@@ -28,6 +28,10 @@
 
 Prudii keeps your mail where it belongs — on your machine. No cloud, no tracking, no telemetry. Just you and your inbox.
 
+## Heads up
+
+This is a hobby project. I build it in my spare time, on energy drinks and good vibes — there's no big company behind it. It's free and it works today. Paid plans (Premium, Team) are on the roadmap but a long way off yet, so don't hold your breath for those. The free version isn't going anywhere either way — this isn't one of those "free until you need it" things.
+
 ## What it does
 
 It's an email client. It does email. Here's the short version.
