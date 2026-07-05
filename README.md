@@ -20,6 +20,7 @@
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-555" alt="Platforms" />
   <img src="https://img.shields.io/badge/built%20with-Rust%20%2B%20Tauri%20%2B%20React-1a7fd6" alt="Built with" />
   <img src="https://img.shields.io/badge/license-source--available-orange" alt="License" />
+  <a href="https://github.com/sponsors/sLuCHaa"><img src="https://img.shields.io/badge/Sponsor-%E2%9D%A4-db61a2?logo=githubsponsors&logoColor=white" alt="Sponsor" /></a>
 </p>
 
 ---
