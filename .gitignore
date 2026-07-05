@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/
+## Cargo.lock is committed for reproducible builds (Tauri is a binary application)
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Database files
+*.db
+*.db-journal
+*.db-wal
+
+# Environment / secrets
+.env
+.env.*
+!.env.example

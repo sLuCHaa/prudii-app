@@ -1,0 +1,796 @@
+@import "tailwindcss";
+
+/* ─── Fonts ─── */
+@font-face { font-family: 'Amulya'; font-weight: 300; font-style: normal; font-display: swap; src: url('./assets/fonts/amulya/amulya-300.woff2') format('woff2'); }
+@font-face { font-family: 'Amulya'; font-weight: 400; font-style: normal; font-display: swap; src: url('./assets/fonts/amulya/amulya-400.woff2') format('woff2'); }
+@font-face { font-family: 'Amulya'; font-weight: 500; font-style: normal; font-display: swap; src: url('./assets/fonts/amulya/amulya-500.woff2') format('woff2'); }
+@font-face { font-family: 'Amulya'; font-weight: 700; font-style: normal; font-display: swap; src: url('./assets/fonts/amulya/amulya-700.woff2') format('woff2'); }
+
+@font-face { font-family: 'Synonym'; font-weight: 200; font-style: normal; font-display: swap; src: url('./assets/fonts/synonym/synonym-200.woff2') format('woff2'); }
+@font-face { font-family: 'Synonym'; font-weight: 300; font-style: normal; font-display: swap; src: url('./assets/fonts/synonym/synonym-300.woff2') format('woff2'); }
+@font-face { font-family: 'Synonym'; font-weight: 400; font-style: normal; font-display: swap; src: url('./assets/fonts/synonym/synonym-400.woff2') format('woff2'); }
+@font-face { font-family: 'Synonym'; font-weight: 500; font-style: normal; font-display: swap; src: url('./assets/fonts/synonym/synonym-500.woff2') format('woff2'); }
+@font-face { font-family: 'Synonym'; font-weight: 600; font-style: normal; font-display: swap; src: url('./assets/fonts/synonym/synonym-600.woff2') format('woff2'); }
+@font-face { font-family: 'Synonym'; font-weight: 700; font-style: normal; font-display: swap; src: url('./assets/fonts/synonym/synonym-700.woff2') format('woff2'); }
+
+/* ─── Design Tokens ─── */
+:root {
+  /* Colors */
+  --c-bg:          #ffffff;
+  --c-bg-secondary:#f8fafc;
+  --c-bg-tertiary: #f1f5f9;
+  --c-surface:     #ffffff;
+  --c-sidebar:     #f8fafc;
+  --c-border:      #e2e8f0;
+  --c-border-light:#eff2f5;
+
+  --c-text:        #0f172a;
+  --c-text-secondary: #475569;
+  --c-text-tertiary:  #64748b;
+  --c-text-inverse:   #ffffff;
+
+  --c-accent:      #3b82f6;
+  --c-accent-hover:#2563eb;
+  --c-accent-soft: rgba(59, 130, 246, 0.1);
+  --c-accent-soft-bg: rgba(59, 130, 246, 0.05);
+  --c-accent-ring: rgba(59, 130, 246, 0.35);
+
+  --c-success:     #10b981;
+  --c-warning:     #f59e0b;
+  --c-danger:      #ef4444;
+
+  /* Signature Gradients (Revolut-style) */
+  --gradient-vip:     linear-gradient(135deg, #f59e0b, #ef4444);
+  --gradient-warm:    linear-gradient(135deg, #ec4899, #f97316);
+  --gradient-cool:    linear-gradient(135deg, #3b82f6, #8b5cf6);
+  --gradient-success: linear-gradient(135deg, #10b981, #3b82f6);
+
+  --c-hover:       #f1f5f9;
+  --c-active:      #e2e8f0;
+  --c-selected:    rgba(59, 130, 246, 0.1);
+
+  --c-scrollbar:       #cbd5e1;
+  --c-scrollbar-hover: #94a3b8;
+  --c-overlay:         rgba(0, 0, 0, 0.6);
+
+  /* Spacing (4px grid) */
+  --space-1:  0.25rem;  /* 4px */
+  --space-2:  0.5rem;   /* 8px */
+  --space-3:  0.75rem;  /* 12px */
+  --space-4:  1rem;     /* 16px */
+  --space-5:  1.25rem;  /* 20px */
+  --space-6:  1.5rem;   /* 24px */
+  --space-8:  2rem;     /* 32px */
+  --space-10: 2.5rem;   /* 40px */
+  --space-12: 3rem;     /* 48px */
+
+  /* Typography */
+  --text-xs:   0.75rem;    /* 12px */
+  --text-sm:   0.875rem;   /* 14px */
+  --text-base: 0.9375rem;  /* 15px */
+  --text-lg:   1.125rem;   /* 18px */
+  --text-xl:   1.25rem;    /* 20px */
+
+  --line-tight:   1.25;
+  --line-snug:    1.375;
+  --line-normal:  1.5;
+  --line-relaxed: 1.625;
+  --line-loose:   1.75;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.07);
+  --shadow-lg: 0 10px 25px rgba(0,0,0,0.1);
+
+  /* Radius */
+  --radius-sm:   0.375rem;
+  --radius-md:   0.5rem;
+  --radius-lg:   0.75rem;
+  --radius-full: 9999px;
+
+  /* Transitions & Easing */
+  --transition-fast:   150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base:   200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow:   300ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slower: 500ms cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-count: 600ms;
+
+  --ease-smooth:  cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-in:      cubic-bezier(0.4, 0, 1, 1);
+  --ease-out:     cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out:  cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-bounce:  cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  --ease-spring:  cubic-bezier(0.175, 0.885, 0.32, 1.275);
+
+  /* Elevation (Enhanced Shadows) */
+  --elevation-0:  none;
+  --elevation-1:  0 1px 2px rgba(0,0,0,0.05);
+  --elevation-2:  0 2px 8px rgba(0,0,0,0.08);
+  --elevation-3:  0 8px 20px rgba(0,0,0,0.12);
+  --elevation-4:  0 16px 48px rgba(0,0,0,0.16);
+
+  /* Backdrop Blur */
+  --blur-sm:  4px;
+  --blur-md:  8px;
+  --blur-lg:  16px;
+  --blur-xl:  24px;
+}
+
+.dark {
+  /* Colors */
+  --c-bg:          #0f172a;
+  --c-bg-secondary:#1e293b;
+  --c-bg-tertiary: #334155;
+  --c-surface:     #1e293b;
+  --c-sidebar:     #0f172a;
+  --c-border:      #334155;
+  --c-border-light:#273447;
+
+  --c-text:        #f1f5f9;
+  --c-text-secondary: #94a3b8;
+  --c-text-tertiary:  #64748b;
+  --c-text-inverse:   #0f172a;
+
+  --c-accent:      #3b82f6;
+  --c-accent-hover:#60a5fa;
+  --c-accent-soft: rgba(59, 130, 246, 0.2);
+  --c-accent-soft-bg: rgba(59, 130, 246, 0.08);
+  --c-accent-ring: rgba(59, 130, 246, 0.45);
+
+  --c-success:     #34d399;
+  --c-warning:     #fbbf24;
+  --c-danger:      #f87171;
+
+  /* Signature Gradients (Revolut-style) */
+  --gradient-vip:     linear-gradient(135deg, #f59e0b, #ef4444);
+  --gradient-warm:    linear-gradient(135deg, #ec4899, #f97316);
+  --gradient-cool:    linear-gradient(135deg, #3b82f6, #8b5cf6);
+  --gradient-success: linear-gradient(135deg, #10b981, #3b82f6);
+
+  --c-hover:       #334155;
+  --c-active:      #475569;
+  --c-selected:    rgba(59, 130, 246, 0.2);
+
+  --c-scrollbar:       #475569;
+  --c-scrollbar-hover: #64748b;
+  --c-overlay:         rgba(0, 0, 0, 0.6);
+
+  /* Shadows (Dark Mode) */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.3);
+  --shadow-lg: 0 10px 25px rgba(0,0,0,0.4);
+
+  --elevation-0:  none;
+  --elevation-1:  0 1px 2px rgba(0,0,0,0.2);
+  --elevation-2:  0 2px 8px rgba(0,0,0,0.24);
+  --elevation-3:  0 8px 20px rgba(0,0,0,0.32);
+  --elevation-4:  0 16px 48px rgba(0,0,0,0.48);
+}
+
+/* ─── Tailwind Theme Mapping ─── */
+@theme {
+  --color-bg:           var(--c-bg);
+  --color-bg-secondary: var(--c-bg-secondary);
+  --color-bg-tertiary:  var(--c-bg-tertiary);
+  --color-surface:      var(--c-surface);
+  --color-sidebar:      var(--c-sidebar);
+  --color-border:       var(--c-border);
+  --color-border-light: var(--c-border-light);
+
+  --color-text:           var(--c-text);
+  --color-text-secondary: var(--c-text-secondary);
+  --color-text-tertiary:  var(--c-text-tertiary);
+  --color-text-inverse:   var(--c-text-inverse);
+
+  --color-accent:       var(--c-accent);
+  --color-accent-hover: var(--c-accent-hover);
+  --color-accent-soft:  var(--c-accent-soft);
+
+  --color-success:      var(--c-success);
+  --color-warning:      var(--c-warning);
+  --color-danger:       var(--c-danger);
+
+  --color-hover:        var(--c-hover);
+  --color-active:       var(--c-active);
+  --color-selected:     var(--c-selected);
+  --color-overlay:      var(--c-overlay);
+
+  --font-heading: 'Amulya', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-body:    'Synonym', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* ─── Base ─── */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+html, body {
+  background: transparent;
+}
+
+#root {
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--c-bg);
+}
+
+body {
+  font-family: 'Synonym', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: var(--text-sm);
+  line-height: var(--line-normal);
+  color: var(--c-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Amulya', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  line-height: var(--line-tight);
+  font-weight: 600;
+}
+
+h1 { font-size: var(--text-xl); }
+h2 { font-size: var(--text-lg); }
+h3 { font-size: var(--text-base); }
+
+/* ─── Transition Utilities ─── */
+.transition-smooth {
+  transition-duration: var(--transition-base);
+  transition-timing-function: var(--ease-smooth);
+}
+
+.transition-fast {
+  transition-duration: var(--transition-fast);
+  transition-timing-function: var(--ease-smooth);
+}
+
+.transition-slow {
+  transition-duration: var(--transition-slow);
+  transition-timing-function: var(--ease-smooth);
+}
+
+.transition-colors {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+  transition-duration: var(--transition-base);
+  transition-timing-function: var(--ease-smooth);
+}
+
+.transition-transform {
+  transition-property: transform;
+  transition-duration: var(--transition-base);
+  transition-timing-function: var(--ease-smooth);
+}
+
+.transition-all {
+  transition-property: all;
+  transition-duration: var(--transition-base);
+  transition-timing-function: var(--ease-smooth);
+}
+
+/* ─── Modal Backdrop ─── */
+.modal-backdrop {
+  background-color: var(--c-overlay);
+  backdrop-filter: blur(var(--blur-md, 8px));
+  -webkit-backdrop-filter: blur(var(--blur-md, 8px));
+}
+
+/* ─── Focus Ring Utility ─── */
+.focus-ring {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--c-accent-soft);
+  border-color: var(--c-accent);
+}
+
+/* Focus states — Superhuman/Apple-Mail style: border shifts accent, no rings */
+/* Inputs & text fields: border color becomes accent on keyboard focus */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+  border-color: var(--c-accent);
+  transition: border-color 120ms ease-out;
+}
+
+/* Buttons & clickable regions: rely on the hover tint for keyboard focus */
+button:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: none;
+  background-color: var(--c-hover);
+  transition: background-color 120ms ease-out;
+}
+
+/* Utility class, same treatment */
+.focus-ring-visible:focus-visible {
+  outline: none;
+  border-color: var(--c-accent);
+  background-color: var(--c-hover);
+}
+
+/* ─── Custom Scrollbar ─── */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--c-accent) 0%, var(--c-accent-hover) 100%); /* lila Verlauf */
+  border: 3px solid transparent; /* inset → thumb floats as a pill */
+  border-radius: var(--radius-full);
+  background-clip: padding-box;
+  min-height: 36px;
+  transition: background var(--transition-fast);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, var(--c-accent) 0%, var(--c-accent-hover) 100%);
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: linear-gradient(180deg, var(--c-accent-hover) 0%, var(--c-accent) 100%);
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Thin scrollbar variant for smaller containers */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  border-width: 2px; /* narrower inset so the thin pill stays visible */
+}
+
+/* Auto-hide scrollbar - shows on hover/scroll */
+.scrollbar-auto {
+  scrollbar-gutter: stable;
+}
+
+.scrollbar-auto::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.scrollbar-auto::-webkit-scrollbar-thumb {
+  background: transparent;
+  transition: background var(--transition-base);
+}
+
+.scrollbar-auto:hover::-webkit-scrollbar-thumb,
+.scrollbar-auto:focus-within::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--c-accent) 0%, var(--c-accent-hover) 100%);
+  background-clip: padding-box;
+}
+
+.scrollbar-auto:hover::-webkit-scrollbar-thumb:hover,
+.scrollbar-auto:focus-within::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, var(--c-accent) 0%, var(--c-accent-hover) 100%);
+  background-clip: padding-box;
+}
+
+.scrollbar-auto::-webkit-scrollbar-thumb:active {
+  background: var(--c-accent);
+}
+
+/* Invisible scrollbar - functional but hidden */
+.scrollbar-hidden::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* Accent-colored scrollbar for special sections */
+.scrollbar-accent::-webkit-scrollbar-thumb {
+  background: var(--c-accent-soft);
+}
+
+.scrollbar-accent::-webkit-scrollbar-thumb:hover {
+  background: var(--c-accent);
+}
+
+.scrollbar-accent::-webkit-scrollbar-thumb:active {
+  background: var(--c-accent-hover);
+}
+
+/* ─── OverlayScrollbars theme (JS scrollbars — WebView2-proof) ─── */
+.os-theme-prudii {
+  --os-size: 12px;
+  --os-padding-perpendicular: 3px;
+  --os-padding-axis: 3px;
+  --os-handle-border-radius: 9999px;
+  --os-handle-min-size: 36px;
+  --os-handle-bg: linear-gradient(180deg, var(--c-accent) 0%, var(--c-accent-hover) 100%);
+  --os-handle-bg-hover: linear-gradient(180deg, var(--c-accent) 0%, var(--c-accent-hover) 100%);
+  --os-handle-bg-active: linear-gradient(180deg, var(--c-accent-hover) 0%, var(--c-accent) 100%);
+}
+
+/* Direct handle override guarantees the gradient even if the OS variable
+   pipeline does not pass a gradient through. */
+.os-theme-prudii .os-scrollbar-handle {
+  background: linear-gradient(180deg, var(--c-accent) 0%, var(--c-accent-hover) 100%);
+}
+.os-theme-prudii .os-scrollbar-handle:hover {
+  background: linear-gradient(180deg, var(--c-accent) 0%, var(--c-accent-hover) 100%);
+}
+.os-theme-prudii .os-scrollbar:active .os-scrollbar-handle {
+  background: linear-gradient(180deg, var(--c-accent-hover) 0%, var(--c-accent) 100%);
+}
+
+/* ─── Utility ─── */
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ─── Design System Documentation ─── */
+/*
+  SPACING SYSTEM (4px grid):
+  --space-1: 4px   | Icon gaps, tight spacing
+  --space-2: 8px   | Compact padding, small gaps
+  --space-3: 12px  | Default gaps between elements
+  --space-4: 16px  | Standard padding (buttons, cards)
+  --space-5: 20px  | Comfortable spacing
+  --space-6: 24px  | Section spacing, large gaps
+  --space-8: 32px  | Major section separation
+
+  TYPOGRAPHY:
+  Sizes:
+    --text-xs:   12px | Metadata, labels, captions
+    --text-sm:   14px | Body, list items, UI text
+    --text-base: 15px | Email content, reading text
+    --text-lg:   18px | Section headers, subjects
+    --text-xl:   20px | Page titles, large headers
+
+  Line Heights:
+    --line-tight:   1.25   | Headings, compact text
+    --line-snug:    1.375  | Tight body text
+    --line-normal:  1.5    | Standard body (default)
+    --line-relaxed: 1.625  | Comfortable reading
+    --line-loose:   1.75   | Extra spacing
+
+  Fonts:
+    Headings: Amulya (600 weight, tight line-height)
+    Body:     Synonym (14px, 1.5 line-height)
+
+  COLORS:
+  Backgrounds:
+    --c-bg:          Base background
+    --c-bg-secondary: Secondary areas (sidebar, filters)
+    --c-bg-tertiary:  Tertiary highlights
+    --c-surface:      Cards, panels
+
+  Text:
+    --c-text:           Primary text
+    --c-text-secondary: Secondary text (70% emphasis)
+    --c-text-tertiary:  Tertiary text (50% emphasis)
+
+  Borders:
+    --c-border:       Main structure borders
+    --c-border-light: Subtle item dividers
+    Principle: Use borders sparingly - whitespace first!
+
+  States:
+    --c-hover:    Hover state background
+    --c-active:   Active/pressed state
+    --c-selected: Selected item highlight
+
+  DESIGN PRINCIPLES:
+  1. Use spacing system - never arbitrary values
+  2. Prefer whitespace over borders
+  3. Consistent typography scale
+  4. Subtle, not loud
+*/
+
+/* ─── TipTap Editor ─── */
+.compose-editor .tiptap {
+  outline: none;
+  min-height: 200px;
+}
+
+/* ProseMirror doesn't use a standard :focus — signal focus via the wrapper */
+.compose-editor .tiptap:focus-visible {
+  outline: none;
+}
+
+.compose-editor .tiptap p {
+  margin: 0 0 0.5em 0;
+}
+
+.compose-editor .tiptap p:last-child {
+  margin-bottom: 0;
+}
+
+.compose-editor .tiptap p.is-editor-empty:first-child::before {
+  color: var(--c-text-tertiary);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.compose-editor .tiptap a {
+  color: var(--c-accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.compose-editor .tiptap img {
+  max-width: 100%;
+  height: auto;
+  display: inline-block;
+}
+
+.compose-editor .tiptap blockquote {
+  border-left: 3px solid var(--c-accent-soft);
+  padding-left: 12px;
+  margin: 8px 0;
+  color: var(--c-text-secondary);
+}
+
+.compose-editor .tiptap blockquote p,
+.compose-editor .tiptap blockquote li {
+  margin: 0;
+}
+
+/* Signature block — visually set apart from the message body so it's clear
+   where the signature begins. The node renders as <div data-type="signature">. */
+.compose-editor .tiptap [data-type="signature"] {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--c-border);
+  color: var(--c-text-secondary);
+}
+.compose-editor .tiptap [data-type="signature"] > :first-child {
+  margin-top: 0;
+}
+
+/* ─── Drag & Drop ─── */
+[draggable="true"] {
+  cursor: grab;
+}
+
+[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+/* Mail item drag hover effect */
+.mail-item-draggable {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.mail-item-draggable:hover {
+  transform: translateX(2px);
+}
+
+/* Folder drop target pulse animation */
+@keyframes folder-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
+  50% { box-shadow: 0 0 0 4px rgba(59, 130, 246, 0); }
+}
+
+.folder-drop-target {
+  animation: folder-pulse 1s ease-in-out infinite;
+}
+
+/* ─── Sidebar base (opaque; ambient tint layers on top, see SidebarAmbient) ─── */
+.glass-sidebar {
+  background: #f8fafc;
+}
+
+.dark .glass-sidebar {
+  background: #0f172a;
+}
+
+/* ─── Vibrancy (translucent sidebar, macOS only) ───
+   [data-vibrancy] is set on <html> only when the native window effect is
+   active (macOS NSVisualEffectView Sidebar). The layer chain behind the
+   sidebar goes transparent; every other column paints its own opaque
+   background (see .app-shell consumers in AppLayout). Windows/Linux never
+   set this attribute — they use the SidebarAmbient in-app tint instead. */
+html[data-vibrancy] #root,
+html[data-vibrancy] .app-shell {
+  background: transparent;
+}
+
+html[data-vibrancy] .glass-sidebar {
+  background: rgba(248, 250, 252, 0.55);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+html[data-vibrancy].dark .glass-sidebar {
+  background: rgba(15, 23, 42, 0.5);
+}
+
+/* ─── Accent Color Themes ─── */
+[data-accent="blue"] {
+  --c-accent: #3b82f6;
+  --c-accent-hover: #2563eb;
+  --c-accent-soft: rgba(59, 130, 246, 0.1);
+  --c-accent-soft-bg: rgba(59, 130, 246, 0.05);
+  --c-accent-ring: rgba(59, 130, 246, 0.35);
+  --c-selected: rgba(59, 130, 246, 0.1);
+}
+.dark [data-accent="blue"], [data-accent="blue"].dark {
+  --c-accent-hover: #60a5fa;
+  --c-accent-soft: rgba(59, 130, 246, 0.2);
+  --c-accent-soft-bg: rgba(59, 130, 246, 0.08);
+  --c-accent-ring: rgba(59, 130, 246, 0.45);
+  --c-selected: rgba(59, 130, 246, 0.2);
+}
+
+[data-accent="purple"] {
+  --c-accent: #8b5cf6;
+  --c-accent-hover: #7c3aed;
+  --c-accent-soft: rgba(139, 92, 246, 0.1);
+  --c-accent-soft-bg: rgba(139, 92, 246, 0.05);
+  --c-selected: rgba(139, 92, 246, 0.1);
+}
+.dark [data-accent="purple"], [data-accent="purple"].dark {
+  --c-accent-hover: #a78bfa;
+  --c-accent-soft: rgba(139, 92, 246, 0.2);
+  --c-accent-soft-bg: rgba(139, 92, 246, 0.08);
+  --c-selected: rgba(139, 92, 246, 0.2);
+}
+
+[data-accent="green"] {
+  --c-accent: #10b981;
+  --c-accent-hover: #059669;
+  --c-accent-soft: rgba(16, 185, 129, 0.1);
+  --c-accent-soft-bg: rgba(16, 185, 129, 0.05);
+  --c-selected: rgba(16, 185, 129, 0.1);
+}
+.dark [data-accent="green"], [data-accent="green"].dark {
+  --c-accent-hover: #34d399;
+  --c-accent-soft: rgba(16, 185, 129, 0.2);
+  --c-accent-soft-bg: rgba(16, 185, 129, 0.08);
+  --c-selected: rgba(16, 185, 129, 0.2);
+}
+
+[data-accent="orange"] {
+  --c-accent: #f97316;
+  --c-accent-hover: #ea580c;
+  --c-accent-soft: rgba(249, 115, 22, 0.1);
+  --c-accent-soft-bg: rgba(249, 115, 22, 0.05);
+  --c-selected: rgba(249, 115, 22, 0.1);
+}
+.dark [data-accent="orange"], [data-accent="orange"].dark {
+  --c-accent-hover: #fb923c;
+  --c-accent-soft: rgba(249, 115, 22, 0.2);
+  --c-accent-soft-bg: rgba(249, 115, 22, 0.08);
+  --c-selected: rgba(249, 115, 22, 0.2);
+}
+
+[data-accent="pink"] {
+  --c-accent: #ec4899;
+  --c-accent-hover: #db2777;
+  --c-accent-soft: rgba(236, 72, 153, 0.1);
+  --c-accent-soft-bg: rgba(236, 72, 153, 0.05);
+  --c-selected: rgba(236, 72, 153, 0.1);
+}
+.dark [data-accent="pink"], [data-accent="pink"].dark {
+  --c-accent-hover: #f472b6;
+  --c-accent-soft: rgba(236, 72, 153, 0.2);
+  --c-accent-soft-bg: rgba(236, 72, 153, 0.08);
+  --c-selected: rgba(236, 72, 153, 0.2);
+}
+
+[data-accent="red"] {
+  --c-accent: #ef4444;
+  --c-accent-hover: #dc2626;
+  --c-accent-soft: rgba(239, 68, 68, 0.1);
+  --c-accent-soft-bg: rgba(239, 68, 68, 0.05);
+  --c-selected: rgba(239, 68, 68, 0.1);
+}
+.dark [data-accent="red"], [data-accent="red"].dark {
+  --c-accent-hover: #f87171;
+  --c-accent-soft: rgba(239, 68, 68, 0.2);
+  --c-accent-soft-bg: rgba(239, 68, 68, 0.08);
+  --c-selected: rgba(239, 68, 68, 0.2);
+}
+
+[data-accent="teal"] {
+  --c-accent: #14b8a6;
+  --c-accent-hover: #0d9488;
+  --c-accent-soft: rgba(20, 184, 166, 0.1);
+  --c-accent-soft-bg: rgba(20, 184, 166, 0.05);
+  --c-selected: rgba(20, 184, 166, 0.1);
+}
+.dark [data-accent="teal"], [data-accent="teal"].dark {
+  --c-accent-hover: #2dd4bf;
+  --c-accent-soft: rgba(20, 184, 166, 0.2);
+  --c-accent-soft-bg: rgba(20, 184, 166, 0.08);
+  --c-selected: rgba(20, 184, 166, 0.2);
+}
+
+[data-accent="amber"] {
+  --c-accent: #f59e0b;
+  --c-accent-hover: #d97706;
+  --c-accent-soft: rgba(245, 158, 11, 0.1);
+  --c-accent-soft-bg: rgba(245, 158, 11, 0.05);
+  --c-selected: rgba(245, 158, 11, 0.1);
+}
+.dark [data-accent="amber"], [data-accent="amber"].dark {
+  --c-accent-hover: #fbbf24;
+  --c-accent-soft: rgba(245, 158, 11, 0.2);
+  --c-accent-soft-bg: rgba(245, 158, 11, 0.08);
+  --c-selected: rgba(245, 158, 11, 0.2);
+}
+
+/* ─── Density Modes ─── */
+[data-density="compact"] .mail-item-draggable {
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
+}
+
+[data-density="spacious"] .mail-item-draggable {
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+
+/* ─── Active Folder Indicator ─── */
+.folder-active {
+  position: relative;
+  background: var(--c-selected);
+  color: var(--c-accent);
+}
+
+.folder-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 1px;
+  background: var(--c-accent);
+}
+
+/* ─── Email HTML content (replaces iframe) ─── */
+.mail-html-content {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+.mail-html-content img { max-width: 100%; height: auto; }
+.mail-html-content pre,
+.mail-html-content code { white-space: pre-wrap; word-wrap: break-word; font-size: 13px; }
+.mail-html-content table { max-width: 100%; border-collapse: collapse; }
+.mail-html-content blockquote { margin: 8px 0; padding-left: 12px; border-left: 3px solid var(--c-accent-soft); color: #6b7280; }
+
+/* Light mode */
+.mail-html-content.mail-light { color: #1a1a1a; }
+.mail-html-content.mail-light a { color: #2563eb; }
+
+/* Dark mode — invert content, re-invert media to preserve original colors */
+.mail-html-content.mail-dark {
+  color: #1a1a1a;
+  filter: invert(0.88) hue-rotate(180deg);
+  color-scheme: dark;
+}
+/* Don't force text color — let inversion handle it naturally.
+   Preserves colored text (red warnings, green success, brand colors). */
+.mail-html-content.mail-dark a,
+.mail-html-content.mail-dark a * {
+  color: #2563eb !important;
+}
+.mail-html-content.mail-dark img,
+.mail-html-content.mail-dark video,
+.mail-html-content.mail-dark picture,
+.mail-html-content.mail-dark svg {
+  filter: invert(1) hue-rotate(180deg) !important;
+}
+.mail-html-content.mail-dark hr { opacity: 0.4; }
+.mail-html-content.mail-dark blockquote { border-left-color: var(--c-accent-soft) !important; }

@@ -1,0 +1,40 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for the main window",
+  "windows": ["main", "compose-*"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-create",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close",
+    "core:window:allow-destroy",
+    "core:window:allow-start-dragging",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-set-focus",
+    "core:window:allow-is-maximized",
+    "core:window:allow-outer-size",
+    "core:window:allow-set-size",
+    "core:window:allow-outer-position",
+    "core:window:allow-set-position",
+    "core:webview:allow-create-webview-window",
+    {
+      "identifier": "shell:allow-open",
+      "allow": [
+        { "url": "https://**", "open": true },
+        { "url": "http://**", "open": true },
+        { "url": "mailto:**", "open": true }
+      ]
+    },
+    "dialog:allow-save",
+    "dialog:allow-open",
+    "core:tray:default",
+    "notification:default",
+    "opener:default",
+    "clipboard-manager:allow-write-text",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister"
+  ]
+}

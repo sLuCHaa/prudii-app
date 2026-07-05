@@ -1,0 +1,67 @@
+[package]
+name = "prudii"
+version = "1.1.1"
+edition = "2021"
+
+[lib]
+name = "prudii_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset", "macos-private-api", "tray-icon", "image-png"] }
+tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-log = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-global-shortcut = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.38", features = ["bundled"] }
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+tokio-rustls = "0.26"
+rustls = { version = "0.23", features = ["ring"] }
+webpki-roots = "1"
+mail-parser = "0.11"
+lettre = { version = "0.11", default-features = false, features = ["tokio1-native-tls", "smtp-transport", "builder"] }
+keyring = "3"
+base64 = "0.22"
+thiserror = "2"
+anyhow = "1"
+zip = { version = "7", default-features = false, features = ["deflate"] }
+ammonia = "4"
+utf7-imap = "0.3"
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "json", "form", "stream"] }
+futures-util = "0.3"
+semver = "1"
+sha2 = "0.10"
+ed25519-dalek = "2"
+rand = "0.10"
+open = "5"
+
+log = "0.4"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+opt-level = "s"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = [
+    "Win32_Graphics_Dwm",
+    "Win32_Security_Cryptography",
+    "Win32_Foundation",
+    "Win32_UI_Shell",
+    "Win32_System_Registry",
+] }
+winreg = "0.55"
+tauri-winrt-notification = "0.7"

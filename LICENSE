@@ -1,0 +1,85 @@
+Prudii Source-Available License
+Copyright (c) 2026 Prudii. All rights reserved.
+
+This source code is made publicly available for the purposes of TRANSPARENCY
+and SECURITY AUDITING only. It is NOT open-source software. Except for the
+limited rights expressly granted in Section 2, all rights are reserved by the
+copyright holder.
+
+1. DEFINITIONS
+
+   "Software" means the source code, build scripts, configuration, assets, and
+   documentation contained in this repository, and any portion thereof.
+
+   "You" means the individual or legal entity exercising rights under this
+   License.
+
+   "Copyright Holder" means Prudii and its successors and assigns.
+
+2. GRANT OF LIMITED RIGHTS
+
+   Subject to Your full and continuing compliance with this License, the
+   Copyright Holder grants You a personal, non-exclusive, non-transferable,
+   non-sublicensable, and revocable right to:
+
+   (a) view and study the source code of the Software; and
+
+   (b) compile and run the Software locally, solely for the purposes of
+       personal evaluation and independent security review.
+
+3. RESTRICTIONS
+
+   Except as expressly permitted in Section 2, You may NOT, without the prior
+   written permission of the Copyright Holder:
+
+   (a) redistribute, publish, host, sublicense, sell, rent, lease, or otherwise
+       make the Software or any derivative or portion of it available to any
+       third party, in source or binary form;
+
+   (b) use the Software, in whole or in part, for any commercial purpose;
+
+   (c) create or distribute a product or service that is derived from,
+       incorporates, or competes with the Software;
+
+   (d) modify, remove, disable, bypass, or circumvent — or assist any third
+       party in modifying, removing, disabling, bypassing, or circumventing —
+       any licensing, entitlement, activation, subscription, or feature-gating
+       mechanism contained in the Software;
+
+   (e) remove, obscure, or alter any copyright, trademark, or other proprietary
+       notices; or
+
+   (f) use the "Prudii" name, logos, or trademarks, except as strictly
+       necessary to accurately identify the Software.
+
+4. RESERVATION OF RIGHTS
+
+   All rights not expressly granted in this License are reserved by the
+   Copyright Holder. No rights are granted by implication, estoppel, or
+   otherwise.
+
+5. COMMERCIAL AND REDISTRIBUTION LICENSING
+
+   The official application binaries and paid plans are distributed under
+   separate terms. For any commercial, redistribution, or other use not
+   permitted by this License, contact the Copyright Holder at
+   https://prudii.com.
+
+6. NO WARRANTY
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+7. LIMITATION OF LIABILITY
+
+   IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, OR
+   OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE,
+   ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+   DEALINGS IN THE SOFTWARE.
+
+8. TERMINATION
+
+   Any breach of this License automatically and immediately terminates the
+   rights granted to You under Section 2. Upon termination, You must cease all
+   use of the Software and destroy all copies in Your possession or control.
