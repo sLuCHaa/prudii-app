@@ -68,6 +68,10 @@ Optional summaries and reply suggestions run through [Ollama](https://ollama.com
 
 Grab it from the [website](https://prudii.com/#download) or the [Releases](https://github.com/sLuCHaa/prudii-app/releases) page. It's free. If you like it, support me. If you don't, get something else. No hard feelings.
 
+## Support
+
+Prudii is free and always will be. If it saved you from another bad email client and you want to chip in, you can [sponsor me on GitHub](https://github.com/sponsors/sLuCHaa). Completely optional — nothing is locked behind it.
+
 ## Build it yourself
 
 You'll need Node.js 20+, pnpm, Rust (stable), and the [Tauri 2 prerequisites](https://tauri.app/start/prerequisites/).
