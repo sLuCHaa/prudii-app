@@ -103,7 +103,7 @@ jobs:
           # Laeufen bleibt tagName leer -> es wird nur gebaut.
           tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
           releaseName: 'Prudii Mail v__VERSION__'
-          releaseBody: 'Automated build. Lade unten den Installer fuer dein System herunter.'
+          releaseBody: 'Prudii Mail v__VERSION__ — privacy-first desktop email client. Install the file for your platform below: Windows (.exe / .msi), macOS (.dmg — Apple Silicon or Intel), Linux (.deb / .rpm / .AppImage). Existing installations update automatically. Release notes below.'
           releaseDraft: true
           prerelease: false
           updaterJsonPreferNsis: true
