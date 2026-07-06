@@ -13,7 +13,7 @@ export function UpdatePanel() {
   const [status, setStatus] = useState<UpdateStatus>("idle");
   const [release, setRelease] = useState<Update | null>(null);
   const [progressPct, setProgressPct] = useState(0);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [errorKind, setErrorKind] = useState<"check" | "install" | null>(null);
 
   useEffect(() => {
     getVersion().then(setCurrentVersion).catch(() => setCurrentVersion("?"));
@@ -21,7 +21,7 @@ export function UpdatePanel() {
 
   async function handleCheck() {
     setStatus("checking");
-    setErrorMessage("");
+    setErrorKind(null);
     try {
       const info = await checkForUpdate();
       if (info) {
@@ -30,9 +30,9 @@ export function UpdatePanel() {
       } else {
         setStatus("up-to-date");
       }
-    } catch (err) {
+    } catch {
       setStatus("error");
-      setErrorMessage(err instanceof Error ? err.message : String(err));
+      setErrorKind("check");
     }
   }
 
@@ -40,16 +40,16 @@ export function UpdatePanel() {
     if (!release) return;
     setStatus("downloading");
     setProgressPct(0);
-    setErrorMessage("");
+    setErrorKind(null);
     try {
       await installUpdate(release, (p) => {
         if (p.phase === "downloading") { setStatus("downloading"); setProgressPct(p.pct); }
         else if (p.phase === "verifying") setStatus("verifying");
         else if (p.phase === "ready") setStatus("ready");
       });
-    } catch (err) {
+    } catch {
       setStatus("error");
-      setErrorMessage(err instanceof Error ? err.message : String(err));
+      setErrorKind("install");
     }
   }
 
@@ -76,7 +76,7 @@ export function UpdatePanel() {
             </div>
           )}
 
-          {status === "error" && errorMessage.includes("Checksum") && (
+          {status === "error" && errorKind === "install" && (
             <div className="p-4 rounded-lg border border-danger/30 bg-danger/5">
               <div className="flex items-start gap-3">
                 <ShieldAlert className="w-5 h-5 text-danger shrink-0 mt-0.5" />
@@ -87,14 +87,10 @@ export function UpdatePanel() {
             </div>
           )}
 
-          {status === "error" && !errorMessage.includes("Checksum") && (
+          {status === "error" && errorKind !== "install" && (
             <div className="flex items-center gap-2 p-3 rounded-lg border border-danger/30 bg-danger/5">
               <XCircle className="w-4 h-4 text-danger shrink-0" />
-              <span className="text-sm text-danger">
-                {errorMessage.includes("Network") || errorMessage.includes("fetch")
-                  ? t("settings.update.networkError")
-                  : errorMessage}
-              </span>
+              <span className="text-sm text-danger">{t("settings.update.networkError")}</span>
             </div>
           )}
         </div>

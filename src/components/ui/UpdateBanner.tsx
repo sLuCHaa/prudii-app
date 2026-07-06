@@ -18,7 +18,6 @@ export function UpdateBanner() {
   const [dismissed, setDismissed] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
   const [progressPct, setProgressPct] = useState(0);
-  const [errorMessage, setErrorMessage] = useState("");
 
   if (!updateAvailable || dismissed) return null;
 
@@ -26,16 +25,14 @@ export function UpdateBanner() {
     if (!updateAvailable) return;
     setPhase("downloading");
     setProgressPct(0);
-    setErrorMessage("");
     try {
       await installUpdate(updateAvailable, (p) => {
         if (p.phase === "downloading") { setPhase("downloading"); setProgressPct(p.pct); }
         else if (p.phase === "verifying") setPhase("verifying");
         else if (p.phase === "ready") setPhase("ready");
       });
-    } catch (err) {
+    } catch {
       setPhase("error");
-      setErrorMessage(err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -57,11 +54,7 @@ export function UpdateBanner() {
         {phase === "downloading" && `${t("settings.update.downloading")} ${progressPct}%`}
         {phase === "verifying" && t("settings.update.verifying")}
         {phase === "ready" && t("settings.update.verified")}
-        {phase === "error" && (errorMessage.includes("Checksum")
-          ? t("settings.update.checksumError")
-          : errorMessage.includes("Network") || errorMessage.includes("fetch")
-            ? t("settings.update.networkError")
-            : errorMessage)}
+        {phase === "error" && t("settings.update.checksumError")}
         {phase === "idle" && t("settings.update.available", { version: updateAvailable.version })}
       </span>
 

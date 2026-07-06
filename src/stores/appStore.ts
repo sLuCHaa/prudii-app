@@ -370,7 +370,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   updateAvailable: null,
-  setUpdateAvailable: (updateAvailable) => set({ updateAvailable }),
+  setUpdateAvailable: (update) => {
+    const prev = get().updateAvailable;
+    if (prev && prev !== update) { void prev.close(); }
+    set({ updateAvailable: update });
+  },
 
   appSettings: {
     launch_on_startup: false,
