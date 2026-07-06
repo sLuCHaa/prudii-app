@@ -88,6 +88,13 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
+      # Schreibt den App-Store-Connect-API-Key (.p8) fuer die Notarisierung
+      # aus dem Base64-Secret in eine Datei (nur macOS-Runner).
+      - name: Prepare Apple notarization key (macOS)
+        if: startsWith(matrix.platform, 'macos')
+        shell: bash
+        run: echo "${{ secrets.APPLE_API_KEY_B64 }}" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+
       - name: Build & release
         id: tauri
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
@@ -98,6 +105,13 @@ jobs:
           PRUDII_GOOGLE_CLIENT_SECRET: ${{ secrets.PRUDII_GOOGLE_CLIENT_SECRET }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # macOS code signing + notarization (ignored on Windows/Linux runners)
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
         with:
           # Nur bei einem Tag-Push wird ein Release erstellt; bei manuellen
           # Laeufen bleibt tagName leer -> es wird nur gebaut.
