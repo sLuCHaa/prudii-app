@@ -121,6 +121,9 @@ jobs:
           releaseDraft: true
           prerelease: false
           updaterJsonPreferNsis: true
+          # Auto-retry: Apples Notary-Service / macOS-Runner haben sporadische
+          # Netzwerk-Timeouts (actions/runner-images#14167) — dann neu versuchen.
+          retryAttempts: 2
           args: ${{ matrix.args }}
 
       # Damit auch manuelle Laeufe (ohne Tag) herunterladbare Installer liefern.
