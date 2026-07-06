@@ -35,6 +35,8 @@
     "opener:default",
     "clipboard-manager:allow-write-text",
     "global-shortcut:allow-register",
-    "global-shortcut:allow-unregister"
+    "global-shortcut:allow-unregister",
+    "updater:default",
+    "process:default"
   ]
 }

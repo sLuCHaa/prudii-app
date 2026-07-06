@@ -28,6 +28,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": "all",
     "publisher": "Prudii",
     "shortDescription": "Privacy-first email client",
@@ -47,6 +48,14 @@
         "displayLanguageSelector": false,
         "installMode": "currentUser"
       }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/sLuCHaa/prudii-app/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDJGMjRGMjgzQUNCQTNGNUQKUldSZFA3cXNnL0lrTHc3UFdtY3Fqb3BWNWRvbnlHK3BwQzgvZmd0NWFhWUVCVmlBbjNnbGtUQ1AK"
     }
   }
 }
