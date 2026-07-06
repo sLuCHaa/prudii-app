@@ -1,18 +1,11 @@
-import { useState, useEffect } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { useState } from "react";
 import { ArrowUpCircle, Download, X, Loader2, CheckCircle, ShieldAlert } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";
-import { downloadAndInstallUpdate } from "../../lib/tauri";
+import { installUpdate } from "../../lib/updater";
 import { Button } from "./Button";
 
 type Phase = "idle" | "downloading" | "verifying" | "ready" | "error";
-
-interface UpdateProgressEvent {
-  status: string;
-  progress_pct: number;
-  message: string;
-}
 
 /**
  * Non-blocking top banner shown when `checkForUpdate` found a newer release
@@ -27,21 +20,6 @@ export function UpdateBanner() {
   const [progressPct, setProgressPct] = useState(0);
   const [errorMessage, setErrorMessage] = useState("");
 
-  // Mirror the Rust update-progress events into the banner.
-  useEffect(() => {
-    const unlisten = listen<UpdateProgressEvent>("update-progress", (event) => {
-      const { status, progress_pct, message } = event.payload;
-      setProgressPct(progress_pct);
-      switch (status) {
-        case "downloading": setPhase("downloading"); break;
-        case "verifying": setPhase("verifying"); break;
-        case "ready": setPhase("ready"); break;
-        case "error": setPhase("error"); setErrorMessage(message); break;
-      }
-    });
-    return () => { unlisten.then((fn) => fn()); };
-  }, []);
-
   if (!updateAvailable || dismissed) return null;
 
   async function handleUpdate() {
@@ -50,7 +28,11 @@ export function UpdateBanner() {
     setProgressPct(0);
     setErrorMessage("");
     try {
-      await downloadAndInstallUpdate(updateAvailable);
+      await installUpdate(updateAvailable, (p) => {
+        if (p.phase === "downloading") { setPhase("downloading"); setProgressPct(p.pct); }
+        else if (p.phase === "verifying") setPhase("verifying");
+        else if (p.phase === "ready") setPhase("ready");
+      });
     } catch (err) {
       setPhase("error");
       setErrorMessage(err instanceof Error ? err.message : String(err));

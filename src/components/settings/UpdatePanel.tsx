@@ -1,54 +1,22 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { listen } from "@tauri-apps/api/event";
 import { getVersion } from "@tauri-apps/api/app";
 import { Download, CheckCircle, XCircle, RefreshCw, Loader2, ShieldAlert } from "lucide-react";
 import { Button } from "../ui/Button";
-import { checkForUpdate, downloadAndInstallUpdate } from "../../lib/tauri";
-import type { ReleaseInfo } from "../../lib/tauri";
+import { checkForUpdate, installUpdate, type Update } from "../../lib/updater";
 
 type UpdateStatus = "idle" | "checking" | "update-available" | "up-to-date" | "downloading" | "verifying" | "ready" | "error";
-
-interface UpdateProgressEvent {
-  status: string;
-  progress_pct: number;
-  message: string;
-}
 
 export function UpdatePanel() {
   const { t } = useTranslation();
   const [currentVersion, setCurrentVersion] = useState("");
   const [status, setStatus] = useState<UpdateStatus>("idle");
-  const [release, setRelease] = useState<ReleaseInfo | null>(null);
+  const [release, setRelease] = useState<Update | null>(null);
   const [progressPct, setProgressPct] = useState(0);
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     getVersion().then(setCurrentVersion).catch(() => setCurrentVersion("?"));
-  }, []);
-
-  useEffect(() => {
-    const unlisten = listen<UpdateProgressEvent>("update-progress", (event) => {
-      const { status: evtStatus, progress_pct, message } = event.payload;
-      setProgressPct(progress_pct);
-
-      switch (evtStatus) {
-        case "downloading":
-          setStatus("downloading");
-          break;
-        case "verifying":
-          setStatus("verifying");
-          break;
-        case "ready":
-          setStatus("ready");
-          break;
-        case "error":
-          setStatus("error");
-          setErrorMessage(message);
-          break;
-      }
-    });
-    return () => { unlisten.then((fn) => fn()); };
   }, []);
 
   async function handleCheck() {
@@ -74,7 +42,11 @@ export function UpdatePanel() {
     setProgressPct(0);
     setErrorMessage("");
     try {
-      await downloadAndInstallUpdate(release);
+      await installUpdate(release, (p) => {
+        if (p.phase === "downloading") { setStatus("downloading"); setProgressPct(p.pct); }
+        else if (p.phase === "verifying") setStatus("verifying");
+        else if (p.phase === "ready") setStatus("ready");
+      });
     } catch (err) {
       setStatus("error");
       setErrorMessage(err instanceof Error ? err.message : String(err));

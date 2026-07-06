@@ -434,22 +434,6 @@ export async function deleteTemplate(id: string): Promise<void> {
   return invoke("delete_template", { id });
 }
 
-export interface ReleaseInfo {
-  version: string;
-  file_url: string;
-  checksum: string;
-  release_id: string;
-  file_name: string;
-}
-
-export async function checkForUpdate(): Promise<ReleaseInfo | null> {
-  return invoke("check_for_update");
-}
-
-export async function downloadAndInstallUpdate(release: ReleaseInfo): Promise<void> {
-  return invoke("download_and_install_update", { release });
-}
-
 export async function batchUpdateMails(mailIds: string[], action: string): Promise<void> {
   return invoke("batch_update_mails", { mailIds, action });
 }

@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { Account, AppSettings, BackfillProgress, Folder, LicenseInfo, Mail, MailFlag, SendMailRequest, SyncProgress } from "../types";
 import type { ComposeMode } from "../components/compose/ComposeModal";
 import { parseMailtoUrl, type MailtoParams } from "../lib/mailtoParser";
-import type { ReleaseInfo } from "../lib/tauri";
+import type { Update } from "../lib/updater";
 import type { ToastData, ToastType } from "../components/ui/Toast";
 
 export interface ComposeSnapshot {
@@ -144,8 +144,8 @@ interface AppState {
   darkMode: boolean;
   setThemeMode: (mode: ThemeMode) => void;
 
-  updateAvailable: ReleaseInfo | null;
-  setUpdateAvailable: (release: ReleaseInfo | null) => void;
+  updateAvailable: Update | null;
+  setUpdateAvailable: (update: Update | null) => void;
 
   appSettings: AppSettings;
   setAppSettings: (settings: AppSettings) => void;

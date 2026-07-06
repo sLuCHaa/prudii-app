@@ -20,7 +20,8 @@ import { useAppStore } from "./stores/appStore";
 import { useSyncAll } from "./hooks/useSync";
 import { useAutoSync } from "./hooks/useAutoSync";
 import { useConnectivity } from "./hooks/useConnectivity";
-import { backfillBodies, getAppSettings, checkLicenseStartup, getStartupMailto, checkSnoozedMails, checkScheduledMails, classifyUnclassifiedMails, checkForUpdate } from "./lib/tauri";
+import { backfillBodies, getAppSettings, checkLicenseStartup, getStartupMailto, checkSnoozedMails, checkScheduledMails, classifyUnclassifiedMails } from "./lib/tauri";
+import { checkForUpdate } from "./lib/updater";
 import { checkFirstHundredOnce } from "./lib/achievements";
 import { useDialog } from "./components/ui/DialogProvider";
 import { useTranslation } from "react-i18next";
@@ -357,7 +358,7 @@ function AppInner() {
 
     const runCheck = () => {
       checkForUpdate()
-        .then((release) => { if (!cancelled && release) setUpdateAvailable(release); })
+        .then((update) => { if (!cancelled && update) setUpdateAvailable(update); })
         .catch(() => {});
     };
 
