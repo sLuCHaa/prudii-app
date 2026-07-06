@@ -12,6 +12,13 @@ export function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (c) => map[c]);
 }
 
+// Sanitize user-authored signature HTML: strips <script>, event handlers and
+// javascript: URLs while keeping normal formatting, links and images. Applied
+// before signature HTML is parsed so pasted markup can't inject anything.
+export function sanitizeSignatureHtml(html: string): string {
+  return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+}
+
 export interface TrackerInfo {
   domain: string;
   type: "pixel" | "tracking_domain" | "hidden";

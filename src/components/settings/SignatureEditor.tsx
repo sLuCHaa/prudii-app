@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Code, Type } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { sanitizeSignatureHtml } from "../../lib/sanitize";
 
 interface SignatureEditorProps {
   htmlValue: string;
@@ -34,19 +35,20 @@ export function SignatureEditor({ htmlValue, textValue, onChange }: SignatureEdi
 
   // Strip non-content elements (style/script/head/meta/link) that come along when
   // pasting a full HTML document (e.g. a copied page brings the browser's default
-  // stylesheet), so the stored signature is just the real content. Only rewrites
-  // when such junk is present — normal hand-edited HTML is left untouched.
+  // stylesheet), so the stored signature is just the real content. Runs the input
+  // through DOMPurify first so pasted markup can never inject scripts/handlers.
   function cleanSignatureHtml(html: string): string {
-    if (!/<style|<head|<!doctype|<script|<meta|<link/i.test(html)) return html;
-    const doc = new DOMParser().parseFromString(html, "text/html");
+    const safe = sanitizeSignatureHtml(html);
+    if (!/<style|<head|<!doctype|<script|<meta|<link/i.test(safe)) return safe;
+    const doc = new DOMParser().parseFromString(safe, "text/html");
     doc.querySelectorAll("style, script, link, meta, title, head").forEach((el) => el.remove());
-    return (doc.body?.innerHTML ?? html).trim();
+    return (doc.body?.innerHTML ?? safe).trim();
   }
 
   // Extract plain text from HTML — drop styles/scripts and trim leading/trailing
   // blank lines so the plain-text version isn't polluted with CSS or empty lines.
   function htmlToPlainText(htmlContent: string): string {
-    const doc = new DOMParser().parseFromString(htmlContent, "text/html");
+    const doc = new DOMParser().parseFromString(sanitizeSignatureHtml(htmlContent), "text/html");
     doc.querySelectorAll("style, script, head").forEach((el) => el.remove());
     return (doc.body?.textContent ?? "").replace(/^\s+/, "").trimEnd();
   }

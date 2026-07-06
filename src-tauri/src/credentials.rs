@@ -215,6 +215,18 @@ fn store_password_to_db(account_id: &str, password: &str) {
     }
 }
 
+/// Blank the stored_password column when an account is deleted. Kept separate
+/// from `store_password_to_db` so no string literal is passed as a password.
+fn clear_password_in_db(account_id: &str) {
+    let Some(conn) = open_db() else { return };
+    if let Err(e) = conn.execute(
+        "UPDATE accounts SET stored_password = '' WHERE id = ?1",
+        rusqlite::params![account_id],
+    ) {
+        log::warn!("[credentials] DB clear failed for {}: {}", account_id, e);
+    }
+}
+
 pub fn store_password(account_id: &str, password: &str) -> Result<()> {
     {
         let mut cache = PASSWORD_CACHE.lock().unwrap_or_else(|e| e.into_inner());
@@ -314,7 +326,7 @@ pub fn delete_password(account_id: &str) -> Result<()> {
         }
     }
 
-    store_password_to_db(account_id, "");
+    clear_password_in_db(account_id);
 
     Ok(())
 }
