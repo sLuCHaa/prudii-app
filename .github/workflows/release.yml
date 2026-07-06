@@ -96,6 +96,8 @@ jobs:
           # Compile-Zeit-Secret fuer Gmail-OAuth. build.rs liest zuerst die
           # Env-Variable -> hier reicht das Repository-Secret voellig.
           PRUDII_GOOGLE_CLIENT_SECRET: ${{ secrets.PRUDII_GOOGLE_CLIENT_SECRET }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           # Nur bei einem Tag-Push wird ein Release erstellt; bei manuellen
           # Laeufen bleibt tagName leer -> es wird nur gebaut.
@@ -104,6 +106,7 @@ jobs:
           releaseBody: 'Automated build. Lade unten den Installer fuer dein System herunter.'
           releaseDraft: true
           prerelease: false
+          updaterJsonPreferNsis: true
           args: ${{ matrix.args }}
 
       # Damit auch manuelle Laeufe (ohne Tag) herunterladbare Installer liefern.
