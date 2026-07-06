@@ -8,6 +8,10 @@ name: Release
 #   - Manuell ueber den "Run workflow"-Button (workflow_dispatch)
 #     -> baut nur und haengt die Installer als Download an den Actions-Run
 #        (kein Release), praktisch zum Testen.
+#
+# Third-Party-Actions sind auf einen festen Commit-SHA gepinnt (Supply-Chain-
+# Absicherung; bewegliche Tags koennten gekapert werden). Dependabot
+# (.github/dependabot.yml) haelt die SHAs per PR aktuell.
 on:
   push:
     tags:
@@ -44,7 +48,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       # Systempakete, die Tauri v2 auf Linux zum Bauen braucht
       # (webkit2gtk 4.1 = v2, ayatana-appindicator = tray-icon-Feature).
@@ -63,21 +67,21 @@ jobs:
             file wget curl
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: pnpm
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
         with:
           targets: ${{ matrix.rust-targets }}
 
       - name: Rust cache
-        uses: swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           workspaces: './src-tauri -> target'
 
@@ -86,7 +90,7 @@ jobs:
 
       - name: Build & release
         id: tauri
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Compile-Zeit-Secret fuer Gmail-OAuth. build.rs liest zuerst die
@@ -105,7 +109,7 @@ jobs:
       # Damit auch manuelle Laeufe (ohne Tag) herunterladbare Installer liefern.
       - name: Upload installers as workflow artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: prudii-${{ matrix.name }}
           if-no-files-found: ignore
