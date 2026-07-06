@@ -1,0 +1,117 @@
+name: Release
+
+# Baut Prudii Mail fuer Windows, macOS (Apple Silicon + Intel) und Linux (.deb).
+#
+# Ausloeser:
+#   - Push eines Version-Tags (z. B. `git tag v1.1.2 && git push --tags`)
+#     -> erstellt einen DRAFT-Release mit allen Installern.
+#   - Manuell ueber den "Run workflow"-Button (workflow_dispatch)
+#     -> baut nur und haengt die Installer als Download an den Actions-Run
+#        (kein Release), praktisch zum Testen.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macos-apple-silicon
+            platform: macos-latest
+            args: '--target aarch64-apple-darwin'
+            rust-targets: aarch64-apple-darwin
+          - name: macos-intel
+            platform: macos-latest
+            args: '--target x86_64-apple-darwin'
+            rust-targets: x86_64-apple-darwin
+          - name: linux-x86_64
+            platform: ubuntu-22.04
+            args: ''
+            rust-targets: ''
+          - name: windows-x86_64
+            platform: windows-latest
+            args: ''
+            rust-targets: ''
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Systempakete, die Tauri v2 auf Linux zum Bauen braucht
+      # (webkit2gtk 4.1 = v2, ayatana-appindicator = tray-icon-Feature).
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            libssl-dev \
+            patchelf \
+            build-essential \
+            file wget curl
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build & release
+        id: tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Compile-Zeit-Secret fuer Gmail-OAuth. build.rs liest zuerst die
+          # Env-Variable -> hier reicht das Repository-Secret voellig.
+          PRUDII_GOOGLE_CLIENT_SECRET: ${{ secrets.PRUDII_GOOGLE_CLIENT_SECRET }}
+        with:
+          # Nur bei einem Tag-Push wird ein Release erstellt; bei manuellen
+          # Laeufen bleibt tagName leer -> es wird nur gebaut.
+          tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+          releaseName: 'Prudii Mail v__VERSION__'
+          releaseBody: 'Automated build. Lade unten den Installer fuer dein System herunter.'
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+
+      # Damit auch manuelle Laeufe (ohne Tag) herunterladbare Installer liefern.
+      - name: Upload installers as workflow artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prudii-${{ matrix.name }}
+          if-no-files-found: ignore
+          path: |
+            src-tauri/target/**/release/bundle/dmg/*.dmg
+            src-tauri/target/**/release/bundle/deb/*.deb
+            src-tauri/target/**/release/bundle/appimage/*.AppImage
+            src-tauri/target/**/release/bundle/msi/*.msi
+            src-tauri/target/**/release/bundle/nsis/*.exe
