@@ -831,8 +831,6 @@ pub fn run() {
             commands::mails::search_attachments,
             commands::mails::count_attachments,
             commands::mails::bulk_save_attachments,
-            commands::update::check_for_update,
-            commands::update::download_and_install_update,
             commands::app_config::get_app_config,
         ])
         .on_window_event(|window, event| {
