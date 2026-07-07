@@ -28,11 +28,11 @@ jobs:
       matrix:
         include:
           - name: macos-apple-silicon
-            platform: macos-15
+            platform: macos-latest
             args: '--target aarch64-apple-darwin'
             rust-targets: aarch64-apple-darwin
           - name: macos-intel
-            platform: macos-15
+            platform: macos-latest
             args: '--target x86_64-apple-darwin'
             rust-targets: x86_64-apple-darwin
           - name: linux-x86_64
