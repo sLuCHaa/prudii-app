@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { Reply, ReplyAll, Forward, Star, StarOff, Mail as MailIcon, MailOpen, Archive, Trash2, Pin, PinOff, Clock, ChevronRight } from "lucide-react";
+import { Reply, ReplyAll, Forward, Star, StarOff, Mail as MailIcon, MailOpen, Archive, Trash2, Pin, PinOff, Clock, ChevronRight, FolderInput } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { Mail } from "../../types";
+import type { Mail, Folder } from "../../types";
 import { useAppStore } from "../../stores/appStore";
+
+export type BulkMailAction = "mark_read" | "mark_unread" | "star" | "unstar" | "archive" | "trash";
 
 interface MailContextMenuProps {
   mail: Mail;
@@ -19,6 +21,14 @@ interface MailContextMenuProps {
   onTrash: (mail: Mail) => void;
   onTogglePin?: (mail: Mail) => void;
   onSnooze?: (mail: Mail, until: string) => void;
+  /** Bulk mode: number of selected mails; menu switches to bulk items when >= 2 and onBulkAction is set. */
+  selectedCount?: number;
+  onBulkAction?: (action: BulkMailAction) => void;
+  onBulkSnooze?: (until: string) => void;
+  /** Move all selected mails to a folder; only offered when moveFolders is non-empty. */
+  onBulkMove?: (destFolderId: string) => void;
+  /** Move targets (folders of the selection's common account). */
+  moveFolders?: Folder[];
 }
 
 function getSnoozePresets(t: (key: string) => string): { label: string; getDate: () => string }[] {
@@ -76,11 +86,18 @@ export function MailContextMenu({
   onTrash,
   onTogglePin,
   onSnooze,
+  selectedCount,
+  onBulkAction,
+  onBulkSnooze,
+  onBulkMove,
+  moveFolders,
 }: MailContextMenuProps) {
   const { t } = useTranslation();
   const menuRef = useRef<HTMLDivElement>(null);
-  const [showSnoozeMenu, setShowSnoozeMenu] = useState(false);
+  const [activeSubmenu, setActiveSubmenu] = useState<"snooze" | "move" | null>(null);
   const hasFeature = useAppStore((s) => s.hasFeature);
+
+  const bulkMode = !!onBulkAction && (selectedCount ?? 0) >= 2;
 
   const adjustedPosition = useCallback(() => {
     const menuWidth = 200;
@@ -112,7 +129,7 @@ export function MailContextMenu({
     };
   }, [onClose]);
 
-  const items: ({ icon: React.ReactNode; label: string; action: () => void; danger?: boolean; submenu?: boolean } | { separator: true })[] = [
+  const singleItems: ({ icon: React.ReactNode; label: string; action: () => void; danger?: boolean; submenu?: boolean } | { separator: true })[] = [
     { icon: <Reply className="w-4 h-4" />, label: t("mailDetail.reply"), action: () => onReply(mail) },
     { icon: <ReplyAll className="w-4 h-4" />, label: t("compose.replyAll"), action: () => onReplyAll(mail) },
     { icon: <Forward className="w-4 h-4" />, label: t("mailDetail.forward"), action: () => onForward(mail) },
@@ -135,13 +152,38 @@ export function MailContextMenu({
     ...(onSnooze && hasFeature("snooze") ? [{
       icon: <Clock className="w-4 h-4" />,
       label: t("snooze.snooze"),
-      action: () => setShowSnoozeMenu(true),
+      action: () => setActiveSubmenu("snooze"),
       submenu: true,
     }] : []),
     { separator: true },
     { icon: <Archive className="w-4 h-4" />, label: t("mailDetail.archive"), action: () => onArchive(mail) },
     { icon: <Trash2 className="w-4 h-4 text-danger" />, label: t("mailDetail.trash"), action: () => onTrash(mail), danger: true },
   ];
+
+  const bulkItems: typeof singleItems = [
+    { icon: <MailOpen className="w-4 h-4" />, label: t("mailDetail.markRead"), action: () => onBulkAction!("mark_read") },
+    { icon: <MailIcon className="w-4 h-4" />, label: t("mailDetail.markUnread"), action: () => onBulkAction!("mark_unread") },
+    { separator: true },
+    { icon: <Star className="w-4 h-4" />, label: t("mailDetail.star"), action: () => onBulkAction!("star") },
+    { icon: <StarOff className="w-4 h-4" />, label: t("mailDetail.unstar"), action: () => onBulkAction!("unstar") },
+    ...(onBulkSnooze && hasFeature("snooze") ? [{
+      icon: <Clock className="w-4 h-4" />,
+      label: t("snooze.snooze"),
+      action: () => setActiveSubmenu("snooze"),
+      submenu: true,
+    }] : []),
+    ...(onBulkMove && moveFolders && moveFolders.length > 0 ? [{
+      icon: <FolderInput className="w-4 h-4" />,
+      label: t("rules.moveToFolder"),
+      action: () => setActiveSubmenu("move"),
+      submenu: true,
+    }] : []),
+    { separator: true },
+    { icon: <Archive className="w-4 h-4" />, label: t("mailDetail.archive"), action: () => onBulkAction!("archive") },
+    { icon: <Trash2 className="w-4 h-4 text-danger" />, label: t("mailDetail.trash"), action: () => onBulkAction!("trash"), danger: true },
+  ];
+
+  const items = bulkMode ? bulkItems : singleItems;
 
   const snoozePresets = getSnoozePresets(t);
 
@@ -151,10 +193,10 @@ export function MailContextMenu({
       className="fixed z-9999 min-w-[180px] bg-surface rounded-lg shadow-lg border border-border py-1 animate-in fade-in zoom-in-95 duration-100"
       style={{ left: pos.left, top: pos.top }}
     >
-      {showSnoozeMenu ? (
+      {activeSubmenu === "snooze" ? (
         <>
           <button
-            onClick={() => setShowSnoozeMenu(false)}
+            onClick={() => setActiveSubmenu(null)}
             className="w-full flex items-center gap-3 px-3 py-1.5 text-sm text-text hover:bg-hover transition-colors"
           >
             <span className="text-text-tertiary"><ChevronRight className="w-4 h-4 rotate-180" /></span>
@@ -165,7 +207,8 @@ export function MailContextMenu({
             <button
               key={i}
               onClick={() => {
-                onSnooze?.(mail, preset.getDate());
+                if (bulkMode) onBulkSnooze?.(preset.getDate());
+                else onSnooze?.(mail, preset.getDate());
                 onClose();
               }}
               className="w-full flex items-center gap-3 px-3 py-1.5 text-sm text-text hover:bg-hover transition-colors"
@@ -175,27 +218,61 @@ export function MailContextMenu({
             </button>
           ))}
         </>
-      ) : (
-        items.map((item, i) =>
-          "separator" in item ? (
-            <div key={i} className="my-1 border-t border-border" />
-          ) : (
+      ) : activeSubmenu === "move" ? (
+        <>
+          <button
+            onClick={() => setActiveSubmenu(null)}
+            className="w-full flex items-center gap-3 px-3 py-1.5 text-sm text-text hover:bg-hover transition-colors"
+          >
+            <span className="text-text-tertiary"><ChevronRight className="w-4 h-4 rotate-180" /></span>
+            <span className="font-medium">{t("rules.moveToFolder")}</span>
+          </button>
+          <div className="my-1 border-t border-border" />
+          {(moveFolders ?? []).map((f) => (
             <button
-              key={i}
+              key={f.id}
               onClick={() => {
-                item.action();
-                if (!item.submenu) onClose();
+                onBulkMove?.(f.id);
+                onClose();
               }}
-              className={`w-full flex items-center gap-3 px-3 py-1.5 text-sm transition-colors hover:bg-hover ${
-                item.danger ? "text-danger" : "text-text"
-              }`}
+              className="w-full flex items-center gap-3 px-3 py-1.5 text-sm text-text hover:bg-hover transition-colors"
             >
-              <span className="text-text-tertiary">{item.icon}</span>
-              <span className="flex-1 text-left">{item.label}</span>
-              {item.submenu && <ChevronRight className="w-3 h-3 text-text-tertiary" />}
+              <span className="text-text-tertiary"><FolderInput className="w-4 h-4" /></span>
+              <span className="flex-1 text-left truncate">{f.name}</span>
             </button>
-          )
-        )
+          ))}
+        </>
+      ) : (
+        <>
+          {bulkMode && (
+            <>
+              <div className="px-3 py-1.5 text-xs font-semibold text-text-tertiary tabular-nums">
+                {selectedCount} {t("mailList.selectedSuffix")}
+              </div>
+              <div className="my-1 border-t border-border" />
+            </>
+          )}
+          {items.map((item, i) =>
+            "separator" in item ? (
+              <div key={i} className="my-1 border-t border-border" />
+            ) : (
+              <button
+                key={i}
+                onClick={() => {
+                  item.action();
+                  if (!item.submenu) onClose();
+                }}
+                className={`w-full flex items-center gap-3 px-3 py-1.5 text-sm transition-colors hover:bg-hover ${
+                  item.danger ? "text-danger" : "text-text"
+                }`}
+              >
+                <span className="text-text-tertiary">{item.icon}</span>
+                <span className="flex-1 text-left">{item.label}</span>
+                {item.submenu && <ChevronRight className="w-3 h-3 text-text-tertiary" />}
+              </button>
+            )
+          )}
+        </>
       )}
     </div>,
     document.body
