@@ -7,15 +7,15 @@ import { useQueryClient } from "@tanstack/react-query";
 import { FlagDots } from "../ui/FlagPicker";
 import { GradientAvatar } from "../motion/GradientAvatar";
 import { NumberTween } from "../motion/NumberTween";
-import { MailContextMenu } from "../ui/MailContextMenu";
+import { MailContextMenu, type BulkMailAction } from "../ui/MailContextMenu";
 import gsap from "gsap";
 import { useShallow } from "zustand/react/shallow";
 import { useAppStore } from "../../stores/appStore";
 import type { FolderFilter } from "../../stores/appStore";
-import { useMails, useFilteredMails, useAllInboxMails, useCombinedFolderMails, useSnoozedMails, useSplitInboxMails, useInboxSplits, useToggleStar, useTogglePin } from "../../hooks/useAccounts";
+import { useMails, useFilteredMails, useAllInboxMails, useCombinedFolderMails, useSnoozedMails, useSplitInboxMails, useInboxSplits, useToggleStar, useTogglePin, useFolders } from "../../hooks/useAccounts";
 import { useSearchMails } from "../../hooks/useSync";
 import { useScroller } from "../../hooks/useScroller";
-import { trashMail, archiveMail, toggleRead, countCombinedFolderMails, emptyAllTrash, emptyAllSpam, batchUpdateMails, snoozeMail, listScheduledMails, cancelScheduledSend } from "../../lib/tauri";
+import { trashMail, archiveMail, toggleRead, countCombinedFolderMails, emptyAllTrash, emptyAllSpam, batchUpdateMails, snoozeMail, moveMail, listScheduledMails, cancelScheduledSend } from "../../lib/tauri";
 import type { ScheduledMail, SearchResult } from "../../types";
 import { useDialog } from "../ui/DialogProvider";
 import { EmptyState, InboxZeroState, NoSearchResultsState } from "../ui/EmptyState";
@@ -954,7 +954,7 @@ export function MailList() {
     queryClient.invalidateQueries({ queryKey: ["split-inbox-mails"] });
   }, [queryClient]);
   const dialog = useDialog();
-  const [contextMenu, setContextMenu] = useState<{ mail: Mail; x: number; y: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ mail: Mail; x: number; y: number; bulk: boolean } | null>(null);
   const [snoozeMenuId, setSnoozeMenuId] = useState<string | null>(null);
   const [draggingMail, setDraggingMail] = useState<Mail | null>(null);
   const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
@@ -1193,8 +1193,78 @@ export function MailList() {
 
   const handleContextMenu = useCallback((e: React.MouseEvent, mail: Mail) => {
     e.preventDefault();
-    setContextMenu({ mail, x: e.clientX, y: e.clientY });
+    const s = useAppStore.getState();
+    if (s.multiSelectMode && s.selectedMailIds.has(mail.id) && s.selectedMailIds.size >= 2) {
+      setContextMenu({ mail, x: e.clientX, y: e.clientY, bulk: true });
+      return;
+    }
+    // Right-click on an unselected mail discards the selection (Gmail/Finder behavior).
+    if (s.multiSelectMode) s.clearSelection();
+    setContextMenu({ mail, x: e.clientX, y: e.clientY, bulk: false });
   }, []);
+
+  // Move targets for bulk move: only when all selected mails share one account.
+  const selectedMailObjects = useMemo(
+    () => mails.filter((m) => selectedMailIds.has(m.id)),
+    [mails, selectedMailIds]
+  );
+  const bulkAccountId = useMemo(() => {
+    if (selectedMailObjects.length < 2) return null;
+    const first = selectedMailObjects[0].account_id;
+    return selectedMailObjects.every((m) => m.account_id === first) ? first : null;
+  }, [selectedMailObjects]);
+  const bulkFoldersQuery = useFolders(bulkAccountId);
+  const bulkMoveFolders = useMemo(
+    () => (bulkFoldersQuery.data ?? []).filter((f) => f.id !== selectedFolderId && f.folder_type !== "drafts"),
+    [bulkFoldersQuery.data, selectedFolderId]
+  );
+
+  const runBulkAction = useCallback((action: BulkMailAction) => {
+    const s = useAppStore.getState();
+    const ids = Array.from(s.selectedMailIds);
+    if (ids.length === 0) return;
+    const idSet = s.selectedMailIds;
+    if (action === "archive" || action === "trash") {
+      setMails((prev) => prev.filter((m) => !idSet.has(m.id)));
+    } else {
+      const patch: Partial<Mail> =
+        action === "mark_read" ? { is_read: true }
+        : action === "mark_unread" ? { is_read: false }
+        : action === "star" ? { is_starred: true }
+        : { is_starred: false };
+      setMails((prev) => prev.map((m) => (idSet.has(m.id) ? { ...m, ...patch } : m)));
+    }
+    s.clearSelection();
+    runMailAction(() => batchUpdateMails(ids, action), {
+      errorKey: "errors.batchUpdate",
+      invalidate: invalidateMailQueries,
+    });
+  }, [setMails, invalidateMailQueries]);
+
+  const runBulkPerMail = useCallback((fn: (id: string) => Promise<unknown>, errorKey: string) => {
+    const s = useAppStore.getState();
+    const ids = Array.from(s.selectedMailIds);
+    if (ids.length === 0) return;
+    const idSet = s.selectedMailIds;
+    setMails((prev) => prev.filter((m) => !idSet.has(m.id)));
+    s.clearSelection();
+    runMailAction(async () => {
+      const results = await Promise.allSettled(ids.map(fn));
+      const firstFailure = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
+      if (firstFailure) throw firstFailure.reason;
+    }, {
+      errorKey,
+      invalidate: invalidateMailQueries,
+    });
+  }, [setMails, invalidateMailQueries]);
+
+  const handleBulkSnooze = useCallback((until: string) => {
+    runBulkPerMail((id) => snoozeMail(id, until), "errors.snooze");
+  }, [runBulkPerMail]);
+
+  const handleBulkMove = useCallback((destFolderId: string) => {
+    runBulkPerMail((id) => moveMail(id, destFolderId), "errors.move");
+  }, [runBulkPerMail]);
 
   /**
    * Call after each successful archive action.
@@ -1778,6 +1848,11 @@ export function MailList() {
               onPendingClear: () => setPendingRemoveId(null),
             });
           }}
+          selectedCount={contextMenu.bulk ? selectedMailIds.size : undefined}
+          onBulkAction={contextMenu.bulk ? runBulkAction : undefined}
+          onBulkSnooze={contextMenu.bulk ? handleBulkSnooze : undefined}
+          onBulkMove={contextMenu.bulk ? handleBulkMove : undefined}
+          moveFolders={contextMenu.bulk ? bulkMoveFolders : undefined}
         />
       )}
     </div>
