@@ -190,7 +190,7 @@ export function MailContextMenu({
   return createPortal(
     <div
       ref={menuRef}
-      className="fixed z-9999 min-w-[180px] bg-surface rounded-lg shadow-lg border border-border py-1 animate-in fade-in zoom-in-95 duration-100"
+      className="fixed z-9999 min-w-[180px] max-h-[min(60vh,400px)] overflow-y-auto bg-surface rounded-lg shadow-lg border border-border py-1 animate-in fade-in zoom-in-95 duration-100"
       style={{ left: pos.left, top: pos.top }}
     >
       {activeSubmenu === "snooze" ? (

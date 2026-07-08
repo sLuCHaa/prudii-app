@@ -1375,6 +1375,7 @@ export function MailList() {
       }
 
       if (e.key === "Escape" && multiSelectMode) {
+        if (contextMenu) return; // menu's own Escape handler closes it; keep the selection
         e.preventDefault();
         clearSelection();
         return;
@@ -1387,6 +1388,7 @@ export function MailList() {
       }
 
       if (e.key === "Delete" && multiSelectMode && selectedMailIds.size > 0) {
+        if (contextMenu) return;
         e.preventDefault();
         const ids = Array.from(selectedMailIds);
         setMails(mails.filter((m) => !selectedMailIds.has(m.id)));
@@ -1412,7 +1414,7 @@ export function MailList() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [filteredMails, selectedMailIndex, selectMail, setSelectedMailId, multiSelectMode, selectedMailIds, clearSelection, selectAllMails, setMails, mails, isSearchActive, searchResultsData, selectedMailId]);
+  }, [filteredMails, selectedMailIndex, selectMail, setSelectedMailId, multiSelectMode, selectedMailIds, clearSelection, selectAllMails, setMails, mails, isSearchActive, searchResultsData, selectedMailId, contextMenu]);
 
   useEffect(() => {
     if (!listRef.current || isLoading || prefersReducedMotion()) return;

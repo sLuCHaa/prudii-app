@@ -185,7 +185,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setMails: (mails) => set((state) => ({
     mails: typeof mails === "function" ? mails(state.mails) : mails,
   })),
-  setSelectedMailId: (selectedMailId) => set({ selectedMailId, selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
+  setSelectedMailId: (selectedMailId) => set({ selectedMailId, selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: selectedMailId }),
   setSelectedMailIndex: (selectedMailIndex) => set({ selectedMailIndex }),
   setActiveFilter: (activeFilter) => set((state) => ({
     activeFilter,
@@ -230,14 +230,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   }),
   selectMailRange: (toMailId, visibleMails) => set((state) => {
     const fromId = state.lastSelectedMailId;
-    if (!fromId) {
+    const fromIdx = fromId ? visibleMails.findIndex((m) => m.id === fromId) : -1;
+    const toIdx = visibleMails.findIndex((m) => m.id === toMailId);
+    if (toIdx === -1) return {};
+    if (fromIdx === -1) {
       const next = new Set(state.selectedMailIds);
       next.add(toMailId);
       return { selectedMailIds: next, multiSelectMode: true, lastSelectedMailId: toMailId };
     }
-    const fromIdx = visibleMails.findIndex((m) => m.id === fromId);
-    const toIdx = visibleMails.findIndex((m) => m.id === toMailId);
-    if (fromIdx === -1 || toIdx === -1) return {};
     const start = Math.min(fromIdx, toIdx);
     const end = Math.max(fromIdx, toIdx);
     const next = new Set(state.selectedMailIds);
