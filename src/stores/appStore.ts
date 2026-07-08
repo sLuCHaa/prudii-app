@@ -84,6 +84,7 @@ interface AppState {
   selectMailRange: (toMailId: string, visibleMails: Mail[]) => void;
   selectAllMails: (mailIds: string[]) => void;
   clearSelection: () => void;
+  setLastSelectedMailId: (id: string | null) => void;
 
   // Animation coordination
   pendingRemoveId: string | null;
@@ -255,6 +256,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     multiSelectMode: false,
     lastSelectedMailId: null,
   }),
+  setLastSelectedMailId: (lastSelectedMailId) => set({ lastSelectedMailId }),
 
   // Animation coordination
   pendingRemoveId: null,

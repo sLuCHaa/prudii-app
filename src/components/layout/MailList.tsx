@@ -1245,6 +1245,7 @@ export function MailList() {
       if (index >= 0 && index < filteredMails.length) {
         const mail = filteredMails[index];
         setSelectedMailIndex(index);
+        useAppStore.getState().setLastSelectedMailId(mail.id);
         if (isDraftsFolder) {
           openCompose("draft", mail);
         } else {
@@ -1260,7 +1261,7 @@ export function MailList() {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
         toggleMailSelection(mail.id);
-      } else if (e.shiftKey && multiSelectMode) {
+      } else if (e.shiftKey) {
         e.preventDefault();
         selectMailRange(mail.id, filteredMails);
       } else if (multiSelectMode) {
