@@ -29,12 +29,10 @@
     "send": "Send",
     "sent": "Sent"
   },
-  "app": {
-    "offline": {
-      "message": "No internet connection. You can still read cached mail.",
-      "retry": "Retry",
-      "checking": "Checking connection…"
-    }
+  "offline": {
+    "message": "No internet connection. You can still read cached mail.",
+    "retry": "Retry",
+    "checking": "Checking connection…"
   },
   "sidebar": {
     "views": "Views",

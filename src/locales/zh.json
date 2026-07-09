@@ -29,11 +29,10 @@
     "send": "发送",
     "sent": "已发送"
   },
-  "app": {
-    "offline": {
-      "message": "没有网络连接。您仍然可以阅读已缓存的邮件。",
-      "retry": "重试"
-    }
+  "offline": {
+    "message": "没有网络连接。您仍然可以阅读已缓存的邮件。",
+    "retry": "重试",
+    "checking": "正在检查连接…"
   },
   "sidebar": {
     "views": "视图",

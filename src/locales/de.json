@@ -29,12 +29,10 @@
     "send": "Senden",
     "sent": "Gesendet"
   },
-  "app": {
-    "offline": {
-      "message": "Keine Internetverbindung. Du kannst gespeicherte Mails weiter lesen.",
-      "retry": "Erneut versuchen",
-      "checking": "Verbindung wird geprüft…"
-    }
+  "offline": {
+    "message": "Keine Internetverbindung. Du kannst gespeicherte Mails weiter lesen.",
+    "retry": "Erneut versuchen",
+    "checking": "Verbindung wird geprüft…"
   },
   "sidebar": {
     "views": "Ansichten",

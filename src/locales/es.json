@@ -29,11 +29,10 @@
     "send": "Enviar",
     "sent": "Enviado"
   },
-  "app": {
-    "offline": {
-      "message": "Sin conexión a internet. Puedes seguir leyendo los correos en caché.",
-      "retry": "Reintentar"
-    }
+  "offline": {
+    "message": "Sin conexión a internet. Puedes seguir leyendo los correos en caché.",
+    "retry": "Reintentar",
+    "checking": "Comprobando conexión…"
   },
   "sidebar": {
     "views": "Vistas",
