@@ -24,7 +24,7 @@ import { TrackingIndicator } from "./TrackingIndicator";
 import { AiSummaryButton, AiSummaryPanel } from "../ai/AiSummary";
 import { AiReplyButton, AiReplySuggestionsPanel } from "../ai/AiReplySuggestions";
 import { useDialog } from "../ui/DialogProvider";
-import type { Mail, Attachment } from "../../types";
+import type { Mail, Attachment, MailAddress } from "../../types";
 import { useTranslation } from "react-i18next";
 import { ImageLightbox, type ImageLightboxItem } from "./ImageLightbox";
 
@@ -42,6 +42,10 @@ function formatFileSize(bytes: number | null): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatRecipient(a: MailAddress): string {
+  return a.name && a.name !== a.email ? `${a.name} <${a.email}>` : a.email;
 }
 
 const AttachmentItem = memo(function AttachmentItem({
@@ -440,6 +444,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, sing
   const setMails = useAppStore((s) => s.setMails);
   const appSettings = useAppStore((s) => s.appSettings);
   const accounts = useAppStore((s) => s.accounts);
+  const folders = useAppStore((s) => s.folders);
   const toggleStarMutation = useToggleStar();
   const toggleFlagMutation = useToggleMailFlag();
   const contentRef = useRef<HTMLDivElement>(null);
@@ -560,15 +565,22 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, sing
   , [mail.date, appSettings.use_24h_clock]);
 
   const recipients = useMemo(() =>
-    mail.to.map((t) => t.name || t.email).join(", ")
+    mail.to.map(formatRecipient).join(", ")
   , [mail.to]);
 
   const ccRecipients = useMemo(() =>
-    mail.cc.length > 0 ? mail.cc.map((c) => c.name || c.email).join(", ") : null
+    mail.cc.length > 0 ? mail.cc.map(formatRecipient).join(", ") : null
   , [mail.cc]);
 
+  const isDraft = useMemo(
+    () => folders.find((f) => f.id === mail.folder_id)?.folder_type === "drafts",
+    [folders, mail.folder_id],
+  );
+
   return (
-    <div className={`bg-surface border border-border rounded-xl overflow-hidden transition-shadow ${!singleMail && isLatest ? "ring-2 ring-accent/30" : ""}`}>
+    <div className={`bg-surface border border-border rounded-xl overflow-hidden transition-shadow ${
+      isDraft ? "ring-2 ring-warning/40" : !singleMail && isLatest ? "ring-2 ring-accent/30" : ""
+    }`}>
       <div
         role={singleMail ? undefined : "button"}
         tabIndex={singleMail ? undefined : 0}
@@ -586,7 +598,12 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, sing
             <span className="font-medium text-text text-sm truncate">
               {mail.from.name || mail.from.email}
             </span>
-            {!singleMail && isLatest && (
+            {isDraft && (
+              <span className="px-1.5 py-0.5 text-[10px] font-medium bg-warning/15 text-warning rounded shrink-0">
+                {t("mailDetail.draft")}
+              </span>
+            )}
+            {!singleMail && isLatest && !isDraft && (
               <span className="px-1.5 py-0.5 text-[10px] font-medium bg-accent/10 text-accent rounded">
                 {t("mailDetail.latest")}
               </span>

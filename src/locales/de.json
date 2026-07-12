@@ -211,6 +211,7 @@
     "archiveConversation": "Konversation archivieren",
     "deleteConversation": "Konversation löschen",
     "latest": "Neueste",
+    "draft": "Entwurf",
     "message_one": "{{count}} Nachricht in der Konversation",
     "message_other": "{{count}} Nachrichten in der Konversation",
     "messagesWithAttachments_one": "{{count}} Nachricht mit Anhängen",

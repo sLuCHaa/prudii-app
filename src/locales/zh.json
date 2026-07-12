@@ -211,6 +211,7 @@
     "archiveConversation": "归档会话",
     "deleteConversation": "删除会话",
     "latest": "最新",
+    "draft": "草稿",
     "message_one": "会话中的 {{count}} 封邮件",
     "message_other": "会话中的 {{count}} 封邮件",
     "messagesWithAttachments_one": "{{count}} 封带附件的邮件",

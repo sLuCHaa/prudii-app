@@ -1404,6 +1404,11 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       };
 
       await saveDraft(request);
+      // Editing an existing draft saves a new one — drop the superseded version, or it
+      // piles up as a duplicate. Only after the new draft is safely stored.
+      if (mode === "draft" && originalMail) {
+        await trashMail(originalMail.id).catch(() => {});
+      }
       setLastSavedAt(new Date());
       // Sync the account so the draft appears in the local mail list
       syncAccount(request.account_id).catch(() => {});

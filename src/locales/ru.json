@@ -213,6 +213,7 @@
     "archiveConversation": "Архивировать переписку",
     "deleteConversation": "Удалить переписку",
     "latest": "Последнее",
+    "draft": "Черновик",
     "message_one": "{{count}} письмо в переписке",
     "message_other": "{{count}} писем в переписке",
     "messagesWithAttachments_one": "{{count}} письмо с вложениями",

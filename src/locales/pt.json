@@ -211,6 +211,7 @@
     "archiveConversation": "Arquivar conversa",
     "deleteConversation": "Excluir conversa",
     "latest": "Mais recente",
+    "draft": "Rascunho",
     "message_one": "{{count}} mensagem na conversa",
     "message_other": "{{count}} mensagens na conversa",
     "messagesWithAttachments_one": "{{count}} mensagem com anexos",

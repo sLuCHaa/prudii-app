@@ -211,6 +211,7 @@
     "archiveConversation": "Archive conversation",
     "deleteConversation": "Delete conversation",
     "latest": "Latest",
+    "draft": "Draft",
     "message_one": "{{count}} message in conversation",
     "message_other": "{{count}} messages in conversation",
     "messagesWithAttachments_one": "{{count}} message with attachments",
