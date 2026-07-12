@@ -296,13 +296,55 @@ const SignatureNode = Node.create({
 
 export type ComposeMode = "new" | "reply" | "replyAll" | "forward" | "draft";
 
+/**
+ * Split an address list into recipients. A comma is only a separator when it is not
+ * part of a display name — unquoted names like `Röhling, Thomas <t@example.com>` are
+ * common in reply headers and must not be torn into two bogus recipients.
+ */
+function splitAddressList(input: string): string[] {
+  const segments: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  let inAngle = false;
+  for (const ch of input) {
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+    } else if (!inQuotes && ch === "<") {
+      inAngle = true;
+    } else if (!inQuotes && ch === ">") {
+      inAngle = false;
+    } else if (ch === "," && !inQuotes && !inAngle) {
+      segments.push(current);
+      current = "";
+      continue;
+    }
+    current += ch;
+  }
+  segments.push(current);
+
+  // A segment without '@' cannot be an address of its own — it is the leading part of
+  // an unquoted display name, so re-join it with the segments that follow.
+  const recipients: string[] = [];
+  let pending: string[] = [];
+  for (const segment of segments) {
+    pending.push(segment);
+    if (segment.includes("@")) {
+      recipients.push(pending.join(",").trim());
+      pending = [];
+    }
+  }
+  if (pending.join(",").trim()) {
+    recipients.push(pending.join(",").trim());
+  }
+  return recipients.filter(Boolean);
+}
+
 function parseRecipients(input: string): { email: string; name?: string }[] {
   if (!input.trim()) return [];
-  return input.split(",").map((part) => {
-    const trimmed = part.trim();
+  return splitAddressList(input).map((trimmed) => {
     const match = trimmed.match(/^(.+?)\s*<(.+?)>$/);
     if (match) {
-      return { name: match[1].trim(), email: match[2].trim() };
+      return { name: match[1].trim().replace(/^"|"$/g, "").trim(), email: match[2].trim() };
     }
     return { email: trimmed };
   });
