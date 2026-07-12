@@ -665,7 +665,8 @@
   "undoSend": {
     "sending": "Отправка сообщения...",
     "undo": "Отменить",
-    "messageSent": "Сообщение отправлено"
+    "messageSent": "Сообщение отправлено",
+    "draftCleanupFailedTitle": "Не удалось удалить черновик"
   },
   "rules": {
     "title": "Правила почты",

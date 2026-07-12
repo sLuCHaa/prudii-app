@@ -663,7 +663,8 @@
   "undoSend": {
     "sending": "正在发送消息...",
     "undo": "撤销",
-    "messageSent": "消息已发送"
+    "messageSent": "消息已发送",
+    "draftCleanupFailedTitle": "无法删除草稿"
   },
   "rules": {
     "title": "邮件规则",

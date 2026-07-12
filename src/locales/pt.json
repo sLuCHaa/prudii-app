@@ -663,7 +663,8 @@
   "undoSend": {
     "sending": "Enviando mensagem...",
     "undo": "Desfazer",
-    "messageSent": "Mensagem enviada"
+    "messageSent": "Mensagem enviada",
+    "draftCleanupFailedTitle": "Não foi possível remover o rascunho"
   },
   "rules": {
     "title": "Regras de e-mail",

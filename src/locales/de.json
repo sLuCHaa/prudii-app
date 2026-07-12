@@ -663,7 +663,8 @@
   "undoSend": {
     "sending": "Nachricht wird gesendet...",
     "undo": "Rückgängig",
-    "messageSent": "Nachricht gesendet"
+    "messageSent": "Nachricht gesendet",
+    "draftCleanupFailedTitle": "Entwurf konnte nicht entfernt werden"
   },
   "rules": {
     "title": "Mail-Regeln",

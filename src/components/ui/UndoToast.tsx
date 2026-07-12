@@ -29,8 +29,17 @@ export function UndoToast() {
     try {
       await sendMail(undoSend.request);
       // Sent from a saved draft — remove the original draft (moves it to Trash).
+      // A failure here leaves the sent mail sitting in Drafts, so say so instead of
+      // swallowing it: the mail went out, only the cleanup did not.
       if (undoSend.composeMode === "draft" && undoSend.composeMail) {
-        trashMail(undoSend.composeMail.id).catch(() => {});
+        trashMail(undoSend.composeMail.id).catch((err) => {
+          console.error("draft cleanup after send failed", err);
+          useAppStore.getState().addToast(
+            "warning",
+            t("undoSend.draftCleanupFailedTitle"),
+            err instanceof Error ? err.message : String(err),
+          );
+        });
       }
       syncAccount(undoSend.request.account_id).catch(() => {});
       setPhase("sent");

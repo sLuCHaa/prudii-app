@@ -1216,8 +1216,11 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       setSending(true);
       sendMail(request).then(() => {
         // Sent from a saved draft — remove the original draft (moves it to Trash).
+        // Never swallow the failure: it leaves the already-sent mail in Drafts.
         if (mode === "draft" && originalMail) {
-          trashMail(originalMail.id).catch(() => {});
+          trashMail(originalMail.id).catch((err) => {
+            console.error("draft cleanup after send failed", err);
+          });
         }
         syncAccount(request.account_id).catch(() => {});
         onClose();
@@ -1418,7 +1421,9 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       // Editing an existing draft saves a new one — drop the superseded version, or it
       // piles up as a duplicate. Only after the new draft is safely stored.
       if (mode === "draft" && originalMail) {
-        await trashMail(originalMail.id).catch(() => {});
+        await trashMail(originalMail.id).catch((err) => {
+          console.error("superseded draft cleanup failed", err);
+        });
       }
       setLastSavedAt(new Date());
       // Sync the account so the draft appears in the local mail list

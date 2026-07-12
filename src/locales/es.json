@@ -663,7 +663,8 @@
   "undoSend": {
     "sending": "Enviando mensaje...",
     "undo": "Deshacer",
-    "messageSent": "Mensaje enviado"
+    "messageSent": "Mensaje enviado",
+    "draftCleanupFailedTitle": "No se pudo eliminar el borrador"
   },
   "rules": {
     "title": "Reglas de correo",

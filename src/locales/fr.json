@@ -663,7 +663,8 @@
   "undoSend": {
     "sending": "Envoi du message...",
     "undo": "Annuler",
-    "messageSent": "Message envoyé"
+    "messageSent": "Message envoyé",
+    "draftCleanupFailedTitle": "Impossible de supprimer le brouillon"
   },
   "rules": {
     "title": "Règles de messagerie",
