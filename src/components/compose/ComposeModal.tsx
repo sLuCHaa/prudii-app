@@ -722,6 +722,36 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     const isReplyOrForward = mode === "reply" || mode === "replyAll" || mode === "forward";
     const signature = getSignatureHtml(defaultAccountId, isReplyOrForward);
 
+    // Pull an existing mail's attachments into the composer. fetchMailBody first:
+    // attachment rows only exist once the body has been fetched, and it re-fetches
+    // when the mail claims attachments but has no rows yet.
+    async function loadAttachmentsFrom(mailId: string) {
+      try {
+        await fetchMailBody(mailId);
+        if (cancelled) return;
+        const atts = await listAttachments(mailId);
+        if (cancelled) return;
+        const files: AttachmentFile[] = [];
+        for (const att of atts.filter((a) => !a.is_inline)) {
+          if (cancelled) return;
+          try {
+            const dataUri = await getAttachmentPreview(att.id);
+            const base64 = dataUri?.split(",")[1];
+            if (base64) {
+              files.push({
+                name: att.filename,
+                size: att.size_bytes ?? 0,
+                type: att.mime_type ?? "application/octet-stream",
+                data: base64,
+              });
+            }
+          } catch { /* skip unreadable attachments */ }
+        }
+        if (cancelled) return;
+        setAttachments(files);
+      } catch { /* leave the composer without attachments */ }
+    }
+
     let content = "";
 
     if (mode === "draft" && originalMail) {
@@ -737,7 +767,12 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       setShowCc(ccFormatted.length > 0);
       setShowBcc(false);
       setSubject(originalMail.subject || "");
+      // A draft's attachments live on the server, not in compose state. Without this
+      // they silently vanish: reopening the draft and sending would drop them.
       setAttachments([]);
+      if (originalMail.has_attachments) {
+        void loadAttachmentsFrom(originalMail.id);
+      }
       if (originalMail.account_id) {
         setFromAccountId(originalMail.account_id);
       }
@@ -823,31 +858,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         content = `<p></p>${signature}`;
 
         if (originalMail.has_attachments) {
-          listAttachments(originalMail.id).then(async (atts) => {
-            if (cancelled) return;
-            const nonInline = atts.filter(a => !a.is_inline);
-            const files: AttachmentFile[] = [];
-            for (const att of nonInline) {
-              if (cancelled) return;
-              try {
-                const dataUri = await getAttachmentPreview(att.id);
-                if (cancelled) return;
-                if (dataUri) {
-                  const base64 = dataUri.split(",")[1];
-                  if (base64) {
-                    files.push({
-                      name: att.filename,
-                      size: att.size_bytes ?? 0,
-                      type: att.mime_type ?? "application/octet-stream",
-                      data: base64,
-                    });
-                  }
-                }
-              } catch { /* skip unreadable attachments */ }
-            }
-            if (cancelled) return;
-            setAttachments(files);
-          }).catch(() => {});
+          void loadAttachmentsFrom(originalMail.id);
         }
       }
     }
