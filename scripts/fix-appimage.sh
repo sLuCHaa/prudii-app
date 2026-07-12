@@ -76,13 +76,9 @@ curl -fsSL "$APPIMAGETOOL_URL" -o "$workdir/appimagetool"
 chmod +x "$workdir/appimagetool"
 
 # --appimage-extract-and-run: GitHub runners have no FUSE.
-# --no-appstream is not accepted by every appimagetool build, so fall back without it.
-if ! ARCH=x86_64 "$workdir/appimagetool" --appimage-extract-and-run --no-appstream \
-      "$workdir/squashfs-root" "$appimage"; then
-  echo "appimagetool rejected --no-appstream, retrying without it"
-  ARCH=x86_64 "$workdir/appimagetool" --appimage-extract-and-run \
-    "$workdir/squashfs-root" "$appimage"
-fi
+# appimagetool shells out to desktop-file-validate, so desktop-file-utils must be installed.
+ARCH=x86_64 "$workdir/appimagetool" --appimage-extract-and-run --no-appstream \
+  "$workdir/squashfs-root" "$appimage"
 chmod +x "$appimage"
 
 if [ ! -s "$appimage" ]; then

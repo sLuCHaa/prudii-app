@@ -64,6 +64,7 @@ jobs:
             libssl-dev \
             patchelf \
             build-essential \
+            desktop-file-utils \
             file wget curl
 
       - name: Setup pnpm
