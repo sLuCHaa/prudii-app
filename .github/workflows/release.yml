@@ -173,12 +173,24 @@ jobs:
       - name: Replace AppImage assets and patch latest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # No checkout in this job, so gh cannot infer the repo from git.
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
           appimage="$(find linux -name '*.AppImage' -print -quit)"
           [ -n "$appimage" ] || { echo "repacked AppImage missing from artifacts" >&2; exit 1; }
           [ -f "${appimage}.sig" ] || { echo "signature missing for $appimage" >&2; exit 1; }
+
+          # tauri-action replaces spaces with dots when it uploads; the asset name comes
+          # from the file name, so match it exactly or --clobber adds a second asset.
+          dir="$(dirname "$appimage")"
+          asset="$(basename "$appimage" | tr ' ' '.')"
+          if [ "$(basename "$appimage")" != "$asset" ]; then
+            mv "$appimage" "$dir/$asset"
+            mv "${appimage}.sig" "$dir/${asset}.sig"
+            appimage="$dir/$asset"
+          fi
 
           gh release upload "$TAG" "$appimage" "${appimage}.sig" --clobber
 
