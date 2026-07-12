@@ -14,7 +14,7 @@
 set -euo pipefail
 
 APPIMAGE_DIR="src-tauri/target/release/bundle/appimage"
-APPIMAGETOOL_URL="https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage"
+APPIMAGETOOL_URL="https://github.com/AppImage/appimagetool/releases/download/1.9.0/appimagetool-x86_64.AppImage"
 
 # Libraries that are known to break when shipped instead of taken from the host.
 REMOVE_GLOBS=(
@@ -76,9 +76,19 @@ curl -fsSL "$APPIMAGETOOL_URL" -o "$workdir/appimagetool"
 chmod +x "$workdir/appimagetool"
 
 # --appimage-extract-and-run: GitHub runners have no FUSE.
-ARCH=x86_64 "$workdir/appimagetool" --appimage-extract-and-run --no-appstream \
-  "$workdir/squashfs-root" "$appimage"
+# --no-appstream is not accepted by every appimagetool build, so fall back without it.
+if ! ARCH=x86_64 "$workdir/appimagetool" --appimage-extract-and-run --no-appstream \
+      "$workdir/squashfs-root" "$appimage"; then
+  echo "appimagetool rejected --no-appstream, retrying without it"
+  ARCH=x86_64 "$workdir/appimagetool" --appimage-extract-and-run \
+    "$workdir/squashfs-root" "$appimage"
+fi
 chmod +x "$appimage"
+
+if [ ! -s "$appimage" ]; then
+  echo "Repacked AppImage is missing or empty" >&2
+  exit 1
+fi
 
 : "${TAURI_SIGNING_PRIVATE_KEY:?private key required to re-sign the repacked AppImage}"
 rm -f "${appimage}.sig"
