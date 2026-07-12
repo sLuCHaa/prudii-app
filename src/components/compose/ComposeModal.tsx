@@ -296,11 +296,6 @@ const SignatureNode = Node.create({
 
 export type ComposeMode = "new" | "reply" | "replyAll" | "forward" | "draft";
 
-/**
- * Split an address list into recipients. A comma is only a separator when it is not
- * part of a display name — unquoted names like `Röhling, Thomas <t@example.com>` are
- * common in reply headers and must not be torn into two bogus recipients.
- */
 function splitAddressList(input: string): string[] {
   const segments: string[] = [];
   let current = "";
@@ -322,8 +317,6 @@ function splitAddressList(input: string): string[] {
   }
   segments.push(current);
 
-  // A segment without '@' cannot be an address of its own — it is the leading part of
-  // an unquoted display name, so re-join it with the segments that follow.
   const recipients: string[] = [];
   let pending: string[] = [];
   for (const segment of segments) {
@@ -722,9 +715,6 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     const isReplyOrForward = mode === "reply" || mode === "replyAll" || mode === "forward";
     const signature = getSignatureHtml(defaultAccountId, isReplyOrForward);
 
-    // Pull an existing mail's attachments into the composer. fetchMailBody first:
-    // attachment rows only exist once the body has been fetched, and it re-fetches
-    // when the mail claims attachments but has no rows yet.
     async function loadAttachmentsFrom(mailId: string) {
       try {
         await fetchMailBody(mailId);
@@ -767,8 +757,6 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       setShowCc(ccFormatted.length > 0);
       setShowBcc(false);
       setSubject(originalMail.subject || "");
-      // A draft's attachments live on the server, not in compose state. Without this
-      // they silently vanish: reopening the draft and sending would drop them.
       setAttachments([]);
       if (originalMail.has_attachments) {
         void loadAttachmentsFrom(originalMail.id);
@@ -1216,7 +1204,6 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       setSending(true);
       sendMail(request).then(() => {
         // Sent from a saved draft — remove the original draft (moves it to Trash).
-        // Never swallow the failure: it leaves the already-sent mail in Drafts.
         if (mode === "draft" && originalMail) {
           trashMail(originalMail.id).catch((err) => {
             console.error("draft cleanup after send failed", err);
@@ -1418,8 +1405,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       };
 
       await saveDraft(request);
-      // Editing an existing draft saves a new one — drop the superseded version, or it
-      // piles up as a duplicate. Only after the new draft is safely stored.
+      // Editing an existing draft saves a new one — drop the superseded version.
       if (mode === "draft" && originalMail) {
         await trashMail(originalMail.id).catch((err) => {
           console.error("superseded draft cleanup failed", err);

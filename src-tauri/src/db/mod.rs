@@ -332,10 +332,13 @@ impl Database {
                 log::info!("DB cleanup: backfilled {} missing FTS entries", fts_backfill);
             }
         }
-        // Ensure the API dedup index exists (recreate if it failed before due to duplicates)
+        // Ensure the API dedup index exists (recreate if it failed before due to duplicates).
+        // Mails without a Message-ID are excluded: SQLite treats empty strings as equal, so
+        // two Message-ID-less mails (drafts) in one folder would collide once uid is NULL.
         let _ = conn.execute_batch("DROP INDEX IF EXISTS idx_mails_gmail_dedup;");
         let _ = conn.execute_batch(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_mails_gmail_dedup ON mails(account_id, folder_id, message_id) WHERE uid IS NULL;"
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_mails_gmail_dedup ON mails(account_id, folder_id, message_id) \
+             WHERE uid IS NULL AND message_id IS NOT NULL AND message_id != '';"
         );
         // Ensure IMAP UID dedup index exists — the table-level UNIQUE(account_id, folder_id, uid)
         // is not applied to databases created before it was added (CREATE TABLE IF NOT EXISTS

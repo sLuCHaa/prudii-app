@@ -408,12 +408,12 @@ interface VirtualMailListProps {
   hasNextPage: boolean | undefined;
   isFetchingNextPage: boolean;
   handleListScroll: (e: React.UIEvent<HTMLDivElement>) => void;
-  handleMailClick: (e: React.MouseEvent, mail: Mail, index: number) => void;
+  handleMailClick: (e: React.MouseEvent | React.KeyboardEvent, mail: Mail, index: number) => void;
   handleContextMenu: (e: React.MouseEvent, mail: Mail) => void;
-  handleDragStart: (e: DragEvent<HTMLButtonElement>, mail: Mail) => void;
-  handleDrag: (e: DragEvent<HTMLButtonElement>) => void;
+  handleDragStart: (e: DragEvent<HTMLDivElement>, mail: Mail) => void;
+  handleDrag: (e: DragEvent<HTMLDivElement>) => void;
   handleDragEnd: () => void;
-  setMailItemRef: (id: string, el: HTMLButtonElement | null) => void;
+  setMailItemRef: (id: string, el: HTMLDivElement | null) => void;
   setMails: (updater: Mail[] | ((prev: Mail[]) => Mail[])) => void;
   toggleMailSelection: (id: string) => void;
   toggleStarMutation: { mutate: (id: string, opts?: { onError?: () => void }) => void };
@@ -620,15 +620,22 @@ function VirtualMailList({
                 transform: `translateY(${vRow.start}px)`,
               }}
             >
-              <button
+              <div
                 ref={(el) => setMailItemRef(mail.id, el)}
+                role="button"
+                tabIndex={0}
                 onClick={(e) => handleMailClick(e, mail, mailIndex)}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter" && e.key !== " ") return;
+                  e.preventDefault();
+                  handleMailClick(e, mail, mailIndex);
+                }}
                 onContextMenu={(e) => handleContextMenu(e, mail)}
                 draggable={!multiSelectMode}
                 onDragStart={(e) => handleDragStart(e, mail)}
                 onDrag={handleDrag}
                 onDragEnd={handleDragEnd}
-                className={`relative group/mail mail-item-draggable w-full text-left px-4 py-2.5 border-b border-border-light transition-all ${
+                className={`relative group/mail mail-item-draggable w-full text-left px-4 py-2.5 border-b border-border-light transition-all cursor-pointer ${
                   isSelected
                     ? "bg-accent/15"
                     : selectedMailId === mail.id
@@ -863,7 +870,7 @@ function VirtualMailList({
                     </div>
                   </div>
                 )}
-              </button>
+              </div>
             </div>
           );
         })}
@@ -960,19 +967,19 @@ export function MailList() {
   const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
   const [grabOffset, setGrabOffset] = useState({ x: 0, y: 0 });
   const [dragItemWidth, setDragItemWidth] = useState(320);
-  const mailItemRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const mailItemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const listRef = useRef<HTMLDivElement>(null);
   const wasLoadingRef = useRef(false);
 
   // Handle drag event to track position (mousemove doesn't work during HTML5 drag)
-  const handleDrag = useCallback((e: DragEvent<HTMLButtonElement>) => {
+  const handleDrag = useCallback((e: DragEvent<HTMLDivElement>) => {
     // During drag, clientX/clientY can be 0 at the end - ignore those
     if (e.clientX !== 0 && e.clientY !== 0) {
       setDragPosition({ x: e.clientX, y: e.clientY });
     }
   }, []);
 
-  const handleDragStart = useCallback((e: DragEvent<HTMLButtonElement>, mail: Mail) => {
+  const handleDragStart = useCallback((e: DragEvent<HTMLDivElement>, mail: Mail) => {
     e.dataTransfer.setData("application/x-mail-id", mail.id);
     e.dataTransfer.setData("application/x-mail-account-id", mail.account_id);
     e.dataTransfer.effectAllowed = "move";
@@ -1025,7 +1032,7 @@ export function MailList() {
     }
   }, [mails, draggingMail]);
 
-  const setMailItemRef = useCallback((id: string, el: HTMLButtonElement | null) => {
+  const setMailItemRef = useCallback((id: string, el: HTMLDivElement | null) => {
     if (el) {
       mailItemRefs.current.set(id, el);
     } else {
@@ -1327,7 +1334,7 @@ export function MailList() {
   );
 
   const handleMailClick = useCallback(
-    (e: React.MouseEvent, mail: Mail, index: number) => {
+    (e: React.MouseEvent | React.KeyboardEvent, mail: Mail, index: number) => {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
         toggleMailSelection(mail.id);
@@ -1418,7 +1425,7 @@ export function MailList() {
 
   useEffect(() => {
     if (!listRef.current || isLoading || prefersReducedMotion()) return;
-    const items = Array.from(listRef.current.querySelectorAll("button.mail-item-draggable")).slice(0, 20);
+    const items = Array.from(listRef.current.querySelectorAll(".mail-item-draggable")).slice(0, 20);
     if (items.length === 0) return;
     gsap.fromTo(items,
       { opacity: 0, y: ENTRANCE.y },
@@ -1435,7 +1442,7 @@ export function MailList() {
 
   useEffect(() => {
     if (wasLoadingRef.current && !isLoading && listRef.current && !prefersReducedMotion()) {
-      const items = Array.from(listRef.current.querySelectorAll("button.mail-item-draggable")).slice(0, 20);
+      const items = Array.from(listRef.current.querySelectorAll(".mail-item-draggable")).slice(0, 20);
       if (items.length > 0) {
         gsap.fromTo(items,
           { opacity: 0, y: ENTRANCE.y },
@@ -1445,6 +1452,15 @@ export function MailList() {
     }
     wasLoadingRef.current = isLoading;
   }, [isLoading]);
+
+  const selectAfterRemoval = useCallback((remaining: Mail[], index: number) => {
+    if (remaining.length === 0) {
+      setSelectedMailId(null);
+      return;
+    }
+    if (index < 0) return;
+    setSelectedMailId(remaining[Math.min(index, remaining.length - 1)].id);
+  }, [setSelectedMailId]);
 
   useEffect(() => {
     if (!pendingRemoveId) return;
@@ -1458,12 +1474,7 @@ export function MailList() {
         onComplete: () => {
           const { mails: currentMails, selectedMailIndex: idx } = useAppStore.getState();
           const remaining = currentMails.filter((m) => m.id !== removeId);
-          if (remaining.length === 0) {
-            setSelectedMailId(null);
-          } else {
-            const nextIndex = Math.min(idx, remaining.length - 1);
-            setSelectedMailId(remaining[nextIndex].id);
-          }
+          selectAfterRemoval(remaining, idx);
           setMails(remaining);
           setPendingRemoveId(null);
         },
@@ -1471,12 +1482,7 @@ export function MailList() {
     } else {
       // Element not found (e.g., already removed), fallback: just remove
       const remaining = mails.filter((m) => m.id !== removeId);
-      if (remaining.length === 0) {
-        setSelectedMailId(null);
-      } else {
-        const nextIndex = Math.min(selectedMailIndex, remaining.length - 1);
-        setSelectedMailId(remaining[nextIndex].id);
-      }
+      selectAfterRemoval(remaining, selectedMailIndex);
       setMails(remaining);
       setPendingRemoveId(null);
     }

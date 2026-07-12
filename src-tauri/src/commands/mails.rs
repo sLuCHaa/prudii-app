@@ -1751,19 +1751,28 @@ pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id:
                     rusqlite::params![mail_id],
                     |row| Ok((row.get(0)?, row.get::<_, i32>(1)? != 0)),
                 ).unwrap_or_default();
-                conn.execute(
+                match conn.execute(
                     "UPDATE mails SET folder_id = ?1, uid = NULL WHERE id = ?2",
                     rusqlite::params![trash_folder_id, mail_id],
-                ).map_err(|e| e.to_string())?;
-                if !source_folder_id.is_empty() {
-                    let _ = conn.execute("UPDATE folders SET total_count = MAX(0, total_count - 1) WHERE id = ?1", rusqlite::params![source_folder_id]);
-                    if !is_read {
-                        let _ = conn.execute("UPDATE folders SET unread_count = MAX(0, unread_count - 1) WHERE id = ?1", rusqlite::params![source_folder_id]);
+                ) {
+                    Ok(_) => {
+                        if !source_folder_id.is_empty() {
+                            let _ = conn.execute("UPDATE folders SET total_count = MAX(0, total_count - 1) WHERE id = ?1", rusqlite::params![source_folder_id]);
+                            if !is_read {
+                                let _ = conn.execute("UPDATE folders SET unread_count = MAX(0, unread_count - 1) WHERE id = ?1", rusqlite::params![source_folder_id]);
+                            }
+                        }
+                        let _ = conn.execute("UPDATE folders SET total_count = total_count + 1 WHERE id = ?1", rusqlite::params![trash_folder_id]);
+                        if !is_read {
+                            let _ = conn.execute("UPDATE folders SET unread_count = unread_count + 1 WHERE id = ?1", rusqlite::params![trash_folder_id]);
+                        }
                     }
-                }
-                let _ = conn.execute("UPDATE folders SET total_count = total_count + 1 WHERE id = ?1", rusqlite::params![trash_folder_id]);
-                if !is_read {
-                    let _ = conn.execute("UPDATE folders SET unread_count = unread_count + 1 WHERE id = ?1", rusqlite::params![trash_folder_id]);
+                    Err(e) => {
+                        log::error!(
+                            "MoveToTrash: local move of {} failed ({}) — running the server operation anyway",
+                            mail_id, e
+                        );
+                    }
                 }
             }
 
