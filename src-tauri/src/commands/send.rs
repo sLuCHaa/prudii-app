@@ -311,6 +311,7 @@ pub async fn save_draft(db: State<'_, Database>, pool: State<'_, ImapPool>, requ
             &client,
             &request.to,
             &request.cc,
+            &request.bcc,
             &request.subject,
             &request.body_text,
             request.body_html.as_deref(),
@@ -336,9 +337,12 @@ pub async fn save_draft(db: State<'_, Database>, pool: State<'_, ImapPool>, requ
         .from(from_mailbox)
         .subject(&request.subject);
 
-    // Add recipients — drafts may have no recipients yet, so use sender as placeholder
+    // Add recipients — drafts may have no recipients yet, so use sender as placeholder.
+    // Bcc is written to the draft too; without it the recipients are lost as soon as the
+    // draft is reopened.
     let has_any_recipient = request.to.iter().any(|a| !a.trim().is_empty())
-        || request.cc.iter().any(|a| !a.trim().is_empty());
+        || request.cc.iter().any(|a| !a.trim().is_empty())
+        || request.bcc.iter().any(|a| !a.trim().is_empty());
 
     if has_any_recipient {
         let mut added_any = false;
@@ -354,6 +358,13 @@ pub async fn save_draft(db: State<'_, Database>, pool: State<'_, ImapPool>, requ
             match smtp::parse_recipient(cc) {
                 Ok(addr) => { message_builder = message_builder.cc(addr); added_any = true; }
                 Err(e) => log::warn!("save_draft: skipping invalid cc address '{}': {}", cc, e),
+            }
+        }
+        for bcc in &request.bcc {
+            if bcc.trim().is_empty() { continue; }
+            match smtp::parse_recipient(bcc) {
+                Ok(addr) => { message_builder = message_builder.bcc(addr); added_any = true; }
+                Err(e) => log::warn!("save_draft: skipping invalid bcc address '{}': {}", bcc, e),
             }
         }
         // All addresses failed to parse — fall back to sender placeholder so draft still saves

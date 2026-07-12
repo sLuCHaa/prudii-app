@@ -400,6 +400,7 @@ pub async fn save_draft(
     client: &OutlookClient,
     to: &[String],
     cc: &[String],
+    bcc: &[String],
     subject: &str,
     body_text: &str,
     body_html: Option<&str>,
@@ -411,6 +412,11 @@ pub async fn save_draft(
         .collect();
 
     let cc_recipients: Vec<GraphRecipient> = cc.iter()
+        .filter(|a| !a.trim().is_empty())
+        .map(|a| parse_recipient(a))
+        .collect();
+
+    let bcc_recipients: Vec<GraphRecipient> = bcc.iter()
         .filter(|a| !a.trim().is_empty())
         .map(|a| parse_recipient(a))
         .collect();
@@ -439,7 +445,7 @@ pub async fn save_draft(
         body: SendBody { content_type, content },
         to_recipients,
         cc_recipients,
-        bcc_recipients: Vec::new(),
+        bcc_recipients,
         attachments: graph_attachments,
         internet_message_headers: Vec::new(),
     };

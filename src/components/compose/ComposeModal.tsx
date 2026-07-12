@@ -751,11 +751,14 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       const ccFormatted = originalMail.cc.map((r) =>
         r.name ? `${r.name} <${r.email}>` : r.email
       );
+      const bccFormatted = originalMail.bcc.map((r) =>
+        r.name ? `${r.name} <${r.email}>` : r.email
+      );
       setTo(toFormatted);
       setCc(ccFormatted);
-      setBcc([]);
+      setBcc(bccFormatted);
       setShowCc(ccFormatted.length > 0);
-      setShowBcc(false);
+      setShowBcc(bccFormatted.length > 0);
       setSubject(originalMail.subject || "");
       setAttachments([]);
       if (originalMail.has_attachments) {
