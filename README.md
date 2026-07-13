@@ -43,7 +43,8 @@
 - ⚡ **Native & fast** — Rust + Tauri, not Electron. Starts in seconds, sips memory.
 - 🤖 **Local AI (optional)** — summaries and reply suggestions via [Ollama](https://ollama.com) on *your* machine. No cloud, no API keys, nothing leaves your network.
 - 🔍 **Instant full-text search** — across every account, offline.
-- 🌍 **7 languages** · 🌗 dark & light · 🔄 signed auto-updates · 💾 ZIP backup & restore.
+- 🌍 **Speaks your language** — English, Deutsch, Español, Français, Português, Русский, 中文.
+- 🌗 dark & light · 🔄 signed auto-updates · 💾 ZIP backup & restore.
 
 <p align="center">
   <img src="screenshots/compose.png" alt="Composing a message in Prudii Mail" width="760" />
