@@ -43,7 +43,7 @@
     "noAccounts": "Пока нет аккаунтов",
     "addAccount": "Добавить аккаунт",
     "accountLimit": "Бесплатный план: макс. 3 аккаунта",
-    "upgradePremium": "Перейти на Premium",
+    "upgradePremium": "Premium — скоро",
     "newFolder": "Новая папка",
     "forceResyncTitle": "Полная пересинхронизация",
     "forceResyncMessage": "Все локально сохранённые письма этого аккаунта будут удалены и загружены заново с сервера. Продолжить?",
@@ -422,8 +422,8 @@
       "activateKeyInstead": "Есть ключ лицензии?",
       "loginInstead": "Войти через аккаунт",
       "freePlan": "Бесплатный план",
-      "freePlanDesc": "До 3 почтовых аккаунтов. Войдите или активируйте ключ для Premium.",
-      "upgrade": "Перейти на Premium",
+      "freePlanDesc": "До 3 почтовых аккаунтов. Premium скоро появится.",
+      "upgrade": "Premium — скоро",
       "licenseKey": "Ключ лицензии",
       "validUntil": "Действует до",
       "device": "Это устройство",
@@ -511,7 +511,7 @@
       "modelRecMedium": "Рекомендуется — лучшая для задач с почтой",
       "modelRecLarge": "Выше качество, медленнее — нужно мощное оборудование",
       "quickStart": "Быстрый старт: выполни \"ollama pull llama3.2\" или \"ollama pull gemma3\" в терминале.",
-      "premiumDesc": "Функции локального ИИ доступны с подпиской Premium."
+      "premiumDesc": "Функции локального ИИ появятся в Premium — скоро."
     }
   },
   "backup": {
@@ -705,7 +705,7 @@
     "save": "Сохранить правило",
     "deleteConfirm": "Удалить это правило?",
     "selectAccount": "Выбрать аккаунт",
-    "premiumDesc": "Правила почты доступны с подпиской Premium."
+    "premiumDesc": "Правила почты появятся в Premium — скоро."
   },
   "dateGroups": {
     "today": "Сегодня",
@@ -838,17 +838,17 @@
     "body": "Текст",
     "noTemplates": "Шаблонов пока нет. Создайте первый.",
     "insertTemplate": "Вставить шаблон",
-    "premiumDesc": "Шаблоны писем доступны с подпиской Premium."
+    "premiumDesc": "Шаблоны писем появятся в Premium — скоро."
   },
   "premium": {
     "badge": "Премиум",
     "upgradePrompt": "Премиум-функция",
-    "upgradeButton": "Перейти на Премиум"
+    "upgradeButton": "Premium — скоро"
   },
   "splitInbox": {
     "title": "Разделённый ящик",
     "description": "Автоматическая сортировка входящей почты по вкладкам: Основные, Уведомления и Рассылки.",
-    "premiumDesc": "Разделённый ящик доступен с подпиской Premium.",
+    "premiumDesc": "Разделённый ящик появится в Premium — скоро.",
     "primary": "Основные",
     "notifications": "Уведомления",
     "newsletters": "Рассылки"
@@ -856,7 +856,7 @@
   "autoLabels": {
     "title": "Авто-метки",
     "description": "Автоматическая классификация писем по типу на основе шаблонов отправителей и заголовков.",
-    "premiumDesc": "Авто-метки доступны с подпиской Premium."
+    "premiumDesc": "Авто-метки появятся в Premium — скоро."
   },
   "empty": {
     "inbox": "Всё прочитано",

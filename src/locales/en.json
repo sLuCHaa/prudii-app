@@ -43,7 +43,7 @@
     "noAccounts": "No accounts yet",
     "addAccount": "Add Account",
     "accountLimit": "Free plan: 3 accounts max",
-    "upgradePremium": "Upgrade to Premium",
+    "upgradePremium": "Premium — coming soon",
     "newFolder": "New folder",
     "forceResyncTitle": "Full Resync",
     "forceResyncMessage": "All locally stored emails for this account will be deleted and re-downloaded from the server. Continue?",
@@ -423,8 +423,8 @@
       "activateKeyInstead": "Have a license key instead?",
       "loginInstead": "Log in with account instead",
       "freePlan": "Free Plan",
-      "freePlanDesc": "Up to 3 email accounts. Log in or activate a key to unlock Premium.",
-      "upgrade": "Upgrade to Premium",
+      "freePlanDesc": "Up to 3 email accounts. Premium is coming soon.",
+      "upgrade": "Premium — coming soon",
       "licenseKey": "License Key",
       "validUntil": "Valid Until",
       "device": "This Device",
@@ -509,7 +509,7 @@
       "modelRecMedium": "Recommended — best for email tasks",
       "modelRecLarge": "Higher quality, slower — needs powerful hardware",
       "quickStart": "Quick start: run \"ollama pull llama3.2\" or \"ollama pull gemma3\" in your terminal.",
-      "premiumDesc": "Local AI features are available with a Premium subscription."
+      "premiumDesc": "Local AI features will be part of Premium — coming soon."
     }
   },
   "backup": {
@@ -703,7 +703,7 @@
     "save": "Save Rule",
     "deleteConfirm": "Delete this rule?",
     "selectAccount": "Select account",
-    "premiumDesc": "Mail rules are available with a Premium subscription."
+    "premiumDesc": "Mail rules will be part of Premium — coming soon."
   },
   "dateGroups": {
     "today": "Today",
@@ -836,17 +836,17 @@
     "body": "Body",
     "noTemplates": "No templates yet. Create one to get started.",
     "insertTemplate": "Insert Template",
-    "premiumDesc": "Email templates are available with a Premium subscription."
+    "premiumDesc": "Email templates will be part of Premium — coming soon."
   },
   "premium": {
     "badge": "Premium",
     "upgradePrompt": "Premium Feature",
-    "upgradeButton": "Upgrade to Premium"
+    "upgradeButton": "Premium — coming soon"
   },
   "splitInbox": {
     "title": "Split Inbox",
     "description": "Automatically categorize incoming mail into tabs like Primary, Notifications, and Newsletters.",
-    "premiumDesc": "Split Inbox is available with a Premium subscription.",
+    "premiumDesc": "Split Inbox will be part of Premium — coming soon.",
     "primary": "Primary",
     "notifications": "Notifications",
     "newsletters": "Newsletters"
@@ -854,7 +854,7 @@
   "autoLabels": {
     "title": "Auto-Labels",
     "description": "Automatically classify emails by type using sender patterns and headers.",
-    "premiumDesc": "Auto-Labels are available with a Premium subscription."
+    "premiumDesc": "Auto-Labels will be part of Premium — coming soon."
   },
   "empty": {
     "inbox": "All caught up",

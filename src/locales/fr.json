@@ -43,7 +43,7 @@
     "noAccounts": "Aucun compte pour le moment",
     "addAccount": "Ajouter un compte",
     "accountLimit": "Plan gratuit : 3 comptes max.",
-    "upgradePremium": "Passer à Premium",
+    "upgradePremium": "Premium — bientôt disponible",
     "newFolder": "Nouveau dossier",
     "forceResyncTitle": "Resynchronisation complète",
     "forceResyncMessage": "Tous les e-mails stockés localement pour ce compte seront supprimés et retéléchargés depuis le serveur. Continuer ?",
@@ -420,8 +420,8 @@
       "activateKeyInstead": "Vous avez une clé de licence ?",
       "loginInstead": "Se connecter avec un compte",
       "freePlan": "Plan gratuit",
-      "freePlanDesc": "Jusqu'à 3 comptes e-mail. Connectez-vous ou activez une clé pour Premium.",
-      "upgrade": "Passer à Premium",
+      "freePlanDesc": "Jusqu'à 3 comptes e-mail. Premium arrive bientôt.",
+      "upgrade": "Premium — bientôt disponible",
       "licenseKey": "Clé de licence",
       "validUntil": "Valide jusqu'au",
       "device": "Cet appareil",
@@ -509,7 +509,7 @@
       "modelRecMedium": "Recommandé — idéal pour les tâches d'email",
       "modelRecLarge": "Meilleure qualité, plus lent — nécessite du matériel puissant",
       "quickStart": "Démarrage rapide : exécute \"ollama pull llama3.2\" ou \"ollama pull gemma3\" dans ton terminal.",
-      "premiumDesc": "Les fonctionnalités IA locales sont disponibles avec un abonnement Premium."
+      "premiumDesc": "Les fonctionnalités IA locales arriveront avec Premium — bientôt."
     }
   },
   "backup": {
@@ -703,7 +703,7 @@
     "save": "Enregistrer la règle",
     "deleteConfirm": "Supprimer cette règle ?",
     "selectAccount": "Sélectionner un compte",
-    "premiumDesc": "Les règles de messagerie sont disponibles avec un abonnement Premium."
+    "premiumDesc": "Les règles de messagerie arriveront avec Premium — bientôt."
   },
   "dateGroups": {
     "today": "Aujourd'hui",
@@ -836,17 +836,17 @@
     "body": "Corps",
     "noTemplates": "Pas encore de modèles. Créez-en un pour commencer.",
     "insertTemplate": "Insérer un modèle",
-    "premiumDesc": "Les modèles d'e-mail sont disponibles avec un abonnement Premium."
+    "premiumDesc": "Les modèles d'e-mail arriveront avec Premium — bientôt."
   },
   "premium": {
     "badge": "Premium",
     "upgradePrompt": "Fonctionnalité Premium",
-    "upgradeButton": "Passer à Premium"
+    "upgradeButton": "Premium — bientôt disponible"
   },
   "splitInbox": {
     "title": "Boîte divisée",
     "description": "Catégoriser automatiquement les e-mails entrants dans des onglets comme Principal, Notifications et Newsletters.",
-    "premiumDesc": "La boîte divisée est disponible avec un abonnement Premium.",
+    "premiumDesc": "La boîte divisée arrivera avec Premium — bientôt.",
     "primary": "Principal",
     "notifications": "Notifications",
     "newsletters": "Newsletters"
@@ -854,7 +854,7 @@
   "autoLabels": {
     "title": "Auto-labels",
     "description": "Classifier automatiquement les e-mails par type en utilisant les modèles d'expéditeur et les en-têtes.",
-    "premiumDesc": "Les auto-labels sont disponibles avec un abonnement Premium."
+    "premiumDesc": "Les auto-labels arriveront avec Premium — bientôt."
   },
   "empty": {
     "inbox": "Tout est à jour",

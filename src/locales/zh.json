@@ -43,7 +43,7 @@
     "noAccounts": "暂无账户",
     "addAccount": "添加账户",
     "accountLimit": "免费版：最多3个账户",
-    "upgradePremium": "升级到高级版",
+    "upgradePremium": "Premium — 即将推出",
     "newFolder": "新建文件夹",
     "forceResyncTitle": "完全重新同步",
     "forceResyncMessage": "此账户所有本地存储的邮件将被删除并从服务器重新下载。是否继续？",
@@ -423,8 +423,8 @@
       "activateKeyInstead": "有许可证密钥？",
       "loginInstead": "使用账户登录",
       "freePlan": "免费版",
-      "freePlanDesc": "最多 3 个邮箱账户。登录或激活密钥以升级到高级版。",
-      "upgrade": "升级到高级版",
+      "freePlanDesc": "最多 3 个邮箱账户。Premium 即将推出。",
+      "upgrade": "Premium — 即将推出",
       "licenseKey": "许可证密钥",
       "validUntil": "有效期至",
       "device": "此设备",
@@ -509,7 +509,7 @@
       "modelRecMedium": "推荐 — 最适合邮件任务",
       "modelRecLarge": "更高质量，较慢 — 需要强大硬件",
       "quickStart": "快速开始：在终端中运行 \"ollama pull llama3.2\" 或 \"ollama pull gemma3\"。",
-      "premiumDesc": "本地 AI 功能需要 Premium 订阅。"
+      "premiumDesc": "本地 AI 功能将在 Premium 中提供——即将推出。"
     }
   },
   "backup": {
@@ -703,7 +703,7 @@
     "save": "保存规则",
     "deleteConfirm": "删除此规则？",
     "selectAccount": "选择账户",
-    "premiumDesc": "邮件规则需要 Premium 订阅。"
+    "premiumDesc": "邮件规则将在 Premium 中提供——即将推出。"
   },
   "dateGroups": {
     "today": "今天",
@@ -836,17 +836,17 @@
     "body": "正文",
     "noTemplates": "还没有模板。创建一个开始使用。",
     "insertTemplate": "插入模板",
-    "premiumDesc": "邮件模板需要 Premium 订阅。"
+    "premiumDesc": "邮件模板将在 Premium 中提供——即将推出。"
   },
   "premium": {
     "badge": "高级版",
     "upgradePrompt": "高级功能",
-    "upgradeButton": "升级到高级版"
+    "upgradeButton": "Premium — 即将推出"
   },
   "splitInbox": {
     "title": "分类收件箱",
     "description": "自动将收到的邮件分类到主要、通知和订阅等标签页。",
-    "premiumDesc": "分类收件箱需要 Premium 订阅。",
+    "premiumDesc": "分类收件箱将在 Premium 中提供——即将推出。",
     "primary": "主要",
     "notifications": "通知",
     "newsletters": "订阅"
@@ -854,7 +854,7 @@
   "autoLabels": {
     "title": "自动标签",
     "description": "根据发件人模式和邮件头自动分类邮件。",
-    "premiumDesc": "自动标签需要 Premium 订阅。"
+    "premiumDesc": "自动标签将在 Premium 中提供——即将推出。"
   },
   "empty": {
     "inbox": "已全部处理",

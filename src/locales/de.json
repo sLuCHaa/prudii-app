@@ -43,7 +43,7 @@
     "noAccounts": "Noch keine Konten",
     "addAccount": "Konto hinzufügen",
     "accountLimit": "Free-Plan: max. 3 Konten",
-    "upgradePremium": "Auf Premium upgraden",
+    "upgradePremium": "Premium — bald verfügbar",
     "newFolder": "Neuer Ordner",
     "forceResyncTitle": "Vollständige Neusynchronisierung",
     "forceResyncMessage": "Alle lokal gespeicherten E-Mails dieses Kontos werden gelöscht und neu vom Server geladen. Fortfahren?",
@@ -420,8 +420,8 @@
       "activateKeyInstead": "Hast du stattdessen einen Lizenzschlüssel?",
       "loginInstead": "Stattdessen mit Konto anmelden",
       "freePlan": "Free-Plan",
-      "freePlanDesc": "Bis zu 3 E-Mail-Konten. Melde dich an oder aktiviere einen Schlüssel für Premium.",
-      "upgrade": "Auf Premium upgraden",
+      "freePlanDesc": "Bis zu 3 E-Mail-Konten. Premium ist bald verfügbar.",
+      "upgrade": "Premium — bald verfügbar",
       "licenseKey": "Lizenzschlüssel",
       "validUntil": "Gültig bis",
       "device": "Dieses Gerät",
@@ -500,7 +500,7 @@
       "modelRecMedium": "Empfohlen — ideal für E-Mail-Aufgaben",
       "modelRecLarge": "Höhere Qualität, langsamer — braucht leistungsstarke Hardware",
       "quickStart": "Schnellstart: Führe \"ollama pull llama3.2\" oder \"ollama pull gemma3\" im Terminal aus.",
-      "premiumDesc": "Lokale KI-Funktionen sind mit einem Premium-Abonnement verfügbar."
+      "premiumDesc": "Lokale KI-Funktionen kommen mit Premium — bald verfügbar."
     },
     "undoSendDelay": "Senden-Rückgängig-Verzögerung",
     "undoSendDelayDesc": "Zeit zum Abbrechen einer gesendeten E-Mail. Auf Aus setzen für sofortigen Versand.",
@@ -703,7 +703,7 @@
     "save": "Regel speichern",
     "deleteConfirm": "Diese Regel löschen?",
     "selectAccount": "Konto auswählen",
-    "premiumDesc": "E-Mail-Regeln sind mit einem Premium-Abonnement verfügbar."
+    "premiumDesc": "E-Mail-Regeln kommen mit Premium — bald verfügbar."
   },
   "dateGroups": {
     "today": "Heute",
@@ -836,17 +836,17 @@
     "body": "Inhalt",
     "noTemplates": "Noch keine Vorlagen. Erstellen Sie eine, um loszulegen.",
     "insertTemplate": "Vorlage einfügen",
-    "premiumDesc": "E-Mail-Vorlagen sind mit einem Premium-Abonnement verfügbar."
+    "premiumDesc": "E-Mail-Vorlagen kommen mit Premium — bald verfügbar."
   },
   "premium": {
     "badge": "Premium",
     "upgradePrompt": "Premium-Funktion",
-    "upgradeButton": "Auf Premium upgraden"
+    "upgradeButton": "Premium — bald verfügbar"
   },
   "splitInbox": {
     "title": "Geteilter Posteingang",
     "description": "Eingehende E-Mails automatisch in Tabs wie Primär, Benachrichtigungen und Newsletter sortieren.",
-    "premiumDesc": "Der geteilte Posteingang ist mit einem Premium-Abonnement verfügbar.",
+    "premiumDesc": "Der geteilte Posteingang kommt mit Premium — bald verfügbar.",
     "primary": "Primär",
     "notifications": "Benachrichtigungen",
     "newsletters": "Newsletter"
@@ -854,7 +854,7 @@
   "autoLabels": {
     "title": "Auto-Labels",
     "description": "E-Mails automatisch anhand von Absendermustern und Headern klassifizieren.",
-    "premiumDesc": "Auto-Labels sind mit einem Premium-Abonnement verfügbar."
+    "premiumDesc": "Auto-Labels kommen mit Premium — bald verfügbar."
   },
   "empty": {
     "inbox": "Alles erledigt",
