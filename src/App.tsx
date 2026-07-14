@@ -268,6 +268,20 @@ function AppInner() {
     return () => { unlisten.then((fn) => fn()); };
   }, []);
 
+  // A saved draft is written straight to the local DB, so the list can refresh without
+  // waiting for the sync that follows it.
+  useEffect(() => {
+    const unlisten = listen<{ account_id: string }>("mails-changed", (event) => {
+      queryClient.refetchQueries({ queryKey: ["folders", event.payload.account_id] });
+      queryClient.refetchQueries({ queryKey: ["mails"] });
+      queryClient.refetchQueries({ queryKey: ["filtered-mails"] });
+      queryClient.refetchQueries({ queryKey: ["all-inbox-mails"] });
+      queryClient.refetchQueries({ queryKey: ["combined-folder-mails"] });
+      queryClient.refetchQueries({ queryKey: ["split-inbox-mails"] });
+    });
+    return () => { unlisten.then((fn) => fn()); };
+  }, []);
+
   // Listen for undo-send-start from compose window → trigger undo-send in main window
   useEffect(() => {
     const unlisten = listen<{

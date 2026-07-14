@@ -1205,13 +1205,17 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     if (appSettings.undo_send_delay === 0) {
       // Undo-send disabled — send directly
       setSending(true);
-      sendMail(request).then(() => {
+      sendMail(request).then(async () => {
         // Sent from a saved draft — remove the original draft (moves it to Trash).
+        // Awaited before the sync: the cleanup queues the server-side move as a pending
+        // op, which the sync runs before re-fetching folders. Syncing first lets it
+        // re-import the draft that is still in the server's Drafts folder.
         if (mode === "draft" && originalMail) {
-          trashMail(originalMail.id).catch((err) => {
+          await trashMail(originalMail.id).catch((err) => {
             console.error("draft cleanup after send failed", err);
           });
         }
+        emit("mails-changed", { account_id: request.account_id });
         syncAccount(request.account_id).catch(() => {});
         onClose();
       }).catch((err) => {
@@ -1407,7 +1411,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         })),
       };
 
-      await saveDraft(request);
+      const savedMailId = await saveDraft(request);
       // Editing an existing draft saves a new one — drop the superseded version.
       if (mode === "draft" && originalMail) {
         await trashMail(originalMail.id).catch((err) => {
@@ -1415,7 +1419,11 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         });
       }
       setLastSavedAt(new Date());
-      // Sync the account so the draft appears in the local mail list
+      // The draft is already in the local DB (IMAP) — refresh the list now so it can
+      // be reopened without waiting for the sync round-trip. Emitted rather than
+      // invalidated locally because compose may run in its own window.
+      emit("mails-changed", { account_id: request.account_id, mail_id: savedMailId });
+      // Reconcile with the server (claims the UID for the mirrored row).
       syncAccount(request.account_id).catch(() => {});
       onClose();
     } catch (err) {
