@@ -1,10 +1,13 @@
 use anyhow::{Context, Result};
 use lettre::{
-    message::{header::ContentType, Attachment, Mailbox, MultiPart, SinglePart},
+    message::{header::ContentType, Mailbox, MultiPart, SinglePart},
     transport::smtp::authentication::Credentials,
     AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
 };
 use std::time::Duration;
+
+pub mod attachment;
+pub use attachment::attachment_part;
 
 pub struct SmtpConfig {
     pub host: String,
@@ -140,15 +143,7 @@ fn build_lettre_message(config: &SmtpConfig, message: &EmailMessage) -> Result<M
 
         let mut mixed = MultiPart::mixed().multipart(body_part);
         for att in &message.attachments {
-            let parsed_ct: ContentType = att.mime_type.parse().unwrap_or_else(|_| "application/octet-stream".parse().expect("static mime type"));
-            // Force binary encoding for text/* attachments to preserve original charset (e.g. Windows-1252 CSVs)
-            let content_type = if att.mime_type.starts_with("text/") {
-                "application/octet-stream".parse().expect("static mime type")
-            } else {
-                parsed_ct
-            };
-            let attachment = Attachment::new(att.name.clone()).body(att.data.clone(), content_type);
-            mixed = mixed.singlepart(attachment);
+            mixed = mixed.singlepart(attachment_part(&att.name, &att.mime_type, att.data.clone()));
         }
 
         email_builder.multipart(mixed).context("Failed to build email message")?
@@ -252,4 +247,50 @@ pub async fn test_smtp_connection(
     mailer.test_connection().await.context("SMTP connection test failed")?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn config() -> SmtpConfig {
+        SmtpConfig {
+            host: "smtp.example.com".into(),
+            port: 465,
+            security: "ssl".into(),
+            email: "sender@example.com".into(),
+            password: String::new(),
+            auth_type: "password".into(),
+            display_name: "Sender".into(),
+        }
+    }
+
+    /// Guards the whole outgoing path, not just the helper: a mail built for the wire
+    /// must carry the RFC 6266 filename form, never lettre's `filename*0*` continuation.
+    #[test]
+    fn a_built_mail_carries_a_readable_filename_for_a_non_ascii_attachment() {
+        let message = EmailMessage {
+            to: vec!["to@example.com".into()],
+            cc: vec![],
+            bcc: vec![],
+            subject: "Zählerwechsel".into(),
+            body_text: "hi".into(),
+            body_html: None,
+            in_reply_to: None,
+            references: None,
+            attachments: vec![EmailAttachment {
+                name: "AKDB-Export-Donauwörth.xml".into(),
+                mime_type: "text/xml".into(),
+                data: b"<root/>".to_vec(),
+            }],
+        };
+
+        let raw = String::from_utf8_lossy(&build_message(config(), message).unwrap()).to_string();
+        let unfolded = raw.replace("\r\n ", "").replace("\r\n\t", "");
+
+        assert!(unfolded.contains("filename=\"AKDB-Export-Donauwoerth.xml\""), "{unfolded}");
+        assert!(unfolded.contains("filename*=UTF-8''AKDB-Export-Donauw%C3%B6rth.xml"), "{unfolded}");
+        assert!(!unfolded.contains("filename*0"), "regressed to RFC 2231 continuation");
+        assert!(unfolded.contains("Content-Transfer-Encoding: base64"));
+    }
 }

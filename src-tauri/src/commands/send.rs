@@ -1,14 +1,54 @@
 use crate::credentials;
 use crate::db::Database;
 use crate::imap;
-use crate::models::SendMailRequest;
+use crate::models::{SendAttachment, SendMailRequest};
 use crate::pool::ImapPool;
 use crate::smtp::{self, EmailAttachment, EmailMessage, SmtpConfig};
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
-use lettre::message::{header::ContentType, Attachment, Message, MultiPart, SinglePart};
+use lettre::message::{Message, MultiPart, SinglePart};
 use uuid::Uuid;
+
+/// Decode the attachments of an outgoing mail.
+///
+/// Every failure here aborts the send. A mail that silently goes out without the
+/// file the user attached is worse than one that refuses to leave, so a payload
+/// that cannot be decoded — or that does not match the size the composer recorded,
+/// which means it was truncated somewhere on the way — is a hard error naming the
+/// file.
+fn decode_attachments(attachments: Option<Vec<SendAttachment>>) -> Result<Vec<EmailAttachment>, String> {
+    attachments
+        .unwrap_or_default()
+        .into_iter()
+        .map(|att| {
+            let data = base64::engine::general_purpose::STANDARD
+                .decode(&att.data)
+                .map_err(|e| format!("Attachment \"{}\" is corrupted and was not sent: {}", att.name, e))?;
+
+            if data.is_empty() {
+                return Err(format!("Attachment \"{}\" is empty and was not sent.", att.name));
+            }
+
+            if let Some(expected) = att.size {
+                if expected != data.len() as u64 {
+                    return Err(format!(
+                        "Attachment \"{}\" is incomplete and was not sent ({} of {} bytes).",
+                        att.name,
+                        data.len(),
+                        expected
+                    ));
+                }
+            }
+
+            Ok(EmailAttachment {
+                name: att.name,
+                mime_type: att.mime_type,
+                data,
+            })
+        })
+        .collect()
+}
 
 #[tauri::command]
 pub async fn send_mail(app: AppHandle, db: State<'_, Database>, pool: State<'_, ImapPool>, request: SendMailRequest) -> Result<(), String> {
@@ -64,21 +104,7 @@ pub async fn send_mail(app: AppHandle, db: State<'_, Database>, pool: State<'_, 
             display_name: display_name.clone(),
         };
 
-        let attachments: Vec<EmailAttachment> = request
-            .attachments
-            .unwrap_or_default()
-            .into_iter()
-            .filter_map(|att| {
-                let data = base64::engine::general_purpose::STANDARD
-                    .decode(&att.data)
-                    .ok()?;
-                Some(EmailAttachment {
-                    name: att.name,
-                    mime_type: att.mime_type,
-                    data,
-                })
-            })
-            .collect();
+        let attachments = decode_attachments(request.attachments)?;
 
         fn validate_email_list(addresses: &[String], field: &str) -> Result<(), String> {
             for addr in addresses {
@@ -305,16 +331,9 @@ pub async fn save_draft(db: State<'_, Database>, pool: State<'_, ImapPool>, requ
 
     if is_outlook_api {
         // Outlook Graph API: POST /me/messages creates a draft
-        let attachments: Vec<(String, String, Vec<u8>)> = request
-            .attachments
-            .unwrap_or_default()
+        let attachments: Vec<(String, String, Vec<u8>)> = decode_attachments(request.attachments.clone())?
             .into_iter()
-            .filter_map(|att| {
-                let data = base64::engine::general_purpose::STANDARD
-                    .decode(&att.data)
-                    .ok()?;
-                Some((att.name, att.mime_type, data))
-            })
+            .map(|att| (smtp::attachment::repair_encoded_name(&att.name), att.mime_type, att.data))
             .collect();
 
         let client = crate::outlook::api::OutlookClient::new(&credential);
@@ -403,16 +422,9 @@ pub async fn save_draft(db: State<'_, Database>, pool: State<'_, ImapPool>, requ
         message_builder = message_builder.references(bracketed.join(" "));
     }
 
-    let attachments: Vec<(String, String, Vec<u8>)> = request
-        .attachments
-        .unwrap_or_default()
+    let attachments: Vec<(String, String, Vec<u8>)> = decode_attachments(request.attachments.clone())?
         .into_iter()
-        .filter_map(|att| {
-            let data = base64::engine::general_purpose::STANDARD
-                .decode(&att.data)
-                .ok()?;
-            Some((att.name, att.mime_type, data))
-        })
+        .map(|att| (att.name, att.mime_type, att.data))
         .collect();
 
     let message = if attachments.is_empty() {
@@ -441,14 +453,7 @@ pub async fn save_draft(db: State<'_, Database>, pool: State<'_, ImapPool>, requ
 
         let mut mixed = MultiPart::mixed().multipart(body_part);
         for (name, mime_type, data) in attachments {
-            // Force binary encoding for text/* attachments to preserve original charset (e.g. Windows-1252 CSVs)
-            let content_type = if mime_type.starts_with("text/") {
-                "application/octet-stream".parse::<ContentType>().expect("static mime type")
-            } else {
-                mime_type.parse::<ContentType>().unwrap_or("application/octet-stream".parse().expect("static mime type"))
-            };
-            let attachment = Attachment::new(name).body(data, content_type);
-            mixed = mixed.singlepart(attachment);
+            mixed = mixed.singlepart(smtp::attachment_part(&name, &mime_type, data));
         }
 
         message_builder
