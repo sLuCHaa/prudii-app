@@ -260,10 +260,16 @@ pub async fn test_smtp_connection(
     Ok("SMTP connection successful".to_string())
 }
 
-/// Save a draft — routes to Graph API for Gmail/Outlook, IMAP for others
+/// Save a draft — routes to Graph API for Gmail/Outlook, IMAP for others.
+///
+/// Returns the id of the local `mails` row for the saved draft, so the UI can show
+/// and reopen it right away. `None` for the Gmail/Outlook API paths, which still
+/// depend on the next sync to pull the draft down (their local rows are keyed by
+/// the provider's API id, not the RFC Message-ID, so a local insert would not be
+/// deduplicated by the sync).
 #[tauri::command]
-pub async fn save_draft(db: State<'_, Database>, pool: State<'_, ImapPool>, request: SendMailRequest) -> Result<(), String> {
-    let (email, display_name, imap_host, imap_port, auth_type, provider, drafts_folder_path): (String, String, String, i32, String, String, String) = {
+pub async fn save_draft(db: State<'_, Database>, pool: State<'_, ImapPool>, request: SendMailRequest) -> Result<Option<String>, String> {
+    let (email, display_name, imap_host, imap_port, auth_type, provider, drafts_folder_path, drafts_folder_id): (String, String, String, i32, String, String, String, Option<String>) = {
         let conn = db.lock_db();
 
         let account_info: (String, String, String, i32, String, String) = conn
@@ -274,15 +280,20 @@ pub async fn save_draft(db: State<'_, Database>, pool: State<'_, ImapPool>, requ
             )
             .map_err(|e| format!("Account not found: {}", e))?;
 
-        let drafts_path: String = conn
+        let drafts_folder: Option<(String, String)> = conn
             .query_row(
-                "SELECT path FROM folders WHERE account_id = ?1 AND folder_type = 'drafts'",
+                "SELECT id, path FROM folders WHERE account_id = ?1 AND folder_type = 'drafts'",
                 rusqlite::params![request.account_id],
-                |row| row.get(0),
+                |row| Ok((row.get(0)?, row.get(1)?)),
             )
-            .unwrap_or_else(|_| "Drafts".to_string());
+            .ok();
 
-        (account_info.0, account_info.1, account_info.2, account_info.3, account_info.4, account_info.5, drafts_path)
+        let (drafts_id, drafts_path) = match drafts_folder {
+            Some((id, path)) => (Some(id), path),
+            None => (None, "Drafts".to_string()),
+        };
+
+        (account_info.0, account_info.1, account_info.2, account_info.3, account_info.4, account_info.5, drafts_path, drafts_id)
     };
 
     let credential = credentials::resolve_credential(&request.account_id, &auth_type, &provider)
@@ -320,7 +331,7 @@ pub async fn save_draft(db: State<'_, Database>, pool: State<'_, ImapPool>, requ
         .await
         .map_err(|e| format!("Outlook draft failed: {}", e))?;
 
-        return Ok(());
+        return Ok(None);
     }
 
     // Gmail and IMAP both need an RFC822 message
@@ -453,22 +464,39 @@ pub async fn save_draft(db: State<'_, Database>, pool: State<'_, ImapPool>, requ
         crate::gmail::messages::save_draft(&client, &message_bytes)
             .await
             .map_err(|e| format!("Gmail draft failed: {}", e))?;
-    } else {
-        let mut session = pool.get_session(&request.account_id, &imap_host, imap_port as u16, &email, &credential, &auth_type)
-            .await
-            .map_err(|e| format!("Failed to get IMAP session: {}", e))?;
+        return Ok(None);
+    }
 
-        match imap::append_to_folder(&mut session, &drafts_folder_path, &message_bytes, &["\\Draft", "\\Seen"]).await {
-            Ok(_) => pool.return_session(&request.account_id, session).await,
-            Err(e) => {
-                let _ = session.logout().await;
-                pool.release(&request.account_id);
-                return Err(format!("Failed to save draft: {}", e));
-            }
+    let mut session = pool.get_session(&request.account_id, &imap_host, imap_port as u16, &email, &credential, &auth_type)
+        .await
+        .map_err(|e| format!("Failed to get IMAP session: {}", e))?;
+
+    match imap::append_to_folder(&mut session, &drafts_folder_path, &message_bytes, &["\\Draft", "\\Seen"]).await {
+        Ok(_) => pool.return_session(&request.account_id, session).await,
+        Err(e) => {
+            let _ = session.logout().await;
+            pool.release(&request.account_id);
+            return Err(format!("Failed to save draft: {}", e));
         }
     }
 
-    Ok(())
+    // Mirror the draft into the local DB immediately. Without this the draft only
+    // exists on the server until the next sync round-trip finishes, so a just-saved
+    // draft cannot be reopened (the superseded local row is trashed right after this
+    // returns). The row carries uid = NULL and is claimed by Message-ID on the next
+    // sync, so no duplicate appears.
+    let local_id = match drafts_folder_id {
+        Some(folder_id) => match imap::insert_local_sent_mail(&db, &request.account_id, &folder_id, &message_bytes) {
+            Ok(id) => Some(id),
+            Err(e) => {
+                log::warn!("save_draft: local mirror failed, falling back to sync: {}", e);
+                None
+            }
+        },
+        None => None,
+    };
+
+    Ok(local_id)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -207,7 +207,9 @@ export async function sendMail(request: SendMailRequest): Promise<void> {
   return invoke("send_mail", { request });
 }
 
-export async function saveDraft(request: SendMailRequest): Promise<void> {
+/// Resolves to the local mail id of the saved draft, or null when the account's
+/// provider only stores it server-side (Gmail/Outlook) and the next sync must fetch it.
+export async function saveDraft(request: SendMailRequest): Promise<string | null> {
   return invoke("save_draft", { request });
 }
 
