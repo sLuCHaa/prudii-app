@@ -530,6 +530,43 @@ button:focus-visible,
   display: inline-block;
 }
 
+/* Tailwind's preflight strips list markers and indentation from ul/ol —
+   restore them inside the editor so lists are actually visible. */
+.compose-editor .tiptap ul,
+.compose-editor .tiptap ol {
+  padding-left: 1.5em;
+  margin: 0 0 0.5em 0;
+}
+
+.compose-editor .tiptap ul {
+  list-style-type: disc;
+}
+
+.compose-editor .tiptap ol {
+  list-style-type: decimal;
+}
+
+.compose-editor .tiptap ul ul {
+  list-style-type: circle;
+}
+
+.compose-editor .tiptap ul ul ul {
+  list-style-type: square;
+}
+
+.compose-editor .tiptap li {
+  margin: 0.15em 0;
+}
+
+.compose-editor .tiptap li > ul,
+.compose-editor .tiptap li > ol {
+  margin: 0.15em 0 0 0;
+}
+
+.compose-editor .tiptap li p {
+  margin: 0;
+}
+
 .compose-editor .tiptap blockquote {
   border-left: 3px solid var(--c-accent-soft);
   padding-left: 12px;
