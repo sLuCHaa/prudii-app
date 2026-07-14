@@ -162,6 +162,11 @@ pub struct SendAttachment {
     pub name: String,
     pub mime_type: String,
     pub data: String, // base64
+    /// Byte length the sender expects after decoding. Checked before the mail goes
+    /// out so a truncated or corrupted payload fails loudly instead of being sent.
+    /// Optional for drafts persisted by older builds, which did not record it.
+    #[serde(default)]
+    pub size: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -536,6 +536,63 @@ pub fn get_attachment_preview(
     Ok(Some(format!("data:{};base64,{}", mime, b64)))
 }
 
+/// The payload of an attachment being carried into a new mail (reply, forward, or a
+/// reopened draft).
+///
+/// Unlike `get_attachment_preview`, this never answers "nothing" — every failure is
+/// an error naming the cause. A preview that quietly comes back empty just looks
+/// blank; an attachment that quietly comes back empty gets sent as a mail with a
+/// missing file, which is exactly what we are here to prevent.
+#[derive(Debug, serde::Serialize)]
+pub struct AttachmentPayload {
+    pub name: String,
+    pub mime_type: String,
+    pub data: String, // base64, no data-URL prefix
+    pub size: u64,
+}
+
+#[tauri::command]
+pub fn get_attachment_data(
+    db: State<'_, Database>,
+    attachment_id: String,
+) -> Result<AttachmentPayload, String> {
+    let (filename, local_path, mime_type): (String, Option<String>, Option<String>) = {
+        let conn = db.lock_db();
+        conn.query_row(
+            "SELECT filename, local_path, mime_type FROM attachments WHERE id = ?1",
+            rusqlite::params![attachment_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .map_err(|e| format!("Attachment not found: {}", e))?
+    };
+
+    let path = match local_path {
+        Some(p) if !p.is_empty() => p,
+        _ => return Err(format!("\"{}\" has not been downloaded yet.", filename)),
+    };
+
+    let file_path = std::path::Path::new(&path);
+    if !file_path.exists() {
+        return Err(format!("The file for \"{}\" is missing on disk.", filename));
+    }
+
+    let metadata = std::fs::metadata(file_path)
+        .map_err(|e| format!("\"{}\" could not be read: {}", filename, e))?;
+    if metadata.len() > 50 * 1024 * 1024 {
+        return Err(format!("\"{}\" is larger than 50 MB.", filename));
+    }
+
+    let data = std::fs::read(file_path)
+        .map_err(|e| format!("\"{}\" could not be read: {}", filename, e))?;
+
+    Ok(AttachmentPayload {
+        name: crate::smtp::attachment::repair_encoded_name(&filename),
+        mime_type: mime_type.unwrap_or_else(|| "application/octet-stream".to_string()),
+        size: data.len() as u64,
+        data: base64::engine::general_purpose::STANDARD.encode(&data),
+    })
+}
+
 #[tauri::command]
 pub fn open_attachment(
     db: State<'_, Database>,

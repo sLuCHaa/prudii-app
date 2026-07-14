@@ -140,6 +140,20 @@ export async function getAttachmentPreview(attachmentId: string): Promise<string
   return invoke("get_attachment_preview", { attachmentId });
 }
 
+export interface AttachmentPayload {
+  name: string;
+  mime_type: string;
+  data: string; // base64
+  size: number;
+}
+
+/// Full bytes of an attachment for re-sending. Rejects with a reason instead of
+/// resolving empty, so a file that cannot be loaded can never be silently omitted
+/// from an outgoing mail.
+export async function getAttachmentData(attachmentId: string): Promise<AttachmentPayload> {
+  return invoke("get_attachment_data", { attachmentId });
+}
+
 export async function openAttachment(attachmentId: string): Promise<string> {
   return invoke("open_attachment", { attachmentId });
 }

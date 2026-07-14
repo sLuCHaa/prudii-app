@@ -207,6 +207,9 @@ export interface SendAttachment {
   name: string;
   mime_type: string;
   data: string; // base64
+  /// Expected byte length after decoding. The backend refuses to send an attachment
+  /// whose payload does not match, so truncation cannot pass unnoticed.
+  size?: number;
 }
 
 export interface SendMailRequest {

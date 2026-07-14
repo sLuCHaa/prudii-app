@@ -22,7 +22,7 @@ import { useScroller } from "../../hooks/useScroller";
 import { useDialog } from "../ui/DialogProvider";
 import { IconButton } from "../ui/Button";
 import { listen, emit } from "@tauri-apps/api/event";
-import { saveDraft, syncAccount, fetchMailBody, suggestReplies, sendMail, scheduleSend, listTemplates, listAttachments, getAttachmentPreview, trashMail } from "../../lib/tauri";
+import { saveDraft, syncAccount, fetchMailBody, suggestReplies, sendMail, scheduleSend, listTemplates, listAttachments, getAttachmentData, trashMail } from "../../lib/tauri";
 import type { AiRepliesEvent, EmailTemplate, ReplySuggestion } from "../../types";
 import { escapeHtml } from "../../lib/sanitize";
 import { HtmlMailFrame } from "../layout/MailDetail";
@@ -30,10 +30,16 @@ import { RecipientInput, type RecipientInputHandle } from "./RecipientInput";
 import type { Mail, SendMailRequest, Account, AppSettings } from "../../types";
 
 interface AttachmentFile {
+  id: string;
   name: string;
   size: number;
   type: string;
-  data: string; // base64
+  data: string; // base64 — empty until status is "ready"
+  // An attachment may only leave the composer once its bytes are actually here.
+  // Anything else blocks the send: a mail without the file the user attached is
+  // worse than one that refuses to go out.
+  status: "loading" | "ready" | "failed";
+  error?: string;
 }
 
 function getFileIcon(mimeType: string, filename: string) {
@@ -715,31 +721,49 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     const isReplyOrForward = mode === "reply" || mode === "replyAll" || mode === "forward";
     const signature = getSignatureHtml(defaultAccountId, isReplyOrForward);
 
+    // Carry the attachments of a draft/reply/forward into the composer. An attachment
+    // that cannot be loaded is kept in the list as "failed" instead of being dropped:
+    // the user sees which file is missing and cannot send until it is resolved.
     async function loadAttachmentsFrom(mailId: string) {
+      let atts: Awaited<ReturnType<typeof listAttachments>>;
       try {
         await fetchMailBody(mailId);
         if (cancelled) return;
-        const atts = await listAttachments(mailId);
+        atts = await listAttachments(mailId);
+      } catch (err) {
         if (cancelled) return;
-        const files: AttachmentFile[] = [];
-        for (const att of atts.filter((a) => !a.is_inline)) {
-          if (cancelled) return;
-          try {
-            const dataUri = await getAttachmentPreview(att.id);
-            const base64 = dataUri?.split(",")[1];
-            if (base64) {
-              files.push({
-                name: att.filename,
-                size: att.size_bytes ?? 0,
-                type: att.mime_type ?? "application/octet-stream",
-                data: base64,
-              });
-            }
-          } catch { /* skip unreadable attachments */ }
+        addToast("error", t("compose.attachmentsLoadFailed"), err instanceof Error ? err.message : String(err));
+        return;
+      }
+      if (cancelled) return;
+
+      const files: AttachmentFile[] = [];
+      for (const att of atts.filter((a) => !a.is_inline)) {
+        if (cancelled) return;
+        try {
+          const payload = await getAttachmentData(att.id);
+          files.push({
+            id: att.id,
+            name: payload.name,
+            size: payload.size,
+            type: payload.mime_type,
+            data: payload.data,
+            status: "ready",
+          });
+        } catch (err) {
+          files.push({
+            id: att.id,
+            name: att.filename,
+            size: att.size_bytes ?? 0,
+            type: att.mime_type ?? "application/octet-stream",
+            data: "",
+            status: "failed",
+            error: err instanceof Error ? err.message : String(err),
+          });
         }
-        if (cancelled) return;
-        setAttachments(files);
-      } catch { /* leave the composer without attachments */ }
+      }
+      if (cancelled) return;
+      setAttachments(files);
     }
 
     let content = "";
@@ -908,7 +932,15 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     setShowBcc(restoreSnapshot.bcc.length > 0);
     setSubject(restoreSnapshot.subject);
     setFromAccountId(restoreSnapshot.fromAccountId);
-    setAttachments(restoreSnapshot.attachments);
+    // The snapshot is only taken once the send guard has confirmed every attachment
+    // was loaded, so these are ready by construction.
+    setAttachments(
+      restoreSnapshot.attachments.map((att) => ({
+        ...att,
+        id: crypto.randomUUID(),
+        status: "ready" as const,
+      })),
+    );
     setQuotedHtml(restoreSnapshot.quotedHtml || "");
     editor.commands.setContent(restoreSnapshot.bodyHtml);
     // Clear snapshot so it doesn't re-apply
@@ -1013,6 +1045,22 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     }
   }
 
+  function readFileAsBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(reader.error ?? new Error("read failed"));
+      reader.onload = () => {
+        const base64 = (reader.result as string).split(",")[1];
+        if (!base64) {
+          reject(new Error("empty file"));
+          return;
+        }
+        resolve(base64);
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
   function addFiles(files: FileList | File[]) {
     Array.from(files).forEach((file) => {
       if (file.size > 25 * 1024 * 1024) {
@@ -1021,25 +1069,49 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         return;
       }
 
-      if (attachments.some((a) => a.name === file.name && a.size === file.size)) {
+      const id = crypto.randomUUID();
+      let isDuplicate = false;
+
+      // Insert as "loading" first, so a send attempt while the file is still being
+      // read is blocked rather than silently dropping it. The dedup check happens in
+      // the updater, where `prev` is the current list — reading `attachments` from the
+      // closure misses files added earlier in this same batch.
+      setAttachments((prev) => {
+        if (prev.some((a) => a.name === file.name && a.size === file.size)) {
+          isDuplicate = true;
+          return prev;
+        }
+        return [
+          ...prev,
+          {
+            id,
+            name: file.name,
+            size: file.size,
+            type: file.type || "application/octet-stream",
+            data: "",
+            status: "loading",
+          },
+        ];
+      });
+
+      if (isDuplicate) {
         addToast("warning", t("compose.fileAlreadyAttached", { name: file.name }));
         return;
       }
 
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64 = (reader.result as string).split(",")[1];
-        setAttachments((prev) => [
-          ...prev,
-          {
-            name: file.name,
-            size: file.size,
-            type: file.type || "application/octet-stream",
-            data: base64,
-          },
-        ]);
-      };
-      reader.readAsDataURL(file);
+      readFileAsBase64(file)
+        .then((base64) => {
+          setAttachments((prev) =>
+            prev.map((a) => (a.id === id ? { ...a, data: base64, status: "ready" as const } : a)),
+          );
+        })
+        .catch((err) => {
+          const reason = err instanceof Error ? err.message : String(err);
+          setAttachments((prev) =>
+            prev.map((a) => (a.id === id ? { ...a, status: "failed" as const, error: reason } : a)),
+          );
+          addToast("error", t("compose.attachmentReadFailed", { name: file.name }));
+        });
     });
   }
 
@@ -1171,6 +1243,23 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       if (!ok) return false;
     }
 
+    // Never send a mail that is missing an attachment the user added. Sending is the
+    // one irreversible step here, so anything not fully in memory stops it.
+    const notReady = attachments.filter((att) => att.status !== "ready");
+    if (notReady.length > 0) {
+      const stillLoading = notReady.every((att) => att.status === "loading");
+      await dialog.alert({
+        type: stillLoading ? "info" : "danger",
+        title: stillLoading ? t("compose.attachmentsStillLoadingTitle") : t("compose.attachmentsFailedTitle"),
+        message: stillLoading
+          ? t("compose.attachmentsStillLoadingMessage")
+          : t("compose.attachmentsFailedMessage", {
+              names: notReady.filter((a) => a.status === "failed").map((a) => a.name).join(", "),
+            }),
+      });
+      return false;
+    }
+
     const { bodyHtml, bodyText } = buildOutgoingBody();
 
     const request: SendMailRequest = {
@@ -1187,6 +1276,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         name: att.name,
         mime_type: att.type,
         data: att.data,
+        size: att.size,
       })),
     };
 
@@ -1198,7 +1288,12 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       bodyHtml,
       bodyText,
       fromAccountId,
-      attachments: attachments.map((att) => ({ ...att })),
+      attachments: attachments.map((att) => ({
+        name: att.name,
+        size: att.size,
+        type: att.type,
+        data: att.data,
+      })),
       quotedHtml: quotedHtml || undefined,
     };
 
@@ -1316,6 +1411,23 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       if (!confirmed) return;
     }
 
+    // A scheduled mail goes out unattended — an incomplete attachment must stop it
+    // here, where the user is still around to fix it.
+    const notReady = attachments.filter((att) => att.status !== "ready");
+    if (notReady.length > 0) {
+      const stillLoading = notReady.every((att) => att.status === "loading");
+      await dialog.alert({
+        type: stillLoading ? "info" : "danger",
+        title: stillLoading ? t("compose.attachmentsStillLoadingTitle") : t("compose.attachmentsFailedTitle"),
+        message: stillLoading
+          ? t("compose.attachmentsStillLoadingMessage")
+          : t("compose.attachmentsFailedMessage", {
+              names: notReady.filter((a) => a.status === "failed").map((a) => a.name).join(", "),
+            }),
+      });
+      return;
+    }
+
     const { bodyHtml, bodyText } = buildOutgoingBody();
 
     const request: SendMailRequest = {
@@ -1332,6 +1444,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         name: att.name,
         mime_type: att.type,
         data: att.data,
+        size: att.size,
       })),
     };
 
@@ -1404,12 +1517,27 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         body_html: bodyHtml,
         in_reply_to: originalMail?.message_id || undefined,
         references: buildReferencesChain(originalMail),
-        attachments: attachments.map((att) => ({
-          name: att.name,
-          mime_type: att.type,
-          data: att.data,
-        })),
+        // Only attachments whose bytes are present go into the draft — a failed one
+        // would be baked in as an empty file and the send guard could never clear it.
+        // The user is told which ones were left out.
+        attachments: attachments
+          .filter((att) => att.status === "ready")
+          .map((att) => ({
+            name: att.name,
+            mime_type: att.type,
+            data: att.data,
+            size: att.size,
+          })),
       };
+
+      const omitted = attachments.filter((att) => att.status !== "ready");
+      if (omitted.length > 0) {
+        addToast(
+          "warning",
+          t("compose.draftAttachmentsOmittedTitle"),
+          t("compose.draftAttachmentsOmittedMessage", { names: omitted.map((a) => a.name).join(", ") }),
+        );
+      }
 
       const savedMailId = await saveDraft(request);
       // Editing an existing draft saves a new one — drop the superseded version.
@@ -1671,10 +1799,15 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
                 {attachments.map((att, index) => {
                   const FileIcon = getFileIcon(att.type, att.name);
                   const iconColor = getFileColor(att.type, att.name);
+                  const failed = att.status === "failed";
+                  const loading = att.status === "loading";
                   return (
                     <div
-                      key={index}
-                      className="group relative flex flex-col items-center p-3 rounded-lg bg-bg-secondary border border-border hover:border-border-light transition-colors"
+                      key={att.id}
+                      title={failed ? att.error : undefined}
+                      className={`group relative flex flex-col items-center p-3 rounded-lg bg-bg-secondary border transition-colors ${
+                        failed ? "border-danger" : "border-border hover:border-border-light"
+                      }`}
                     >
                       <button
                         onClick={() => removeAttachment(index)}
@@ -1682,11 +1815,21 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
                       >
                         <X className="w-3 h-3" />
                       </button>
-                      <div className={`w-10 h-10 rounded-lg bg-surface flex items-center justify-center mb-2 ${iconColor}`}>
-                        <FileIcon className="w-6 h-6" />
+                      <div className={`w-10 h-10 rounded-lg bg-surface flex items-center justify-center mb-2 ${failed ? "text-danger" : iconColor}`}>
+                        {loading ? (
+                          <Loader2 className="w-5 h-5 animate-spin text-text-tertiary" />
+                        ) : (
+                          <FileIcon className="w-6 h-6" />
+                        )}
                       </div>
                       <span className="text-xs text-text truncate w-full text-center font-medium">{att.name}</span>
-                      <span className="text-[10px] text-text-tertiary">{formatFileSize(att.size)}</span>
+                      <span className={`text-[10px] ${failed ? "text-danger" : "text-text-tertiary"}`}>
+                        {failed
+                          ? t("compose.attachmentFailed")
+                          : loading
+                            ? t("compose.attachmentLoading")
+                            : formatFileSize(att.size)}
+                      </span>
                     </div>
                   );
                 })}

@@ -751,6 +751,7 @@ pub fn run() {
             commands::mails::fetch_mail_body,
             commands::mails::list_attachments,
             commands::mails::get_attachment_preview,
+            commands::mails::get_attachment_data,
             commands::mails::open_attachment,
             commands::mails::save_attachment,
             commands::mails::toggle_star,
