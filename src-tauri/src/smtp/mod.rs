@@ -273,13 +273,13 @@ mod tests {
             to: vec!["to@example.com".into()],
             cc: vec![],
             bcc: vec![],
-            subject: "Zählerwechsel".into(),
+            subject: "Bericht".into(),
             body_text: "hi".into(),
             body_html: None,
             in_reply_to: None,
             references: None,
             attachments: vec![EmailAttachment {
-                name: "AKDB-Export-Donauwörth.xml".into(),
+                name: "export-übersicht.xml".into(),
                 mime_type: "text/xml".into(),
                 data: b"<root/>".to_vec(),
             }],
@@ -288,8 +288,8 @@ mod tests {
         let raw = String::from_utf8_lossy(&build_message(config(), message).unwrap()).to_string();
         let unfolded = raw.replace("\r\n ", "").replace("\r\n\t", "");
 
-        assert!(unfolded.contains("filename=\"AKDB-Export-Donauwoerth.xml\""), "{unfolded}");
-        assert!(unfolded.contains("filename*=UTF-8''AKDB-Export-Donauw%C3%B6rth.xml"), "{unfolded}");
+        assert!(unfolded.contains("filename=\"export-uebersicht.xml\""), "{unfolded}");
+        assert!(unfolded.contains("filename*=UTF-8''export-%C3%BCbersicht.xml"), "{unfolded}");
         assert!(!unfolded.contains("filename*0"), "regressed to RFC 2231 continuation");
         assert!(unfolded.contains("Content-Transfer-Encoding: base64"));
     }

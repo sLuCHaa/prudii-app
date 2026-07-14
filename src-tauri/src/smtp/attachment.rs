@@ -2,10 +2,10 @@
 //!
 //! lettre's `Attachment::new` writes a non-ASCII filename as an RFC 2231
 //! continuation parameter (`filename*0*=utf-8''...`). Several widely used clients
-//! do not parse that form and show the raw value, so `Donauwörth.xlsx` arrives as
-//! `utf-8''Donauw%C3%B6rth.xlsx`. Build the part here instead and emit the RFC 6266
-//! form every client understands: a quoted ASCII `filename` plus an extended
-//! `filename*`.
+//! do not parse that form and show the raw value, so `Größe.xlsx` arrives as
+//! `utf-8''Gr%C3%B6%C3%9Fe.xlsx` — extension included in the damage. Build the part
+//! here instead and emit the RFC 6266 form every client understands: a quoted ASCII
+//! `filename` plus an extended `filename*`.
 
 use lettre::message::{
     header::{ContentTransferEncoding, ContentType, Header, HeaderName, HeaderValue},
@@ -66,7 +66,7 @@ fn pct_decode(value: &str) -> Option<String> {
 }
 
 /// Undo a filename that was stored with its RFC 2231 encoding intact, e.g.
-/// `utf-8''Donauw%C3%B6rth.xlsx` — such names reach us from mails whose sender (or
+/// `utf-8''Gr%C3%B6%C3%9Fe.xlsx` — such names reach us from mails whose sender (or
 /// an earlier version of this app) leaked the encoding into the value itself.
 /// Re-sending them as-is would propagate the damage.
 pub fn repair_encoded_name(name: &str) -> String {
@@ -177,13 +177,13 @@ mod tests {
 
     #[test]
     fn non_ascii_name_emits_both_forms_and_never_a_continuation() {
-        let cd = disposition_of("importdonauwörth.xlsx", "application/octet-stream");
+        let cd = disposition_of("größenliste.xlsx", "application/octet-stream");
         assert!(
-            cd.contains("filename=\"importdonauwoerth.xlsx\""),
+            cd.contains("filename=\"groessenliste.xlsx\""),
             "missing ASCII fallback: {cd}"
         );
         assert!(
-            cd.contains("filename*=UTF-8''importdonauw%C3%B6rth.xlsx"),
+            cd.contains("filename*=UTF-8''gr%C3%B6%C3%9Fenliste.xlsx"),
             "missing extended filename: {cd}"
         );
         // The bug this module exists to prevent.
@@ -192,15 +192,15 @@ mod tests {
 
     #[test]
     fn the_extension_survives_in_the_ascii_fallback() {
-        let cd = disposition_of("AKDB-Export-Donauwörth.xml", "text/xml");
-        assert!(cd.contains("filename=\"AKDB-Export-Donauwoerth.xml\""), "{cd}");
+        let cd = disposition_of("export-übersicht.xml", "text/xml");
+        assert!(cd.contains("filename=\"export-uebersicht.xml\""), "{cd}");
     }
 
     #[test]
     fn an_already_encoded_name_is_repaired_rather_than_re_encoded() {
-        let cd = disposition_of("utf-8''importdonauw%C3%B6rth.xlsx", "application/octet-stream");
-        assert!(cd.contains("filename=\"importdonauwoerth.xlsx\""), "{cd}");
-        assert!(cd.contains("filename*=UTF-8''importdonauw%C3%B6rth.xlsx"), "{cd}");
+        let cd = disposition_of("utf-8''gr%C3%B6%C3%9Fenliste.xlsx", "application/octet-stream");
+        assert!(cd.contains("filename=\"groessenliste.xlsx\""), "{cd}");
+        assert!(cd.contains("filename*=UTF-8''gr%C3%B6%C3%9Fenliste.xlsx"), "{cd}");
         assert!(!cd.contains("utf-8''utf-8"), "double-encoded: {cd}");
     }
 
