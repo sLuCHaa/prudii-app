@@ -1086,8 +1086,22 @@ pub async fn fetch_mail_body(
     };
 
     // Phase 3: Parse body and write to DB
+    store_body_and_attachments(db, mail_id, &body_bytes)
+        .await
+        .with_context(|| format!("Body konnte nicht verarbeitet werden für Mail {} in {}", mail_id, folder_path))
+}
+
+/// Parse a raw RFC822 message and persist its body, inline images and attachments.
+/// Attachment files are written to `{data_dir}/attachments/{mail_id}`.
+///
+/// Shared by the IMAP body fetch and by the local mirror of a mail we wrote ourselves
+/// (a sent copy or a saved draft). The mirror already holds the raw bytes, so it can
+/// store the attachments immediately instead of waiting for the server to hand them
+/// back on the next sync — without this, a freshly saved draft reopens with its
+/// attachments missing.
+pub async fn store_body_and_attachments(db: &Database, mail_id: &str, body_bytes: &[u8]) -> Result<()> {
     let parser = MessageParser::default();
-    if let Some(msg) = parser.parse(&body_bytes) {
+    if let Some(msg) = parser.parse(body_bytes) {
         let body_text = msg.body_text(0).unwrap_or_default().to_string();
         let mut body_html = msg.body_html(0).unwrap_or_default().to_string();
         let snippet = {
@@ -1199,7 +1213,7 @@ pub async fn fetch_mail_body(
             rusqlite::params![body_text, mail_id],
         );
     } else {
-        anyhow::bail!("Body konnte nicht geparst werden für Mail {} in {}", mail_id, folder_path);
+        anyhow::bail!("Body konnte nicht geparst werden für Mail {}", mail_id);
     }
 
     Ok(())

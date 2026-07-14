@@ -225,8 +225,15 @@ pub async fn send_mail(app: AppHandle, db: State<'_, Database>, pool: State<'_, 
                                 // instead of relying on a later sync to re-fetch it (which
                                 // is unreliable on some servers, e.g. GMX). The next sync
                                 // claims this row by Message-ID and backfills the real UID.
-                                if let Err(e) = imap::insert_local_sent_mail(&db, &account_id, &sent_id, &message_bytes) {
-                                    log::warn!("Failed to insert local sent copy (will appear after next sync): {}", e);
+                                match imap::insert_local_sent_mail(&db, &account_id, &sent_id, &message_bytes) {
+                                    // Store the attachments from the same bytes — the local row has
+                                    // no UID yet, so opening the sent mail cannot fetch them.
+                                    Ok(sent_mail_id) => {
+                                        if let Err(e) = imap::store_body_and_attachments(&db, &sent_mail_id, &message_bytes).await {
+                                            log::error!("Failed to store attachments of the local sent copy: {}", e);
+                                        }
+                                    }
+                                    Err(e) => log::warn!("Failed to insert local sent copy (will appear after next sync): {}", e),
                                 }
                                 Ok(())
                             }
@@ -500,6 +507,15 @@ pub async fn save_draft(db: State<'_, Database>, pool: State<'_, ImapPool>, requ
         },
         None => None,
     };
+
+    // The mirrored row has no UID yet, so reopening the draft cannot fetch its
+    // attachments from the server. Store them from the bytes we just built — otherwise
+    // the draft reopens without them and would be sent with the files missing.
+    if let Some(ref id) = local_id {
+        if let Err(e) = imap::store_body_and_attachments(&db, id, &message_bytes).await {
+            log::error!("save_draft: storing attachments for the local draft failed: {}", e);
+        }
+    }
 
     Ok(local_id)
 }
