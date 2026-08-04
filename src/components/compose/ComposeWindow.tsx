@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { X, Maximize2, Minimize2, Pencil, Reply, ReplyAll, Forward } from "lucide-react";
-import { listen, emit } from "@tauri-apps/api/event";
+import { emit } from "@tauri-apps/api/event";
 import { getCurrentWindow, currentMonitor } from "@tauri-apps/api/window";
 import { LogicalSize, LogicalPosition } from "@tauri-apps/api/dpi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -34,16 +34,32 @@ export function ComposeWindow() {
 
   useEffect(() => {
     const win = getCurrentWindow();
+    let unlisten: (() => void) | null = null;
+    let cancelled = false;
 
-    const unlisten = listen<ComposeInitData>("compose-init", (event) => {
-      setInitData(event.payload);
-      setReady(true);
-    });
+    // Listen scoped to THIS window's label. A plain global listen() would also
+    // receive the compose-init emitted for every OTHER compose window, which
+    // re-initialized (and wiped) already-open compose windows.
+    win
+      .listen<ComposeInitData>("compose-init", (event) => {
+        setInitData(event.payload);
+        setReady(true);
+      })
+      .then((fn) => {
+        if (cancelled) {
+          fn();
+          return;
+        }
+        unlisten = fn;
+        // Signal readiness only once the listener is actually registered,
+        // otherwise the main window can emit compose-init into the void.
+        emit("compose-ready", win.label);
+      });
 
-    // Signal to the main window that we're mounted and listening
-    emit("compose-ready", win.label);
-
-    return () => { unlisten.then((fn) => fn()); };
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
   }, []);
 
   const composeFormRef = useRef<ComposeFormHandle>(null);
