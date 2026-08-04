@@ -663,6 +663,38 @@ async fn do_sync_account_inner(app: &AppHandle, account: Account, account_id: &s
                     new_mails: total_new,
                     message: format!("Error syncing {}: {}", folder.name, e),
                 });
+
+                // A timed-out command was dropped mid-read: the response is
+                // still half-buffered in the stream, and every later command
+                // on this session would misparse it and time out too. Drop
+                // the connection (no LOGOUT — it would hang on the same
+                // poisoned stream) and reconnect before the next folder.
+                if e.to_string().contains("timed out") {
+                    log::warn!("Reconnecting IMAP session after timeout in folder {}", folder.name);
+                    match imap::connect_with_auth(
+                        &account.imap_host,
+                        account.imap_port as u16,
+                        &account.email,
+                        auth_type,
+                        credential,
+                    )
+                    .await
+                    {
+                        Ok(fresh) => session = fresh,
+                        Err(e2) => {
+                            emit_progress(app, &SyncProgress {
+                                account_id: account_id.to_string(),
+                                status: "error".into(),
+                                folder_name: None,
+                                folder_index: i as u32,
+                                folder_count,
+                                new_mails: total_new,
+                                message: format!("IMAP reconnect failed: {:#}", e2),
+                            });
+                            return;
+                        }
+                    }
+                }
             }
         }
 
@@ -697,10 +729,11 @@ async fn do_sync_account_inner(app: &AppHandle, account: Account, account_id: &s
         // FTS5 optimize: collapse the many small segments accumulated during bulk
         // initial insert into a single segment for faster searches. Runs once here,
         // after ALL folders are done — never on incremental syncs.
-        {
-            let conn = db.lock_db();
-            let _ = conn.execute_batch("INSERT INTO mails_fts(mails_fts) VALUES('optimize')");
-        }
+        // Reuses the guard taken above: lock_db() is a non-reentrant std::sync::Mutex,
+        // so taking it again while `conn` is still alive self-deadlocks this thread
+        // with the DB mutex held — which froze the entire app at the end of every
+        // first sync of a new IMAP account.
+        let _ = conn.execute_batch("INSERT INTO mails_fts(mails_fts) VALUES('optimize')");
         log::info!("IMAP initial sync FTS5 optimize complete for account {}", account_id);
     }
 
@@ -1440,7 +1473,10 @@ pub async fn sync_folder(
         }
     }
 
-    let _ = session.logout().await;
+    // Bounded logout: after a timed-out sync the stream may hold a half-read
+    // response, on which LOGOUT would block forever. Dropping the session
+    // closes the connection either way.
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(5), session.logout()).await;
     sync_result.map(|_| ()).map_err(|e| format!("Folder sync failed: {}", e))
 }
 

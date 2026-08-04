@@ -324,11 +324,15 @@ fn detect_folder_type(
 /// UID reconciliation + flag sync: EXAMINE the folder, UID FETCH 1:* FLAGS,
 /// remove local mails whose UIDs no longer exist on the server, and update
 /// flags (read/starred/replied) for existing mails that differ from the server.
+/// Server-rejected commands are logged and swallowed (the session is still
+/// usable), but timeouts are returned as errors: a timed-out command was
+/// dropped mid-read and leaves the response half-consumed in the stream
+/// buffer, so the session must not be reused afterwards.
 async fn reconcile_and_sync_flags(
     session: &mut ImapSession,
     folder: &Folder,
     db: &Database,
-) {
+) -> Result<()> {
     // EXAMINE to get read-only access
     match tokio::time::timeout(
         std::time::Duration::from_secs(15),
@@ -337,11 +341,10 @@ async fn reconcile_and_sync_flags(
         Ok(Ok(_)) => {}
         Ok(Err(e)) => {
             log::warn!("reconcile '{}': EXAMINE failed: {}", folder.name, e);
-            return;
+            return Ok(());
         }
         Err(_) => {
-            log::warn!("reconcile '{}': EXAMINE timed out", folder.name);
-            return;
+            anyhow::bail!("reconcile '{}': EXAMINE timed out", folder.name);
         }
     }
 
@@ -367,7 +370,7 @@ async fn reconcile_and_sync_flags(
                     "SELECT id, uid, is_read, is_starred, is_replied FROM mails WHERE folder_id = ?1 AND uid IS NOT NULL"
                 ) {
                     Ok(s) => s,
-                    Err(e) => { log::warn!("reconcile '{}': prepare failed: {}", folder.name, e); return; }
+                    Err(e) => { log::warn!("reconcile '{}': prepare failed: {}", folder.name, e); return Ok(()); }
                 };
                 stmt.query_map(rusqlite::params![folder.id], |row| {
                     Ok((
@@ -433,9 +436,10 @@ async fn reconcile_and_sync_flags(
             log::warn!("reconcile '{}': UID FETCH FLAGS failed: {}", folder.name, e);
         }
         Err(_) => {
-            log::warn!("reconcile '{}': UID FETCH FLAGS timed out", folder.name);
+            anyhow::bail!("reconcile '{}': UID FETCH FLAGS timed out", folder.name);
         }
     }
+    Ok(())
 }
 
 /// Sync mails from a single IMAP folder — HEADERS ONLY (UID-based incremental).
@@ -546,7 +550,7 @@ pub async fn sync_mails(
                 "sync_mails '{}': UIDNEXT unchanged but local has more mails than server (local={}, server={}), reconciling",
                 folder.name, local_count, server_exists
             );
-            reconcile_and_sync_flags(session, folder, db).await;
+            reconcile_and_sync_flags(session, folder, db).await?;
             update_folder_counts(db, folder, server_exists, server_uid_validity, server_uid_next)?;
             return Ok(SyncStats {
                 new_mails: 0,
@@ -557,7 +561,7 @@ pub async fn sync_mails(
                 "sync_mails '{}': UIDNEXT unchanged ({}), syncing flags ({:?} total)",
                 folder.name, server_uid_next, t0.elapsed()
             );
-            reconcile_and_sync_flags(session, folder, db).await;
+            reconcile_and_sync_flags(session, folder, db).await?;
             update_folder_counts(db, folder, server_exists, server_uid_validity, server_uid_next)?;
             return Ok(SyncStats {
                 new_mails: 0,
@@ -587,60 +591,77 @@ pub async fn sync_mails(
         .unwrap_or(0)
     };
 
-    let fetch_range = format!("{}:*", last_uid + 1);
-    let fetched = tokio::time::timeout(
-        std::time::Duration::from_secs(60),
-        session.uid_fetch(&fetch_range, "(UID RFC822.HEADER FLAGS RFC822.SIZE)"),
+    // Resolve the concrete UIDs to fetch, then pull them in bounded chunks.
+    // The previous single `{last_uid+1}:*` FETCH loaded the entire folder into
+    // memory under one 60s timeout: any large mailbox hit the timeout on its
+    // very first sync, the dropped read left half a response in the stream
+    // buffer (poisoning every later command on this session), and no progress
+    // event fired for the whole duration — the wizard sat at 0.
+    let search_range = format!("UID {}:*", last_uid + 1);
+    let mut uids = tokio::time::timeout(
+        std::time::Duration::from_secs(30),
+        session.uid_search(&search_range),
     )
     .await
-    .map_err(|_| anyhow::anyhow!("IMAP fetch timed out after 60s"))?
-    .context("Failed to fetch mails")?;
+    .map_err(|_| anyhow::anyhow!("IMAP search timed out after 30s"))?
+    .context("Failed to search for new mails")?;
+    // `{n}:*` clamps to the highest existing UID, so a folder with no new mail
+    // returns its newest message — filter it out instead of refetching it.
+    uids.retain(|u| *u > last_uid);
+    uids.sort_unstable();
+    uids.dedup();
 
     let parser = MessageParser::default();
     let mut new_count: u32 = 0;
     let mut all_new_mail_ids: Vec<String> = Vec::new();
     let batch_size = 500;
-    let mut batch: Vec<FetchedMail> = Vec::with_capacity(batch_size);
 
-    for item in &fetched {
-        let uid = match item.uid {
-            Some(uid) if uid > last_uid => uid,
-            _ => continue,
-        };
+    for chunk in uids.chunks(batch_size) {
+        // The chunk is a run of consecutive entries from the sorted UID list,
+        // so first:last addresses exactly these messages.
+        let set = format!("{}:{}", chunk[0], chunk[chunk.len() - 1]);
+        let fetched = tokio::time::timeout(
+            std::time::Duration::from_secs(60),
+            session.uid_fetch(&set, "(UID RFC822.HEADER FLAGS RFC822.SIZE)"),
+        )
+        .await
+        .map_err(|_| anyhow::anyhow!("IMAP fetch timed out after 60s"))?
+        .context("Failed to fetch mails")?;
 
-        let raw_bytes = item.data.clone().unwrap_or_default();
-        let flags = item.flags.clone();
-        let size = item.size.unwrap_or(0);
+        let batch: Vec<FetchedMail> = fetched
+            .into_iter()
+            .filter_map(|item| match item.uid {
+                Some(uid) if uid > last_uid => Some(FetchedMail {
+                    uid,
+                    raw_bytes: item.data.unwrap_or_default(),
+                    flags: item.flags,
+                    size: item.size.unwrap_or(0),
+                }),
+                _ => None,
+            })
+            .collect();
 
-        batch.push(FetchedMail { uid, raw_bytes, flags, size });
-
-        if batch.len() >= batch_size {
-            let (count, ids) = process_header_batch(&batch, &parser, account_id, folder, db);
-            new_count += count;
-            all_new_mail_ids.extend(ids);
-            batch.clear();
-
-            if let Some((app, folder_idx, folder_count, base_new)) = progress_ctx {
-                let _ = app.emit("sync-progress", &SyncProgress {
-                    account_id: account_id.to_string(),
-                    status: "syncing_mails".into(),
-                    folder_name: Some(folder.name.clone()),
-                    folder_index: folder_idx,
-                    folder_count,
-                    new_mails: base_new + new_count,
-                    message: format!(
-                        "Syncing {} ({}/{})... {} mails",
-                        folder.name, folder_idx + 1, folder_count, base_new + new_count,
-                    ),
-                });
-            }
+        if batch.is_empty() {
+            continue;
         }
-    }
-
-    if !batch.is_empty() {
         let (count, ids) = process_header_batch(&batch, &parser, account_id, folder, db);
         new_count += count;
         all_new_mail_ids.extend(ids);
+
+        if let Some((app, folder_idx, folder_count, base_new)) = progress_ctx {
+            let _ = app.emit("sync-progress", &SyncProgress {
+                account_id: account_id.to_string(),
+                status: "syncing_mails".into(),
+                folder_name: Some(folder.name.clone()),
+                folder_index: folder_idx,
+                folder_count,
+                new_mails: base_new + new_count,
+                message: format!(
+                    "Syncing {} ({}/{})... {} mails",
+                    folder.name, folder_idx + 1, folder_count, base_new + new_count,
+                ),
+            });
+        }
     }
 
     if !all_new_mail_ids.is_empty() {
@@ -660,7 +681,7 @@ pub async fn sync_mails(
             "sync_mails '{}': local has more mails than server (local={}, server={}), reconciling UIDs",
             folder.name, local_count_after, server_exists
         );
-        reconcile_and_sync_flags(session, folder, db).await;
+        reconcile_and_sync_flags(session, folder, db).await?;
     }
 
     log::info!(
