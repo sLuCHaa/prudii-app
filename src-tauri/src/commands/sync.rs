@@ -755,15 +755,13 @@ async fn do_sync_account_inner(app: &AppHandle, account: Account, account_id: &s
         account_id, total_new, folder_count, sync_start.elapsed()
     );
 
-    // Return session to pool with folder info for instant reuse.
+    // Offer the session to the pool for instant reuse. Sync opened this
+    // connection itself (never claimed the pool's in_use slot), so it must
+    // not use return_session — that would clear another operation's claim.
     // After prefetch, session is in INBOX; otherwise unknown.
     let pool = app.state::<ImapPool>();
     let last_folder = folders.iter().find(|f| f.folder_type == "inbox").map(|f| f.path.clone());
-    if let Some(folder) = last_folder {
-        pool.return_session_in_folder(account_id, session, folder).await;
-    } else {
-        pool.return_session(account_id, session).await;
-    }
+    pool.offer_session(account_id, session, last_folder).await;
 
     if total_new > 0 {
         crate::notifications::send_new_mail_notification(app, account_id, total_new, &db);

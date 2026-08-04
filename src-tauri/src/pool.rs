@@ -79,6 +79,14 @@ impl ImapPool {
         let deadline = Instant::now() + std::time::Duration::from_secs(60);
 
         loop {
+            // Register interest in `returned` BEFORE inspecting pool state.
+            // `notify_waiters()` stores no permit, so a return_session landing
+            // between the in_use check and the first poll of `notified()` would
+            // otherwise be missed and park this waiter for the full deadline.
+            let notified = self.returned.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+
             // 1. Try to take an available session from the pool
             let existing = {
                 let mut sessions = self.sessions.lock().await;
@@ -146,7 +154,7 @@ impl ImapPool {
                 );
 
                 tokio::select! {
-                    _ = self.returned.notified() => {
+                    _ = notified.as_mut() => {
                         // A session was returned — loop back and try to take it.
                         // (Might be for a different account, so we re-check.)
                         continue;
@@ -244,21 +252,7 @@ impl ImapPool {
 
     /// Return a session to the pool for reuse.
     pub async fn return_session(&self, account_id: &str, session: ImapSession) {
-        let mut sessions = self.sessions.lock().await;
-        sessions.insert(
-            account_id.to_string(),
-            PoolEntry {
-                session,
-                current_folder: None,
-                last_used: Instant::now(),
-            },
-        );
-        drop(sessions);
-        {
-            let mut in_use = self.in_use.lock().unwrap_or_else(|e| e.into_inner());
-            in_use.remove(account_id);
-        }
-        self.returned.notify_waiters();
+        self.put_back(account_id, session, None).await;
     }
 
     /// Return a session to the pool, recording which folder it's currently in.
@@ -269,20 +263,66 @@ impl ImapPool {
         session: ImapSession,
         folder: String,
     ) {
+        self.put_back(account_id, session, Some(folder)).await;
+    }
+
+    async fn put_back(&self, account_id: &str, session: ImapSession, folder: Option<String>) {
         let mut sessions = self.sessions.lock().await;
-        sessions.insert(
+        let replaced = sessions.insert(
             account_id.to_string(),
             PoolEntry {
                 session,
-                current_folder: Some(folder),
+                current_folder: folder,
                 last_used: Instant::now(),
             },
         );
         drop(sessions);
+        // A session can already be pooled if take_session gave up waiting and
+        // opened a second connection. Log the displaced one out instead of
+        // silently leaking a live TLS connection.
+        if let Some(mut old) = replaced {
+            let _ = old.session.logout().await;
+        }
         {
             let mut in_use = self.in_use.lock().unwrap_or_else(|e| e.into_inner());
             in_use.remove(account_id);
         }
+        self.returned.notify_waiters();
+    }
+
+    /// Offer a session to the pool from a caller that never claimed the
+    /// account's in-use slot (e.g. sync, which opens its own connection).
+    /// Unlike `return_session`, this must NOT touch `in_use`: clearing it
+    /// here would wipe the claim of whatever operation currently holds the
+    /// pooled session and allow two tasks to use one connection concurrently.
+    /// The session is adopted only if the slot is free and nothing is pooled;
+    /// otherwise it is logged out and dropped.
+    pub async fn offer_session(
+        &self,
+        account_id: &str,
+        session: ImapSession,
+        folder: Option<String>,
+    ) {
+        let mut sessions = self.sessions.lock().await;
+        let slot_free = {
+            let in_use = self.in_use.lock().unwrap_or_else(|e| e.into_inner());
+            !in_use.contains(account_id)
+        };
+        if !slot_free || sessions.contains_key(account_id) {
+            drop(sessions);
+            let mut session = session;
+            let _ = session.logout().await;
+            return;
+        }
+        sessions.insert(
+            account_id.to_string(),
+            PoolEntry {
+                session,
+                current_folder: folder,
+                last_used: Instant::now(),
+            },
+        );
+        drop(sessions);
         self.returned.notify_waiters();
     }
 

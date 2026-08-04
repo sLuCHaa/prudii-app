@@ -3159,15 +3159,32 @@ async fn empty_folder_by_type(app: tauri::AppHandle, db: State<'_, Database>, ac
                 Err(e) => { log::error!("EmptyFolder: IMAP connection failed: {}", e); return; }
             };
 
-            let result = crate::imap::empty_folder_on_server(&mut session, &folder_path).await;
+            // Bounded: SELECT/STORE/EXPUNGE have no per-command timeout, so a
+            // dead connection would otherwise pin the pool's in_use slot for
+            // this account indefinitely and stall every other IMAP operation
+            // (body fetches, prefetch, backfill) app-wide.
+            let result = tokio::time::timeout(
+                std::time::Duration::from_secs(180),
+                crate::imap::empty_folder_on_server(&mut session, &folder_path),
+            )
+            .await;
             match &result {
-                Ok(_) => {
+                Ok(Ok(_)) => {
                     log::info!("EmptyFolder: server folder '{}' emptied", folder_path);
                     pool.return_session(&account_id, session).await;
                 }
-                Err(e) => {
+                Ok(Err(e)) => {
                     log::error!("EmptyFolder: IMAP failed: {}", e);
                     let _ = session.logout().await;
+                    pool.release(&account_id);
+                }
+                Err(_) => {
+                    log::error!(
+                        "EmptyFolder: server expunge for '{}' timed out after 180s, dropping connection",
+                        folder_path
+                    );
+                    // Session state is unknown mid-command — drop without logout.
+                    drop(session);
                     pool.release(&account_id);
                 }
             }
