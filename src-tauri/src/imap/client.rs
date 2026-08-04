@@ -12,6 +12,11 @@ type TlsStream = tokio_rustls::client::TlsStream<tokio::net::TcpStream>;
 // Outlook/Office365 throttles IMAP aggressively; on a throttle or transient
 // drop, back off exponentially with jitter instead of failing the whole sync.
 const IMAP_MAX_RETRIES: u32 = 3;
+/// Per-read/-write I/O bounds. A connection silently killed by a network
+/// switch never delivers data again; these caps turn that into an error the
+/// callers' reconnect logic can handle instead of an indefinite hang.
+const READ_TIMEOUT: Duration = Duration::from_secs(60);
+const WRITE_TIMEOUT: Duration = Duration::from_secs(30);
 
 fn is_throttle_error(msg: &str) -> bool {
     let m = msg.to_ascii_lowercase();
@@ -102,6 +107,20 @@ impl ImapClient {
         .context("TCP connect failed")?;
 
         tcp.set_nodelay(true).ok();
+        // TCP keepalive so the kernel notices a dead peer on its own. Switching
+        // Wi-Fi networks silently kills connections without FIN/RST; without
+        // keepalive, a blocked read (e.g. the 25-minute IDLE wait) only fails
+        // when its own timeout fires. With ~30s probes a dead connection
+        // errors out within roughly a minute.
+        {
+            let sock = socket2::SockRef::from(&tcp);
+            let keepalive = socket2::TcpKeepalive::new()
+                .with_time(Duration::from_secs(30))
+                .with_interval(Duration::from_secs(15));
+            if let Err(e) = sock.set_tcp_keepalive(&keepalive) {
+                log::warn!("IMAP connect {}: failed to set TCP keepalive: {}", host, e);
+            }
+        }
         log::debug!("IMAP connect {}: TCP {:?}", host, t0.elapsed());
 
         let t1 = std::time::Instant::now();
@@ -115,10 +134,13 @@ impl ImapClient {
             tokio_rustls::TlsConnector::from(std::sync::Arc::new(tls_config));
         let server_name = rustls::pki_types::ServerName::try_from(host.to_string())
             .context("Invalid server name")?;
-        let tls_stream = connector
-            .connect(server_name, tcp)
-            .await
-            .context(format!("TLS handshake failed for {}:{}", host, port))?;
+        let tls_stream = tokio::time::timeout(
+            Duration::from_secs(15),
+            connector.connect(server_name, tcp),
+        )
+        .await
+        .map_err(|_| anyhow::anyhow!("TLS handshake timed out for {}:{}", host, port))?
+        .context(format!("TLS handshake failed for {}:{}", host, port))?;
 
         log::debug!("IMAP connect {}: TLS {:?}", host, t1.elapsed());
 
@@ -191,26 +213,46 @@ impl ImapClient {
 
     async fn send_raw(&mut self, data: &[u8]) -> Result<()> {
         let t0 = std::time::Instant::now();
-        self.stream.get_mut().write_all(data).await?;
-        let t_write = t0.elapsed();
-        self.stream.get_mut().flush().await?;
+        // Bounded: on a connection killed by a network switch the send buffer
+        // fills and an unbounded write_all blocks forever.
+        tokio::time::timeout(WRITE_TIMEOUT, async {
+            self.stream.get_mut().write_all(data).await?;
+            self.stream.get_mut().flush().await
+        })
+        .await
+        .map_err(|_| anyhow::anyhow!("IMAP write timed out"))??;
         let t_flush = t0.elapsed();
         if t_flush > std::time::Duration::from_millis(100) {
-            log::warn!(
-                "IMAP send_raw slow: write_all={:?}, flush={:?} (total {:?})",
-                t_write, t_flush - t_write, t_flush
-            );
+            log::warn!("IMAP send_raw slow: total {:?}", t_flush);
         }
         Ok(())
     }
 
+    /// Bounded read used by every command/response path. Only IDLE's event
+    /// wait uses `read_line_raw` (it deliberately blocks for up to 25 min
+    /// under its own timeout).
     async fn read_line(&mut self) -> Result<String> {
+        tokio::time::timeout(READ_TIMEOUT, self.read_line_raw())
+            .await
+            .map_err(|_| anyhow::anyhow!("IMAP read timed out"))?
+    }
+
+    async fn read_line_raw(&mut self) -> Result<String> {
         let mut line = String::new();
         let n = self.stream.read_line(&mut line).await?;
         if n == 0 {
             bail!("IMAP connection closed");
         }
         Ok(line)
+    }
+
+    /// Bounded literal read (message headers/bodies announced as `{N}`).
+    async fn read_exact_bounded(&mut self, buf: &mut [u8]) -> Result<()> {
+        tokio::time::timeout(READ_TIMEOUT, self.stream.read_exact(buf))
+            .await
+            .map_err(|_| anyhow::anyhow!("IMAP read timed out"))?
+            .context("Failed to read literal")?;
+        Ok(())
     }
 
     fn next_tag(&mut self) -> String {
@@ -251,10 +293,7 @@ impl ImapClient {
                     line.truncate(pos);
                 }
                 let mut buf = vec![0u8; literal_size];
-                self.stream
-                    .read_exact(&mut buf)
-                    .await
-                    .context("Failed to read literal")?;
+                self.read_exact_bounded(&mut buf).await?;
                 line.push_str(&String::from_utf8_lossy(&buf));
                 let cont = self.read_line().await?;
                 line.push_str(&cont);
@@ -427,7 +466,7 @@ impl ImapClient {
                 text.truncate(pos);
             }
             let mut buf = vec![0u8; literal_size];
-            self.stream.read_exact(&mut buf).await?;
+            self.read_exact_bounded(&mut buf).await?;
             data = Some(buf);
             // Read continuation (closing paren, more items, etc.)
             let cont = self.read_line().await?;
@@ -627,7 +666,10 @@ impl ImapClient {
             bail!("Server doesn't support IDLE: {}", line.trim());
         }
 
-        let event = match tokio::time::timeout(timeout, self.read_line()).await {
+        // read_line_raw: the IDLE wait is the one read that must NOT carry the
+        // 60s READ_TIMEOUT — silence here is normal for up to `timeout` (25 min).
+        // TCP keepalive still surfaces a dead connection as a read error.
+        let event = match tokio::time::timeout(timeout, self.read_line_raw()).await {
             Ok(Ok(_)) => IdleEvent::NewData,
             Ok(Err(e)) => return Err(e.context("Error during IDLE")),
             Err(_) => IdleEvent::Timeout,

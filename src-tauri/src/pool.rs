@@ -350,13 +350,16 @@ impl ImapPool {
         self.returned.notify_waiters();
     }
 
-    /// Drop all sessions (e.g. after backup restore).
+    /// Drop all sessions (network reset, backup restore). No LOGOUT: this is
+    /// called precisely when the connections are presumed dead — a polite
+    /// logout would block on every dead socket in turn, all while holding the
+    /// sessions lock, freezing the whole pool. Dropping closes the sockets.
     pub async fn clear_all(&self) {
-        let mut sessions = self.sessions.lock().await;
-        for (_, mut entry) in sessions.drain() {
-            let _ = entry.session.logout().await;
-        }
-        drop(sessions);
+        let drained: Vec<PoolEntry> = {
+            let mut sessions = self.sessions.lock().await;
+            sessions.drain().map(|(_, entry)| entry).collect()
+        };
+        drop(drained);
         {
             let mut in_use = self.in_use.lock().unwrap_or_else(|e| e.into_inner());
             in_use.clear();
