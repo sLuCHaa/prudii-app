@@ -72,6 +72,7 @@ pub fn list_accounts(db: State<'_, Database>) -> Result<Vec<Account>, String> {
 
 #[tauri::command]
 pub fn create_account(
+    app: tauri::AppHandle,
     db: State<'_, Database>,
     request: CreateAccountRequest,
 ) -> Result<Account, String> {
@@ -97,6 +98,21 @@ pub fn create_account(
             ));
         }
         log::info!("Cleaning up existing account {} before re-add (same provider)", old_id);
+        // Mirror delete_account's teardown: kill the old id's background tasks
+        // (IDLE watcher, in-flight sync) and evict its pooled IMAP session.
+        // Without this, the old IDLE loop outlives the row it belongs to and
+        // reconnects to the same mailbox forever, eating the server's
+        // connection limit while the new account tries its first sync.
+        crate::task_registry::abort_account(&old_id);
+        {
+            use tauri::Manager;
+            let app = app.clone();
+            let old_id = old_id.clone();
+            tauri::async_runtime::spawn(async move {
+                let pool = app.state::<crate::pool::ImapPool>();
+                pool.drop_session(&old_id).await;
+            });
+        }
         if let Err(e) = credentials::delete_password(&old_id) {
             log::warn!("Failed to delete credentials for {}: {}", old_id, e);
         }
