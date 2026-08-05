@@ -1713,7 +1713,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               placeholder={t("compose.subjectPlaceholder")}
-              className="flex-1 bg-transparent text-sm text-text placeholder:text-text-secondary"
+              className="compose-writing flex-1 bg-transparent text-sm text-text placeholder:text-text-secondary"
             />
           </div>
 

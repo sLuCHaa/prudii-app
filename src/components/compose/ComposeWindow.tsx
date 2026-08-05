@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from "react";
 import { X, Maximize2, Minimize2, Pencil, Reply, ReplyAll, Forward } from "lucide-react";
 import { emit } from "@tauri-apps/api/event";
 import { getCurrentWindow, currentMonitor } from "@tauri-apps/api/window";
-import { LogicalSize, LogicalPosition } from "@tauri-apps/api/dpi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { DialogProvider } from "../ui/DialogProvider";
@@ -18,6 +17,7 @@ export function ComposeWindow() {
   const { t } = useTranslation();
   const [initData, setInitData] = useState<ComposeInitData | null>(null);
   const [ready, setReady] = useState(false);
+  const [shown, setShown] = useState(false);
 
   useEffect(() => {
     if (!initData) return;
@@ -27,10 +27,27 @@ export function ComposeWindow() {
     document.documentElement.setAttribute("data-density", appSettings.density);
     // Window was created hidden — show it now that content + theme are ready.
     // The window's native background color (set at creation in composeWindow.ts)
-    // prevents a white flash before the web content paints.
+    // prevents a white flash before the web content paints. The content itself
+    // fades in over a few frames so the window materializes instead of popping.
     const win = getCurrentWindow();
-    win.show().then(() => win.setFocus());
+    win.show().then(() => {
+      win.setFocus();
+      requestAnimationFrame(() => setShown(true));
+    });
   }, [initData]);
+
+  // The webview's default right-click menu (Reload, browser items) breaks the
+  // native feel. Keep it only where typing happens — there it carries the OS
+  // spelling suggestions and clipboard actions.
+  useEffect(() => {
+    const onContextMenu = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('input, textarea, [contenteditable="true"]')) return;
+      e.preventDefault();
+    };
+    window.addEventListener("contextmenu", onContextMenu);
+    return () => window.removeEventListener("contextmenu", onContextMenu);
+  }, []);
 
   useEffect(() => {
     const win = getCurrentWindow();
@@ -70,89 +87,47 @@ export function ComposeWindow() {
   const closingRef = useRef(false);
 
   const [maximized, setMaximized] = useState(false);
-  const savedBounds = useRef<{ w: number; h: number; x: number; y: number } | null>(null);
-  const resizing = useRef(false);
+  const sizeSaveTimer = useRef<number | null>(null);
 
-  // Detect native maximize (e.g. double-click on title bar) via resize events
+  // Track native maximize state and remember the user's chosen size.
+  // Maximize/restore is fully native (win.toggleMaximize below), so the OS
+  // animates the transition and picks the correct work area — no manual
+  // bounds math, no pixel heuristics.
   useEffect(() => {
     const win = getCurrentWindow();
     const unlisten = win.onResized(async () => {
-      if (resizing.current) return; // ignore our own resizes
       try {
-        const scale = (await currentMonitor())?.scaleFactor ?? 1;
-        const size = await win.outerSize();
-        const w = Math.round(size.width / scale);
-        const h = Math.round(size.height / scale);
-        const availW = window.screen.availWidth;
-        const availH = window.screen.availHeight;
-        const isMax = w >= availW - 10 && h >= availH - 10;
-        if (isMax && !maximized) {
-          // Window was just maximized externally — save the previous bounds
-          // (savedBounds was set before the resize, so it holds the normal-size bounds)
-          setMaximized(true);
-        } else if (!isMax && maximized) {
-          setMaximized(false);
-        }
+        const isMax = await win.isMaximized();
+        setMaximized(isMax);
+        if (isMax) return;
+        // Debounced: persist the free-form size so the next compose window
+        // opens the way the user left this one (see composeWindow.ts).
+        if (sizeSaveTimer.current !== null) clearTimeout(sizeSaveTimer.current);
+        sizeSaveTimer.current = window.setTimeout(async () => {
+          try {
+            const scale = (await currentMonitor())?.scaleFactor ?? 1;
+            const size = await win.outerSize();
+            localStorage.setItem(
+              "compose-window-size",
+              JSON.stringify({
+                w: Math.round(size.width / scale),
+                h: Math.round(size.height / scale),
+              })
+            );
+          } catch { /* ignore */ }
+        }, 400);
       } catch { /* ignore */ }
     });
-    return () => { unlisten.then((fn) => fn()); };
-  }, [maximized]);
-
-  // Save bounds continuously while in normal state so we always have a restore target
-  useEffect(() => {
-    if (maximized) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const win = getCurrentWindow();
-        const scale = (await currentMonitor())?.scaleFactor ?? 1;
-        const size = await win.outerSize();
-        const pos = await win.outerPosition();
-        if (cancelled) return;
-        savedBounds.current = {
-          w: Math.round(size.width / scale),
-          h: Math.round(size.height / scale),
-          x: Math.round(pos.x / scale),
-          y: Math.round(pos.y / scale),
-        };
-      } catch { /* ignore */ }
-    })();
-    return () => { cancelled = true; };
-  }, [maximized]);
+    return () => {
+      unlisten.then((fn) => fn());
+      if (sizeSaveTimer.current !== null) clearTimeout(sizeSaveTimer.current);
+    };
+  }, []);
 
   async function handleToggleMaximize() {
-    const win = getCurrentWindow();
-    resizing.current = true;
     try {
-      if (maximized) {
-        if (savedBounds.current) {
-          const { w, h, x, y } = savedBounds.current;
-          await win.setPosition(new LogicalPosition(x, y));
-          await win.setSize(new LogicalSize(w, h));
-        }
-        setMaximized(false);
-      } else {
-        const scale = (await currentMonitor())?.scaleFactor ?? 1;
-        const size = await win.outerSize();
-        const pos = await win.outerPosition();
-        savedBounds.current = {
-          w: Math.round(size.width / scale),
-          h: Math.round(size.height / scale),
-          x: Math.round(pos.x / scale),
-          y: Math.round(pos.y / scale),
-        };
-        // Use available screen area (respects dock + menu bar dynamically)
-        const availX = (window.screen as any).availLeft ?? 0;
-        const availY = (window.screen as any).availTop ?? 0;
-        const availW = window.screen.availWidth;
-        const availH = window.screen.availHeight;
-        await win.setPosition(new LogicalPosition(availX, availY));
-        await win.setSize(new LogicalSize(availW, availH));
-        setMaximized(true);
-      }
-    } finally {
-      setTimeout(() => { resizing.current = false; }, 200);
-    }
+      await getCurrentWindow().toggleMaximize();
+    } catch { /* ignore */ }
   }
 
   // Intercept system close (Alt+F4, taskbar close) to trigger draft dialog
@@ -205,7 +180,7 @@ export function ComposeWindow() {
   return (
     <QueryClientProvider client={composeQueryClient}>
     <DialogProvider>
-      <div className="flex flex-col h-screen bg-surface text-text">
+      <div className={`flex flex-col h-screen bg-surface text-text transition-opacity duration-150 ${shown ? "opacity-100" : "opacity-0"}`}>
           {/* macOS: left padding clears the native traffic lights (overlay title bar) */}
           <div
             data-tauri-drag-region

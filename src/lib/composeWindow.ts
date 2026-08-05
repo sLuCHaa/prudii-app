@@ -21,12 +21,16 @@ export async function openComposeWindow(data: ComposeInitData): Promise<void> {
     let composeW = 740;
     let composeH = 680;
     let scale = 1;
+    let screenW = Infinity;
+    let screenH = Infinity;
     try {
       const monitor = await currentMonitor();
       if (monitor) {
         scale = monitor.scaleFactor ?? 1;
         const sw = Math.round(monitor.size.width / scale);
         const sh = Math.round(monitor.size.height / scale);
+        screenW = sw;
+        screenH = sh;
         // Leave room for menu bar + dock (~100 logical px)
         const availH = sh - 100;
         if (sw <= 1366) {
@@ -39,6 +43,19 @@ export async function openComposeWindow(data: ComposeInitData): Promise<void> {
       }
     } catch {
       // Fallback to defaults
+    }
+
+    // A size the user chose beats the computed default (all compose windows
+    // share the same localStorage origin, so the compose window's own resize
+    // handler wrote this). Clamped so a size from a larger monitor still fits.
+    try {
+      const saved = JSON.parse(localStorage.getItem("compose-window-size") ?? "null");
+      if (saved && typeof saved.w === "number" && typeof saved.h === "number") {
+        composeW = Math.min(Math.max(500, Math.round(saved.w)), screenW);
+        composeH = Math.min(Math.max(400, Math.round(saved.h)), screenH);
+      }
+    } catch {
+      // Corrupt entry — keep the computed default
     }
 
     // Center the compose window on the main window's current position,
@@ -100,7 +117,7 @@ export async function openComposeWindow(data: ComposeInitData): Promise<void> {
       // Native window background matching the theme, so the window never flashes
       // WebView2's white default before the web content paints.
       backgroundColor: data.darkMode ? [15, 23, 42, 255] : [255, 255, 255, 255],
-      maximizable: false,
+      maximizable: true,
       visible: false,
       dragDropEnabled: false,
     });

@@ -318,7 +318,7 @@ export const RecipientInput = forwardRef<RecipientInputHandle, RecipientInputPro
             }
           }}
           placeholder={recipients.length === 0 ? placeholder : ""}
-          className="flex-1 min-w-[120px] bg-transparent text-sm text-text placeholder:text-text-secondary"
+          className="compose-writing flex-1 min-w-[120px] bg-transparent text-sm text-text placeholder:text-text-secondary"
         />
       </div>
 
