@@ -1718,8 +1718,16 @@ pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id:
             |row| Ok((row.get(0)?, row.get(1)?, row.get::<_, Option<u32>>(2)?, row.get(3)?, row.get(4)?)),
         );
 
-        let (account_id, current_folder_id, uid, source_folder_path, message_id) = mail_info
-            .map_err(|e| format!("Mail not found: {}", e))?;
+        let (account_id, current_folder_id, uid, source_folder_path, message_id) = match mail_info {
+            Ok(v) => v,
+            Err(rusqlite::Error::QueryReturnedNoRows) => {
+                // Idempotent: the row is already gone (double delete, race with
+                // a background op) — the desired state is reached, not an error.
+                log::warn!("trash_mail: mail {} already deleted, nothing to do", mail_id);
+                return Ok(());
+            }
+            Err(e) => return Err(format!("Mail not found: {}", e)),
+        };
 
         let trash_info: Option<(String, String)> = conn
             .query_row(
