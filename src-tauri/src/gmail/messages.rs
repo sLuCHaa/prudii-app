@@ -28,7 +28,9 @@ pub async fn fetch_message_body(
         gmail_id, body_text.len(), body_html.len(), attachments.len()
     );
 
-    let has_attachments = !attachments.is_empty();
+    // Inline parts (embedded signature images) don't count as attachments —
+    // the attachment UI filters them out, so the flag must not announce them.
+    let has_attachments = attachments.iter().any(|a| !a.is_inline);
     let snippet = msg.snippet.as_deref().unwrap_or("");
 
     // Backfill empty metadata early (safe — doesn't set body_text/body_html which the

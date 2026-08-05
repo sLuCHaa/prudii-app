@@ -1135,12 +1135,14 @@ pub async fn store_body_and_attachments(db: &Database, mail_id: &str, body_bytes
             };
             s.replace('\n', " ").replace('\r', "")
         };
-        let has_attachments = msg.attachment_count() > 0;
-
         let attach_dir = db.data_dir.join("attachments").join(mail_id);
         let _ = tokio::fs::create_dir_all(&attach_dir).await;
 
         let mut processed_filenames = std::collections::HashSet::new();
+        // Counts only real (non-inline) attachments: attachment_count() includes
+        // embedded signature images, which made the UI announce attachments the
+        // attachment list then (correctly) refused to show.
+        let mut real_attachment_count: u32 = 0;
 
         for part in msg.attachments() {
             let raw_filename = part.attachment_name().unwrap_or("unnamed").to_string();
@@ -1180,6 +1182,9 @@ pub async fn store_body_and_attachments(db: &Database, mail_id: &str, body_bytes
             } else {
                 false // everything else is a regular attachment
             };
+            if !is_inline {
+                real_attachment_count += 1;
+            }
             let data = part.contents();
             let size = data.len() as i64;
 
@@ -1226,7 +1231,7 @@ pub async fn store_body_and_attachments(db: &Database, mail_id: &str, body_bytes
         let conn = db.lock_db();
         conn.execute(
             "UPDATE mails SET body_text = ?1, body_html = ?2, snippet = ?3, has_attachments = ?4 WHERE id = ?5",
-            rusqlite::params![body_text, body_html, snippet, has_attachments as i32, mail_id],
+            rusqlite::params![body_text, body_html, snippet, (real_attachment_count > 0) as i32, mail_id],
         )?;
 
         let _ = conn.execute(
@@ -1363,12 +1368,12 @@ pub async fn backfill_folder_bodies(
                     };
                     s.replace('\n', " ").replace('\r', "")
                 };
-                let has_attachments = msg.attachment_count() > 0;
-
                 let attach_dir = db.data_dir.join("attachments").join(mail_id);
                 let _ = tokio::fs::create_dir_all(&attach_dir).await;
 
                 let mut processed_filenames = std::collections::HashSet::new();
+                // Same rule as fetch_mail_body: only non-inline parts count.
+                let mut real_attachment_count: u32 = 0;
 
                 for part in msg.attachments() {
                     let original_name = part.attachment_name().unwrap_or("unnamed").to_string();
@@ -1409,6 +1414,9 @@ pub async fn backfill_folder_bodies(
                     } else {
                         false
                     };
+                    if !is_inline {
+                        real_attachment_count += 1;
+                    }
                     let data = part.contents();
                     let size = data.len() as i64;
 
@@ -1449,7 +1457,7 @@ pub async fn backfill_folder_bodies(
                 let conn = db.lock_db();
                 let _ = conn.execute(
                     "UPDATE mails SET body_text = ?1, body_html = ?2, snippet = ?3, has_attachments = ?4 WHERE id = ?5",
-                    rusqlite::params![body_text, body_html, snippet, has_attachments as i32, mail_id],
+                    rusqlite::params![body_text, body_html, snippet, (real_attachment_count > 0) as i32, mail_id],
                 );
                 let _ = conn.execute(
                     "UPDATE mails_fts SET body_text = ?1 WHERE mail_id = ?2",

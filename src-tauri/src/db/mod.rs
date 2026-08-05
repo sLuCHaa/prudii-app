@@ -3,7 +3,7 @@ use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
-const SCHEMA_VERSION: u32 = 34;
+const SCHEMA_VERSION: u32 = 35;
 
 pub struct Database {
     pub conn: Mutex<Connection>,
@@ -217,6 +217,23 @@ impl Database {
             ).unwrap_or(0);
             if fixed_tz > 0 {
                 log::info!("DB v33 fix: normalized {} mail dates to RFC3339 UTC (T...Z)", fixed_tz);
+            }
+        }
+
+        // v35 fix: has_attachments used to count inline parts (embedded signature
+        // images), so headers announced attachments for a list the UI correctly
+        // showed as empty. For mails whose body was fetched, the attachments
+        // table is authoritative — clear the flag when no real attachment exists.
+        if prev_version < 35 {
+            let fixed: usize = conn.execute(
+                "UPDATE mails SET has_attachments = 0
+                 WHERE has_attachments = 1
+                   AND (body_html != '' OR body_text != '')
+                   AND id NOT IN (SELECT mail_id FROM attachments WHERE is_inline = 0)",
+                [],
+            ).unwrap_or(0);
+            if fixed > 0 {
+                log::info!("DB v35 fix: cleared inline-only has_attachments on {} mails", fixed);
             }
         }
 
