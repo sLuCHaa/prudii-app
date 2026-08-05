@@ -709,7 +709,7 @@ export function SettingsPanel() {
       onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}
     >
       <div
-        className="bg-surface rounded-xl w-full max-w-6xl mx-4 overflow-hidden h-[80vh] flex flex-col"
+        className="bg-surface rounded-xl w-full max-w-6xl mx-4 overflow-hidden h-[80vh] flex flex-col modal-panel-enter"
         style={{ boxShadow: "var(--shadow-lg)" }}
       >
         {view === "account" && selectedAccount ? (

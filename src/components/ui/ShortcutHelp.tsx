@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
-import gsap from "gsap";
 import { useTranslation } from "react-i18next";
 
 interface ShortcutHelpProps {
@@ -38,23 +37,6 @@ export function ShortcutHelp({ isOpen, onClose }: ShortcutHelpProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (isOpen) {
-      requestAnimationFrame(() => {
-        if (overlayRef.current) {
-          gsap.fromTo(overlayRef.current, { opacity: 0 }, { opacity: 1, duration: 0.15 });
-        }
-        if (panelRef.current) {
-          gsap.fromTo(
-            panelRef.current,
-            { opacity: 0, y: -16, scale: 0.97 },
-            { opacity: 1, y: 0, scale: 1, duration: 0.2, ease: "power2.out" }
-          );
-        }
-      });
-    }
-  }, [isOpen]);
-
-  useEffect(() => {
     if (!isOpen) return;
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
@@ -76,7 +58,7 @@ export function ShortcutHelp({ isOpen, onClose }: ShortcutHelpProps) {
     >
       <div
         ref={panelRef}
-        className="w-full max-w-md bg-surface rounded-xl shadow-lg border border-border overflow-hidden"
+        className="w-full max-w-md bg-surface rounded-xl shadow-lg border border-border overflow-hidden modal-panel-enter"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">

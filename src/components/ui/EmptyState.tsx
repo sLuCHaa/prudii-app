@@ -1,11 +1,11 @@
 import { useEffect, useRef } from "react";
-import { Inbox } from "lucide-react";
+import { Inbox, Sprout, Flame, Search } from "lucide-react";
 import gsap from "gsap";
 import { useTranslation } from "react-i18next";
 import { motion } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
 import { NumberTween } from "../motion/NumberTween";
-import { SPRING_BOUNCY } from "../motion/tokens";
+import { SPRING_BOUNCY, ENTRANCE, prefersReducedMotion } from "../motion/tokens";
 import { getArchivedToday, getInboxZeroStreak } from "../../lib/achievements";
 import { DaylightSky, useAtmosphereLine } from "../motion/DaylightSky";
 import { countSearchableMails } from "../../lib/tauri";
@@ -26,12 +26,14 @@ export function EmptyState({ icon, title, description, action, className = "" }:
   useEffect(() => {
     const els = [iconRef.current, titleRef.current, descRef.current].filter(Boolean) as HTMLElement[];
 
-    els.forEach((el, i) => {
-      gsap.fromTo(el,
-        { opacity: 0, y: 16, scale: 0.8 },
-        { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: "back.out(1.5)", delay: i * 0.15 }
-      );
-    });
+    if (prefersReducedMotion()) {
+      els.forEach((el) => gsap.set(el, { opacity: 1 }));
+      return;
+    }
+    gsap.fromTo(els,
+      { opacity: 0, y: ENTRANCE.y },
+      { opacity: 1, y: 0, duration: ENTRANCE.duration, stagger: ENTRANCE.stagger, ease: ENTRANCE.ease }
+    );
 
     return () => {
       els.forEach((el) => gsap.killTweensOf(el));
@@ -66,9 +68,9 @@ export function InboxZeroState() {
           initial={{ scale: 0.6, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={SPRING_BOUNCY}
-          className="text-6xl mb-4"
+          className="mb-4 w-16 h-16 rounded-full bg-success/10 text-success flex items-center justify-center"
         >
-          🌱
+          <Sprout className="w-8 h-8" />
         </motion.div>
         <h2 className="text-xl font-heading font-bold">{t("emptyState.inboxZeroTitle")}</h2>
         <p className="text-sm text-text-secondary mt-2">{line ?? t("emptyState.inboxZeroDesc")}</p>
@@ -81,8 +83,8 @@ export function InboxZeroState() {
           </div>
         )}
         {streak > 1 && (
-          <div className="mt-3 text-xs text-warning font-semibold">
-            🔥 {t("emptyState.streak", { days: streak })}
+          <div className="mt-3 inline-flex items-center gap-1 text-xs text-warning font-semibold">
+            <Flame className="w-3.5 h-3.5" /> {t("emptyState.streak", { days: streak })}
           </div>
         )}
       </div>
@@ -107,7 +109,7 @@ export function NoSearchResultsState({ query }: { query: string }) {
 
   return (
     <EmptyState
-      icon={<span className="text-2xl">🔍</span>}
+      icon={<Search className="w-6 h-6" />}
       title={t("emptyState.noResultsTitle", { query })}
       description={description}
     />

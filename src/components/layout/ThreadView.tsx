@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback, memo, useMemo } from "react";
+import { Tooltip } from "../ui/Tooltip";
 import { parseISO } from "date-fns";
 import { Reply, ReplyAll, Forward, Archive, Paperclip, FileText, Image, Film, Music, File, Loader2, Download, ChevronDown, ChevronRight, MessageSquare, Copy, Check, Code, Eye, FileType, Printer, MailMinus, ImageOff } from "lucide-react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
@@ -12,6 +13,7 @@ import { useAttachments, useToggleStar, useToggleMailFlag } from "../../hooks/us
 import { useScroller } from "../../hooks/useScroller";
 import { openAttachment, saveAttachment, fetchMailBody, trashMail, archiveMail, getThreadMails, markAsRead, unsubscribeMail } from "../../lib/tauri";
 import { MAIL_LINK_BRIDGE, MAIL_LINK_BRIDGE_CSP_HASH } from "../../lib/mailLinkBridge";
+import { detectCause, causeMessage } from "../../lib/errorToast";
 import { checkLink } from "../../lib/linkChecker";
 import { cleanMailUrl, openMailUrl } from "../../lib/trackingParams";
 import { ContactAvatar } from "../ui/ContactAvatar";
@@ -653,9 +655,9 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, sing
               <span>&lt;{mail.from.email}&gt;</span>
               <CopyEmailButton email={mail.from.email} />
             </div>
-            <span>To: {recipients}</span>
+            <span>{t("mailDetail.toLabel")}: {recipients}</span>
             {ccRecipients && (
-              <span className="ml-2">Cc: {ccRecipients}</span>
+              <span className="ml-2">{t("mailDetail.ccLabel")}: {ccRecipients}</span>
             )}
           </div>
 
@@ -665,7 +667,10 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, sing
             </div>
           ) : bodyError ? (
             <div className="py-4 text-center">
-              <p className="text-sm text-danger">{bodyError}</p>
+              <p className="text-sm text-danger">{t("errors.bodyLoad")}</p>
+              {detectCause(bodyError) && (
+                <p className="text-xs text-text-tertiary mt-1">{t(`errors.cause.${detectCause(bodyError)}`)}</p>
+              )}
             </div>
           ) : hasBody ? (
             <div className="prose-sm">
@@ -1034,8 +1039,11 @@ export function ThreadView({ mail }: ThreadViewProps) {
     }
   }, [mail.id]);
 
+  // Paint the selected mail immediately from memory; sibling thread messages
+  // merge in when the DB query returns.
   useEffect(() => {
     let cancelled = false;
+    setThreadMails([mail]);
     setLoading(true);
 
     getThreadMails(mail.id)
@@ -1093,7 +1101,7 @@ export function ThreadView({ mail }: ThreadViewProps) {
     trashMail(mail.id)
       .then(() => queryClient.invalidateQueries({ queryKey: ["folders"] }))
       .catch((e) => {
-        dialog.alert({ type: "danger", title: t("common.error"), message: String(e) });
+        dialog.alert({ type: "danger", title: t("common.error"), message: causeMessage(e) });
       });
   }, [mail.id, mail.subject, isInTrash, selectNextMail, dialog, t, queryClient]);
 
@@ -1102,7 +1110,7 @@ export function ThreadView({ mail }: ThreadViewProps) {
     archiveMail(mail.id)
       .then(() => queryClient.invalidateQueries({ queryKey: ["folders"] }))
       .catch((e) => {
-        dialog.alert({ type: "danger", title: t("common.error"), message: String(e) });
+        dialog.alert({ type: "danger", title: t("common.error"), message: causeMessage(e) });
       });
   }, [mail.id, setPendingRemoveId, dialog, t, queryClient]);
 
@@ -1160,7 +1168,7 @@ export function ThreadView({ mail }: ThreadViewProps) {
         openUrl(result.url).catch(() => {});
       }
     } catch (e) {
-      dialog.alert({ type: "danger", title: t("common.error"), message: String(e) });
+      dialog.alert({ type: "danger", title: t("common.error"), message: causeMessage(e) });
     }
   }, [mail.id, dialog, t]);
 
@@ -1230,86 +1238,87 @@ export function ThreadView({ mail }: ThreadViewProps) {
       <div ref={messagesScrollRef} className="relative flex-1 overflow-y-auto px-4 pt-1 pb-4">
         <div className="sticky top-1 z-20 flex justify-center pointer-events-none mb-3">
           <div className="inline-flex items-center gap-0.5 px-2 py-1.5 rounded-xl bg-surface/90 backdrop-blur-md border border-border shadow-lg pointer-events-auto">
-            <button
-              title={t("mailDetail.reply")}
-              aria-label={t("mailDetail.reply")}
-              onClick={() => openCompose("reply", mail)}
-              className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
-            >
-              <Reply className="w-4 h-4" />
-            </button>
-            <button
-              title={t("mailDetail.replyAll")}
-              aria-label={t("mailDetail.replyAll")}
-              onClick={() => openCompose("replyAll", mail)}
-              className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
-            >
-              <ReplyAll className="w-4 h-4" />
-            </button>
-            <button
-              title={t("mailDetail.forward")}
-              aria-label={t("mailDetail.forward")}
-              onClick={() => openCompose("forward", mail)}
-              className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
-            >
-              <Forward className="w-4 h-4" />
-            </button>
-            <button
-              title={t("mailDetail.print")}
-              aria-label={t("mailDetail.print")}
-              onClick={handlePrint}
-              className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
-            >
-              <Printer className="w-4 h-4" />
-            </button>
-            <button
-              title={t("mailDetail.archiveConversation")}
-              aria-label={t("mailDetail.archiveConversation")}
-              onClick={handleArchive}
-              className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
-            >
-              <Archive className="w-4 h-4" />
-            </button>
-            <button
-              title={t("mailDetail.deleteConversation")}
-              aria-label={t("mailDetail.deleteConversation")}
-              onClick={handleTrash}
-              className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
-            >
-              <TrashIcon size={16} strokeWidth={1.5} dangerHover />
-            </button>
+            <Tooltip label={t("mailDetail.reply")}>
+              <button
+                aria-label={t("mailDetail.reply")}
+                onClick={() => openCompose("reply", mail)}
+                className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
+              >
+                <Reply className="w-4 h-4" />
+              </button>
+            </Tooltip>
+            <Tooltip label={t("mailDetail.replyAll")}>
+              <button
+                aria-label={t("mailDetail.replyAll")}
+                onClick={() => openCompose("replyAll", mail)}
+                className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
+              >
+                <ReplyAll className="w-4 h-4" />
+              </button>
+            </Tooltip>
+            <Tooltip label={t("mailDetail.forward")}>
+              <button
+                aria-label={t("mailDetail.forward")}
+                onClick={() => openCompose("forward", mail)}
+                className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
+              >
+                <Forward className="w-4 h-4" />
+              </button>
+            </Tooltip>
+            <Tooltip label={t("mailDetail.print")}>
+              <button
+                aria-label={t("mailDetail.print")}
+                onClick={handlePrint}
+                className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
+              >
+                <Printer className="w-4 h-4" />
+              </button>
+            </Tooltip>
+            <Tooltip label={t("mailDetail.archiveConversation")}>
+              <button
+                aria-label={t("mailDetail.archiveConversation")}
+                onClick={handleArchive}
+                className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
+              >
+                <Archive className="w-4 h-4" />
+              </button>
+            </Tooltip>
+            <Tooltip label={t("mailDetail.deleteConversation")}>
+              <button
+                aria-label={t("mailDetail.deleteConversation")}
+                onClick={handleTrash}
+                className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
+              >
+                <TrashIcon size={16} strokeWidth={2} dangerHover />
+              </button>
+            </Tooltip>
             <div className="w-px h-4 bg-border mx-0.5" />
             <AiSummaryButton mailId={mail.id} threadMode={!isSingleMail} onToggle={() => setShowAiSummary((v) => !v)} active={showAiSummary} />
             <AiReplyButton mailId={latestMail.id} onToggle={() => setShowAiReplies((v) => !v)} active={showAiReplies} />
             {mail.list_unsubscribe && (
+              <Tooltip label={t("unsubscribe.title")}>
               <button
-                title={t("unsubscribe.title")}
                 aria-label={t("unsubscribe.title")}
                 onClick={handleUnsubscribe}
                 className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
               >
                 <MailMinus className="w-4 h-4" />
               </button>
+              </Tooltip>
             )}
           </div>
         </div>
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-6 h-6 text-accent animate-spin" />
-          </div>
-        ) : (
-          <ThreadMessages
-            threadMails={threadMails}
-            isSingleMail={isSingleMail}
-            loading={loading}
-            selectedMailId={mail.id}
-            onReply={handleReply}
-            onReplyAll={handleReplyAll}
-            onForward={handleForward}
-            onLinkClick={handleLinkClick}
-            onUpdateMail={handleUpdateThreadMail}
-          />
-        )}
+        <ThreadMessages
+          threadMails={threadMails}
+          isSingleMail={isSingleMail}
+          loading={loading}
+          selectedMailId={mail.id}
+          onReply={handleReply}
+          onReplyAll={handleReplyAll}
+          onForward={handleForward}
+          onLinkClick={handleLinkClick}
+          onUpdateMail={handleUpdateThreadMail}
+        />
       </div>
     </div>
   );

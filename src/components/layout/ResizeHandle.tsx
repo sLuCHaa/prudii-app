@@ -4,9 +4,11 @@ interface ResizeHandleProps {
   onResize: (delta: number) => void;
   onResizeStart?: () => void;
   onResizeEnd?: () => void;
+  /** Double-click restores the panel's default width. */
+  onReset?: () => void;
 }
 
-export function ResizeHandle({ onResize, onResizeStart, onResizeEnd }: ResizeHandleProps) {
+export function ResizeHandle({ onResize, onResizeStart, onResizeEnd, onReset }: ResizeHandleProps) {
   const startX = useRef(0);
 
   const handleMouseDown = useCallback(
@@ -40,7 +42,8 @@ export function ResizeHandle({ onResize, onResizeStart, onResizeEnd }: ResizeHan
   return (
     <div
       onMouseDown={handleMouseDown}
-      className="w-1 shrink-0 cursor-col-resize hover:bg-accent/40 active:bg-accent/60 transition-colors"
+      onDoubleClick={onReset}
+      className="relative w-1 shrink-0 cursor-col-resize hover:bg-accent/40 active:bg-accent/60 transition-colors before:absolute before:inset-y-0 before:-left-1 before:-right-1 before:content-['']"
     />
   );
 }

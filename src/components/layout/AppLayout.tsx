@@ -19,6 +19,11 @@ const SIDEBAR_MAX = 400;
 const MAILLIST_MIN = 250;
 const MAILLIST_MAX = 600;
 
+function loadPanelWidth(key: string, fallback: number, min: number, max: number): number {
+  const v = Number(localStorage.getItem(key));
+  return Number.isFinite(v) && v >= min && v <= max ? v : fallback;
+}
+
 export function AppLayout() {
   const showAccountWizard = useAppStore((s) => s.showAccountWizard);
   const showSettings = useAppStore((s) => s.showSettings);
@@ -27,8 +32,8 @@ export function AppLayout() {
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const showAttachmentBrowser = useAppStore((s) => s.showAttachmentBrowser);
-  const [sidebarWidth, setSidebarWidth] = useState(240);
-  const [mailListWidth, setMailListWidth] = useState(320);
+  const [sidebarWidth, setSidebarWidth] = useState(() => loadPanelWidth("sidebar-width", 240, SIDEBAR_MIN, SIDEBAR_MAX));
+  const [mailListWidth, setMailListWidth] = useState(() => loadPanelWidth("maillist-width", 320, MAILLIST_MIN, MAILLIST_MAX));
   const [isResizing, setIsResizing] = useState(false);
   const { data: accounts } = useAccounts();
   // First-run: accounts loaded (not undefined) and empty → show welcome screen.
@@ -96,11 +101,29 @@ export function AppLayout() {
   }, [toggleSidebar]);
 
   const handleSidebarResize = useCallback((delta: number) => {
-    setSidebarWidth((w) => Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, w + delta)));
+    setSidebarWidth((w) => {
+      const next = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, w + delta));
+      localStorage.setItem("sidebar-width", String(next));
+      return next;
+    });
   }, []);
 
   const handleMailListResize = useCallback((delta: number) => {
-    setMailListWidth((w) => Math.min(MAILLIST_MAX, Math.max(MAILLIST_MIN, w + delta)));
+    setMailListWidth((w) => {
+      const next = Math.min(MAILLIST_MAX, Math.max(MAILLIST_MIN, w + delta));
+      localStorage.setItem("maillist-width", String(next));
+      return next;
+    });
+  }, []);
+
+  const resetSidebarWidth = useCallback(() => {
+    localStorage.removeItem("sidebar-width");
+    setSidebarWidth(240);
+  }, []);
+
+  const resetMailListWidth = useCallback(() => {
+    localStorage.removeItem("maillist-width");
+    setMailListWidth(320);
   }, []);
 
   return (
@@ -127,6 +150,7 @@ export function AppLayout() {
                 onResize={handleSidebarResize}
                 onResizeStart={() => setIsResizing(true)}
                 onResizeEnd={() => setIsResizing(false)}
+                onReset={resetSidebarWidth}
               />
             )}
 
@@ -140,7 +164,7 @@ export function AppLayout() {
                   <MailList />
                 </div>
 
-                <ResizeHandle onResize={handleMailListResize} />
+                <ResizeHandle onResize={handleMailListResize} onReset={resetMailListWidth} />
 
                 <div className="flex-1 min-w-0 bg-bg">
                   <MailDetail />

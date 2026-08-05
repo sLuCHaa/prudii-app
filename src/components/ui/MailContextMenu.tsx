@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Reply, ReplyAll, Forward, Star, StarOff, Mail as MailIcon, MailOpen, Archive, Trash2, Pin, PinOff, Clock, ChevronRight, FolderInput } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -99,18 +99,18 @@ export function MailContextMenu({
 
   const bulkMode = !!onBulkAction && (selectedCount ?? 0) >= 2;
 
-  const adjustedPosition = useCallback(() => {
-    const menuWidth = 200;
-    const menuHeight = 280;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    return {
-      left: x + menuWidth > vw ? vw - menuWidth - 8 : x,
-      top: y + menuHeight > vh ? vh - menuHeight - 8 : y,
-    };
-  }, [x, y]);
-
-  const pos = adjustedPosition();
+  // Measured after render: the menu's height varies (bulk mode, submenus),
+  // and the previous hardcoded estimate let taller variants clip off-screen.
+  const [pos, setPos] = useState({ left: x, top: y });
+  useLayoutEffect(() => {
+    const el = menuRef.current;
+    if (!el) return;
+    const { offsetWidth: w, offsetHeight: h } = el;
+    setPos({
+      left: Math.min(x, window.innerWidth - w - 8),
+      top: Math.min(y, window.innerHeight - h - 8),
+    });
+  }, [x, y, activeSubmenu, bulkMode]);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -190,7 +190,7 @@ export function MailContextMenu({
   return createPortal(
     <div
       ref={menuRef}
-      className="fixed z-9999 min-w-[180px] max-h-[min(60vh,400px)] overflow-y-auto bg-surface rounded-lg shadow-lg border border-border py-1 animate-in fade-in zoom-in-95 duration-100"
+      className="fixed z-9999 min-w-[180px] max-h-[min(60vh,400px)] overflow-y-auto bg-surface rounded-lg shadow-lg border border-border py-1 menu-enter"
       style={{ left: pos.left, top: pos.top }}
     >
       {activeSubmenu === "snooze" ? (

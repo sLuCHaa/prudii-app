@@ -46,7 +46,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { BackfillProgress, FolderType, Account as AccountType, Folder as FolderT, MailFlag } from "../../types";
 import { MAIL_FLAG_COLORS } from "../../types";
 import { useTranslation } from "react-i18next";
-import { toastError } from "../../lib/errorToast";
+import { toastError, causeMessage } from "../../lib/errorToast";
 import { parseSyncSubProgress } from "../../lib/syncProgress";
 
 // Throttles on-demand syncs of Gmail's "All Mail" archive folder (excluded from
@@ -153,7 +153,7 @@ const FOLDER_ICONS: Record<FolderType, React.ReactNode> = {
   inbox: <Inbox className="w-4 h-4" />,
   sent: <Send className="w-4 h-4" />,
   drafts: <FileText className="w-4 h-4" />,
-  trash: <TrashIcon size={16} strokeWidth={1.5} />,
+  trash: <TrashIcon size={16} strokeWidth={2} />,
   spam: <AlertOctagon className="w-4 h-4" />,
   archive: <Archive className="w-4 h-4" />,
   custom: <Folder className="w-4 h-4" />,
@@ -342,7 +342,7 @@ function CreateFolderDialog({
       className="fixed inset-0 modal-backdrop flex items-center justify-center z-50"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-surface rounded-xl p-4 w-80 shadow-lg">
+      <div className="bg-surface rounded-xl p-4 w-80 shadow-lg modal-panel-enter">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-text">{t("folder.newFolder")}</h3>
           <IconButton
@@ -357,7 +357,10 @@ function CreateFolderDialog({
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleCreate();
+            if (e.key === "Escape") onClose();
+          }}
           placeholder={t("folder.folderName")}
           className="w-full px-3 py-2 rounded-lg border border-border bg-bg-secondary text-text text-sm mb-3 focus:border-accent"
         />
@@ -569,7 +572,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
         await dialog.alert({
           type: "danger",
           title: t("folder.moveFailed"),
-          message: err instanceof Error ? err.message : String(err),
+          message: causeMessage(err),
         });
       });
   }
@@ -622,7 +625,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
       await dialog.alert({
         type: "danger",
         title: t("folder.deleteFailed"),
-        message: err instanceof Error ? err.message : String(err),
+        message: causeMessage(err),
       });
     }
   }
@@ -676,7 +679,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
       await dialog.alert({
         type: "danger",
         title: t("common.error"),
-        message: err instanceof Error ? err.message : String(err),
+        message: causeMessage(err),
       });
     }
   }
@@ -699,7 +702,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
       await dialog.alert({
         type: "danger",
         title: t("folder.colorUpdateFailed"),
-        message: err instanceof Error ? err.message : String(err),
+        message: causeMessage(err),
       });
     }
   }
@@ -713,7 +716,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
       await dialog.alert({
         type: "danger",
         title: t("folder.renameFailed"),
-        message: err instanceof Error ? err.message : String(err),
+        message: causeMessage(err),
       });
     }
     setRenamingFolder(null);
@@ -984,7 +987,7 @@ function CombinedFoldersSection({ collapsed }: { collapsed: boolean }) {
     { type: "inbox", label: t("sidebar.allInboxes"), icon: <Inbox className="w-4 h-4" /> },
     { type: "sent", label: t("sidebar.allSent"), icon: <Send className="w-4 h-4" /> },
     { type: "drafts", label: t("sidebar.allDrafts"), icon: <FileText className="w-4 h-4" /> },
-    { type: "trash", label: t("sidebar.allTrash"), icon: <TrashIcon size={16} strokeWidth={1.5} /> },
+    { type: "trash", label: t("sidebar.allTrash"), icon: <TrashIcon size={16} strokeWidth={2} /> },
     { type: "spam", label: t("sidebar.allSpam"), icon: <AlertOctagon className="w-4 h-4" /> },
     { type: "archive", label: t("sidebar.allArchive"), icon: <Archive className="w-4 h-4" /> },
   ];
@@ -1048,7 +1051,7 @@ function CombinedFoldersSection({ collapsed }: { collapsed: boolean }) {
       await dialog.alert({
         type: "danger",
         title: t("common.error"),
-        message: err instanceof Error ? err.message : String(err),
+        message: causeMessage(err),
       });
     }
   }
@@ -1333,7 +1336,21 @@ export function Sidebar() {
     }
   }, [folders, setFolders, setSelectedFolderId]);
 
-  if (sidebarCollapsed) {
+  // Swap to the icon tree only after the container's 200ms width animation:
+  // swapping immediately left a 52px content strip in a still-wide container.
+  // The fade masks the reflow while the width animates.
+  const [renderCollapsed, setRenderCollapsed] = useState(sidebarCollapsed);
+  useEffect(() => {
+    if (!sidebarCollapsed) {
+      setRenderCollapsed(false);
+      return;
+    }
+    const timer = setTimeout(() => setRenderCollapsed(true), 200);
+    return () => clearTimeout(timer);
+  }, [sidebarCollapsed]);
+  const collapseTransition = sidebarCollapsed !== renderCollapsed;
+
+  if (renderCollapsed) {
     return (
       <div className="flex flex-col h-full w-[52px] glass-sidebar relative isolate border-r border-border no-select">
         <SidebarAmbient />
@@ -1383,7 +1400,7 @@ export function Sidebar() {
   }
 
   return (
-    <div className="flex flex-col h-full glass-sidebar relative isolate border-r border-border no-select">
+    <div className={`flex flex-col h-full glass-sidebar relative isolate border-r border-border no-select transition-opacity duration-150 ${collapseTransition ? "opacity-0" : "opacity-100"}`}>
       <SidebarAmbient />
       <div className="p-3">
         <div className="flex items-center justify-between mb-3">

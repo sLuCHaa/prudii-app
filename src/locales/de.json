@@ -232,7 +232,9 @@
     "imagesBlocked": {
       "message": "Externe Bilder aus Datenschutzgründen blockiert.",
       "load": "Bilder laden"
-    }
+    },
+    "toLabel": "An",
+    "ccLabel": "Cc"
   },
   "atmosphere": {
     "selectMail": {
@@ -916,7 +918,9 @@
       "network": "Verbindung verloren",
       "auth": "Anmeldung abgelaufen",
       "server": "Serverfehler"
-    }
+    },
+    "bodyLoad": "Diese Nachricht konnte nicht vom Server geladen werden.",
+    "generic": "Etwas ist schiefgelaufen. Bitte versuche es erneut."
   },
   "privacy": {
     "badge": "Datenschutz",

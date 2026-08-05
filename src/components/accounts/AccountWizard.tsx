@@ -260,9 +260,17 @@ export function AccountWizard() {
     setShowAccountWizard(false);
   }
 
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") close();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   return (
     <div className="fixed inset-0 modal-backdrop flex items-center justify-center z-50">
-      <div className="bg-surface rounded-xl w-full max-w-xl mx-4 overflow-hidden max-h-[90vh] flex flex-col" style={{ boxShadow: "var(--shadow-lg)" }}>
+      <div className="bg-surface rounded-xl w-full max-w-xl mx-4 overflow-hidden max-h-[90vh] flex flex-col modal-panel-enter" style={{ boxShadow: "var(--shadow-lg)" }}>
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h2 className="text-lg font-semibold text-text">{t("wizard.addAccount")}</h2>
           <IconButton

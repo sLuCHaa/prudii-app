@@ -174,6 +174,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   folders: [],
   selectedFolderId: null,
   setFolders: (folders) => set({ folders }),
+  // Deliberately keeps selectedMailId: clearing it on every folder switch made
+  // the reading pane flash to the NoSelectionState scene each time.
   setSelectedFolderId: (selectedFolderId) => set({ selectedFolderId, showSnoozed: false, showScheduled: false, showAttachmentBrowser: false, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
 
   mails: [],

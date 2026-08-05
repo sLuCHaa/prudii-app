@@ -3,6 +3,7 @@ import { Info, CheckCircle, Trash2, AlertCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import gsap from "gsap";
 import { Button } from "./Button";
+import { prefersReducedMotion } from "../motion/tokens";
 
 type DialogType = "confirm" | "alert" | "danger" | "success" | "info";
 
@@ -64,46 +65,28 @@ function Dialog({ state, onClose }: { state: DialogState; onClose: (result: bool
   const { t } = useTranslation();
   const overlayRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
-  const iconRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!state.isOpen || !overlayRef.current || !dialogRef.current) return;
-
-    gsap.fromTo(overlayRef.current,
-      { opacity: 0 },
-      { opacity: 1, duration: 0.2, ease: "power2.out" }
-    );
-
-    gsap.fromTo(dialogRef.current,
-      { opacity: 0, scale: 0.9, y: 20 },
-      { opacity: 1, scale: 1, y: 0, duration: 0.3, ease: "back.out(1.5)" }
-    );
-
-    if (iconRef.current) {
-      gsap.fromTo(iconRef.current,
-        { scale: 0, rotation: -180 },
-        { scale: 1, rotation: 0, duration: 0.4, delay: 0.1, ease: "back.out(2)" }
-      );
-    }
-  }, [state.isOpen]);
+  // Entrance is CSS (.modal-panel-enter): declarative from the first painted
+  // frame, so the dialog can never flash fully visible before a JS effect
+  // hides it. Exit stays imperative (gsap) since it must precede unmount.
 
   const handleClose = useCallback((result: boolean) => {
-    if (!overlayRef.current || !dialogRef.current) {
+    if (!overlayRef.current || !dialogRef.current || prefersReducedMotion()) {
       onClose(result);
       return;
     }
 
     gsap.to(dialogRef.current, {
       opacity: 0,
-      scale: 0.9,
-      y: 20,
-      duration: 0.2,
+      scale: 0.97,
+      y: 4,
+      duration: 0.14,
       ease: "power2.in",
     });
 
     gsap.to(overlayRef.current, {
       opacity: 0,
-      duration: 0.2,
+      duration: 0.14,
       ease: "power2.in",
       onComplete: () => onClose(result),
     });
@@ -116,7 +99,8 @@ function Dialog({ state, onClose }: { state: DialogState; onClose: (result: bool
       if (e.key === "Escape") {
         handleClose(false);
       } else if (e.key === "Enter") {
-        handleClose(true);
+        // A stray Return must never confirm a destructive action.
+        if (state.options?.type !== "danger") handleClose(true);
       } else if (e.key === "Tab" && dialogRef.current) {
         // Focus trap: keep Tab within the dialog
         const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
@@ -162,14 +146,11 @@ function Dialog({ state, onClose }: { state: DialogState; onClose: (result: bool
     >
       <div
         ref={dialogRef}
-        className="bg-surface rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden"
+        className="bg-surface rounded-xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden modal-panel-enter"
       >
         <div className="p-6">
           <div className="flex items-start gap-4">
-            <div
-              ref={iconRef}
-              className={`p-3 rounded-full ${colors.bg} ${colors.text} shrink-0`}
-            >
+            <div className={`p-3 rounded-full ${colors.bg} ${colors.text} shrink-0`}>
               {icon || DIALOG_ICONS[type]}
             </div>
 

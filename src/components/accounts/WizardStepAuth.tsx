@@ -18,7 +18,7 @@ const ACCOUNT_COLORS = [
 ];
 
 const inputClass =
-  "w-full px-3 py-2 rounded-lg border border-border bg-surface text-text placeholder-text-secondary focus-visible:ring-2 focus-visible:ring-accent focus-visible:border-transparent";
+  "w-full px-3 py-2 rounded-lg border border-border bg-surface text-text placeholder-text-secondary";
 
 interface WizardStepAuthProps {
   provider: ProviderPreset;

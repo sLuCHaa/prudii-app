@@ -3,6 +3,7 @@
 // (appStore.addToast, App.tsx event handlers) keep working.
 
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Check, X, AlertCircle, Info } from "lucide-react";
 import { useAppStore } from "../../stores/appStore";
 import { StackedToast, type StackedToastItem } from "../motion/StackedToast";
@@ -43,6 +44,7 @@ function useAutoDismiss(id: string, duration: number | undefined, type: ToastTyp
 }
 
 function ToastBody({ toast }: { toast: ToastData }) {
+  const { t } = useTranslation();
   const Icon = ICONS[toast.type];
   const iconCls = ICON_BG[toast.type];
   const removeToast = useAppStore((s) => s.removeToast);
@@ -62,7 +64,7 @@ function ToastBody({ toast }: { toast: ToastData }) {
       <button
         onClick={() => removeToast(toast.id)}
         className="p-0.5 rounded hover:bg-hover transition-colors text-text-tertiary shrink-0"
-        aria-label="Dismiss"
+        aria-label={t("common.close")}
       >
         <X className="w-3.5 h-3.5" />
       </button>

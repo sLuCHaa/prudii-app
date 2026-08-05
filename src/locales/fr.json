@@ -232,7 +232,9 @@
     "imagesBlocked": {
       "message": "Images externes bloquées pour la confidentialité.",
       "load": "Charger les images"
-    }
+    },
+    "toLabel": "À",
+    "ccLabel": "Cc"
   },
   "atmosphere": {
     "selectMail": {
@@ -916,7 +918,9 @@
       "network": "Connexion perdue",
       "auth": "Session expirée",
       "server": "Erreur du serveur"
-    }
+    },
+    "bodyLoad": "Impossible de charger ce message depuis le serveur.",
+    "generic": "Une erreur s'est produite. Veuillez réessayer."
   },
   "privacy": {
     "badge": "Confidentialité",

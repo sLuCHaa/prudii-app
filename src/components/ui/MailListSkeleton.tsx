@@ -14,19 +14,17 @@ const ROW_TEMPLATES: Array<{
   { senderW: "80px",  timeW: "44px",  subjectW: "85%", snippetW: "78%" },
 ];
 
+// Mirrors the real row geometry (px-4 py-2.5, gap-3, 36px avatar) so the
+// crossfade to content doesn't shift anything.
 function MailItemSkeleton({ index }: { index: number }) {
   const tpl = ROW_TEMPLATES[index % ROW_TEMPLATES.length];
   return (
     <div
-      className="w-full px-4 py-2 border-b border-border-light"
+      className="w-full px-4 py-2.5 border-b border-border-light"
       style={{ borderLeft: "3px solid transparent" }}
     >
-      <div className="flex items-start gap-2.5">
-        {/* Unread dot placeholder */}
-        <div className="mt-1 shrink-0 w-2 h-2 rounded-full bg-border-light" />
-
-        {/* Avatar */}
-        <Skeleton width="28px" height="28px" rounded="full" className="shrink-0" />
+      <div className="flex items-start gap-3">
+        <Skeleton width="36px" height="36px" rounded="full" className="shrink-0" />
 
         <div className="flex-1 min-w-0 space-y-1.5">
           {/* Row 1: Sender + timestamp */}
@@ -49,14 +47,8 @@ function MailItemSkeleton({ index }: { index: number }) {
 export function MailListSkeleton({ count = 10 }: { count?: number }) {
   return (
     <div className="flex-1 overflow-hidden">
-      {/* Header */}
-      <div className="px-4 py-2 border-b border-border">
-        <div className="flex items-center justify-between">
-          <Skeleton width="150px" height="1.25rem" rounded="md" />
-          <Skeleton width="80px" height="2rem" rounded="lg" />
-        </div>
-      </div>
-
+      {/* No fake header: the real header/filter row stays mounted above the
+          crossfade — a second skeleton header shifted the rows on swap. */}
       <div className="overflow-hidden">
         {Array.from({ length: count }).map((_, i) => (
           <MailItemSkeleton key={i} index={i} />

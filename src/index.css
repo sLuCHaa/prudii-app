@@ -276,11 +276,61 @@ h3 { font-size: var(--text-base); }
   -webkit-backdrop-filter: blur(var(--blur-md, 8px));
 }
 
+/* Shared entrance for modals/menus that don't run their own JS animation */
+@keyframes modal-panel-in {
+  from { opacity: 0; transform: scale(0.97) translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes overlay-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.modal-panel-enter { animation: modal-panel-in 0.16s var(--ease-out, ease-out); }
+.modal-overlay-enter { animation: overlay-fade-in 0.16s ease-out; }
+.menu-enter { animation: modal-panel-in 0.12s ease-out; transform-origin: top left; }
+
+/* Vertical reveal for bars that push content (search bar, banners): the grid
+   row animates 0fr -> 1fr, so appearing/disappearing slides instead of jumping */
+.reveal-y {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 150ms ease;
+}
+.reveal-y.reveal-open { grid-template-rows: 1fr; }
+.reveal-y > * { overflow: hidden; min-height: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .reveal-y { transition: none; }
+}
+
+.tooltip-bubble {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  white-space: nowrap;
+  background: var(--c-text);
+  color: var(--c-bg);
+  box-shadow: var(--shadow-md, 0 2px 8px rgb(0 0 0 / 0.25));
+  animation: overlay-fade-in 0.1s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .modal-panel-enter, .modal-overlay-enter, .menu-enter { animation: none; }
+}
+
 /* ─── Focus Ring Utility ─── */
 .focus-ring {
   outline: none;
   box-shadow: 0 0 0 3px var(--c-accent-soft);
   border-color: var(--c-accent);
+}
+
+/* Native checkboxes/radios keep their platform look but pick up the theme */
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--c-accent);
 }
 
 /* Focus states — Superhuman/Apple-Mail style: border shifts accent, no rings */
@@ -293,12 +343,14 @@ select:focus-visible {
   transition: border-color 120ms ease-out;
 }
 
-/* Buttons & clickable regions: rely on the hover tint for keyboard focus */
+/* Buttons & clickable regions: keyboard focus gets a real outline — the
+   hover tint alone was indistinguishable from mousing over a button.
+   :focus-visible keeps mouse clicks ring-free. */
 button:focus-visible,
 [role="button"]:focus-visible,
 [tabindex]:focus-visible {
-  outline: none;
-  background-color: var(--c-hover);
+  outline: 2px solid var(--c-accent);
+  outline-offset: 1px;
   transition: background-color 120ms ease-out;
 }
 
@@ -320,7 +372,7 @@ button:focus-visible,
 }
 
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, var(--c-accent) 0%, var(--c-accent-hover) 100%); /* lila Verlauf */
+  background: var(--c-scrollbar);
   border: 3px solid transparent; /* inset → thumb floats as a pill */
   border-radius: var(--radius-full);
   background-clip: padding-box;
@@ -329,7 +381,7 @@ button:focus-visible,
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, var(--c-accent) 0%, var(--c-accent-hover) 100%);
+  background: var(--c-scrollbar-hover);
   background-clip: padding-box;
 }
 
@@ -409,21 +461,17 @@ button:focus-visible,
   --os-padding-axis: 3px;
   --os-handle-border-radius: 9999px;
   --os-handle-min-size: 36px;
-  --os-handle-bg: linear-gradient(180deg, var(--c-accent) 0%, var(--c-accent-hover) 100%);
-  --os-handle-bg-hover: linear-gradient(180deg, var(--c-accent) 0%, var(--c-accent-hover) 100%);
-  --os-handle-bg-active: linear-gradient(180deg, var(--c-accent-hover) 0%, var(--c-accent) 100%);
+  --os-handle-bg: var(--c-scrollbar);
+  --os-handle-bg-hover: var(--c-scrollbar-hover);
+  --os-handle-bg-active: var(--c-scrollbar-hover);
 }
 
-/* Direct handle override guarantees the gradient even if the OS variable
-   pipeline does not pass a gradient through. */
 .os-theme-prudii .os-scrollbar-handle {
-  background: linear-gradient(180deg, var(--c-accent) 0%, var(--c-accent-hover) 100%);
+  background: var(--c-scrollbar);
 }
-.os-theme-prudii .os-scrollbar-handle:hover {
-  background: linear-gradient(180deg, var(--c-accent) 0%, var(--c-accent-hover) 100%);
-}
+.os-theme-prudii .os-scrollbar-handle:hover,
 .os-theme-prudii .os-scrollbar:active .os-scrollbar-handle {
-  background: linear-gradient(180deg, var(--c-accent-hover) 0%, var(--c-accent) 100%);
+  background: var(--c-scrollbar-hover);
 }
 
 /* ─── Utility ─── */
@@ -492,6 +540,15 @@ button:focus-visible,
 */
 
 /* ─── TipTap Editor ─── */
+/* Writing surfaces (message body, recipients, subject) use the OS font:
+   typing in the platform's native rendering is a large part of what makes a
+   compose window feel like a mail app rather than a web page. The brand
+   fonts stay on chrome (labels, buttons, titles). */
+.compose-editor .tiptap,
+.compose-writing {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
 .compose-editor .tiptap {
   outline: none;
   min-height: 200px;
@@ -600,13 +657,8 @@ button:focus-visible,
   cursor: grabbing;
 }
 
-/* Mail item drag hover effect */
 .mail-item-draggable {
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-.mail-item-draggable:hover {
-  transform: translateX(2px);
+  transition: box-shadow 0.15s ease;
 }
 
 /* Folder drop target pulse animation */

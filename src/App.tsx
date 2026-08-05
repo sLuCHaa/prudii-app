@@ -5,7 +5,14 @@ const MotionLab = import.meta.env.DEV
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
-import { AppLayout } from "./components/layout/AppLayout";
+// Lazy: keeps the main-window layout (mail lists, settings, …) and the
+// compose editor (tiptap) in separate chunks. The compose window boots a
+// fresh webview on every open — without the split it parsed the entire app
+// bundle before it could paint, which is most of the delay between clicking
+// Compose and the window appearing.
+const AppLayout = lazy(() =>
+  import("./components/layout/AppLayout").then((m) => ({ default: m.AppLayout }))
+);
 import { SplashScreen } from "./components/ui/SplashScreen";
 import { DialogProvider } from "./components/ui/DialogProvider";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary";
@@ -15,13 +22,16 @@ import { CommandPalette } from "./components/ui/CommandPalette";
 import { ShortcutHelp } from "./components/ui/ShortcutHelp";
 // Eager (not lazy): ComposeWindow IS the entire content of the compose window
 // (index.html?compose=true), so lazy-loading it just delays that window's open.
-import { ComposeWindow } from "./components/compose/ComposeWindow";
+const ComposeWindow = lazy(() =>
+  import("./components/compose/ComposeWindow").then((m) => ({ default: m.ComposeWindow }))
+);
 import { useAppStore } from "./stores/appStore";
 import { useSyncAll } from "./hooks/useSync";
 import { useAutoSync } from "./hooks/useAutoSync";
 import { useConnectivity } from "./hooks/useConnectivity";
 import { backfillBodies, getAppSettings, checkLicenseStartup, getStartupMailto, checkSnoozedMails, checkScheduledMails, classifyUnclassifiedMails } from "./lib/tauri";
 import { checkForUpdate } from "./lib/updater";
+import { installGlobalTooltips } from "./lib/globalTooltips";
 import { checkFirstHundredOnce } from "./lib/achievements";
 import { useDialog } from "./components/ui/DialogProvider";
 import { useTranslation } from "react-i18next";
@@ -39,7 +49,17 @@ const queryClient = new QueryClient({
 });
 
 function AppInner() {
-  const [showSplash, setShowSplash] = useState(true);
+  // Production: once per launch (sessionStorage survives in-window reloads).
+  // Dev: never — tauri dev relaunches the app on every Rust rebuild, which
+  // would replay the splash constantly.
+  const [showSplash, setShowSplash] = useState(
+    () => !import.meta.env.DEV && !sessionStorage.getItem("splash-shown")
+  );
+  useEffect(() => {
+    sessionStorage.setItem("splash-shown", "1");
+  }, []);
+  const [layoutReady, setLayoutReady] = useState(false);
+  const [splashDone, setSplashDone] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showMotionLab, setShowMotionLab] = useState(false);
   const themeMode = useAppStore((s) => s.themeMode);
@@ -431,13 +451,25 @@ function AppInner() {
     };
   }, [setShowAccountWizard, setShowHelp]);
 
+  // Splash covers the layout chunk load instead of running on a fixed timer;
+  // it ends as soon as both the minimum display time and the chunk are done.
+  useEffect(() => {
+    import("./components/layout/AppLayout").then(() => setLayoutReady(true));
+  }, []);
+
+  useEffect(() => {
+    if (layoutReady && splashDone) setShowSplash(false);
+  }, [layoutReady, splashDone]);
+
   if (showSplash) {
-    return <SplashScreen onComplete={() => setShowSplash(false)} duration={2500} />;
+    return <SplashScreen onComplete={() => setSplashDone(true)} duration={1200} />;
   }
 
   return (
     <>
-      <AppLayout />
+      <Suspense fallback={null}>
+        <AppLayout />
+      </Suspense>
       <UndoToast />
       <ToastContainer />
       <CommandPalette />
@@ -454,6 +486,7 @@ function AppInner() {
 const isComposeWindow = new URLSearchParams(window.location.search).has("compose");
 
 export default function App() {
+  useEffect(() => installGlobalTooltips(), []);
   if (isComposeWindow) {
     return (
       <ErrorBoundary>

@@ -232,7 +232,9 @@
     "imagesBlocked": {
       "message": "为保护隐私，外部图片已被阻止。",
       "load": "加载图片"
-    }
+    },
+    "toLabel": "收件人",
+    "ccLabel": "抄送"
   },
   "atmosphere": {
     "selectMail": {
@@ -916,7 +918,9 @@
       "network": "连接已断开",
       "auth": "会话已过期",
       "server": "服务器错误"
-    }
+    },
+    "bodyLoad": "无法从服务器加载此邮件。",
+    "generic": "出了点问题，请重试。"
   },
   "privacy": {
     "badge": "隐私",

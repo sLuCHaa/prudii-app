@@ -26,7 +26,7 @@ import { MailListSkeleton } from "../ui/MailListSkeleton";
 import { LoadingCrossfade } from "../motion/LoadingCrossfade";
 import { ENTRANCE, prefersReducedMotion } from "../motion/tokens";
 import { formatMailDate, getDateGroup } from "../../lib/dateUtils";
-import { runMailAction, toastError } from "../../lib/errorToast";
+import { runMailAction, toastError, causeMessage } from "../../lib/errorToast";
 import { MAIL_FLAG_COLORS } from "../../types";
 import type { Mail } from "../../types";
 import { useTranslation } from "react-i18next";
@@ -338,20 +338,27 @@ function SearchResultsList({ results, isLoading, selectedMailId, setSelectedMail
         </span>
         <div className="flex-1 h-px bg-border" />
       </div>
+      {/* Same construction as the regular mail rows (stripe, avatar, spacing),
+          so toggling search doesn't switch to a different-looking list. */}
       {results.map((result) => (
         <button
           key={result.mail_id}
           onClick={() => setSelectedMailId(result.mail_id)}
-          style={{
-            borderLeft: !result.is_read ? "2px solid var(--c-accent)" : "2px solid transparent",
-          }}
-          className={`w-full text-left px-4 py-2.5 border-b border-border-light transition-all hover:translate-x-0.5 ${
+          className={`relative w-full text-left select-none px-4 py-2.5 border-b border-border-light transition-colors ${
             selectedMailId === result.mail_id ? "bg-selected" : "hover:bg-hover"
           }`}
         >
-          <div className="flex items-start gap-2.5">
-            <div className="mt-1.5 shrink-0">
-              <div className={`w-1.5 h-1.5 rounded-full ${!result.is_read ? "bg-accent" : "bg-transparent"}`} />
+          <div
+            className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r"
+            style={{ background: !result.is_read ? "#3b82f6" : "transparent" }}
+          />
+          <div className="flex items-start gap-3">
+            <div className="shrink-0">
+              <GradientAvatar
+                name={result.from_name || result.from_email}
+                email={result.from_email}
+                size={36}
+              />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between mb-0.5">
@@ -362,24 +369,22 @@ function SearchResultsList({ results, isLoading, selectedMailId, setSelectedMail
                   {result.has_attachments && (
                     <Paperclip className="w-3 h-3 text-text-tertiary" />
                   )}
+                  {result.folder_name && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-alt text-text-tertiary">
+                      {result.folder_name}
+                    </span>
+                  )}
                   <span className="text-xs text-text-tertiary">
                     {formatMailDate(result.date, appSettings.use_24h_clock)}
                   </span>
                 </div>
               </div>
-              <div className={`text-sm mb-0.5 ${!result.is_read ? "font-medium text-text" : "text-text-secondary"}`}>
+              <div className={`text-sm mb-0.5 truncate ${!result.is_read ? "font-medium text-text" : "text-text-secondary"}`}>
                 {result.subject}
               </div>
               {result.snippet && (
-                <div className="text-xs text-text-tertiary line-clamp-2 leading-relaxed">
+                <div className="text-xs text-text-tertiary truncate">
                   <HighlightedText text={result.snippet} />
-                </div>
-              )}
-              {result.folder_name && (
-                <div className="mt-1">
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-alt text-text-tertiary">
-                    {result.folder_name}
-                  </span>
                 </div>
               )}
             </div>
@@ -635,7 +640,7 @@ function VirtualMailList({
                 onDragStart={(e) => handleDragStart(e, mail)}
                 onDrag={handleDrag}
                 onDragEnd={handleDragEnd}
-                className={`relative group/mail mail-item-draggable w-full text-left px-4 py-2.5 border-b border-border-light transition-all cursor-pointer ${
+                className={`relative group/mail mail-item-draggable select-none w-full text-left px-4 py-2.5 border-b border-border-light transition-all cursor-pointer ${
                   isSelected
                     ? "bg-accent/15"
                     : selectedMailId === mail.id
@@ -969,7 +974,6 @@ export function MailList() {
   const [dragItemWidth, setDragItemWidth] = useState(320);
   const mailItemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const listRef = useRef<HTMLDivElement>(null);
-  const wasLoadingRef = useRef(false);
 
   // Handle drag event to track position (mousemove doesn't work during HTML5 drag)
   const handleDrag = useCallback((e: DragEvent<HTMLDivElement>) => {
@@ -1193,7 +1197,7 @@ export function MailList() {
       await dialog.alert({
         type: "danger",
         title: t("common.error"),
-        message: err instanceof Error ? err.message : String(err),
+        message: causeMessage(err),
       });
     }
   }, [activeCombinedFolder, mails.length, t, dialog, queryClient]);
@@ -1423,16 +1427,16 @@ export function MailList() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [filteredMails, selectedMailIndex, selectMail, setSelectedMailId, multiSelectMode, selectedMailIds, clearSelection, selectAllMails, setMails, mails, isSearchActive, searchResultsData, selectedMailId, contextMenu]);
 
+  // Each view starts at the top — without this, the previous folder's scroll
+  // offset carried over and landed the new folder mid-list.
   useEffect(() => {
-    if (!listRef.current || isLoading || prefersReducedMotion()) return;
-    const items = Array.from(listRef.current.querySelectorAll(".mail-item-draggable")).slice(0, 20);
-    if (items.length === 0) return;
-    gsap.fromTo(items,
-      { opacity: 0, y: ENTRANCE.y },
-      { opacity: 1, y: 0, stagger: ENTRANCE.stagger, duration: ENTRANCE.duration, ease: ENTRANCE.ease }
-    );
+    listRef.current?.scrollTo({ top: 0 });
   }, [selectedFolderId, activeFilter, showAllInboxes, activeCombinedFolder, showSnoozed, activeSplitId]);
 
+  // No entrance stagger on folder switches: effects run after paint, so the
+  // rows were visible for one frame, blanked to opacity 0, then staggered in —
+  // perceived as a flash on every switch. Native lists swap content instantly;
+  // the skeleton crossfade already covers the slow-load case.
   useEffect(() => {
     if (!snoozeMenuId) return;
     function handleClick() { setSnoozeMenuId(null); }
@@ -1440,25 +1444,15 @@ export function MailList() {
     return () => window.removeEventListener("click", handleClick);
   }, [snoozeMenuId]);
 
-  useEffect(() => {
-    if (wasLoadingRef.current && !isLoading && listRef.current && !prefersReducedMotion()) {
-      const items = Array.from(listRef.current.querySelectorAll(".mail-item-draggable")).slice(0, 20);
-      if (items.length > 0) {
-        gsap.fromTo(items,
-          { opacity: 0, y: ENTRANCE.y },
-          { opacity: 1, y: 0, stagger: ENTRANCE.stagger, duration: ENTRANCE.duration, ease: ENTRANCE.ease }
-        );
-      }
-    }
-    wasLoadingRef.current = isLoading;
-  }, [isLoading]);
-
   const selectAfterRemoval = useCallback((remaining: Mail[], index: number) => {
-    if (remaining.length === 0) {
+    // Only touch the selection if the removed mail was the open one; otherwise
+    // deleting an unrelated row must not yank the reading pane elsewhere.
+    const { selectedMailId: current } = useAppStore.getState();
+    if (current && remaining.some((m) => m.id === current)) return;
+    if (remaining.length === 0 || index < 0) {
       setSelectedMailId(null);
       return;
     }
-    if (index < 0) return;
     setSelectedMailId(remaining[Math.min(index, remaining.length - 1)].id);
   }, [setSelectedMailId]);
 
@@ -1468,9 +1462,12 @@ export function MailList() {
     const removeId = pendingRemoveId;
 
     if (el) {
+      // Fade/slide only — collapsing height inside the virtualizer's
+      // absolutely-positioned wrapper left a hole for the animation's
+      // duration, then every row below snapped up at once.
       gsap.to(el, {
-        opacity: 0, x: -40, height: 0, paddingTop: 0, paddingBottom: 0,
-        duration: 0.25, ease: "power2.in",
+        opacity: 0, x: -40,
+        duration: 0.15, ease: "power2.in",
         onComplete: () => {
           const { mails: currentMails, selectedMailIndex: idx } = useAppStore.getState();
           const remaining = currentMails.filter((m) => m.id !== removeId);
@@ -1497,7 +1494,7 @@ export function MailList() {
   return (
     <div className="flex flex-col h-full bg-surface">
       {multiSelectMode && selectedMailIds.size > 0 ? (
-        <div className="px-4 py-2.5 border-b border-border no-select flex items-center justify-between bg-accent/5">
+        <div className="px-4 py-2 border-b border-border no-select flex items-center justify-between bg-accent/5">
           <div className="flex items-center gap-2">
             <button
               onClick={() => {
@@ -1739,7 +1736,13 @@ export function MailList() {
           skeleton={<MailListSkeleton count={12} />}
           className="flex flex-col flex-1 min-h-0"
         >
-          {filteredMails.length === 0 && !searchOpen ? (
+          {/* Empty states only once the current view's data has actually
+              arrived (query settled AND the store caught up with it) —
+              otherwise the colorful zero-state flashes during every folder
+              switch while the store lags one frame behind. A non-"all" pill
+              filter legitimately empties the list with data present, and can
+              only be active after the switch, so it bypasses the check. */}
+          {filteredMails.length === 0 && !searchOpen && !isLoading && (fetchedMails.length === 0 || folderFilter !== "all") ? (
             (() => {
               const isInboxView = (currentFolder?.folder_type === "inbox" || showAllInboxes)
                 && !activeFilter

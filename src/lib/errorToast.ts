@@ -16,6 +16,15 @@ export function detectCause(err: unknown): ErrorCause | undefined {
 }
 
 /**
+ * Localized dialog/toast body for a caught error: the detected cause when one
+ * matches, a generic retry line otherwise. Never the raw protocol string.
+ */
+export function causeMessage(err: unknown): string {
+  const cause = detectCause(err);
+  return cause ? i18n.t(`errors.cause.${cause}`) : i18n.t("errors.generic");
+}
+
+/**
  * Surface an async failure to the user as an error toast.
  * - Always logs to console.error with the action key for grep-ability.
  * - Shows toast title from the i18n key, optional cause line as toast message.

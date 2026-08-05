@@ -8,8 +8,7 @@ export function OfflineBanner() {
   const networkStatus = useAppStore((s) => s.networkStatus);
   const setNetworkStatus = useAppStore((s) => s.setNetworkStatus);
 
-  if (networkStatus === "online") return null;
-
+  const offline = networkStatus !== "online";
   const checking = networkStatus === "checking";
 
   async function retry() {
@@ -23,6 +22,8 @@ export function OfflineBanner() {
   }
 
   return (
+    <div className={`reveal-y ${offline ? "reveal-open" : ""}`} aria-hidden={!offline}>
+      <div className="min-h-0 overflow-hidden">
     <div className="flex items-center justify-between gap-2 px-4 py-2 bg-warning/10 border-b border-warning/30 text-xs text-text">
       <div className="flex items-center gap-2">
         {checking ? (
@@ -36,11 +37,14 @@ export function OfflineBanner() {
         type="button"
         onClick={retry}
         disabled={checking}
+        tabIndex={offline ? 0 : -1}
         className="flex items-center gap-1 px-2 py-1 rounded hover:bg-hover transition-colors text-text-secondary disabled:opacity-50"
       >
         <RefreshCw className="w-3 h-3" />
         {t("offline.retry")}
       </button>
+    </div>
+      </div>
     </div>
   );
 }

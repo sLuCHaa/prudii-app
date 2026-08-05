@@ -114,24 +114,6 @@ export function SplashScreen({ onComplete, duration = 2000 }: SplashScreenProps)
           {t("splash.tagline")}
         </motion.p>
 
-        {/* Loading indicator */}
-        <motion.div
-          initial={{ opacity: 0, scaleX: 0 }}
-          animate={{ opacity: 1, scaleX: 1 }}
-          transition={{ duration: 0.8, delay: 0.9 }}
-          className="mt-8 w-32 h-0.5 bg-white/10 rounded-full overflow-hidden origin-left"
-        >
-          <motion.div
-            initial={{ x: "-100%" }}
-            animate={{ x: "100%" }}
-            transition={{
-              duration: 0.8,
-              delay: 1,
-              ease: "easeInOut"
-            }}
-            className="h-full w-full bg-linear-to-r from-orange-400 via-pink-500 to-purple-500"
-          />
-        </motion.div>
       </motion.div>
     </AnimatePresence>
   );

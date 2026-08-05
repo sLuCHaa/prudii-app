@@ -47,10 +47,10 @@ export function SearchBar() {
     }
   }
 
-  if (!searchOpen) return null;
-
   return (
-    <div className="border-b border-border bg-surface">
+    <div className={`reveal-y ${searchOpen ? "reveal-open" : ""}`} aria-hidden={!searchOpen}>
+      <div className="min-h-0 overflow-hidden">
+      <div className="border-b border-border bg-surface">
       <div className="flex items-center gap-2 px-4 py-2">
         <Search className="w-4 h-4 text-text-tertiary shrink-0" />
         <input
@@ -60,6 +60,7 @@ export function SearchBar() {
           onChange={(e) => setLocalQuery(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={t("search.placeholder")}
+          tabIndex={searchOpen ? 0 : -1}
           className="flex-1 bg-transparent text-sm text-text placeholder-text-secondary"
         />
         {isDebouncing ? (
@@ -71,10 +72,13 @@ export function SearchBar() {
         ) : null}
         <button
           onClick={() => setSearchOpen(false)}
-          className="p-1 rounded hover:bg-hover transition-fast focus:ring-2 focus:ring-accent/50"
+          tabIndex={searchOpen ? 0 : -1}
+          className="p-1 rounded hover:bg-hover transition-fast"
         >
           <X className="w-4 h-4 text-text-tertiary" />
         </button>
+      </div>
+      </div>
       </div>
     </div>
   );
