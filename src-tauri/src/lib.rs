@@ -683,6 +683,166 @@ pub fn run() {
                 })
                 .build(app)?;
 
+            // Build the native macOS menu bar (app menu, File/Edit/Mailbox/Message/Window).
+            // Labels are localized using the same DB language value read above for the tray menu.
+            #[cfg(target_os = "macos")]
+            {
+                use tauri::menu::{AboutMetadataBuilder, PredefinedMenuItem, SubmenuBuilder};
+
+                let (
+                    settings_label,
+                    new_message_label,
+                    sync_all_label,
+                    reply_label,
+                    reply_all_label,
+                    forward_label,
+                ) = match lang.as_str() {
+                    "de" => (
+                        "Einstellungen…",
+                        "Neue E-Mail",
+                        "Alle Konten abrufen",
+                        "Antworten",
+                        "Allen antworten",
+                        "Weiterleiten",
+                    ),
+                    "es" => (
+                        "Configuración…",
+                        "Nuevo mensaje",
+                        "Recibir todo el correo nuevo",
+                        "Responder",
+                        "Responder a todos",
+                        "Reenviar",
+                    ),
+                    "fr" => (
+                        "Préférences…",
+                        "Nouveau message",
+                        "Relever tout le courrier",
+                        "Répondre",
+                        "Répondre à tous",
+                        "Transférer",
+                    ),
+                    "pt" => (
+                        "Configurações…",
+                        "Nova Mensagem",
+                        "Receber Todas as Mensagens",
+                        "Responder",
+                        "Responder a Todos",
+                        "Encaminhar",
+                    ),
+                    "ru" => (
+                        "Настройки…",
+                        "Новое письмо",
+                        "Получить всю новую почту",
+                        "Ответить",
+                        "Ответить всем",
+                        "Переслать",
+                    ),
+                    "zh" => (
+                        "设置…",
+                        "新邮件",
+                        "接收全部新邮件",
+                        "回复",
+                        "全部回复",
+                        "转发",
+                    ),
+                    _ => (
+                        "Settings…",
+                        "New Message",
+                        "Get All New Mail",
+                        "Reply",
+                        "Reply All",
+                        "Forward",
+                    ),
+                };
+
+                let app_menu = SubmenuBuilder::new(app, "Prudii Mail")
+                    .item(&PredefinedMenuItem::about(
+                        app,
+                        None,
+                        Some(AboutMetadataBuilder::new().build()),
+                    )?)
+                    .separator()
+                    .item(
+                        &MenuItemBuilder::with_id("menu:settings", settings_label)
+                            .accelerator("Cmd+,")
+                            .build(app)?,
+                    )
+                    .separator()
+                    .item(&PredefinedMenuItem::hide(app, None)?)
+                    .item(&PredefinedMenuItem::hide_others(app, None)?)
+                    .separator()
+                    .item(&PredefinedMenuItem::quit(app, None)?)
+                    .build()?;
+
+                let file_menu = SubmenuBuilder::new(app, "File")
+                    .item(
+                        &MenuItemBuilder::with_id("menu:new_message", new_message_label)
+                            .accelerator("Cmd+N")
+                            .build(app)?,
+                    )
+                    .separator()
+                    .item(&PredefinedMenuItem::close_window(app, None)?)
+                    .build()?;
+
+                let edit_menu = SubmenuBuilder::new(app, "Edit")
+                    .item(&PredefinedMenuItem::undo(app, None)?)
+                    .item(&PredefinedMenuItem::redo(app, None)?)
+                    .separator()
+                    .item(&PredefinedMenuItem::cut(app, None)?)
+                    .item(&PredefinedMenuItem::copy(app, None)?)
+                    .item(&PredefinedMenuItem::paste(app, None)?)
+                    .item(&PredefinedMenuItem::select_all(app, None)?)
+                    .build()?;
+
+                let mailbox_menu = SubmenuBuilder::new(app, "Mailbox")
+                    .item(
+                        &MenuItemBuilder::with_id("menu:sync_all", sync_all_label)
+                            .accelerator("Cmd+Shift+N")
+                            .build(app)?,
+                    )
+                    .build()?;
+
+                let message_menu = SubmenuBuilder::new(app, "Message")
+                    .item(
+                        &MenuItemBuilder::with_id("menu:reply", reply_label)
+                            .accelerator("Cmd+R")
+                            .build(app)?,
+                    )
+                    .item(
+                        &MenuItemBuilder::with_id("menu:reply_all", reply_all_label)
+                            .accelerator("Cmd+Shift+R")
+                            .build(app)?,
+                    )
+                    .item(
+                        &MenuItemBuilder::with_id("menu:forward", forward_label)
+                            .accelerator("Cmd+Shift+F")
+                            .build(app)?,
+                    )
+                    .build()?;
+
+                let window_menu = SubmenuBuilder::new(app, "Window")
+                    .item(&PredefinedMenuItem::minimize(app, None)?)
+                    .item(&PredefinedMenuItem::maximize(app, None)?)
+                    .separator()
+                    .item(&PredefinedMenuItem::fullscreen(app, None)?)
+                    .build()?;
+
+                let menu = MenuBuilder::new(app)
+                    .item(&app_menu)
+                    .item(&file_menu)
+                    .item(&edit_menu)
+                    .item(&mailbox_menu)
+                    .item(&message_menu)
+                    .item(&window_menu)
+                    .build()?;
+                app.set_menu(menu)?;
+
+                let handle = app.handle().clone();
+                app.on_menu_event(move |_app, event| {
+                    let _ = handle.emit("menu", event.id().0.clone());
+                });
+            }
+
             // Register global shortcut: Ctrl+Shift+M to show/focus the window
             {
                 use tauri_plugin_global_shortcut::{

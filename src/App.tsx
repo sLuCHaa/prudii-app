@@ -264,6 +264,24 @@ function AppInner() {
     return () => { unlisten.then((fn) => fn()); };
   }, []);
 
+  // Dispatch native macOS menu bar actions (see src-tauri/src/lib.rs)
+  useEffect(() => {
+    const unlisten = listen<string>("menu", (event) => {
+      const s = useAppStore.getState();
+      const selected = s.mails.find((m) => m.id === s.selectedMailId) ?? null;
+      switch (event.payload) {
+        case "menu:new_message": s.openCompose("new"); break;
+        case "menu:settings": s.setShowSettings(true); break;
+        case "menu:sync_all": syncAll.mutate(); break;
+        case "menu:reply": if (selected) s.openCompose("reply", selected); break;
+        case "menu:reply_all": if (selected) s.openCompose("replyAll", selected); break;
+        case "menu:forward": if (selected) s.openCompose("forward", selected); break;
+      }
+    });
+    return () => { unlisten.then((fn) => fn()); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     const unlisten = listen<{ account_id: string; mail_id: string; folder_id: string }>(
       "notification-clicked",
