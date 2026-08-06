@@ -1113,9 +1113,11 @@ export function MailList() {
   }, [fetchedMails, setMails]);
 
   // A restored selection may point at a mail that has since moved out of this
-  // folder — validate once data is loaded; search selects across folders.
+  // folder — validate once data is loaded. Skipped during search (selects
+  // across folders) and under pill filters (they legitimately drop the open
+  // mail from the query, e.g. reading it under "unread").
   useEffect(() => {
-    if (!searchOpen && selectedFolderId && selectedMailId && queryData !== undefined) {
+    if (!searchOpen && folderFilter === "all" && selectedFolderId && selectedMailId && queryData !== undefined) {
       const index = fetchedMails.findIndex((m) => m.id === selectedMailId);
       if (index === -1) {
         setSelectedMailId(null);
@@ -1123,7 +1125,7 @@ export function MailList() {
         setSelectedMailIndex(index);
       }
     }
-  }, [fetchedMails, searchOpen, selectedFolderId, selectedMailId, queryData, setSelectedMailId, setSelectedMailIndex]);
+  }, [fetchedMails, searchOpen, folderFilter, selectedFolderId, selectedMailId, queryData, setSelectedMailId, setSelectedMailIndex]);
 
   // Infinite scroll handler — called directly via onScroll prop (no stale closures)
   const handleListScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {

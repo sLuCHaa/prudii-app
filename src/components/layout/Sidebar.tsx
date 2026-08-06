@@ -1333,7 +1333,13 @@ export function Sidebar() {
   useEffect(() => {
     if (folders) {
       setFolders(folders);
-      if (folders.length > 0 && !useAppStore.getState().selectedFolderId) {
+      // Auto-select only when NO view is active at all — a null folder id is
+      // normal in filter/all-inbox/combined views, and selecting here would
+      // hijack the open mail via the per-folder selection restore.
+      const s = useAppStore.getState();
+      const viewActive = s.activeFilter || s.showAllInboxes || s.activeCombinedFolder
+        || s.activeSplitId || s.showSnoozed || s.showScheduled || s.showAttachmentBrowser;
+      if (folders.length > 0 && !s.selectedFolderId && !viewActive) {
         setSelectedFolderId(folders[0].id);
       }
     }

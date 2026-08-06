@@ -43,6 +43,8 @@ export function SearchBar() {
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === "Escape") {
+      // Blur, or focus stays in the hidden input and swallows j/k navigation.
+      (e.target as HTMLElement).blur();
       setSearchOpen(false);
     }
   }

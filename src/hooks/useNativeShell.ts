@@ -35,12 +35,12 @@ export function useNativeShell(): void {
     setDockBadge(inboxUnread > 0 ? inboxUnread : null).catch(() => {});
   }, [inboxUnread]);
 
+  // Keyed on the derived string, not the per-render query array identity —
+  // otherwise the setTitle IPC fires on every AppLayout render.
+  const currentName = allFolders.find((f) => f.id === selectedFolderId)?.name;
+  const base = showAllInboxes ? t("sidebar.allInboxes") : currentName ?? "Prudii Mail";
+  const title = inboxUnread > 0 ? `${base} (${inboxUnread})` : base;
   useEffect(() => {
-    const current = allFolders.find((f) => f.id === selectedFolderId);
-    const base = showAllInboxes
-      ? t("sidebar.allInboxes")
-      : current?.name ?? "Prudii Mail";
-    const title = inboxUnread > 0 ? `${base} (${inboxUnread})` : base;
     getCurrentWindow().setTitle(title).catch(() => {});
-  }, [allFolders, selectedFolderId, showAllInboxes, inboxUnread, t]);
+  }, [title]);
 }
