@@ -7,7 +7,7 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::Mutex;
-use std::time::Instant;
+
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 
 struct OAuthConfig {
@@ -94,7 +94,11 @@ struct IdTokenClaims {
 
 struct CachedToken {
     access_token: String,
-    expires_at: Instant,
+    // Wall clock, not Instant: monotonic time pauses during system sleep, so
+    // an Instant-based expiry kept serving tokens that had long expired in
+    // real time after the laptop woke up — every API call then failed with
+    // 401 until an app restart cleared the cache.
+    expires_at: std::time::SystemTime,
 }
 
 static TOKEN_CACHE: std::sync::LazyLock<Mutex<HashMap<String, CachedToken>>> =
@@ -104,7 +108,7 @@ pub fn get_cached_token(account_id: &str) -> Option<String> {
     let cache = TOKEN_CACHE.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(entry) = cache.get(account_id) {
         // Return if still valid with 60s safety margin
-        if entry.expires_at > Instant::now() + std::time::Duration::from_secs(60) {
+        if entry.expires_at > std::time::SystemTime::now() + std::time::Duration::from_secs(60) {
             return Some(entry.access_token.clone());
         }
     }
@@ -117,9 +121,22 @@ pub fn cache_token(account_id: &str, token: &str, expires_in: u64) {
         account_id.to_string(),
         CachedToken {
             access_token: token.to_string(),
-            expires_at: Instant::now() + std::time::Duration::from_secs(expires_in),
+            expires_at: std::time::SystemTime::now() + std::time::Duration::from_secs(expires_in),
         },
     );
+}
+
+/// Drop one account's cached access token (e.g. after a 401) so the next
+/// resolve_credential performs a fresh refresh.
+pub fn invalidate_token(account_id: &str) {
+    let mut cache = TOKEN_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    cache.remove(account_id);
+}
+
+/// Drop all cached access tokens (network reset).
+pub fn clear_token_cache() {
+    let mut cache = TOKEN_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    cache.clear();
 }
 
 /// Start the full OAuth flow: open browser, wait for callback, exchange code.

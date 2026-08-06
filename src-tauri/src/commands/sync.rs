@@ -900,6 +900,13 @@ async fn do_gmail_sync(app: &AppHandle, _account: &Account, account_id: &str, cr
                         );
                     } else {
                         log::error!("Gmail incremental sync failed: {}", e);
+                        // A 401 means the cached access token is bad (e.g. it
+                        // expired in wall-clock time while the machine slept).
+                        // Drop it so the next sync refreshes instead of
+                        // resending the same dead token until app restart.
+                        if e.to_string().contains("401") {
+                            crate::oauth::invalidate_token(account_id);
+                        }
                         emit_progress(app, &SyncProgress {
                             account_id: account_id.to_string(),
                             status: "error".into(),
@@ -1171,6 +1178,9 @@ async fn do_outlook_sync(app: &AppHandle, _account: &Account, account_id: &str, 
                             log::info!("Outlook: delta expired for folder '{}', will catch up in phase 2", folder.name);
                         } else {
                             log::warn!("Outlook incremental sync failed for '{}': {}", folder.name, e);
+                            if msg.contains("401") {
+                                crate::oauth::invalidate_token(account_id);
+                            }
                         }
                     }
                 }
