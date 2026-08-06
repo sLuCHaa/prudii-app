@@ -5,7 +5,6 @@ import { useQueries } from "@tanstack/react-query";
 import { useAppStore } from "../stores/appStore";
 import { setDockBadge, listFolders } from "../lib/tauri";
 import { useTranslation } from "react-i18next";
-import type { Folder } from "../types";
 
 /** Mirrors app state into the OS shell: dock badge + window title. */
 export function useNativeShell(): void {
