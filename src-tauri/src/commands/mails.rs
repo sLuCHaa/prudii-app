@@ -21,35 +21,43 @@ use tauri::{Manager, State};
 /// with an empty body (both body_html and body_text empty) always collapses
 /// into a copy that has a body, and two copies with the same non-empty body
 /// collapse into one; two copies with different non-empty bodies are kept
-/// as distinct messages. Input is ordered by date ASC; the first copy seen
-/// in a group keeps the output slot, except that an empty-bodied first copy
-/// is replaced in place by a later, fuller copy from the same group.
+/// as distinct messages — a group can end up with several surviving slots
+/// once bodies genuinely differ. Input is ordered by date ASC; an incoming
+/// copy is checked against every existing slot in its group (not just the
+/// most recent one), and collapses into the first slot it matches, except
+/// that an empty-bodied slot is replaced in place by a later, fuller copy.
 fn dedupe_thread_copies(mails: Vec<Mail>) -> Vec<Mail> {
     fn is_empty_body(m: &Mail) -> bool {
         m.body_html.trim().is_empty() && m.body_text.trim().is_empty()
     }
 
     let mut result: Vec<Mail> = Vec::new();
-    let mut slot_by_key: HashMap<(String, String, String), usize> = HashMap::new();
+    let mut slots_by_key: HashMap<(String, String, String), Vec<usize>> = HashMap::new();
 
     for m in mails {
         let key = (m.from.email.clone(), m.date.clone(), m.subject.clone());
         let m_empty = is_empty_body(&m);
 
-        if let Some(&i) = slot_by_key.get(&key) {
-            let existing_empty = is_empty_body(&result[i]);
-            let bodies_equal = result[i].body_html == m.body_html && result[i].body_text == m.body_text;
+        let matched_slot = slots_by_key.get(&key).and_then(|slots| {
+            slots.iter().copied().find(|&i| {
+                let existing_empty = is_empty_body(&result[i]);
+                let bodies_equal = result[i].body_html == m.body_html && result[i].body_text == m.body_text;
+                existing_empty || m_empty || bodies_equal
+            })
+        });
 
-            if existing_empty || m_empty || bodies_equal {
-                if existing_empty && !m_empty {
+        match matched_slot {
+            Some(i) => {
+                if is_empty_body(&result[i]) && !m_empty {
                     result[i] = m;
                 }
-                continue;
+            }
+            None => {
+                let idx = result.len();
+                slots_by_key.entry(key).or_default().push(idx);
+                result.push(m);
             }
         }
-
-        slot_by_key.insert(key, result.len());
-        result.push(m);
     }
 
     result
@@ -4400,5 +4408,21 @@ mod thread_dedupe_tests {
         let out = dedupe_thread_copies(mails);
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].body_html, "full body");
+    }
+
+    #[test]
+    fn matches_against_every_slot_in_the_group_not_just_the_latest() {
+        // Same key (from/date/subject), three copies: body1, then a
+        // distinct body2 in between, then a duplicate of body1 again.
+        // The trailing duplicate must collapse into the first body1 copy
+        // even though body2 currently holds the most recently added slot
+        // for this key.
+        let mails = vec![
+            mail("1", "<a@x>", "2026-08-05T15:00:06Z", "Re: X", "body1"),
+            mail("2", "<b@x>", "2026-08-05T15:00:06Z", "Re: X", "body2"),
+            mail("3", "<c@x>", "2026-08-05T15:00:06Z", "Re: X", "body1"),
+        ];
+        let out = dedupe_thread_copies(mails);
+        assert_eq!(out.len(), 2);
     }
 }
