@@ -45,10 +45,7 @@ export function TitleBar() {
           className="flex items-center gap-2 hover:opacity-70 transition-opacity cursor-pointer"
         >
           <img src={AppLogo} alt="Prudii Mail" className="w-4 h-4" />
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-xs font-medium text-text-secondary">Prudii Mail</span>
-            <span className="text-[9px] text-text-tertiary italic">Mando'a for shadow</span>
-          </div>
+          <span className="text-xs font-medium text-text-secondary">Prudii Mail</span>
         </button>
       </div>
 
