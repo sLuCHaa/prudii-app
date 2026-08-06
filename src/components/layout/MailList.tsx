@@ -485,8 +485,12 @@ function VirtualMailList({
     count: virtualItems.length + (hasNextPage || isFetchingNextPage ? 1 : 0),
     getScrollElement: () => listRef.current,
     estimateSize: (i) => {
-      if (i >= virtualItems.length) return 40; // spinner row
-      return virtualItems[i].kind === "separator" ? 32 : 68;
+      if (i >= virtualItems.length) return 40;
+      if (virtualItems[i].kind === "separator") return 32;
+      // Row padding varies by density (index.css data-density rules):
+      // compact py-1.5 → ~60px, comfortable py-2.5 → ~68px, spacious py-4 → ~90px
+      const density = document.documentElement.getAttribute("data-density");
+      return density === "compact" ? 60 : density === "spacious" ? 90 : 68;
     },
     overscan: 8,
     measureElement: (el: Element) => el.getBoundingClientRect().height,
