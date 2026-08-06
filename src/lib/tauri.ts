@@ -538,3 +538,6 @@ export async function invalidateConnections(): Promise<void> {
   return invoke("invalidate_connections");
 }
 
+export async function setDockBadge(count: number | null): Promise<void> {
+  return invoke("set_dock_badge", { count });
+}

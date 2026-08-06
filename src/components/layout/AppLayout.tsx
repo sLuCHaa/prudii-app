@@ -13,6 +13,7 @@ import { WelcomeScreen } from "../accounts/WelcomeScreen";
 import { useAppStore } from "../../stores/appStore";
 import { openComposeWindow } from "../../lib/composeWindow";
 import { useAccounts } from "../../hooks/useAccounts";
+import { useNativeShell } from "../../hooks/useNativeShell";
 
 const SIDEBAR_MIN = 180;
 const SIDEBAR_MAX = 400;
@@ -36,6 +37,7 @@ export function AppLayout() {
   const [mailListWidth, setMailListWidth] = useState(() => loadPanelWidth("maillist-width", 320, MAILLIST_MIN, MAILLIST_MAX));
   const [isResizing, setIsResizing] = useState(false);
   const { data: accounts } = useAccounts();
+  useNativeShell();
   // First-run: accounts loaded (not undefined) and empty → show welcome screen.
   const noAccounts = accounts !== undefined && accounts.length === 0;
 

@@ -6,6 +6,7 @@ pub mod connectivity;
 pub mod license;
 pub mod mails;
 pub mod mailto;
+pub mod native;
 pub mod rules;
 pub mod send;
 pub mod settings;
