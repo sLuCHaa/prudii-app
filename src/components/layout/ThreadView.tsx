@@ -6,7 +6,6 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import gsap from "gsap";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "../../stores/appStore";
 import { useAttachments, useToggleStar, useToggleMailFlag } from "../../hooks/useAccounts";
@@ -956,20 +955,14 @@ function ThreadMessages({
 }) {
   const messagesRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!messagesRef.current || loading || threadMails.length === 0) return;
-    const cards = messagesRef.current.querySelectorAll(".message-card");
-    if (cards.length === 0) return;
-    gsap.fromTo(cards,
-      { opacity: 0, y: 16, scale: 0.98 },
-      { opacity: 1, y: 0, scale: 1, stagger: 0.06, duration: 0.3, ease: "back.out(1.2)" }
-    );
-  }, [loading, threadMails.length]);
-
+  // No JS entrance for message cards: they rendered at inline opacity 0 and
+  // relied on a gsap stagger to become visible — any path that skipped or
+  // interrupted the tween (paused global timeline, guard conditions) left a
+  // fully loaded mail invisible.
   return (
     <div ref={messagesRef} className={isSingleMail ? "space-y-3" : "space-y-4"}>
       {threadMails.map((m, index) => (
-        <div key={m.id} className="message-card flex gap-3" style={{ opacity: 0 }}>
+        <div key={m.id} className="message-card flex gap-3">
           {!isSingleMail && (
             <div className="flex flex-col items-center shrink-0 pt-3">
               <ContactAvatar name={m.from.name} email={m.from.email} size={28} />
@@ -1037,6 +1030,12 @@ export function ThreadView({ mail }: ThreadViewProps) {
         })
         .catch((err) => addToast("error", t("errors.markRead"), err instanceof Error ? err.message : String(err)));
     }
+  }, [mail.id]);
+
+  // Every mail starts at the top — the scroll container stays mounted across
+  // selections, so the previous mail's scroll offset would carry over.
+  useEffect(() => {
+    messagesScrollRef.current?.scrollTo({ top: 0 });
   }, [mail.id]);
 
   // Paint the selected mail immediately from memory; sibling thread messages
