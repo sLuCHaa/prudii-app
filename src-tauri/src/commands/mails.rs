@@ -11,6 +11,20 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 use tauri::{Manager, State};
 
+/// Collapses copies of the same message that carry different Message-IDs
+/// (e.g. a client-generated id next to the server-assigned one). Same
+/// sender + same date + same subject + same body is treated as one message;
+/// the first row (lowest rowid, i.e. earliest import) wins. Body is part of
+/// the key so that distinct messages which happen to share sender/date/
+/// subject (e.g. quick back-to-back replies) are never collapsed.
+fn dedupe_thread_copies(mails: Vec<Mail>) -> Vec<Mail> {
+    let mut seen = std::collections::HashSet::new();
+    mails
+        .into_iter()
+        .filter(|m| seen.insert((m.from.email.clone(), m.date.clone(), m.subject.clone(), m.body_html.clone())))
+        .collect()
+}
+
 /// Deduplicate mails in two passes:
 /// 1. By message_id (same account/folder duplicates)
 /// 2. By subject+date+from (cross-account duplicates, e.g. same email in Gmail + IMAP)
@@ -2419,7 +2433,7 @@ pub fn get_thread_mails(db: State<'_, Database>, mail_id: String) -> Result<Vec<
         }
     }
 
-    Ok(result)
+    Ok(dedupe_thread_copies(result))
 }
 
 #[tauri::command]
@@ -4302,4 +4316,44 @@ pub async fn bulk_save_attachments(
         failed,
         dest_path: dest_path.to_string_lossy().to_string(),
     })
+}
+
+#[cfg(test)]
+mod thread_dedupe_tests {
+    use super::dedupe_thread_copies;
+    use crate::models::{Mail, MailAddress};
+
+    fn mail(id: &str, message_id: &str, date: &str, subject: &str, body: &str) -> Mail {
+        Mail {
+            id: id.into(),
+            message_id: message_id.into(),
+            date: date.into(),
+            subject: subject.into(),
+            body_html: body.into(),
+            from: MailAddress { name: "A".into(), email: "a@x.de".into() },
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn drops_same_message_under_different_message_ids() {
+        let mails = vec![
+            mail("1", "<a@x>", "2026-08-05T15:00:06Z", "Re: X", "body"),
+            mail("2", "<b@spark>", "2026-08-05T15:00:06Z", "Re: X", "body"),
+            mail("3", "<c@x>", "2026-08-05T16:00:00Z", "Re: X", "other"),
+        ];
+        let out = dedupe_thread_copies(mails);
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0].id, "1");
+        assert_eq!(out[1].id, "3");
+    }
+
+    #[test]
+    fn keeps_distinct_messages() {
+        let mails = vec![
+            mail("1", "<a@x>", "2026-08-05T15:00:06Z", "Re: X", "body A"),
+            mail("2", "<b@x>", "2026-08-05T15:00:06Z", "Re: X", "body B"),
+        ];
+        assert_eq!(dedupe_thread_copies(mails).len(), 2);
+    }
 }

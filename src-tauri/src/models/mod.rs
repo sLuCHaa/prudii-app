@@ -69,13 +69,13 @@ pub struct CreateFolderRequest {
     pub is_local: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MailAddress {
     pub name: String,
     pub email: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Mail {
     pub id: String,
     pub account_id: String,
