@@ -17,25 +17,39 @@ use tauri::{Manager, State};
 /// and the body is written in afterwards, so a stray duplicate row can be
 /// stuck with no body forever).
 ///
-/// Mails are grouped by sender + date + subject. Within a group, a copy
-/// with an empty body (both body_html and body_text empty) always collapses
-/// into a copy that has a body, and two copies with the same non-empty body
-/// collapse into one; two copies with different non-empty bodies are kept
-/// as distinct messages — a group can end up with several surviving slots
-/// once bodies genuinely differ. Input is ordered by date ASC; an incoming
-/// copy is checked against every existing slot in its group (not just the
-/// most recent one), and collapses into the first slot it matches, except
-/// that an empty-bodied slot is replaced in place by a later, fuller copy.
+/// Mails are grouped by sender + date + subject (case-insensitive). Within a
+/// group, a copy with an empty body (both body_html and body_text empty)
+/// always collapses into a copy that has a body, and two copies with the
+/// same non-empty body collapse into one; two copies with different
+/// non-empty bodies are kept as distinct messages — a group can end up with
+/// several surviving slots once bodies genuinely differ. Input is ordered by
+/// date ASC; an incoming copy is checked against every existing slot in its
+/// group (not just the most recent one), and collapses into the first slot
+/// it matches, except that an empty-bodied slot is replaced in place by a
+/// later, fuller copy.
+///
+/// Mails with empty/placeholder subject or empty from-email are skipped by
+/// the grouping entirely — these are likely incomplete (e.g. Outlook delta
+/// sync returned only IDs) and would falsely collapse multiple distinct
+/// mails that happen to share the same blank key.
 fn dedupe_thread_copies(mails: Vec<Mail>) -> Vec<Mail> {
     fn is_empty_body(m: &Mail) -> bool {
         m.body_html.trim().is_empty() && m.body_text.trim().is_empty()
+    }
+    fn has_incomplete_metadata(m: &Mail) -> bool {
+        m.subject.is_empty() || m.subject == "(No Subject)" || m.from.email.is_empty()
     }
 
     let mut result: Vec<Mail> = Vec::new();
     let mut slots_by_key: HashMap<(String, String, String), Vec<usize>> = HashMap::new();
 
     for m in mails {
-        let key = (m.from.email.clone(), m.date.clone(), m.subject.clone());
+        if has_incomplete_metadata(&m) {
+            result.push(m);
+            continue;
+        }
+
+        let key = (m.from.email.to_lowercase(), m.date.clone(), m.subject.to_lowercase());
         let m_empty = is_empty_body(&m);
 
         let matched_slot = slots_by_key.get(&key).and_then(|slots| {
@@ -2462,16 +2476,19 @@ pub fn get_thread_mails(db: State<'_, Database>, mail_id: String) -> Result<Vec<
         return query_single_mail(&conn, &mail_id).map(|m| vec![m]);
     }
 
-    let mut result = dedup_mails(mails);
+    let result = dedup_mails(mails);
+    let mut result = dedupe_thread_copies(result);
 
-    // Safety net: ensure the clicked mail is always included in the thread
+    // Safety net: ensure the clicked mail is always included in the thread.
+    // Must run AFTER dedupe_thread_copies so the safety net can't itself be
+    // collapsed away by it.
     if !result.iter().any(|m| m.id == mail_id) {
         if let Ok(clicked_mail) = query_single_mail(&conn, &mail_id) {
             result.push(clicked_mail);
         }
     }
 
-    Ok(dedupe_thread_copies(result))
+    Ok(result)
 }
 
 #[tauri::command]
@@ -4408,6 +4425,20 @@ mod thread_dedupe_tests {
         let out = dedupe_thread_copies(mails);
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].body_html, "full body");
+    }
+
+    #[test]
+    fn keeps_headers_incomplete_mails_distinct() {
+        // Mails with empty subject and empty sender are likely partial sync
+        // rows (e.g. Outlook delta sync returning only IDs). They'd all share
+        // the same blank group key, so without a guard two unrelated
+        // incomplete mails would falsely collapse into one.
+        let mails = vec![
+            Mail { id: "1".into(), message_id: "<a@x>".into(), date: "2026-08-05T15:00:06Z".into(), subject: "".into(), from: MailAddress { name: "".into(), email: "".into() }, ..Default::default() },
+            Mail { id: "2".into(), message_id: "<b@x>".into(), date: "2026-08-05T15:00:06Z".into(), subject: "".into(), from: MailAddress { name: "".into(), email: "".into() }, ..Default::default() },
+        ];
+        let out = dedupe_thread_copies(mails);
+        assert_eq!(out.len(), 2);
     }
 
     #[test]
