@@ -696,6 +696,11 @@ pub fn run() {
                     reply_label,
                     reply_all_label,
                     forward_label,
+                    file_title,
+                    edit_title,
+                    mailbox_title,
+                    message_title,
+                    window_title,
                 ) = match lang.as_str() {
                     "de" => (
                         "Einstellungen…",
@@ -704,6 +709,11 @@ pub fn run() {
                         "Antworten",
                         "Allen antworten",
                         "Weiterleiten",
+                        "Ablage",
+                        "Bearbeiten",
+                        "Postfach",
+                        "E-Mail",
+                        "Fenster",
                     ),
                     "es" => (
                         "Configuración…",
@@ -712,6 +722,11 @@ pub fn run() {
                         "Responder",
                         "Responder a todos",
                         "Reenviar",
+                        "Archivo",
+                        "Edición",
+                        "Buzón",
+                        "Mensaje",
+                        "Ventana",
                     ),
                     "fr" => (
                         "Paramètres…",
@@ -720,6 +735,11 @@ pub fn run() {
                         "Répondre",
                         "Répondre à tous",
                         "Transférer",
+                        "Fichier",
+                        "Édition",
+                        "Boîte aux lettres",
+                        "Message",
+                        "Fenêtre",
                     ),
                     "pt" => (
                         "Configurações…",
@@ -728,6 +748,11 @@ pub fn run() {
                         "Responder",
                         "Responder a Todos",
                         "Encaminhar",
+                        "Arquivo",
+                        "Edição",
+                        "Caixa de Correio",
+                        "Mensagem",
+                        "Janela",
                     ),
                     "ru" => (
                         "Настройки…",
@@ -736,6 +761,11 @@ pub fn run() {
                         "Ответить",
                         "Ответить всем",
                         "Переслать",
+                        "Файл",
+                        "Правка",
+                        "Почтовый ящик",
+                        "Сообщение",
+                        "Окно",
                     ),
                     "zh" => (
                         "设置…",
@@ -744,6 +774,11 @@ pub fn run() {
                         "回复",
                         "全部回复",
                         "转发",
+                        "文件",
+                        "编辑",
+                        "邮箱",
+                        "邮件",
+                        "窗口",
                     ),
                     _ => (
                         "Settings…",
@@ -752,6 +787,11 @@ pub fn run() {
                         "Reply",
                         "Reply All",
                         "Forward",
+                        "File",
+                        "Edit",
+                        "Mailbox",
+                        "Message",
+                        "Window",
                     ),
                 };
 
@@ -774,7 +814,7 @@ pub fn run() {
                     .item(&PredefinedMenuItem::quit(app, None)?)
                     .build()?;
 
-                let file_menu = SubmenuBuilder::new(app, "File")
+                let file_menu = SubmenuBuilder::new(app, file_title)
                     .item(
                         &MenuItemBuilder::with_id("menu:new_message", new_message_label)
                             .accelerator("Cmd+N")
@@ -788,7 +828,7 @@ pub fn run() {
                 // shortcut from the webview before MailList.tsx's own Cmd+A handler (bulk
                 // select-all-mails) ever sees it. Leaving it out lets Cmd+A fall through to
                 // the webview, so both text-field selection and the in-app handler keep working.
-                let edit_menu = SubmenuBuilder::new(app, "Edit")
+                let edit_menu = SubmenuBuilder::new(app, edit_title)
                     .item(&PredefinedMenuItem::undo(app, None)?)
                     .item(&PredefinedMenuItem::redo(app, None)?)
                     .separator()
@@ -797,7 +837,7 @@ pub fn run() {
                     .item(&PredefinedMenuItem::paste(app, None)?)
                     .build()?;
 
-                let mailbox_menu = SubmenuBuilder::new(app, "Mailbox")
+                let mailbox_menu = SubmenuBuilder::new(app, mailbox_title)
                     .item(
                         &MenuItemBuilder::with_id("menu:sync_all", sync_all_label)
                             .accelerator("Cmd+Shift+N")
@@ -805,7 +845,7 @@ pub fn run() {
                     )
                     .build()?;
 
-                let message_menu = SubmenuBuilder::new(app, "Message")
+                let message_menu = SubmenuBuilder::new(app, message_title)
                     .item(
                         &MenuItemBuilder::with_id("menu:reply", reply_label)
                             .accelerator("Cmd+R")
@@ -823,7 +863,7 @@ pub fn run() {
                     )
                     .build()?;
 
-                let window_menu = SubmenuBuilder::new(app, "Window")
+                let window_menu = SubmenuBuilder::new(app, window_title)
                     .item(&PredefinedMenuItem::minimize(app, None)?)
                     .item(&PredefinedMenuItem::maximize(app, None)?)
                     .separator()
