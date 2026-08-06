@@ -194,15 +194,25 @@ export const useAppStore = create<AppState>((set, get) => ({
   setMails: (mails) => set((state) => ({
     mails: typeof mails === "function" ? mails(state.mails) : mails,
   })),
-  setSelectedMailId: (selectedMailId) => set((state) => ({
-    selectedMailId,
-    selectedMailIds: new Set(),
-    multiSelectMode: false,
-    lastSelectedMailId: selectedMailId,
-    folderSelection: state.selectedFolderId && selectedMailId
-      ? { ...state.folderSelection, [state.selectedFolderId]: selectedMailId }
-      : state.folderSelection,
-  })),
+  setSelectedMailId: (selectedMailId) => set((state) => {
+    let folderSelection = state.folderSelection;
+    if (state.selectedFolderId) {
+      if (selectedMailId) {
+        folderSelection = { ...folderSelection, [state.selectedFolderId]: selectedMailId };
+      } else if (state.selectedFolderId in folderSelection) {
+        // Purge on clear so a since-moved mail (e.g. trashed) isn't restored into this folder later.
+        folderSelection = { ...folderSelection };
+        delete folderSelection[state.selectedFolderId];
+      }
+    }
+    return {
+      selectedMailId,
+      selectedMailIds: new Set(),
+      multiSelectMode: false,
+      lastSelectedMailId: selectedMailId,
+      folderSelection,
+    };
+  }),
   setSelectedMailIndex: (selectedMailIndex) => set({ selectedMailIndex }),
   setActiveFilter: (activeFilter) => set((state) => ({
     activeFilter,

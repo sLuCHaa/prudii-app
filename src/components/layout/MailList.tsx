@@ -1092,7 +1092,19 @@ export function MailList() {
 
   useEffect(() => {
     setMails(fetchedMails);
-  }, [fetchedMails, setMails]);
+    // Validate a folder-restored selection against the freshly fetched list: a mail
+    // remembered for this folder may since have moved elsewhere (trash/archive move
+    // rows, they don't delete them), so an id absent from fetchedMails is stale.
+    // Skipped while search is open — search legitimately selects mails from other folders.
+    if (!searchOpen && selectedFolderId && selectedMailId) {
+      const index = fetchedMails.findIndex((m) => m.id === selectedMailId);
+      if (index === -1) {
+        setSelectedMailId(null);
+      } else {
+        setSelectedMailIndex(index);
+      }
+    }
+  }, [fetchedMails, setMails, searchOpen, selectedFolderId, selectedMailId, setSelectedMailId, setSelectedMailIndex]);
 
   // Infinite scroll handler — called directly via onScroll prop (no stale closures)
   const handleListScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
