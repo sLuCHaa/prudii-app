@@ -1096,7 +1096,9 @@ export function MailList() {
     // remembered for this folder may since have moved elsewhere (trash/archive move
     // rows, they don't delete them), so an id absent from fetchedMails is stale.
     // Skipped while search is open — search legitimately selects mails from other folders.
-    if (!searchOpen && selectedFolderId && selectedMailId) {
+    // Also skipped until queryData has actually arrived: on a cold cache fetchedMails
+    // is briefly [] while the query loads, which must not be mistaken for a stale id.
+    if (!searchOpen && selectedFolderId && selectedMailId && queryData !== undefined) {
       const index = fetchedMails.findIndex((m) => m.id === selectedMailId);
       if (index === -1) {
         setSelectedMailId(null);
@@ -1104,7 +1106,7 @@ export function MailList() {
         setSelectedMailIndex(index);
       }
     }
-  }, [fetchedMails, setMails, searchOpen, selectedFolderId, selectedMailId, setSelectedMailId, setSelectedMailIndex]);
+  }, [fetchedMails, setMails, searchOpen, selectedFolderId, selectedMailId, queryData, setSelectedMailId, setSelectedMailIndex]);
 
   // Infinite scroll handler — called directly via onScroll prop (no stale closures)
   const handleListScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
