@@ -272,10 +272,8 @@ pub async fn send_mail(app: AppHandle, db: State<'_, Database>, pool: State<'_, 
             }
         }
 
-        // Reconcile only the Sent folder in the background: claims the
-        // mirrored row's UID (and, for Gmail-IMAP, imports the auto-saved
-        // copy). Replaces the full account sync the frontend used to fire
-        // after every send.
+        // Background reconcile of only the Sent folder: claims the mirrored
+        // row's UID; for Gmail-IMAP imports the auto-saved copy.
         if let Some((sent_id, sent_path)) = sent_folder_reconcile {
             let app = app.clone();
             let account_id = account_id.clone();

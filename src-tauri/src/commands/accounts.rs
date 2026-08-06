@@ -98,11 +98,8 @@ pub fn create_account(
             ));
         }
         log::info!("Cleaning up existing account {} before re-add (same provider)", old_id);
-        // Mirror delete_account's teardown: kill the old id's background tasks
-        // (IDLE watcher, in-flight sync) and evict its pooled IMAP session.
-        // Without this, the old IDLE loop outlives the row it belongs to and
-        // reconnects to the same mailbox forever, eating the server's
-        // connection limit while the new account tries its first sync.
+        // Mirror delete_account's teardown — an orphaned IDLE watcher would
+        // reconnect to the mailbox forever.
         crate::task_registry::abort_account(&old_id);
         {
             use tauri::Manager;

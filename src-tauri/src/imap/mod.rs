@@ -605,12 +605,8 @@ pub async fn sync_mails(
         .unwrap_or(0)
     };
 
-    // Resolve the concrete UIDs to fetch, then pull them in bounded chunks.
-    // The previous single `{last_uid+1}:*` FETCH loaded the entire folder into
-    // memory under one 60s timeout: any large mailbox hit the timeout on its
-    // very first sync, the dropped read left half a response in the stream
-    // buffer (poisoning every later command on this session), and no progress
-    // event fired for the whole duration — the wizard sat at 0.
+    // Resolve the concrete UIDs, then fetch in bounded chunks — each with its
+    // own timeout, immediate commit and progress event.
     let search_range = format!("UID {}:*", last_uid + 1);
     let mut uids = tokio::time::timeout(
         std::time::Duration::from_secs(30),
@@ -1153,9 +1149,7 @@ pub async fn store_body_and_attachments(db: &Database, mail_id: &str, body_bytes
         let _ = tokio::fs::create_dir_all(&attach_dir).await;
 
         let mut processed_filenames = std::collections::HashSet::new();
-        // Counts only real (non-inline) attachments: attachment_count() includes
-        // embedded signature images, which made the UI announce attachments the
-        // attachment list then (correctly) refused to show.
+        // Only non-inline parts count toward has_attachments.
         let mut real_attachment_count: u32 = 0;
 
         for part in msg.attachments() {

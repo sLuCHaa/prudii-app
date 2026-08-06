@@ -79,10 +79,8 @@ impl ImapPool {
         let deadline = Instant::now() + std::time::Duration::from_secs(60);
 
         loop {
-            // Register interest in `returned` BEFORE inspecting pool state.
-            // `notify_waiters()` stores no permit, so a return_session landing
-            // between the in_use check and the first poll of `notified()` would
-            // otherwise be missed and park this waiter for the full deadline.
+            // Register BEFORE inspecting state: notify_waiters() stores no
+            // permit, so a wakeup between check and poll would be lost.
             let notified = self.returned.notified();
             tokio::pin!(notified);
             notified.as_mut().enable();
@@ -277,9 +275,8 @@ impl ImapPool {
             },
         );
         drop(sessions);
-        // A session can already be pooled if take_session gave up waiting and
-        // opened a second connection. Log the displaced one out instead of
-        // silently leaking a live TLS connection.
+        // A second connection may exist after a wait timeout — log the
+        // displaced session out instead of leaking it.
         if let Some(mut old) = replaced {
             let _ = old.session.logout().await;
         }
@@ -290,13 +287,9 @@ impl ImapPool {
         self.returned.notify_waiters();
     }
 
-    /// Offer a session to the pool from a caller that never claimed the
-    /// account's in-use slot (e.g. sync, which opens its own connection).
-    /// Unlike `return_session`, this must NOT touch `in_use`: clearing it
-    /// here would wipe the claim of whatever operation currently holds the
-    /// pooled session and allow two tasks to use one connection concurrently.
-    /// The session is adopted only if the slot is free and nothing is pooled;
-    /// otherwise it is logged out and dropped.
+    /// Offer a session from a caller that never claimed the in-use slot
+    /// (e.g. sync). Must not touch `in_use` — that claim belongs to whoever
+    /// holds the pooled session. Adopted only if the slot is free.
     pub async fn offer_session(
         &self,
         account_id: &str,
@@ -350,10 +343,8 @@ impl ImapPool {
         self.returned.notify_waiters();
     }
 
-    /// Drop all sessions (network reset, backup restore). No LOGOUT: this is
-    /// called precisely when the connections are presumed dead — a polite
-    /// logout would block on every dead socket in turn, all while holding the
-    /// sessions lock, freezing the whole pool. Dropping closes the sockets.
+    /// Drop all sessions (network reset, backup restore). No LOGOUT — the
+    /// connections are presumed dead and dropping closes the sockets.
     pub async fn clear_all(&self) {
         let drained: Vec<PoolEntry> = {
             let mut sessions = self.sessions.lock().await;

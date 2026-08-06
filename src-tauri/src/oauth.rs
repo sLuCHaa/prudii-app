@@ -94,10 +94,8 @@ struct IdTokenClaims {
 
 struct CachedToken {
     access_token: String,
-    // Wall clock, not Instant: monotonic time pauses during system sleep, so
-    // an Instant-based expiry kept serving tokens that had long expired in
-    // real time after the laptop woke up — every API call then failed with
-    // 401 until an app restart cleared the cache.
+    // Wall clock, not Instant: monotonic time pauses during system sleep,
+    // so tokens must expire in real time.
     expires_at: std::time::SystemTime,
 }
 

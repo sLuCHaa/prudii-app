@@ -955,10 +955,7 @@ function ThreadMessages({
 }) {
   const messagesRef = useRef<HTMLDivElement>(null);
 
-  // No JS entrance for message cards: they rendered at inline opacity 0 and
-  // relied on a gsap stagger to become visible — any path that skipped or
-  // interrupted the tween (paused global timeline, guard conditions) left a
-  // fully loaded mail invisible.
+  // Cards must never depend on a JS animation to become visible.
   return (
     <div ref={messagesRef} className={isSingleMail ? "space-y-3" : "space-y-4"}>
       {threadMails.map((m, index) => (
@@ -1032,14 +1029,12 @@ export function ThreadView({ mail }: ThreadViewProps) {
     }
   }, [mail.id]);
 
-  // Every mail starts at the top — the scroll container stays mounted across
-  // selections, so the previous mail's scroll offset would carry over.
+  // The scroll container survives selection changes; reset it per mail.
   useEffect(() => {
     messagesScrollRef.current?.scrollTo({ top: 0 });
   }, [mail.id]);
 
-  // Paint the selected mail immediately from memory; sibling thread messages
-  // merge in when the DB query returns.
+  // Paint the selected mail immediately; the thread merges in async.
   useEffect(() => {
     let cancelled = false;
     setThreadMails([mail]);

@@ -45,9 +45,7 @@ export async function openComposeWindow(data: ComposeInitData): Promise<void> {
       // Fallback to defaults
     }
 
-    // A size the user chose beats the computed default (all compose windows
-    // share the same localStorage origin, so the compose window's own resize
-    // handler wrote this). Clamped so a size from a larger monitor still fits.
+    // A remembered user size beats the computed default (clamped to monitor).
     try {
       const saved = JSON.parse(localStorage.getItem("compose-window-size") ?? "null");
       if (saved && typeof saved.w === "number" && typeof saved.h === "number") {

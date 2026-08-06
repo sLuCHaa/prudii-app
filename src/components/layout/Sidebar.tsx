@@ -1339,9 +1339,7 @@ export function Sidebar() {
     }
   }, [folders, setFolders, setSelectedFolderId]);
 
-  // Swap to the icon tree only after the container's 200ms width animation:
-  // swapping immediately left a 52px content strip in a still-wide container.
-  // The fade masks the reflow while the width animates.
+  // Swap to the icon tree only after the container's width animation.
   const [renderCollapsed, setRenderCollapsed] = useState(sidebarCollapsed);
   useEffect(() => {
     if (!sidebarCollapsed) {

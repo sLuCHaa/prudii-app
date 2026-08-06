@@ -5,11 +5,8 @@ const MotionLab = import.meta.env.DEV
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
-// Lazy: keeps the main-window layout (mail lists, settings, …) and the
-// compose editor (tiptap) in separate chunks. The compose window boots a
-// fresh webview on every open — without the split it parsed the entire app
-// bundle before it could paint, which is most of the delay between clicking
-// Compose and the window appearing.
+// Separate chunks: the compose window must not parse the main layout, and
+// the main window must not parse the editor.
 const AppLayout = lazy(() =>
   import("./components/layout/AppLayout").then((m) => ({ default: m.AppLayout }))
 );
@@ -20,8 +17,6 @@ import { UndoToast } from "./components/ui/UndoToast";
 import { ToastContainer } from "./components/ui/Toast";
 import { CommandPalette } from "./components/ui/CommandPalette";
 import { ShortcutHelp } from "./components/ui/ShortcutHelp";
-// Eager (not lazy): ComposeWindow IS the entire content of the compose window
-// (index.html?compose=true), so lazy-loading it just delays that window's open.
 const ComposeWindow = lazy(() =>
   import("./components/compose/ComposeWindow").then((m) => ({ default: m.ComposeWindow }))
 );
@@ -49,9 +44,7 @@ const queryClient = new QueryClient({
 });
 
 function AppInner() {
-  // Production: once per launch (sessionStorage survives in-window reloads).
-  // Dev: never — tauri dev relaunches the app on every Rust rebuild, which
-  // would replay the splash constantly.
+  // Once per launch in production; never in dev (rebuilds relaunch the app).
   const [showSplash, setShowSplash] = useState(
     () => !import.meta.env.DEV && !sessionStorage.getItem("splash-shown")
   );
@@ -469,8 +462,7 @@ function AppInner() {
     };
   }, [setShowAccountWizard, setShowHelp]);
 
-  // Splash covers the layout chunk load instead of running on a fixed timer;
-  // it ends as soon as both the minimum display time and the chunk are done.
+  // The splash gates on the layout chunk plus a minimum display time.
   useEffect(() => {
     import("./components/layout/AppLayout").then(() => setLayoutReady(true));
   }, []);

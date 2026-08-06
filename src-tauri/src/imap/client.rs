@@ -12,9 +12,8 @@ type TlsStream = tokio_rustls::client::TlsStream<tokio::net::TcpStream>;
 // Outlook/Office365 throttles IMAP aggressively; on a throttle or transient
 // drop, back off exponentially with jitter instead of failing the whole sync.
 const IMAP_MAX_RETRIES: u32 = 3;
-/// Per-read/-write I/O bounds. A connection silently killed by a network
-/// switch never delivers data again; these caps turn that into an error the
-/// callers' reconnect logic can handle instead of an indefinite hang.
+/// Every read/write is bounded so a dead connection becomes an error,
+/// never an indefinite hang.
 const READ_TIMEOUT: Duration = Duration::from_secs(60);
 const WRITE_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -107,11 +106,8 @@ impl ImapClient {
         .context("TCP connect failed")?;
 
         tcp.set_nodelay(true).ok();
-        // TCP keepalive so the kernel notices a dead peer on its own. Switching
-        // Wi-Fi networks silently kills connections without FIN/RST; without
-        // keepalive, a blocked read (e.g. the 25-minute IDLE wait) only fails
-        // when its own timeout fires. With ~30s probes a dead connection
-        // errors out within roughly a minute.
+        // Keepalive: network switches kill connections without FIN/RST; the
+        // kernel probes surface that within ~1 min even during the IDLE wait.
         {
             let sock = socket2::SockRef::from(&tcp);
             let keepalive = socket2::TcpKeepalive::new()
@@ -213,8 +209,6 @@ impl ImapClient {
 
     async fn send_raw(&mut self, data: &[u8]) -> Result<()> {
         let t0 = std::time::Instant::now();
-        // Bounded: on a connection killed by a network switch the send buffer
-        // fills and an unbounded write_all blocks forever.
         tokio::time::timeout(WRITE_TIMEOUT, async {
             self.stream.get_mut().write_all(data).await?;
             self.stream.get_mut().flush().await
@@ -666,9 +660,8 @@ impl ImapClient {
             bail!("Server doesn't support IDLE: {}", line.trim());
         }
 
-        // read_line_raw: the IDLE wait is the one read that must NOT carry the
-        // 60s READ_TIMEOUT — silence here is normal for up to `timeout` (25 min).
-        // TCP keepalive still surfaces a dead connection as a read error.
+        // The IDLE wait is the one read without READ_TIMEOUT — silence is
+        // normal here for up to `timeout`.
         let event = match tokio::time::timeout(timeout, self.read_line_raw()).await {
             Ok(Ok(_)) => IdleEvent::NewData,
             Ok(Err(e)) => return Err(e.context("Error during IDLE")),

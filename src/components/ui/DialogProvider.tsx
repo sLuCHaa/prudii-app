@@ -66,9 +66,8 @@ function Dialog({ state, onClose }: { state: DialogState; onClose: (result: bool
   const overlayRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
 
-  // Entrance is CSS (.modal-panel-enter): declarative from the first painted
-  // frame, so the dialog can never flash fully visible before a JS effect
-  // hides it. Exit stays imperative (gsap) since it must precede unmount.
+  // Entrance is CSS (declarative from first paint); exit is gsap (must
+  // precede unmount).
 
   const handleClose = useCallback((result: boolean) => {
     if (!overlayRef.current || !dialogRef.current || prefersReducedMotion()) {

@@ -54,9 +54,8 @@ export function ComposeWindow() {
     let unlisten: (() => void) | null = null;
     let cancelled = false;
 
-    // Listen scoped to THIS window's label. A plain global listen() would also
-    // receive the compose-init emitted for every OTHER compose window, which
-    // re-initialized (and wiped) already-open compose windows.
+    // Scoped to this window's label — a global listen() receives every
+    // compose window's init event.
     win
       .listen<ComposeInitData>("compose-init", (event) => {
         setInitData(event.payload);
@@ -89,10 +88,7 @@ export function ComposeWindow() {
   const [maximized, setMaximized] = useState(false);
   const sizeSaveTimer = useRef<number | null>(null);
 
-  // Track native maximize state and remember the user's chosen size.
-  // Maximize/restore is fully native (win.toggleMaximize below), so the OS
-  // animates the transition and picks the correct work area — no manual
-  // bounds math, no pixel heuristics.
+  // Track native maximize state and persist the free-form size.
   useEffect(() => {
     const win = getCurrentWindow();
     const unlisten = win.onResized(async () => {

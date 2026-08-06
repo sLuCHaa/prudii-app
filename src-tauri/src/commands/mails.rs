@@ -1787,8 +1787,7 @@ pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id:
         let (account_id, current_folder_id, uid, source_folder_path, message_id) = match mail_info {
             Ok(v) => v,
             Err(rusqlite::Error::QueryReturnedNoRows) => {
-                // Idempotent: the row is already gone (double delete, race with
-                // a background op) — the desired state is reached, not an error.
+                // Idempotent: already deleted is success, not an error.
                 log::warn!("trash_mail: mail {} already deleted, nothing to do", mail_id);
                 return Ok(());
             }
@@ -3236,10 +3235,7 @@ async fn empty_folder_by_type(app: tauri::AppHandle, db: State<'_, Database>, ac
                 Err(e) => { log::error!("EmptyFolder: IMAP connection failed: {}", e); return; }
             };
 
-            // Bounded: SELECT/STORE/EXPUNGE have no per-command timeout, so a
-            // dead connection would otherwise pin the pool's in_use slot for
-            // this account indefinitely and stall every other IMAP operation
-            // (body fetches, prefetch, backfill) app-wide.
+            // Bounded so a dead connection cannot pin the pool slot.
             let result = tokio::time::timeout(
                 std::time::Duration::from_secs(180),
                 crate::imap::empty_folder_on_server(&mut session, &folder_path),

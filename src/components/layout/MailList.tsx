@@ -1108,12 +1108,8 @@ export function MailList() {
 
   useEffect(() => {
     setMails(fetchedMails);
-    // Validate a folder-restored selection against the freshly fetched list: a mail
-    // remembered for this folder may since have moved elsewhere (trash/archive move
-    // rows, they don't delete them), so an id absent from fetchedMails is stale.
-    // Skipped while search is open — search legitimately selects mails from other folders.
-    // Also skipped until queryData has actually arrived: on a cold cache fetchedMails
-    // is briefly [] while the query loads, which must not be mistaken for a stale id.
+    // A restored selection may point at a mail that has since moved out of this
+    // folder — validate once data is loaded; search selects across folders.
     if (!searchOpen && selectedFolderId && selectedMailId && queryData !== undefined) {
       const index = fetchedMails.findIndex((m) => m.id === selectedMailId);
       if (index === -1) {
@@ -1463,10 +1459,7 @@ export function MailList() {
     listRef.current?.scrollTo({ top: 0 });
   }, [selectedFolderId, activeFilter, showAllInboxes, activeCombinedFolder, showSnoozed, activeSplitId]);
 
-  // No entrance stagger on folder switches: effects run after paint, so the
-  // rows were visible for one frame, blanked to opacity 0, then staggered in —
-  // perceived as a flash on every switch. Native lists swap content instantly;
-  // the skeleton crossfade already covers the slow-load case.
+  // No entrance animation on folder switches (post-paint effects flash).
   useEffect(() => {
     if (!snoozeMenuId) return;
     function handleClick() { setSnoozeMenuId(null); }
@@ -1475,8 +1468,7 @@ export function MailList() {
   }, [snoozeMenuId]);
 
   const selectAfterRemoval = useCallback((remaining: Mail[], index: number) => {
-    // Only touch the selection if the removed mail was the open one; otherwise
-    // deleting an unrelated row must not yank the reading pane elsewhere.
+    // Only move the selection if the removed mail was the open one.
     const { selectedMailId: current } = useAppStore.getState();
     if (current && remaining.some((m) => m.id === current)) return;
     if (remaining.length === 0 || index < 0) {
@@ -1492,9 +1484,7 @@ export function MailList() {
     const removeId = pendingRemoveId;
 
     if (el) {
-      // Fade/slide only — collapsing height inside the virtualizer's
-      // absolutely-positioned wrapper left a hole for the animation's
-      // duration, then every row below snapped up at once.
+      // Fade/slide only — height animation fights the virtualizer's absolute layout.
       gsap.to(el, {
         opacity: 0, x: -40,
         duration: 0.15, ease: "power2.in",
@@ -1766,12 +1756,8 @@ export function MailList() {
           skeleton={<MailListSkeleton count={12} />}
           className="flex flex-col flex-1 min-h-0"
         >
-          {/* Empty states only once the current view's data has actually
-              arrived (query settled AND the store caught up with it) —
-              otherwise the colorful zero-state flashes during every folder
-              switch while the store lags one frame behind. A non-"all" pill
-              filter legitimately empties the list with data present, and can
-              only be active after the switch, so it bypasses the check. */}
+          {/* Empty states only after the view's data has arrived; a pill
+              filter may legitimately empty the list with data present. */}
           {filteredMails.length === 0 && !searchOpen && !isLoading && (fetchedMails.length === 0 || folderFilter !== "all") ? (
             (() => {
               const isInboxView = (currentFolder?.folder_type === "inbox" || showAllInboxes)
