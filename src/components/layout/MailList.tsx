@@ -500,9 +500,9 @@ function VirtualMailList({
       if (i >= virtualItems.length) return 40;
       if (virtualItems[i].kind === "separator") return 32;
       // Row padding varies by density (index.css data-density rules):
-      // compact py-1.5 → ~60px, comfortable py-2.5 → ~68px, spacious py-4 → ~90px
+      // compact py-1.5 → ~60px, comfortable py-2.5 → ~68px, spacious py-4 → ~80px
       const density = document.documentElement.getAttribute("data-density");
-      return density === "compact" ? 60 : density === "spacious" ? 90 : 68;
+      return density === "compact" ? 60 : density === "spacious" ? 80 : 68;
     },
     overscan: 8,
     measureElement: (el: Element) => el.getBoundingClientRect().height,
@@ -1106,10 +1106,15 @@ export function MailList() {
   }, [queryData]);
 
 
+  // Keyed on fetchedMails ONLY: extra deps would re-run setMails on every
+  // selection change and revert optimistic removals to the stale query data.
   useEffect(() => {
     setMails(fetchedMails);
-    // A restored selection may point at a mail that has since moved out of this
-    // folder — validate once data is loaded; search selects across folders.
+  }, [fetchedMails, setMails]);
+
+  // A restored selection may point at a mail that has since moved out of this
+  // folder — validate once data is loaded; search selects across folders.
+  useEffect(() => {
     if (!searchOpen && selectedFolderId && selectedMailId && queryData !== undefined) {
       const index = fetchedMails.findIndex((m) => m.id === selectedMailId);
       if (index === -1) {
@@ -1118,7 +1123,7 @@ export function MailList() {
         setSelectedMailIndex(index);
       }
     }
-  }, [fetchedMails, setMails, searchOpen, selectedFolderId, selectedMailId, queryData, setSelectedMailId, setSelectedMailIndex]);
+  }, [fetchedMails, searchOpen, selectedFolderId, selectedMailId, queryData, setSelectedMailId, setSelectedMailIndex]);
 
   // Infinite scroll handler — called directly via onScroll prop (no stale closures)
   const handleListScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
