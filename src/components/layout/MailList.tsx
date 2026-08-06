@@ -231,8 +231,16 @@ function ScheduledMailsView() {
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <Loader2 className="w-5 h-5 text-accent animate-spin" />
+      <div className="flex-1 overflow-hidden px-4 py-3 space-y-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="flex items-start gap-3">
+            <Skeleton width="36px" height="36px" rounded="full" className="shrink-0" />
+            <div className="flex-1 space-y-1.5">
+              <Skeleton width={`${55 + (i % 3) * 12}%`} height="0.75rem" rounded="sm" />
+              <Skeleton width={`${70 + (i % 2) * 15}%`} height="0.75rem" rounded="sm" />
+            </div>
+          </div>
+        ))}
       </div>
     );
   }
