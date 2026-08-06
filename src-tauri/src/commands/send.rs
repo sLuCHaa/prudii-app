@@ -214,6 +214,7 @@ pub async fn send_mail(app: AppHandle, db: State<'_, Database>, pool: State<'_, 
         // Append to Sent folder via IMAP (skip for Gmail which auto-saves sent mails).
         // The mail was already sent successfully via SMTP — if saving to Sent fails,
         // emit a non-blocking warning event so the user knows, but don't fail the send.
+        let sent_folder_reconcile = sent_folder.clone();
         if !is_gmail_imap {
             if let Some((sent_id, sent_path)) = sent_folder {
                 let sent_save_result = match pool.get_session(&account_id, &imap_host, imap_port as u16, &email, &credential, &auth_type).await {
@@ -269,6 +270,48 @@ pub async fn send_mail(app: AppHandle, db: State<'_, Database>, pool: State<'_, 
                     "error": "No 'Sent' folder was detected for this account, so the sent copy could not be saved.",
                 }));
             }
+        }
+
+        // Reconcile only the Sent folder in the background: claims the
+        // mirrored row's UID (and, for Gmail-IMAP, imports the auto-saved
+        // copy). Replaces the full account sync the frontend used to fire
+        // after every send.
+        if let Some((sent_id, sent_path)) = sent_folder_reconcile {
+            let app = app.clone();
+            let account_id = account_id.clone();
+            let imap_host = imap_host.clone();
+            let email = email.clone();
+            let credential = credential.clone();
+            let auth_type = auth_type.clone();
+            crate::task_registry::spawn_for_account(&account_id.clone(), async move {
+                let db = app.state::<crate::db::Database>();
+                let pool = app.state::<crate::pool::ImapPool>();
+                let folder = crate::models::Folder {
+                    id: sent_id,
+                    account_id: account_id.clone(),
+                    name: "Sent".to_string(),
+                    folder_type: "sent".to_string(),
+                    path: sent_path,
+                    unread_count: 0,
+                    total_count: 0,
+                    is_local: false,
+                    color: String::new(),
+                };
+                match pool.get_session_guarded(&account_id, &imap_host, imap_port as u16, &email, &credential, &auth_type).await {
+                    Ok((mut session, _guard)) => {
+                        match imap::sync_mails(&mut session, &folder, &account_id, &db, None).await {
+                            Ok(_) => pool.return_session(&account_id, session).await,
+                            Err(e) => {
+                                log::warn!("Sent-folder reconcile failed (next sync catches up): {}", e);
+                                drop(session);
+                                pool.release(&account_id);
+                            }
+                        }
+                        let _ = app.emit("mails-changed", serde_json::json!({ "account_id": account_id }));
+                    }
+                    Err(e) => log::warn!("Sent-folder reconcile: no IMAP session: {}", e),
+                };
+            });
         }
     }
 
