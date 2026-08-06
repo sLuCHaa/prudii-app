@@ -324,6 +324,20 @@ fn detect_folder_type(
 /// UID reconciliation + flag sync: EXAMINE the folder, UID FETCH 1:* FLAGS,
 /// remove local mails whose UIDs no longer exist on the server, and update
 /// flags (read/starred/replied) for existing mails that differ from the server.
+/// S/MIME signature parts (smime.p7s) are mail metadata, not attachments:
+/// Apple Mail and Outlook hide them. Treated like inline parts so neither the
+/// paperclip flag nor the attachment list announces them.
+pub fn is_signature_part(filename: &str, mime_type: Option<&str>) -> bool {
+    let f = filename.to_ascii_lowercase();
+    if f.ends_with(".p7s") || f.ends_with(".p7m") {
+        return true;
+    }
+    matches!(
+        mime_type.map(|m| m.to_ascii_lowercase()),
+        Some(m) if m.contains("pkcs7-signature") || m.contains("pkcs7-mime") || m.contains("pgp-signature")
+    )
+}
+
 /// Server-rejected commands are logged and swallowed (the session is still
 /// usable), but timeouts are returned as errors: a timed-out command was
 /// dropped mid-read and leaves the response half-consumed in the stream
@@ -1175,7 +1189,9 @@ pub async fn store_body_and_attachments(db: &Database, mail_id: &str, body_bytes
             let disposition_inline = part.content_disposition()
                 .map(|cd| cd.ctype() == "inline")
                 .unwrap_or(false);
-            let is_inline = if disposition_inline && is_image && content_id.is_some() {
+            let is_inline = if is_signature_part(&filename, mime_type.as_deref()) {
+                true // S/MIME/PGP signature — mail metadata, never a visible attachment
+            } else if disposition_inline && is_image && content_id.is_some() {
                 true // image with CID referenced in HTML — genuinely inline
             } else if !disposition_inline && content_id.is_some() && !has_real_filename && is_image {
                 true // no disposition header, unnamed image with CID — embedded image
@@ -1407,7 +1423,9 @@ pub async fn backfill_folder_bodies(
                     let disposition_inline = part.content_disposition()
                         .map(|cd| cd.ctype() == "inline")
                         .unwrap_or(false);
-                    let is_inline = if disposition_inline && is_image && content_id.is_some() {
+                    let is_inline = if is_signature_part(&filename, mime_type.as_deref()) {
+                        true
+                    } else if disposition_inline && is_image && content_id.is_some() {
                         true
                     } else if !disposition_inline && content_id.is_some() && !has_real_filename && is_image {
                         true

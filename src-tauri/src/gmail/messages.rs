@@ -111,7 +111,8 @@ pub async fn fetch_message_body(
                 mime_type: att.mime_type.clone(),
                 data,
                 content_id: att.content_id.clone(),
-                is_inline: att.is_inline,
+                is_inline: att.is_inline
+                    || crate::imap::is_signature_part(&att.filename, att.mime_type.as_deref()),
             });
         }
 

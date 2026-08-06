@@ -3,7 +3,7 @@ use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
-const SCHEMA_VERSION: u32 = 35;
+const SCHEMA_VERSION: u32 = 36;
 
 pub struct Database {
     pub conn: Mutex<Connection>,
@@ -234,6 +234,31 @@ impl Database {
             ).unwrap_or(0);
             if fixed > 0 {
                 log::info!("DB v35 fix: cleared inline-only has_attachments on {} mails", fixed);
+            }
+        }
+
+        // v36 fix: S/MIME/PGP signature parts (smime.p7s) are mail metadata, not
+        // attachments — mark existing rows inline and clear the attachment flag
+        // for mails whose only "attachments" were signatures.
+        if prev_version < 36 {
+            let sigs: usize = conn.execute(
+                "UPDATE attachments SET is_inline = 1
+                 WHERE is_inline = 0
+                   AND (LOWER(filename) LIKE '%.p7s' OR LOWER(filename) LIKE '%.p7m'
+                        OR LOWER(COALESCE(mime_type,'')) LIKE '%pkcs7-signature%'
+                        OR LOWER(COALESCE(mime_type,'')) LIKE '%pkcs7-mime%'
+                        OR LOWER(COALESCE(mime_type,'')) LIKE '%pgp-signature%')",
+                [],
+            ).unwrap_or(0);
+            let flags: usize = conn.execute(
+                "UPDATE mails SET has_attachments = 0
+                 WHERE has_attachments = 1
+                   AND (body_html != '' OR body_text != '')
+                   AND id NOT IN (SELECT mail_id FROM attachments WHERE is_inline = 0)",
+                [],
+            ).unwrap_or(0);
+            if sigs > 0 || flags > 0 {
+                log::info!("DB v36 fix: {} signature parts marked inline, {} attachment flags cleared", sigs, flags);
             }
         }
 
