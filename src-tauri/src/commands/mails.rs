@@ -12,17 +12,47 @@ use std::sync::Mutex;
 use tauri::{Manager, State};
 
 /// Collapses copies of the same message that carry different Message-IDs
-/// (e.g. a client-generated id next to the server-assigned one). Same
-/// sender + same date + same subject + same body is treated as one message;
-/// the first row (lowest rowid, i.e. earliest import) wins. Body is part of
-/// the key so that distinct messages which happen to share sender/date/
-/// subject (e.g. quick back-to-back replies) are never collapsed.
+/// (e.g. a client-generated id next to the server-assigned one, or a
+/// headers-only row: mails are inserted header-first with an empty body
+/// and the body is written in afterwards, so a stray duplicate row can be
+/// stuck with no body forever).
+///
+/// Mails are grouped by sender + date + subject. Within a group, a copy
+/// with an empty body (both body_html and body_text empty) always collapses
+/// into a copy that has a body, and two copies with the same non-empty body
+/// collapse into one; two copies with different non-empty bodies are kept
+/// as distinct messages. Input is ordered by date ASC; the first copy seen
+/// in a group keeps the output slot, except that an empty-bodied first copy
+/// is replaced in place by a later, fuller copy from the same group.
 fn dedupe_thread_copies(mails: Vec<Mail>) -> Vec<Mail> {
-    let mut seen = std::collections::HashSet::new();
-    mails
-        .into_iter()
-        .filter(|m| seen.insert((m.from.email.clone(), m.date.clone(), m.subject.clone(), m.body_html.clone())))
-        .collect()
+    fn is_empty_body(m: &Mail) -> bool {
+        m.body_html.trim().is_empty() && m.body_text.trim().is_empty()
+    }
+
+    let mut result: Vec<Mail> = Vec::new();
+    let mut slot_by_key: HashMap<(String, String, String), usize> = HashMap::new();
+
+    for m in mails {
+        let key = (m.from.email.clone(), m.date.clone(), m.subject.clone());
+        let m_empty = is_empty_body(&m);
+
+        if let Some(&i) = slot_by_key.get(&key) {
+            let existing_empty = is_empty_body(&result[i]);
+            let bodies_equal = result[i].body_html == m.body_html && result[i].body_text == m.body_text;
+
+            if existing_empty || m_empty || bodies_equal {
+                if existing_empty && !m_empty {
+                    result[i] = m;
+                }
+                continue;
+            }
+        }
+
+        slot_by_key.insert(key, result.len());
+        result.push(m);
+    }
+
+    result
 }
 
 /// Deduplicate mails in two passes:
@@ -4355,5 +4385,20 @@ mod thread_dedupe_tests {
             mail("2", "<b@x>", "2026-08-05T15:00:06Z", "Re: X", "body B"),
         ];
         assert_eq!(dedupe_thread_copies(mails).len(), 2);
+    }
+
+    #[test]
+    fn collapses_headers_only_copy_into_full_body_copy() {
+        // Mails are inserted header-first with an empty body, which is
+        // filled in afterwards (see imap sync: "Write body LAST"). A stray
+        // headers-only row for the same message must not survive as a
+        // visible duplicate next to the row that got its body.
+        let mails = vec![
+            mail("1", "<a@x>", "2026-08-05T15:00:06Z", "Re: X", ""),
+            mail("2", "<b@spark>", "2026-08-05T15:00:06Z", "Re: X", "full body"),
+        ];
+        let out = dedupe_thread_copies(mails);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].body_html, "full body");
     }
 }
