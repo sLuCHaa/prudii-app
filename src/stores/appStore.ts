@@ -218,9 +218,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     activeFilter,
     // Only clear selectedFolderId when setting a filter, not when clearing it
     selectedFolderId: activeFilter ? null : state.selectedFolderId,
-    // Same for the selection: clearing the filter must not wipe out a selection
-    // just restored by setSelectedFolderId (e.g. Sidebar's handleFolderOpen).
-    selectedMailId: activeFilter ? null : state.selectedMailId,
+    selectedMailId: null,
     selectedMailIndex: -1,
     showAllInboxes: false,
     activeCombinedFolder: null,
@@ -231,7 +229,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     folderFilter: "all",
     selectedMailIds: new Set(),
     multiSelectMode: false,
-    lastSelectedMailId: activeFilter ? null : state.lastSelectedMailId,
+    lastSelectedMailId: null,
   })),
   setShowAllInboxes: (showAllInboxes) => set({ showAllInboxes, showSnoozed: false, showScheduled: false, showAttachmentBrowser: false, selectedFolderId: null, activeFilter: null, activeCombinedFolder: null, activeSplitId: null, selectedMailId: null, selectedMailIndex: -1, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
   setActiveCombinedFolder: (activeCombinedFolder) => set({ activeCombinedFolder, showAllInboxes: false, showSnoozed: false, showScheduled: false, showAttachmentBrowser: false, selectedFolderId: null, activeFilter: null, activeSplitId: null, selectedMailId: null, selectedMailIndex: -1, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),

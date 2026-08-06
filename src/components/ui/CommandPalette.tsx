@@ -249,9 +249,12 @@ export function CommandPalette() {
           section: accounts.length > 1 ? `${groupAccounts} — ${account.display_name}` : groupFolders,
           action: () => {
             setSelectedAccountId(account.id);
-            setSelectedFolderId(folder.id);
             setActiveFilter(null);
             useAppStore.setState({ showAllInboxes: false, activeCombinedFolder: null });
+            // setSelectedFolderId must run last: it restores the folder's remembered
+            // selection, and setActiveFilter(null) unconditionally clears selectedMailId,
+            // so running it first would wipe the just-restored selection.
+            setSelectedFolderId(folder.id);
           },
           accountEmail: account.email,
           accountName: account.display_name,

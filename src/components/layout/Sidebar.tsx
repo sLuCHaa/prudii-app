@@ -725,9 +725,12 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
 
   function handleFolderOpen(folder: FolderT) {
     useAppStore.setState({ showAllInboxes: false, activeCombinedFolder: null });
-    setSelectedFolderId(folder.id);
     setSelectedAccountId(account.id);
     setActiveFilter(null);
+    // setSelectedFolderId must run last: it restores the folder's remembered
+    // selection, and setActiveFilter(null) unconditionally clears selectedMailId,
+    // so running it first would wipe the just-restored selection.
+    setSelectedFolderId(folder.id);
     prefetchFolder(folder.id).catch((e) => console.error("[prefetchFolder]", folder.id, e));
 
     // Gmail's All Mail archive is excluded from routine sync (it duplicates the
