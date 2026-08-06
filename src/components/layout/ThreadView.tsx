@@ -1234,79 +1234,78 @@ export function ThreadView({ mail }: ThreadViewProps) {
 
       {!isSingleMail && <ThreadAttachments threadMails={threadMails} loading={loading} />}
 
+      <div className="flex items-center gap-0.5 px-4 py-1.5 border-b border-border bg-surface shrink-0">
+        <Tooltip label={t("mailDetail.reply")}>
+          <button
+            aria-label={t("mailDetail.reply")}
+            onClick={() => openCompose("reply", mail)}
+            className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
+          >
+            <Reply className="w-4 h-4" />
+          </button>
+        </Tooltip>
+        <Tooltip label={t("mailDetail.replyAll")}>
+          <button
+            aria-label={t("mailDetail.replyAll")}
+            onClick={() => openCompose("replyAll", mail)}
+            className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
+          >
+            <ReplyAll className="w-4 h-4" />
+          </button>
+        </Tooltip>
+        <Tooltip label={t("mailDetail.forward")}>
+          <button
+            aria-label={t("mailDetail.forward")}
+            onClick={() => openCompose("forward", mail)}
+            className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
+          >
+            <Forward className="w-4 h-4" />
+          </button>
+        </Tooltip>
+        <Tooltip label={t("mailDetail.print")}>
+          <button
+            aria-label={t("mailDetail.print")}
+            onClick={handlePrint}
+            className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
+          >
+            <Printer className="w-4 h-4" />
+          </button>
+        </Tooltip>
+        <Tooltip label={t("mailDetail.archiveConversation")}>
+          <button
+            aria-label={t("mailDetail.archiveConversation")}
+            onClick={handleArchive}
+            className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
+          >
+            <Archive className="w-4 h-4" />
+          </button>
+        </Tooltip>
+        <Tooltip label={t("mailDetail.deleteConversation")}>
+          <button
+            aria-label={t("mailDetail.deleteConversation")}
+            onClick={handleTrash}
+            className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
+          >
+            <TrashIcon size={16} strokeWidth={2} dangerHover />
+          </button>
+        </Tooltip>
+        <div className="w-px h-4 bg-border mx-0.5" />
+        <AiSummaryButton mailId={mail.id} threadMode={!isSingleMail} onToggle={() => setShowAiSummary((v) => !v)} active={showAiSummary} />
+        <AiReplyButton mailId={latestMail.id} onToggle={() => setShowAiReplies((v) => !v)} active={showAiReplies} />
+        {mail.list_unsubscribe && (
+          <Tooltip label={t("unsubscribe.title")}>
+          <button
+            aria-label={t("unsubscribe.title")}
+            onClick={handleUnsubscribe}
+            className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
+          >
+            <MailMinus className="w-4 h-4" />
+          </button>
+          </Tooltip>
+        )}
+      </div>
+
       <div ref={messagesScrollRef} className="relative flex-1 overflow-y-auto px-4 pt-1 pb-4">
-        <div className="sticky top-1 z-20 flex justify-center pointer-events-none mb-3">
-          <div className="inline-flex items-center gap-0.5 px-2 py-1.5 rounded-xl bg-surface/90 backdrop-blur-md border border-border shadow-lg pointer-events-auto">
-            <Tooltip label={t("mailDetail.reply")}>
-              <button
-                aria-label={t("mailDetail.reply")}
-                onClick={() => openCompose("reply", mail)}
-                className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
-              >
-                <Reply className="w-4 h-4" />
-              </button>
-            </Tooltip>
-            <Tooltip label={t("mailDetail.replyAll")}>
-              <button
-                aria-label={t("mailDetail.replyAll")}
-                onClick={() => openCompose("replyAll", mail)}
-                className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
-              >
-                <ReplyAll className="w-4 h-4" />
-              </button>
-            </Tooltip>
-            <Tooltip label={t("mailDetail.forward")}>
-              <button
-                aria-label={t("mailDetail.forward")}
-                onClick={() => openCompose("forward", mail)}
-                className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
-              >
-                <Forward className="w-4 h-4" />
-              </button>
-            </Tooltip>
-            <Tooltip label={t("mailDetail.print")}>
-              <button
-                aria-label={t("mailDetail.print")}
-                onClick={handlePrint}
-                className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
-              >
-                <Printer className="w-4 h-4" />
-              </button>
-            </Tooltip>
-            <Tooltip label={t("mailDetail.archiveConversation")}>
-              <button
-                aria-label={t("mailDetail.archiveConversation")}
-                onClick={handleArchive}
-                className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
-              >
-                <Archive className="w-4 h-4" />
-              </button>
-            </Tooltip>
-            <Tooltip label={t("mailDetail.deleteConversation")}>
-              <button
-                aria-label={t("mailDetail.deleteConversation")}
-                onClick={handleTrash}
-                className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
-              >
-                <TrashIcon size={16} strokeWidth={2} dangerHover />
-              </button>
-            </Tooltip>
-            <div className="w-px h-4 bg-border mx-0.5" />
-            <AiSummaryButton mailId={mail.id} threadMode={!isSingleMail} onToggle={() => setShowAiSummary((v) => !v)} active={showAiSummary} />
-            <AiReplyButton mailId={latestMail.id} onToggle={() => setShowAiReplies((v) => !v)} active={showAiReplies} />
-            {mail.list_unsubscribe && (
-              <Tooltip label={t("unsubscribe.title")}>
-              <button
-                aria-label={t("unsubscribe.title")}
-                onClick={handleUnsubscribe}
-                className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
-              >
-                <MailMinus className="w-4 h-4" />
-              </button>
-              </Tooltip>
-            )}
-          </div>
-        </div>
         <ThreadMessages
           threadMails={threadMails}
           isSingleMail={isSingleMail}
