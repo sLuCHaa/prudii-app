@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useAccounts } from "./useAccounts";
+import { useQueries } from "@tanstack/react-query";
 import { useAppStore } from "../stores/appStore";
 import { setDockBadge, listFolders } from "../lib/tauri";
 import { useTranslation } from "react-i18next";
@@ -10,27 +11,26 @@ import type { Folder } from "../types";
 export function useNativeShell(): void {
   const { t } = useTranslation();
   const { data: accounts } = useAccounts();
-  const [allFolders, setAllFolders] = useState<Folder[]>([]);
   const selectedFolderId = useAppStore((s) => s.selectedFolderId);
   const showAllInboxes = useAppStore((s) => s.showAllInboxes);
 
-  useEffect(() => {
-    if (!accounts || accounts.length === 0) {
-      setAllFolders([]);
-      return;
-    }
+  const folderQueries = useQueries({
+    queries: (accounts ?? []).map((account) => ({
+      queryKey: ["folders", account.id],
+      queryFn: () => listFolders(account.id),
+    })),
+  });
 
-    Promise.all(accounts.map((account) => listFolders(account.id)))
-      .then((results) => {
-        const combined = results.flatMap((folders) => folders || []);
-        setAllFolders(combined);
-      })
-      .catch(() => {});
-  }, [accounts]);
+  const allFolders = useMemo(() => {
+    return folderQueries
+      .flatMap((query) => query.data || []);
+  }, [folderQueries]);
 
-  const inboxUnread = allFolders
-    .filter((f) => f.folder_type === "inbox")
-    .reduce((sum, f) => sum + (f.unread_count ?? 0), 0);
+  const inboxUnread = useMemo(() => {
+    return allFolders
+      .filter((f) => f.folder_type === "inbox")
+      .reduce((sum, f) => sum + (f.unread_count ?? 0), 0);
+  }, [allFolders]);
 
   useEffect(() => {
     setDockBadge(inboxUnread > 0 ? inboxUnread : null).catch(() => {});
