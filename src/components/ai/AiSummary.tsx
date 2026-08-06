@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from "react";
-import { Sparkles, RefreshCw, X, Loader2 } from "lucide-react";
+import { Sparkles, RefreshCw, X } from "lucide-react";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";
 import { summarizeMail, summarizeThread, clearAiCache } from "../../lib/tauri";
+import { Skeleton } from "../ui/Skeleton";
 import type { AiStreamEvent } from "../../types";
 
 interface AiSummaryProps {
@@ -120,9 +121,10 @@ export function AiSummaryPanel({ mailId, threadMode }: AiSummaryProps) {
       </div>
 
       {loading && !text && (
-        <div className="flex items-center gap-2 py-2">
-          <Loader2 className="w-4 h-4 text-accent animate-spin" />
-          <span className="text-xs text-text-tertiary">{t("ai.summarizing")}</span>
+        <div className="py-1 space-y-1.5">
+          <Skeleton width="100%" height="0.75rem" rounded="sm" />
+          <Skeleton width="92%" height="0.75rem" rounded="sm" />
+          <Skeleton width="60%" height="0.75rem" rounded="sm" />
         </div>
       )}
 

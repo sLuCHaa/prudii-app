@@ -6,6 +6,7 @@ import { searchAttachments, countAttachments, bulkSaveAttachments, saveAttachmen
 import { listen } from "@tauri-apps/api/event";
 import { formatMailDate } from "../../lib/dateUtils";
 import { EmptyState } from "../ui/EmptyState";
+import { Skeleton } from "../ui/Skeleton";
 import { useScroller } from "../../hooks/useScroller";
 import { AttachmentPreview } from "./AttachmentPreview";
 import { ResizeHandle } from "./ResizeHandle";
@@ -624,8 +625,39 @@ export function AttachmentBrowser() {
       )}
 
       {(loading && !aiResults) ? (
-        <div className="flex-1 flex items-center justify-center">
-          <Loader2 className="w-5 h-5 text-accent animate-spin" />
+        <div className="flex-1 overflow-hidden">
+          <table className="w-full text-sm">
+            <tbody>
+              {Array.from({ length: 8 }).map((_, i) => (
+                <tr key={i} className="border-b border-border-light">
+                  <td className="pl-6 pr-1 py-3 w-10">
+                    <Skeleton width="16px" height="16px" rounded="sm" />
+                  </td>
+                  <td className="py-3 px-3">
+                    <div className="flex items-center gap-2">
+                      <Skeleton width="16px" height="16px" rounded="sm" className="shrink-0" />
+                      <Skeleton width={`${45 + (i % 4) * 12}%`} height="0.75rem" rounded="sm" />
+                    </div>
+                  </td>
+                  <td className="py-3 px-3 w-24">
+                    <Skeleton width="40px" height="0.75rem" rounded="sm" />
+                  </td>
+                  <td className="py-3 px-3">
+                    <Skeleton width={`${40 + (i % 3) * 15}%`} height="0.75rem" rounded="sm" />
+                  </td>
+                  <td className="py-3 px-3">
+                    <Skeleton width={`${50 + (i % 2) * 20}%`} height="0.75rem" rounded="sm" />
+                  </td>
+                  <td className="py-3 px-3 w-32">
+                    <Skeleton width="60px" height="0.75rem" rounded="sm" />
+                  </td>
+                  <td className="py-3 px-3 w-32 pr-6">
+                    <Skeleton width="70px" height="0.75rem" rounded="sm" />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       ) : displayedAttachments.length === 0 ? (
         <EmptyState

@@ -23,6 +23,7 @@ import { incrementArchivedToday, recordInboxZeroDay } from "../../lib/achievemen
 import { SearchBar } from "./SearchBar";
 import { MagnifierIcon, StarIcon } from "../icons";
 import { MailListSkeleton } from "../ui/MailListSkeleton";
+import { Skeleton } from "../ui/Skeleton";
 import { LoadingCrossfade } from "../motion/LoadingCrossfade";
 import { ENTRANCE, prefersReducedMotion } from "../motion/tokens";
 import { formatMailDate, getDateGroup } from "../../lib/dateUtils";
@@ -315,11 +316,16 @@ function SearchResultsList({ results, isLoading, selectedMailId, setSelectedMail
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-5 h-5 text-accent animate-spin mx-auto mb-2" />
-          <p className="text-sm text-text-tertiary">{t("common.searching")}</p>
-        </div>
+      <div className="flex-1 overflow-hidden px-4 py-3 space-y-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="flex items-start gap-3">
+            <Skeleton width="36px" height="36px" rounded="full" className="shrink-0" />
+            <div className="flex-1 space-y-1.5">
+              <Skeleton width={`${55 + (i % 3) * 12}%`} height="0.75rem" rounded="sm" />
+              <Skeleton width={`${70 + (i % 2) * 15}%`} height="0.75rem" rounded="sm" />
+            </div>
+          </div>
+        ))}
       </div>
     );
   }

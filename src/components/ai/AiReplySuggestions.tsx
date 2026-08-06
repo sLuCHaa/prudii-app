@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
-import { MessageSquareReply, Loader2 } from "lucide-react";
+import { MessageSquareReply } from "lucide-react";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";
 import { suggestReplies, suggestThreadReplies } from "../../lib/tauri";
+import { Skeleton } from "../ui/Skeleton";
 import type { AiRepliesEvent, ReplySuggestion } from "../../types";
 
 interface AiReplySuggestionsProps {
@@ -119,9 +120,14 @@ export function AiReplySuggestionsPanel({ mailId, threadMode }: AiReplySuggestio
       </div>
 
       {loading && (
-        <div className="flex items-center gap-2 py-4">
-          <Loader2 className="w-4 h-4 text-accent animate-spin" />
-          <span className="text-xs text-text-tertiary">{t("ai.generatingReplies")}</span>
+        <div className="space-y-2">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="p-3 rounded-lg border border-border bg-surface space-y-2">
+              <Skeleton width="70px" height="0.7rem" rounded="sm" />
+              <Skeleton width={`${75 + (i % 2) * 15}%`} height="0.7rem" rounded="sm" />
+              <Skeleton width={`${45 + (i % 3) * 10}%`} height="0.7rem" rounded="sm" />
+            </div>
+          ))}
         </div>
       )}
 
