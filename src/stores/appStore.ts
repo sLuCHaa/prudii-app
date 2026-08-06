@@ -61,6 +61,7 @@ interface AppState {
 
   mails: Mail[];
   selectedMailId: string | null;
+  folderSelection: Record<string, string>;
   selectedMailIndex: number;
   activeFilter: MailFilter;
   showAllInboxes: boolean;
@@ -174,12 +175,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   folders: [],
   selectedFolderId: null,
   setFolders: (folders) => set({ folders }),
-  // Deliberately keeps selectedMailId: clearing it on every folder switch made
-  // the reading pane flash to the NoSelectionState scene each time.
-  setSelectedFolderId: (selectedFolderId) => set({ selectedFolderId, showSnoozed: false, showScheduled: false, showAttachmentBrowser: false, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
+  // Restores the folder's remembered selection instead of leaving the previous folder's mail selected.
+  setSelectedFolderId: (selectedFolderId) => set((state) => ({
+    selectedFolderId,
+    selectedMailId: selectedFolderId ? state.folderSelection[selectedFolderId] ?? null : null,
+    selectedMailIndex: -1,
+    showSnoozed: false, showScheduled: false, showAttachmentBrowser: false,
+    folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null,
+  })),
 
   mails: [],
   selectedMailId: null,
+  folderSelection: {} as Record<string, string>,
   selectedMailIndex: -1,
   activeFilter: null,
   showAllInboxes: false,
@@ -187,7 +194,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   setMails: (mails) => set((state) => ({
     mails: typeof mails === "function" ? mails(state.mails) : mails,
   })),
-  setSelectedMailId: (selectedMailId) => set({ selectedMailId, selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: selectedMailId }),
+  setSelectedMailId: (selectedMailId) => set((state) => ({
+    selectedMailId,
+    selectedMailIds: new Set(),
+    multiSelectMode: false,
+    lastSelectedMailId: selectedMailId,
+    folderSelection: state.selectedFolderId && selectedMailId
+      ? { ...state.folderSelection, [state.selectedFolderId]: selectedMailId }
+      : state.folderSelection,
+  })),
   setSelectedMailIndex: (selectedMailIndex) => set({ selectedMailIndex }),
   setActiveFilter: (activeFilter) => set((state) => ({
     activeFilter,
