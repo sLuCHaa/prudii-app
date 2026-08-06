@@ -714,7 +714,7 @@ pub fn run() {
                         "Reenviar",
                     ),
                     "fr" => (
-                        "Préférences…",
+                        "Paramètres…",
                         "Nouveau message",
                         "Relever tout le courrier",
                         "Répondre",
@@ -784,6 +784,10 @@ pub fn run() {
                     .item(&PredefinedMenuItem::close_window(app, None)?)
                     .build()?;
 
+                // No Select All item here: a native Cmd+A menu accelerator would steal the
+                // shortcut from the webview before MailList.tsx's own Cmd+A handler (bulk
+                // select-all-mails) ever sees it. Leaving it out lets Cmd+A fall through to
+                // the webview, so both text-field selection and the in-app handler keep working.
                 let edit_menu = SubmenuBuilder::new(app, "Edit")
                     .item(&PredefinedMenuItem::undo(app, None)?)
                     .item(&PredefinedMenuItem::redo(app, None)?)
@@ -791,7 +795,6 @@ pub fn run() {
                     .item(&PredefinedMenuItem::cut(app, None)?)
                     .item(&PredefinedMenuItem::copy(app, None)?)
                     .item(&PredefinedMenuItem::paste(app, None)?)
-                    .item(&PredefinedMenuItem::select_all(app, None)?)
                     .build()?;
 
                 let mailbox_menu = SubmenuBuilder::new(app, "Mailbox")
