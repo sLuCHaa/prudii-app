@@ -3,7 +3,7 @@ use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
-const SCHEMA_VERSION: u32 = 36;
+const SCHEMA_VERSION: u32 = 37;
 
 pub struct Database {
     pub conn: Mutex<Connection>,
@@ -259,6 +259,22 @@ impl Database {
             ).unwrap_or(0);
             if sigs > 0 || flags > 0 {
                 log::info!("DB v36 fix: {} signature parts marked inline, {} attachment flags cleared", sigs, flags);
+            }
+        }
+
+        // v37: bodies used to inline embedded images as base64 (multi-MB DOMs
+        // that bog down the shared render process). Clear oversized refetchable
+        // bodies so they reload with file references.
+        if prev_version < 37 {
+            let cleared: usize = conn.execute(
+                "UPDATE mails SET body_html = '', body_text = ''
+                 WHERE length(body_html) > 1000000
+                   AND uid IS NOT NULL
+                   AND body_html LIKE '%;base64,%'",
+                [],
+            ).unwrap_or(0);
+            if cleared > 0 {
+                log::info!("DB v37 fix: cleared {} oversized inlined bodies for refetch", cleared);
             }
         }
 
