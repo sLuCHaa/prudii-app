@@ -3,7 +3,6 @@ pub mod client;
 use std::collections::{HashMap, HashSet};
 
 use anyhow::{Context, Result};
-use base64::Engine;
 use mail_parser::{MessageParser, MimeHeaders};
 use tauri::Emitter;
 
@@ -1203,19 +1202,15 @@ pub async fn store_body_and_attachments(db: &Database, mail_id: &str, body_bytes
                 continue;
             }
 
-            // Always replace CID references in HTML regardless of is_inline flag.
-            // Many clients (e.g. Outlook) mark inline images as Content-Disposition: attachment
-            // while still referencing them via cid: in the HTML body.
-            if let Some(ref cid) = content_id {
-                let mime = mime_type.as_deref().unwrap_or("application/octet-stream");
-                let b64 = base64::engine::general_purpose::STANDARD.encode(data);
-                let data_uri = format!("data:{};base64,{}", mime, b64);
-                body_html = body_html.replace(&format!("cid:{}", cid), &data_uri);
-            }
-
             let file_path = attach_dir.join(&safe_name);
             match tokio::fs::write(&file_path, data).await {
                 Ok(_) => {
+                    // Reference the stored file instead of inlining base64 —
+                    // embedded images ballooned body_html to multiple MB.
+                    if let Some(ref cid) = content_id {
+                        let url = format!("file://{}", file_path.to_string_lossy());
+                        body_html = body_html.replace(&format!("cid:{}", cid), &url);
+                    }
                     let path_str = file_path.to_string_lossy().to_string();
                     let conn = db.lock_db();
                     // Check if attachment already exists for this mail+filename to preserve its ID
@@ -1440,15 +1435,12 @@ pub async fn backfill_folder_bodies(
                     // Always replace CID references in HTML regardless of is_inline flag.
                     // Many clients (e.g. Outlook) mark inline images as Content-Disposition: attachment
                     // while still referencing them via cid: in the HTML body.
-                    if let Some(ref cid) = content_id {
-                        let mime = mime_type.as_deref().unwrap_or("application/octet-stream");
-                        let b64 = base64::engine::general_purpose::STANDARD.encode(data);
-                        let data_uri = format!("data:{};base64,{}", mime, b64);
-                        body_html = body_html.replace(&format!("cid:{}", cid), &data_uri);
-                    }
-
                     let file_path = attach_dir.join(&safe_name);
                     if tokio::fs::write(&file_path, data).await.is_ok() {
+                        if let Some(ref cid) = content_id {
+                            let url = format!("file://{}", file_path.to_string_lossy());
+                            body_html = body_html.replace(&format!("cid:{}", cid), &url);
+                        }
                         let path_str = file_path.to_string_lossy().to_string();
                         let conn = db.lock_db();
                         let existing: Option<String> = conn.query_row(

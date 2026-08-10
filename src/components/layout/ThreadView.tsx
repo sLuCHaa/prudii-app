@@ -306,10 +306,21 @@ const HtmlMailFrame = memo(function HtmlMailFrame({ html, allowExternalImages = 
 
   const themeStyles = darkMode ? DARK_STYLES : LIGHT_STYLES;
 
-  const { html: cleanHtml, trackers } = useMemo(
-    () => sanitizeEmailHtml(html, allowExternalImages),
-    [html, allowExternalImages]
-  );
+  const { html: cleanHtml, trackers } = useMemo(() => {
+    const res = sanitizeEmailHtml(html, allowExternalImages);
+    if (!res.html.includes("file://")) return res;
+    // Locally stored inline images are referenced as file:// by the backend;
+    // only convertFileSrc knows the platform's asset origin.
+    const d = document.createElement("div");
+    d.innerHTML = res.html;
+    d.querySelectorAll('img[src^="file://"]').forEach((img) => {
+      const raw = (img.getAttribute("src") ?? "").replace(/^file:\/+/, "/");
+      let path = raw;
+      try { path = decodeURIComponent(raw); } catch { /* keep raw */ }
+      img.setAttribute("src", convertFileSrc(path));
+    });
+    return { html: d.innerHTML, trackers: res.trackers };
+  }, [html, allowExternalImages]);
 
   useEffect(() => {
     if (onTrackersDetected && trackers.length > 0) {
