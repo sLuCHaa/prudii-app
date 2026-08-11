@@ -89,15 +89,18 @@ impl Database {
             );"
         );
 
-        // Clean up duplicate attachments and add unique constraint
-        let att_dupes: usize = conn.execute(
-            "DELETE FROM attachments WHERE rowid NOT IN (
-                SELECT MIN(rowid) FROM attachments GROUP BY mail_id, filename
-            )",
-            [],
-        ).unwrap_or(0);
-        if att_dupes > 0 {
-            log::info!("DB cleanup: removed {} duplicate attachments", att_dupes);
+        // Upgrade-gated: full-table cleanup scans ran on every start and could
+        // stall the launch for seconds on a cold cache.
+        if prev_version < SCHEMA_VERSION {
+            let att_dupes: usize = conn.execute(
+                "DELETE FROM attachments WHERE rowid NOT IN (
+                    SELECT MIN(rowid) FROM attachments GROUP BY mail_id, filename
+                )",
+                [],
+            ).unwrap_or(0);
+            if att_dupes > 0 {
+                log::info!("DB cleanup: removed {} duplicate attachments", att_dupes);
+            }
         }
         let _ = conn.execute_batch(
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_attachments_unique ON attachments(mail_id, filename);"
@@ -197,12 +200,14 @@ impl Database {
         // Fix mails with empty date (caused by Outlook messages missing receivedDateTime).
         // Set to current UTC time so the frontend doesn't crash on Invalid Date.
         // Use RFC3339 with `T` and `Z` so parseISO interprets it as UTC, not local time.
-        let fixed_dates: usize = conn.execute(
-            "UPDATE mails SET date = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE date IS NULL OR date = ''",
-            [],
-        ).unwrap_or(0);
-        if fixed_dates > 0 {
-            log::info!("DB cleanup: fixed {} mails with empty date", fixed_dates);
+        if prev_version < SCHEMA_VERSION {
+            let fixed_dates: usize = conn.execute(
+                "UPDATE mails SET date = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE date IS NULL OR date = ''",
+                [],
+            ).unwrap_or(0);
+            if fixed_dates > 0 {
+                log::info!("DB cleanup: fixed {} mails with empty date", fixed_dates);
+            }
         }
 
         // v33 fix: rewrite Gmail/Outlook mail dates from "YYYY-MM-DD HH:MM:SS" (UTC values
@@ -393,7 +398,10 @@ impl Database {
         // Ensure the API dedup index exists (recreate if it failed before due to duplicates).
         // Mails without a Message-ID are excluded: SQLite treats empty strings as equal, so
         // two Message-ID-less mails (drafts) in one folder would collide once uid is NULL.
-        let _ = conn.execute_batch("DROP INDEX IF EXISTS idx_mails_gmail_dedup;");
+        // Rebuild only on upgrades — DROP forced a full index rebuild every start.
+        if prev_version < SCHEMA_VERSION {
+            let _ = conn.execute_batch("DROP INDEX IF EXISTS idx_mails_gmail_dedup;");
+        }
         let _ = conn.execute_batch(
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_mails_gmail_dedup ON mails(account_id, folder_id, message_id) \
              WHERE uid IS NULL AND message_id IS NOT NULL AND message_id != '';"
@@ -401,7 +409,9 @@ impl Database {
         // Ensure IMAP UID dedup index exists — the table-level UNIQUE(account_id, folder_id, uid)
         // is not applied to databases created before it was added (CREATE TABLE IF NOT EXISTS
         // does not alter existing tables). This explicit index enforces uniqueness retroactively.
-        let _ = conn.execute_batch("DROP INDEX IF EXISTS idx_mails_imap_uid_dedup;");
+        if prev_version < SCHEMA_VERSION {
+            let _ = conn.execute_batch("DROP INDEX IF EXISTS idx_mails_imap_uid_dedup;");
+        }
         let _ = conn.execute_batch(
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_mails_imap_uid_dedup ON mails(account_id, folder_id, uid) WHERE uid IS NOT NULL;"
         );
@@ -409,12 +419,21 @@ impl Database {
         // Fix attachments incorrectly marked as inline — many email clients
         // set Content-Disposition: inline for PDFs and other file attachments.
         // Only images with a Content-ID are genuinely inline (embedded in HTML).
-        let fixed_inline = conn.execute(
-            "UPDATE attachments SET is_inline = 0 WHERE is_inline = 1 AND (mime_type IS NULL OR mime_type NOT LIKE 'image/%')",
-            [],
-        ).unwrap_or(0);
-        if fixed_inline > 0 {
-            log::info!("DB cleanup: fixed {} non-image attachments incorrectly marked as inline", fixed_inline);
+        // Signature parts are non-image AND inline by design (v36) — exclude them.
+        if prev_version < SCHEMA_VERSION {
+            let fixed_inline = conn.execute(
+                "UPDATE attachments SET is_inline = 0
+                 WHERE is_inline = 1
+                   AND (mime_type IS NULL OR mime_type NOT LIKE 'image/%')
+                   AND LOWER(COALESCE(filename,'')) NOT LIKE '%.p7s'
+                   AND LOWER(COALESCE(filename,'')) NOT LIKE '%.p7m'
+                   AND LOWER(COALESCE(mime_type,'')) NOT LIKE '%pkcs7%'
+                   AND LOWER(COALESCE(mime_type,'')) NOT LIKE '%pgp-signature%'",
+                [],
+            ).unwrap_or(0);
+            if fixed_inline > 0 {
+                log::info!("DB cleanup: fixed {} non-image attachments incorrectly marked as inline", fixed_inline);
+            }
         }
 
         // Only bump version AFTER all migrations have run
