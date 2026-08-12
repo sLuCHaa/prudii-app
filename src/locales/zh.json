@@ -656,6 +656,7 @@
   },
   "signature": {
     "visual": "可视化",
+    "preview": "预览",
     "html": "HTML",
     "plainText": "纯文本",
     "insertImage": "插入图片",

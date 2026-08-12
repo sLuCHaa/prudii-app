@@ -656,6 +656,7 @@
   },
   "signature": {
     "visual": "Visual",
+    "preview": "Vista previa",
     "html": "HTML",
     "plainText": "Texto plano",
     "insertImage": "Insertar imagen",

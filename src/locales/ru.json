@@ -658,6 +658,7 @@
   },
   "signature": {
     "visual": "Визуально",
+    "preview": "Просмотр",
     "html": "HTML",
     "plainText": "Обычный текст",
     "insertImage": "Вставить изображение",
