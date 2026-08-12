@@ -114,20 +114,36 @@ describe("derivePlainText", () => {
 });
 
 describe("htmlToPlainLines", () => {
+  it("returns a single line for a single div", () => {
+    expect(htmlToPlainLines("<div>A</div>")).toBe("A");
+  });
+
   it("round-trips two div lines to two text lines", () => {
-    expect(htmlToPlainLines("<div>Hello</div><div>World</div>")).toBe("Hello\nWorld");
+    expect(htmlToPlainLines("<div>A</div><div>B</div>")).toBe("A\nB");
+  });
+
+  it("keeps a blank line in the middle", () => {
+    expect(htmlToPlainLines("<div>A</div><div><br></div><div>B</div>")).toBe("A\n\nB");
+  });
+
+  it("keeps a trailing empty line instead of eating it", () => {
+    expect(htmlToPlainLines("<div>A</div><div><br></div>")).toBe("A\n");
+  });
+
+  it("keeps a leading empty line instead of eating it", () => {
+    expect(htmlToPlainLines("<div><br></div><div>Hello</div>")).toBe("\nHello");
+  });
+
+  it("keeps a leading empty line when it's the only content", () => {
+    expect(htmlToPlainLines("<div><br></div><div><br></div>")).toBe("\n");
   });
 
   it("treats a lone <br> placeholder div as a single empty line", () => {
     expect(htmlToPlainLines("<div><br></div>")).toBe("");
   });
 
-  it("keeps a trailing empty line instead of eating it", () => {
-    expect(htmlToPlainLines("<div>Hello</div><div><br></div>")).toBe("Hello\n");
-  });
-
   it("decodes entities back to literal characters", () => {
-    expect(htmlToPlainLines("<div>&lt;b&gt;</div>")).toBe("<b>");
+    expect(htmlToPlainLines("<div>&lt;</div>")).toBe("<");
   });
 
   it("returns an empty string for an empty signature", () => {

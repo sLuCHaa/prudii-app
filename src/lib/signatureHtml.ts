@@ -77,41 +77,57 @@ export function derivePlainText(html: string): string {
 // one feeds a live textarea, where the very last line is very often still blank
 // (the user just pressed Enter) and trimming it would erase the newline again —
 // reintroducing the bug this function exists to fix. Do not merge the two.
+//
+// Narrow contract: this only ever runs on the unstructured branch (`hasStructure()`
+// is false), where `commitPlainText` below is the sole producer of the HTML — one
+// top-level <div> per line, `<br>` as filler for a blank line. That one-block-per-
+// line shape is inverted directly here rather than tracked with running state, so
+// there is no "are we at the start of the document" case left to get wrong. It does
+// not attempt to handle nested divs or arbitrary pasted markup.
+function isBrOnlyChild(el: Element): boolean {
+  const only = el.firstChild;
+  return (
+    el.childNodes.length === 1 &&
+    only !== null &&
+    only.nodeType === Node.ELEMENT_NODE &&
+    (only as Element).tagName === "BR"
+  );
+}
+
+function blockToLine(el: Element): string {
+  // `commitPlainText` renders a blank line as `<div><br></div>` — that <br> is
+  // filler so the empty div doesn't visually collapse, not a real line break.
+  if (isBrOnlyChild(el)) return "";
+  let text = "";
+  function walk(node: ParentNode) {
+    node.childNodes.forEach((child) => {
+      if (child.nodeType === Node.TEXT_NODE) {
+        text += (child as Text).data;
+      } else if (child.nodeType === Node.ELEMENT_NODE) {
+        const childEl = child as Element;
+        if (childEl.tagName === "BR") {
+          text += "\n";
+        } else {
+          walk(childEl);
+        }
+      }
+    });
+  }
+  walk(el);
+  return text;
+}
+
 export function htmlToPlainLines(html: string): string {
   const doc = new DOMParser().parseFromString(sanitizeSignatureHtml(html), "text/html");
   doc.querySelectorAll("style, script, head").forEach((el) => el.remove());
 
-  const lines: string[] = [""];
   const BLOCK = new Set(["DIV", "P"]);
-  const atLineStart = () => lines.length === 1 && lines[0] === "";
+  const blocks = Array.from(doc.body.children).filter((el) => BLOCK.has(el.tagName));
+  // No top-level div/p at all — e.g. an empty signature, or bare text with no
+  // wrapping block. Fall back to the raw text content rather than producing nothing.
+  if (blocks.length === 0) return doc.body.textContent ?? "";
 
-  function walk(node: ParentNode) {
-    node.childNodes.forEach((child) => {
-      if (child.nodeType === Node.TEXT_NODE) {
-        lines[lines.length - 1] += (child as Text).data;
-        return;
-      }
-      if (child.nodeType !== Node.ELEMENT_NODE) return;
-      const el = child as Element;
-      if (el.tagName === "BR") {
-        // `commitPlainText` renders a blank line as `<div><br></div>` — the <br>
-        // there is filler so the empty div doesn't visually collapse, not a real
-        // line break, so a <br> that is its parent's only child adds no line.
-        if (el.parentElement?.childNodes.length === 1) return;
-        lines.push("");
-        return;
-      }
-      if (BLOCK.has(el.tagName)) {
-        if (!atLineStart()) lines.push("");
-        walk(el);
-        return;
-      }
-      walk(el);
-    });
-  }
-
-  walk(doc.body);
-  return lines.join("\n");
+  return blocks.map(blockToLine).join("\n");
 }
 
 // The guillemets and spaces cannot occur inside base64, so a placeholder is
