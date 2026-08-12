@@ -3,6 +3,7 @@ import {
   parseSignature,
   setSignatureText,
   derivePlainText,
+  htmlToPlainLines,
   buildPreviewHtml,
   collapseDataUris,
   expandDataUris,
@@ -109,6 +110,28 @@ describe("derivePlainText", () => {
     expect(text).toContain("Patrick");
     expect(text).toContain("Developer");
     expect(text).not.toContain("color:red");
+  });
+});
+
+describe("htmlToPlainLines", () => {
+  it("round-trips two div lines to two text lines", () => {
+    expect(htmlToPlainLines("<div>Hello</div><div>World</div>")).toBe("Hello\nWorld");
+  });
+
+  it("treats a lone <br> placeholder div as a single empty line", () => {
+    expect(htmlToPlainLines("<div><br></div>")).toBe("");
+  });
+
+  it("keeps a trailing empty line instead of eating it", () => {
+    expect(htmlToPlainLines("<div>Hello</div><div><br></div>")).toBe("Hello\n");
+  });
+
+  it("decodes entities back to literal characters", () => {
+    expect(htmlToPlainLines("<div>&lt;b&gt;</div>")).toBe("<b>");
+  });
+
+  it("returns an empty string for an empty signature", () => {
+    expect(htmlToPlainLines("")).toBe("");
   });
 });
 

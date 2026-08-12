@@ -69,6 +69,51 @@ export function derivePlainText(html: string): string {
   return (doc.body?.textContent ?? "").replace(/^\s+/, "").trimEnd();
 }
 
+// Converts the plain (`div`/`p`/`br`, no attributes) HTML produced by the plain-text
+// tab back into editable multi-line text, preserving line structure so a controlled
+// textarea can be driven directly off it without eating newlines the user just typed.
+// Deliberately separate from `derivePlainText`: that function is for the *stored*
+// `signature_text`, where trailing blank lines are noise and get trimmed away; this
+// one feeds a live textarea, where the very last line is very often still blank
+// (the user just pressed Enter) and trimming it would erase the newline again —
+// reintroducing the bug this function exists to fix. Do not merge the two.
+export function htmlToPlainLines(html: string): string {
+  const doc = new DOMParser().parseFromString(sanitizeSignatureHtml(html), "text/html");
+  doc.querySelectorAll("style, script, head").forEach((el) => el.remove());
+
+  const lines: string[] = [""];
+  const BLOCK = new Set(["DIV", "P"]);
+  const atLineStart = () => lines.length === 1 && lines[0] === "";
+
+  function walk(node: ParentNode) {
+    node.childNodes.forEach((child) => {
+      if (child.nodeType === Node.TEXT_NODE) {
+        lines[lines.length - 1] += (child as Text).data;
+        return;
+      }
+      if (child.nodeType !== Node.ELEMENT_NODE) return;
+      const el = child as Element;
+      if (el.tagName === "BR") {
+        // `commitPlainText` renders a blank line as `<div><br></div>` — the <br>
+        // there is filler so the empty div doesn't visually collapse, not a real
+        // line break, so a <br> that is its parent's only child adds no line.
+        if (el.parentElement?.childNodes.length === 1) return;
+        lines.push("");
+        return;
+      }
+      if (BLOCK.has(el.tagName)) {
+        if (!atLineStart()) lines.push("");
+        walk(el);
+        return;
+      }
+      walk(el);
+    });
+  }
+
+  walk(doc.body);
+  return lines.join("\n");
+}
+
 // The guillemets and spaces cannot occur inside base64, so a placeholder is
 // always distinguishable from real payload.
 const PLACEHOLDER = /‹Bild (\d+) · [^›]*›/g;

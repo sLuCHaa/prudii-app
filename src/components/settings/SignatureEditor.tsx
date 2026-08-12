@@ -7,6 +7,7 @@ import {
   derivePlainText,
   expandDataUris,
   hasStructure,
+  htmlToPlainLines,
 } from "../../lib/signatureHtml";
 import { SignaturePreviewEditor } from "./SignaturePreviewEditor";
 
@@ -119,7 +120,7 @@ export function SignatureEditor({ htmlValue, textValue, onChange }: SignatureEdi
               </p>
             )}
             <textarea
-              value={structured ? derivedText : html.replace(/<[^>]*>/g, "")}
+              value={structured ? derivedText : htmlToPlainLines(html)}
               readOnly={structured}
               onChange={(e) => commitPlainText(e.target.value)}
               className="w-full p-3 min-h-[240px] text-sm text-text bg-transparent resize-y disabled:opacity-60"
