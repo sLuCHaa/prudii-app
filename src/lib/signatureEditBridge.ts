@@ -8,7 +8,7 @@
 //
 //   node -e "const c=require('crypto');const m=require('fs').readFileSync('src/lib/signatureEditBridge.ts','utf8').match(/SIGNATURE_EDIT_BRIDGE = \`([\s\S]*?)\`;/)[1];console.log('sha256-'+c.createHash('sha256').update(m,'utf8').digest('base64'))"
 //
-export const SIGNATURE_EDIT_BRIDGE = `(function(){document.addEventListener('input',function(e){var t=e.target;if(!t||!t.getAttribute)return;var i=t.getAttribute('data-sig-text');if(i===null)return;try{parent.postMessage({__prudiiSigEdit:{index:Number(i),text:t.textContent||''}},'*');}catch(_){}},true);document.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();}},true);})();`;
+export const SIGNATURE_EDIT_BRIDGE = `(function(){document.addEventListener('input',function(e){var t=e.target;if(!t||!t.getAttribute)return;var i=t.getAttribute('data-sig-text');if(i===null)return;try{parent.postMessage({__prudiiSigEdit:{index:Number(i),text:t.textContent||''}},'*');}catch(_){}},true);document.addEventListener('keydown',function(e){var t=e.target;if(!t||!t.getAttribute||t.getAttribute('data-sig-text')===null)return;if(e.key==='Enter'){e.preventDefault();}},true);})();`;
 
 // SHA-256 of SIGNATURE_EDIT_BRIDGE (filled in by the regenerate command above).
-export const SIGNATURE_EDIT_BRIDGE_CSP_HASH = "sha256-G6VCV2xFxy0kSzpn13q2x+eAN55Lwtr43ET6gPtnzVc=";
+export const SIGNATURE_EDIT_BRIDGE_CSP_HASH = "sha256-TXxKmjdlBr/Ifss8Da3ts62ucz6j5CWVJf3L00kcV8I=";
