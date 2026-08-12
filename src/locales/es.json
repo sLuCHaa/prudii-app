@@ -659,7 +659,12 @@
     "html": "HTML",
     "plainText": "Texto plano",
     "insertImage": "Insertar imagen",
-    "imageTooLarge": "Imagen demasiado grande. El tamaño máximo es 500KB."
+    "imageTooLarge": "Imagen demasiado grande. El tamaño máximo es 500KB.",
+    "emptyPreview": "Aún no hay firma — cambia a Texto o HTML para crear una.",
+    "previewTitle": "Vista previa de la firma",
+    "derivedFromHtml": "Generado a partir de la firma HTML.",
+    "imagesCollapsed": "Las imágenes incrustadas se acortan para facilitar la lectura y se restauran al guardar.",
+    "sanitized": "Se eliminó el marcado inseguro al guardar."
   },
   "folderColors": {
     "none": "Ninguno",

@@ -659,7 +659,12 @@
     "html": "HTML",
     "plainText": "Texte brut",
     "insertImage": "Insérer une image",
-    "imageTooLarge": "Image trop volumineuse. La taille maximale est de 500 Ko."
+    "imageTooLarge": "Image trop volumineuse. La taille maximale est de 500 Ko.",
+    "emptyPreview": "Pas encore de signature — passez en mode Texte ou HTML pour en créer une.",
+    "previewTitle": "Aperçu de la signature",
+    "derivedFromHtml": "Généré à partir de la signature HTML.",
+    "imagesCollapsed": "Les images intégrées sont raccourcies pour la lisibilité et restaurées à l'enregistrement.",
+    "sanitized": "Le balisage non sécurisé a été supprimé lors de l'enregistrement."
   },
   "folderColors": {
     "none": "Aucun",

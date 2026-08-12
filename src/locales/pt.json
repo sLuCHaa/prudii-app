@@ -659,7 +659,12 @@
     "html": "HTML",
     "plainText": "Texto Simples",
     "insertImage": "Inserir imagem",
-    "imageTooLarge": "Imagem muito grande. O tamanho máximo é 500KB."
+    "imageTooLarge": "Imagem muito grande. O tamanho máximo é 500KB.",
+    "emptyPreview": "Ainda não há assinatura — mude para Texto ou HTML para criar uma.",
+    "previewTitle": "Pré-visualização da assinatura",
+    "derivedFromHtml": "Gerado a partir da assinatura HTML.",
+    "imagesCollapsed": "As imagens incorporadas são reduzidas para facilitar a leitura e restauradas ao salvar.",
+    "sanitized": "Marcação insegura foi removida ao salvar."
   },
   "folderColors": {
     "none": "Nenhuma",

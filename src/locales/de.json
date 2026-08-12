@@ -659,7 +659,12 @@
     "html": "HTML",
     "plainText": "Nur Text",
     "insertImage": "Bild einfügen",
-    "imageTooLarge": "Bild zu groß. Maximale Größe ist 500 KB."
+    "imageTooLarge": "Bild zu groß. Maximale Größe ist 500 KB.",
+    "emptyPreview": "Noch keine Signatur — über Text oder HTML anlegen.",
+    "previewTitle": "Signatur-Vorschau",
+    "derivedFromHtml": "Wird aus der HTML-Signatur erzeugt.",
+    "imagesCollapsed": "Eingebettete Bilder sind gekürzt dargestellt und werden beim Speichern wiederhergestellt.",
+    "sanitized": "Beim Speichern wurde unsicheres Markup entfernt."
   },
   "folderColors": {
     "none": "Keine",

@@ -659,7 +659,12 @@
     "html": "HTML",
     "plainText": "Plain Text",
     "insertImage": "Insert image",
-    "imageTooLarge": "Image too large. Maximum size is 500KB."
+    "imageTooLarge": "Image too large. Maximum size is 500KB.",
+    "emptyPreview": "No signature yet — switch to Text or HTML to create one.",
+    "previewTitle": "Signature preview",
+    "derivedFromHtml": "Generated from the HTML signature.",
+    "imagesCollapsed": "Embedded images are shortened for readability and restored on save.",
+    "sanitized": "Unsafe markup was removed while saving."
   },
   "folderColors": {
     "none": "None",

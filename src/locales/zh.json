@@ -659,7 +659,12 @@
     "html": "HTML",
     "plainText": "纯文本",
     "insertImage": "插入图片",
-    "imageTooLarge": "图片过大。最大大小为 500KB。"
+    "imageTooLarge": "图片过大。最大大小为 500KB。",
+    "emptyPreview": "暂无签名 — 切换到文本或 HTML 以创建一个。",
+    "previewTitle": "签名预览",
+    "derivedFromHtml": "由 HTML 签名生成。",
+    "imagesCollapsed": "嵌入的图片已缩短以便阅读，保存时会恢复。",
+    "sanitized": "保存时已移除不安全的标记。"
   },
   "folderColors": {
     "none": "无",
