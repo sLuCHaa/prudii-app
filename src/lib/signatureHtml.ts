@@ -86,14 +86,11 @@ export function collapseDataUris(html: string): { html: string; images: string[]
 }
 
 export function expandDataUris(html: string, images: string[]): string {
-  return html.replace(
-    new RegExp(`data:[a-z0-9.+/-]+;base64,${PLACEHOLDER.source}`, "g"),
-    (match, n) => {
-      const uri = images[Number(n) - 1];
-      if (!uri) return match;
-      return uri;
-    }
-  );
+  return html.replace(PLACEHOLDER, (match, n) => {
+    const uri = images[Number(n) - 1];
+    if (!uri) return match;
+    return uri.slice(uri.indexOf(",") + 1);
+  });
 }
 
 export function hasStructure(html: string): boolean {
