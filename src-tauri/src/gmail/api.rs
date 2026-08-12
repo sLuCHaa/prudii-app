@@ -473,6 +473,39 @@ impl GmailClient {
         }
     }
 
+    /// Restore a message from the trash. Gmail exposes a dedicated endpoint for
+    /// this; it also restores the labels the message carried before it was trashed.
+    pub async fn untrash_message(&self, id: &str) -> Result<()> {
+        let url = format!("{}/messages/{}/untrash", BASE_URL, id);
+
+        let mut attempt = 0u32;
+        loop {
+            let resp = self.http
+                .post(&url)
+                .header("Authorization", self.auth_header())
+                .header("Content-Length", "0")
+                .send()
+                .await
+                .context("untrash_message request failed")?;
+
+            let status = resp.status();
+            if status.is_success() {
+                return Ok(());
+            }
+
+            attempt += 1;
+            if Self::is_retryable(status) && attempt <= 3 {
+                let delay = std::time::Duration::from_millis(1000 * 2u64.pow(attempt - 1));
+                log::warn!("untrash_message {}: {} on attempt {}, retrying in {:?}", id, status, attempt, delay);
+                tokio::time::sleep(delay).await;
+                continue;
+            }
+
+            let body = resp.text().await.unwrap_or_default();
+            bail!("untrash_message {} failed ({}): {}", id, status, body);
+        }
+    }
+
     pub async fn delete_message(&self, id: &str) -> Result<()> {
         let url = format!("{}/messages/{}", BASE_URL, id);
 

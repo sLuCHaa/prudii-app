@@ -295,8 +295,13 @@ pub async fn initial_sync_folder(
                 .filter_map(|r| r.ok()).collect();
             result
         } else {
+            // Mails filed into a local folder still carry this folder's label on
+            // the server. They must count as known, or every sync would pull them
+            // back in as new and leave a duplicate behind.
             let mut stmt = conn.prepare(
-                "SELECT message_id FROM mails WHERE account_id = ?1 AND folder_id = ?2 AND message_id IS NOT NULL"
+                "SELECT message_id FROM mails WHERE account_id = ?1 AND message_id IS NOT NULL \
+                 AND (folder_id = ?2 OR folder_id IN \
+                      (SELECT id FROM folders WHERE account_id = ?1 AND COALESCE(is_local, 0) = 1))"
             )?;
             let result = stmt.query_map(rusqlite::params![account_id, folder.id], |row| row.get::<_, String>(0))?
                 .filter_map(|r| r.ok()).collect();

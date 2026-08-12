@@ -2086,8 +2086,39 @@ pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id:
     Ok(())
 }
 
+/// Re-home a mail in the local DB without touching the server, keeping the
+/// folder counters straight. Used for local-only folders.
+fn move_mail_locally(db: &Database, mail_id: &str, dest_folder_id: &str) -> Result<(), String> {
+    let conn = db.lock_db();
+    let (source_fid, is_read): (String, bool) = conn.query_row(
+        "SELECT folder_id, is_read FROM mails WHERE id = ?1",
+        rusqlite::params![mail_id],
+        |row| Ok((row.get(0)?, row.get::<_, i32>(1)? != 0)),
+    ).map_err(|e| format!("Mail not found: {}", e))?;
+
+    // `uid` is deliberately kept: the message is untouched on the server, so the
+    // identifier stays valid if it is ever moved back out of the local folder.
+    conn.execute(
+        "UPDATE mails SET folder_id = ?1 WHERE id = ?2",
+        rusqlite::params![dest_folder_id, mail_id],
+    ).map_err(|e| e.to_string())?;
+
+    if !source_fid.is_empty() {
+        let _ = conn.execute("UPDATE folders SET total_count = MAX(0, total_count - 1) WHERE id = ?1", rusqlite::params![source_fid]);
+        if !is_read {
+            let _ = conn.execute("UPDATE folders SET unread_count = MAX(0, unread_count - 1) WHERE id = ?1", rusqlite::params![source_fid]);
+        }
+    }
+    let _ = conn.execute("UPDATE folders SET total_count = total_count + 1 WHERE id = ?1", rusqlite::params![dest_folder_id]);
+    if !is_read {
+        let _ = conn.execute("UPDATE folders SET unread_count = unread_count + 1 WHERE id = ?1", rusqlite::params![dest_folder_id]);
+    }
+    Ok(())
+}
+
 /// Move a mail to a different folder (both locally and on server).
-/// IMAP operation runs first; local DB is only updated on success.
+/// The server operation runs first; local DB is only updated on success.
+/// Local-only folders are handled entirely in the DB.
 #[tauri::command]
 pub async fn move_mail(
     db: State<'_, Database>,
@@ -2095,47 +2126,37 @@ pub async fn move_mail(
     mail_id: String,
     dest_folder_id: String,
 ) -> Result<(), String> {
+    // A local folder has no counterpart on the server — its `path` is just the
+    // display name, so it must never be sent as a label or mailbox name.
+    let (dest_path, dest_is_local): (String, bool) = {
+        let conn = db.lock_db();
+        conn.query_row(
+            "SELECT path, COALESCE(is_local, 0) FROM folders WHERE id = ?1",
+            rusqlite::params![dest_folder_id],
+            |row| Ok((row.get(0)?, row.get::<_, i32>(1)? != 0)),
+        ).map_err(|e| format!("Destination folder not found: {}", e))?
+    };
+    let (source_path, source_is_local): (String, bool) = {
+        let conn = db.lock_db();
+        conn.query_row(
+            "SELECT f.path, COALESCE(f.is_local, 0) FROM mails m JOIN folders f ON m.folder_id = f.id WHERE m.id = ?1",
+            rusqlite::params![mail_id],
+            |row| Ok((row.get(0)?, row.get::<_, i32>(1)? != 0)),
+        ).map_err(|e| format!("Mail not found: {}", e))?
+    };
+
+    if dest_is_local {
+        return move_mail_locally(&db, &mail_id, &dest_folder_id);
+    }
+
     if let Some((api_msg_id, account_id)) = get_api_message_id(&db, &mail_id) {
         let (api_type, provider, auth_type) = get_api_type(&db, &account_id);
         match api_type {
             ApiType::Gmail => {
-                let (source_label, dest_label) = {
-                    let conn = db.lock_db();
-                    let source: String = conn.query_row(
-                        "SELECT f.path FROM mails m JOIN folders f ON m.folder_id = f.id WHERE m.id = ?1",
-                        rusqlite::params![mail_id],
-                        |row| row.get(0),
-                    ).map_err(|e| format!("Mail not found: {}", e))?;
-                    let dest: String = conn.query_row(
-                        "SELECT path FROM folders WHERE id = ?1",
-                        rusqlite::params![dest_folder_id],
-                        |row| row.get(0),
-                    ).map_err(|e| format!("Folder not found: {}", e))?;
-                    (source, dest)
-                };
-
-                {
-                    let conn = db.lock_db();
-                    let (source_fid, is_read): (String, bool) = conn.query_row(
-                        "SELECT folder_id, is_read FROM mails WHERE id = ?1",
-                        rusqlite::params![mail_id],
-                        |row| Ok((row.get(0)?, row.get::<_, i32>(1)? != 0)),
-                    ).unwrap_or_default();
-                    let _ = conn.execute(
-                        "UPDATE mails SET folder_id = ?1, uid = NULL WHERE id = ?2",
-                        rusqlite::params![dest_folder_id, mail_id],
-                    );
-                    if !source_fid.is_empty() {
-                        let _ = conn.execute("UPDATE folders SET total_count = MAX(0, total_count - 1) WHERE id = ?1", rusqlite::params![source_fid]);
-                        if !is_read {
-                            let _ = conn.execute("UPDATE folders SET unread_count = MAX(0, unread_count - 1) WHERE id = ?1", rusqlite::params![source_fid]);
-                        }
-                    }
-                    let _ = conn.execute("UPDATE folders SET total_count = total_count + 1 WHERE id = ?1", rusqlite::params![dest_folder_id]);
-                    if !is_read {
-                        let _ = conn.execute("UPDATE folders SET unread_count = unread_count + 1 WHERE id = ?1", rusqlite::params![dest_folder_id]);
-                    }
-                }
+                // Coming out of a local folder there is no label to strip — the
+                // message still carries whatever labels it had on the server.
+                let source_label = if source_is_local { String::new() } else { source_path.clone() };
+                let dest_label = dest_path.clone();
 
                 let credential = credentials::resolve_credential(&account_id, &auth_type, &provider)
                     .await
@@ -2145,18 +2166,8 @@ pub async fn move_mail(
                     .await
                     .map_err(|e| format!("Gmail move failed: {}", e))?;
 
-                return Ok(());
-            }
-            ApiType::Outlook => {
-                let dest_path: String = {
-                    let conn = db.lock_db();
-                    conn.query_row(
-                        "SELECT path FROM folders WHERE id = ?1",
-                        rusqlite::params![dest_folder_id],
-                        |row| row.get(0),
-                    ).map_err(|e| format!("Folder not found: {}", e))?
-                };
-
+                // Server first — a failed move must leave the mail where it is
+                // instead of stranding it in a folder it never reached.
                 {
                     let conn = db.lock_db();
                     let (source_fid, is_read): (String, bool) = conn.query_row(
@@ -2180,6 +2191,11 @@ pub async fn move_mail(
                     }
                 }
 
+                return Ok(());
+            }
+            ApiType::Outlook => {
+                // Graph addresses messages by their own id, so a move works the
+                // same whether the mail currently sits in a local folder or not.
                 let credential = credentials::resolve_credential(&account_id, &auth_type, &provider)
                     .await
                     .map_err(|e| format!("Credentials: {}", e))?;
@@ -2187,13 +2203,31 @@ pub async fn move_mail(
                 let new_graph_id = outlook::messages::move_message(&client, &api_msg_id, &dest_path)
                     .await
                     .map_err(|e| format!("Outlook move failed: {}", e))?;
-                // Graph IDs change on move — persist the new one
+
+                // Server first — a failed move must leave the mail where it is
+                // instead of stranding it in a folder it never reached.
                 {
                     let conn = db.lock_db();
+                    let (source_fid, is_read): (String, bool) = conn.query_row(
+                        "SELECT folder_id, is_read FROM mails WHERE id = ?1",
+                        rusqlite::params![mail_id],
+                        |row| Ok((row.get(0)?, row.get::<_, i32>(1)? != 0)),
+                    ).unwrap_or_default();
+                    // Graph IDs change on move — persist the new one
                     let _ = conn.execute(
-                        "UPDATE mails SET message_id = ?1 WHERE id = ?2",
-                        rusqlite::params![new_graph_id, mail_id],
+                        "UPDATE mails SET folder_id = ?1, uid = NULL, message_id = ?2 WHERE id = ?3",
+                        rusqlite::params![dest_folder_id, new_graph_id, mail_id],
                     );
+                    if !source_fid.is_empty() {
+                        let _ = conn.execute("UPDATE folders SET total_count = MAX(0, total_count - 1) WHERE id = ?1", rusqlite::params![source_fid]);
+                        if !is_read {
+                            let _ = conn.execute("UPDATE folders SET unread_count = MAX(0, unread_count - 1) WHERE id = ?1", rusqlite::params![source_fid]);
+                        }
+                    }
+                    let _ = conn.execute("UPDATE folders SET total_count = total_count + 1 WHERE id = ?1", rusqlite::params![dest_folder_id]);
+                    if !is_read {
+                        let _ = conn.execute("UPDATE folders SET unread_count = unread_count + 1 WHERE id = ?1", rusqlite::params![dest_folder_id]);
+                    }
                 }
 
                 return Ok(());
@@ -2202,27 +2236,31 @@ pub async fn move_mail(
         }
     }
 
+    // A local folder keeps no record of the mailbox the mail came from, and its
+    // UID belongs to that original mailbox — so there is nothing to MOVE from.
+    if source_is_local {
+        return Err(
+            "This mail sits in a local folder and has no counterpart on the server to move. \
+             Move it back from the folder it was filed from, or file it locally instead."
+                .to_string(),
+        );
+    }
+
     // Gather info needed for the move (read-only DB access).
     // `uid` is Option<u32> because a prior move/archive may have cleared it locally
     // before the next sync re-learned the new UID. We fall back to a Message-ID
     // search on the server when missing.
-    let (account_id, source_folder_path, dest_folder_path, uid_opt, message_id, imap_host, imap_port, email, auth_type, provider) = {
+    let source_folder_path = source_path;
+    let dest_folder_path = dest_path;
+    let (account_id, uid_opt, message_id, imap_host, imap_port, email, auth_type, provider) = {
         let conn = db.lock_db();
 
-        let (account_id, source_folder_path, uid_opt, message_id): (String, String, Option<u32>, String) = conn.query_row(
-            "SELECT m.account_id, f.path, m.uid, COALESCE(m.message_id, '') FROM mails m JOIN folders f ON m.folder_id = f.id WHERE m.id = ?1",
+        let (account_id, uid_opt, message_id): (String, Option<u32>, String) = conn.query_row(
+            "SELECT m.account_id, m.uid, COALESCE(m.message_id, '') FROM mails m WHERE m.id = ?1",
             rusqlite::params![mail_id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get::<_, Option<u32>>(2)?, row.get(3)?)),
+            |row| Ok((row.get(0)?, row.get::<_, Option<u32>>(1)?, row.get(2)?)),
         )
         .map_err(|e| format!("Mail not found: {}", e))?;
-
-        let dest_folder_path: String = conn
-            .query_row(
-                "SELECT path FROM folders WHERE id = ?1",
-                rusqlite::params![dest_folder_id],
-                |row| row.get(0),
-            )
-            .map_err(|e| format!("Destination folder not found: {}", e))?;
 
         let (imap_host, imap_port, email, auth_type, provider): (String, i32, String, String, String) = conn.query_row(
             "SELECT imap_host, imap_port, email, auth_type, provider FROM accounts WHERE id = ?1",
@@ -2231,7 +2269,7 @@ pub async fn move_mail(
         )
         .map_err(|e| format!("Account not found: {}", e))?;
 
-        (account_id, source_folder_path, dest_folder_path, uid_opt, message_id, imap_host, imap_port, email, auth_type, provider)
+        (account_id, uid_opt, message_id, imap_host, imap_port, email, auth_type, provider)
     };
 
     let credential = credentials::resolve_credential(&account_id, &auth_type, &provider)
@@ -4451,5 +4489,81 @@ mod thread_dedupe_tests {
         ];
         let out = dedupe_thread_copies(mails);
         assert_eq!(out.len(), 2);
+    }
+}
+
+#[cfg(test)]
+mod local_move_tests {
+    use super::move_mail_locally;
+    use crate::db::Database;
+
+    /// Build a throwaway DB holding one account, an INBOX and a local folder,
+    /// plus a single unread mail sitting in the INBOX.
+    fn fixture(tag: &str) -> Database {
+        let dir = std::env::temp_dir().join(format!("prudii-local-move-{}", tag));
+        let _ = std::fs::remove_dir_all(&dir);
+        let db = Database::new(dir).expect("temp db");
+        {
+            let conn = db.lock_db();
+            conn.execute(
+                "INSERT INTO accounts (id, email, display_name, provider, imap_host, smtp_host) \
+                 VALUES ('acc', 'a@x.de', 'A', 'google', 'imap.x.de', 'smtp.x.de')",
+                [],
+            ).unwrap();
+            conn.execute(
+                "INSERT INTO folders (id, account_id, name, folder_type, path, unread_count, total_count) \
+                 VALUES ('inbox', 'acc', 'INBOX', 'inbox', 'INBOX', 1, 1)",
+                [],
+            ).unwrap();
+            conn.execute(
+                "INSERT INTO folders (id, account_id, name, folder_type, path, is_local, unread_count, total_count) \
+                 VALUES ('local', 'acc', 'Rechnungen', 'custom', 'Rechnungen', 1, 0, 0)",
+                [],
+            ).unwrap();
+            conn.execute(
+                "INSERT INTO mails (id, account_id, folder_id, message_id, uid, is_read) \
+                 VALUES ('m1', 'acc', 'inbox', '19ff67505b6aa372', 500, 0)",
+                [],
+            ).unwrap();
+        }
+        db
+    }
+
+    #[test]
+    fn filing_into_a_local_folder_rehomes_the_mail_and_keeps_its_uid() {
+        let db = fixture("rehome");
+        move_mail_locally(&db, "m1", "local").unwrap();
+
+        let conn = db.lock_db();
+        let (folder_id, uid): (String, Option<u32>) = conn.query_row(
+            "SELECT folder_id, uid FROM mails WHERE id = 'm1'",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        ).unwrap();
+        assert_eq!(folder_id, "local");
+        assert_eq!(uid, Some(500), "the server copy is untouched, so the UID stays valid");
+    }
+
+    #[test]
+    fn filing_into_a_local_folder_moves_both_counters() {
+        let db = fixture("counters");
+        move_mail_locally(&db, "m1", "local").unwrap();
+
+        let conn = db.lock_db();
+        let counts = |id: &str| -> (i64, i64) {
+            conn.query_row(
+                "SELECT total_count, unread_count FROM folders WHERE id = ?1",
+                rusqlite::params![id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            ).unwrap()
+        };
+        assert_eq!(counts("inbox"), (0, 0));
+        assert_eq!(counts("local"), (1, 1));
+    }
+
+    #[test]
+    fn an_unknown_mail_is_reported_rather_than_silently_ignored() {
+        let db = fixture("missing");
+        assert!(move_mail_locally(&db, "nope", "local").is_err());
     }
 }

@@ -148,11 +148,15 @@ pub async fn initial_sync_folder(
         return Ok(0);
     }
 
-    // 2. Filter out already-known message IDs
+    // 2. Filter out already-known message IDs.
+    // Mails filed into a local folder are still in this folder on the server, so
+    // they count as known — otherwise each sync would re-add them as duplicates.
     let existing_ids: HashSet<String> = {
         let conn = db.lock_db();
         let mut stmt = conn.prepare(
-            "SELECT message_id FROM mails WHERE account_id = ?1 AND folder_id = ?2 AND message_id IS NOT NULL"
+            "SELECT message_id FROM mails WHERE account_id = ?1 AND message_id IS NOT NULL \
+             AND (folder_id = ?2 OR folder_id IN \
+                  (SELECT id FROM folders WHERE account_id = ?1 AND COALESCE(is_local, 0) = 1))"
         )?;
         let result = stmt.query_map(rusqlite::params![account_id, folder.id], |row| row.get::<_, String>(0))?
             .filter_map(|r| r.ok()).collect();

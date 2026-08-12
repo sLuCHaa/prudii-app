@@ -226,8 +226,80 @@ pub async fn trash_message(client: &GmailClient, gmail_id: &str) -> Result<()> {
     client.trash_message(gmail_id).await
 }
 
+/// The app's synthetic "All Mail" folder. Gmail has no such label — a message is
+/// in All Mail simply by existing, so this id must never reach the API.
+pub const ALL_MAIL: &str = "ALL_MAIL";
+
+/// Gmail applies these itself and rejects them in `addLabelIds` with a 400.
+const NOT_APPLIABLE: [&str; 2] = ["SENT", "DRAFT"];
+
+/// How a folder-to-folder move maps onto Gmail label operations.
+#[derive(Debug, PartialEq, Eq)]
+pub struct GmailMovePlan {
+    /// Restore via the dedicated untrash endpoint instead of dropping the TRASH label.
+    pub untrash: bool,
+    /// Trash via the dedicated trash endpoint instead of applying the TRASH label.
+    pub trash: bool,
+    pub add: Vec<String>,
+    pub remove: Vec<String>,
+}
+
+/// Translate a move between two of the app's folders into Gmail label operations.
+///
+/// Gmail is a label store, not a folder tree, so a "move" is add-dest/remove-source.
+/// Three cases break that naive mapping and each produced a 400 before:
+///   - `ALL_MAIL` is our own invention and is not a real label id,
+///   - leaving the trash is done with the untrash endpoint,
+///   - `SENT`/`DRAFT` cannot be applied by hand.
+pub fn plan_gmail_move(source_label: &str, dest_label: &str) -> Result<GmailMovePlan> {
+    if NOT_APPLIABLE.contains(&dest_label) {
+        anyhow::bail!("Gmail does not allow moving messages into {}", dest_label);
+    }
+
+    let untrash = source_label == "TRASH";
+    let trash = dest_label == "TRASH";
+
+    // Never remove the synthetic All Mail id, and never remove TRASH by label —
+    // untrash handles that and also restores the message's previous labels.
+    let mut remove: Vec<String> = Vec::new();
+    if !untrash && source_label != ALL_MAIL && !source_label.is_empty() {
+        remove.push(source_label.to_string());
+    }
+
+    let mut add: Vec<String> = Vec::new();
+    if trash {
+        // The trash endpoint does the whole job; stripping the source label too
+        // would only lose where the message came from if it is restored later.
+        remove.clear();
+    } else if dest_label == ALL_MAIL {
+        // "All Mail" is this app's archive: keep the message, just take it out of
+        // the inbox. Needed after an untrash, which restores the INBOX label.
+        remove.push("INBOX".to_string());
+    } else if !dest_label.is_empty() {
+        add.push(dest_label.to_string());
+    }
+
+    Ok(GmailMovePlan { untrash, trash, add, remove })
+}
+
 pub async fn move_message(client: &GmailClient, gmail_id: &str, dest_label: &str, source_label: &str) -> Result<()> {
-    client.modify_message(gmail_id, &[dest_label], &[source_label]).await
+    let plan = plan_gmail_move(source_label, dest_label)?;
+
+    if plan.untrash {
+        client.untrash_message(gmail_id).await?;
+    }
+
+    if plan.trash {
+        client.trash_message(gmail_id).await?;
+    }
+
+    if plan.add.is_empty() && plan.remove.is_empty() {
+        return Ok(());
+    }
+
+    let add: Vec<&str> = plan.add.iter().map(String::as_str).collect();
+    let remove: Vec<&str> = plan.remove.iter().map(String::as_str).collect();
+    client.modify_message(gmail_id, &add, &remove).await
 }
 
 pub async fn archive_message(client: &GmailClient, gmail_id: &str) -> Result<()> {
@@ -321,5 +393,72 @@ fn sanitize_filename(name: &str) -> String {
         "attachment".to_string()
     } else {
         clean
+    }
+}
+
+#[cfg(test)]
+mod move_plan_tests {
+    use super::{plan_gmail_move, ALL_MAIL};
+
+    #[test]
+    fn trash_to_inbox_untrashes_instead_of_removing_the_trash_label() {
+        let plan = plan_gmail_move("TRASH", "INBOX").unwrap();
+        assert!(plan.untrash);
+        assert_eq!(plan.add, vec!["INBOX"]);
+        assert!(plan.remove.is_empty(), "TRASH must not be removed by label");
+    }
+
+    #[test]
+    fn trash_to_custom_label_untrashes_and_applies_the_label() {
+        let plan = plan_gmail_move("TRASH", "Label_79").unwrap();
+        assert!(plan.untrash);
+        assert_eq!(plan.add, vec!["Label_79"]);
+        assert!(plan.remove.is_empty());
+    }
+
+    #[test]
+    fn trash_to_all_mail_archives_rather_than_applying_a_fake_label() {
+        let plan = plan_gmail_move("TRASH", ALL_MAIL).unwrap();
+        assert!(plan.untrash);
+        assert!(!plan.add.iter().any(|l| l == ALL_MAIL), "ALL_MAIL is not a real label");
+        assert_eq!(plan.remove, vec!["INBOX"]);
+    }
+
+    #[test]
+    fn all_mail_is_never_sent_as_a_source_label() {
+        let plan = plan_gmail_move(ALL_MAIL, "INBOX").unwrap();
+        assert!(!plan.untrash);
+        assert_eq!(plan.add, vec!["INBOX"]);
+        assert!(plan.remove.is_empty());
+    }
+
+    #[test]
+    fn ordinary_label_move_still_swaps_labels() {
+        let plan = plan_gmail_move("INBOX", "Label_79").unwrap();
+        assert!(!plan.untrash);
+        assert_eq!(plan.add, vec!["Label_79"]);
+        assert_eq!(plan.remove, vec!["INBOX"]);
+    }
+
+    #[test]
+    fn spam_is_still_left_by_removing_its_label() {
+        let plan = plan_gmail_move("SPAM", "INBOX").unwrap();
+        assert!(!plan.untrash);
+        assert_eq!(plan.remove, vec!["SPAM"]);
+    }
+
+    #[test]
+    fn moving_into_the_trash_uses_the_trash_endpoint_not_a_label() {
+        let plan = plan_gmail_move("INBOX", "TRASH").unwrap();
+        assert!(plan.trash);
+        assert!(!plan.untrash);
+        assert!(plan.add.is_empty(), "TRASH must not be applied as a label");
+        assert!(plan.remove.is_empty());
+    }
+
+    #[test]
+    fn moving_into_sent_or_draft_is_rejected_up_front() {
+        assert!(plan_gmail_move("TRASH", "SENT").is_err());
+        assert!(plan_gmail_move("INBOX", "DRAFT").is_err());
     }
 }
