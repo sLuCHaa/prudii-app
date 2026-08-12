@@ -69,65 +69,82 @@ export function derivePlainText(html: string): string {
   return (doc.body?.textContent ?? "").replace(/^\s+/, "").trimEnd();
 }
 
-// Converts the plain (`div`/`p`/`br`, no attributes) HTML produced by the plain-text
-// tab back into editable multi-line text, preserving line structure so a controlled
-// textarea can be driven directly off it without eating newlines the user just typed.
-// Deliberately separate from `derivePlainText`: that function is for the *stored*
-// `signature_text`, where trailing blank lines are noise and get trimmed away; this
-// one feeds a live textarea, where the very last line is very often still blank
-// (the user just pressed Enter) and trimming it would erase the newline again —
-// reintroducing the bug this function exists to fix. Do not merge the two.
+// Converts HTML into editable multi-line text, preserving line structure. Used to
+// *seed* the plain-text tab's draft (see `plainDraft` in SignatureEditor) — never
+// called on every keystroke, so it does not need to be a perfect inverse of
+// anything; it just needs to produce a sensible starting point once, without
+// dropping content. Deliberately separate from `derivePlainText`: that function is
+// for the *stored* `signature_text`, where trailing blank lines are noise and get
+// trimmed away; trimming here would eat a leading/trailing blank line that is part
+// of what's being seeded. Do not merge the two.
 //
-// Narrow contract: this only ever runs on the unstructured branch (`hasStructure()`
-// is false), where `commitPlainText` below is the sole producer of the HTML — one
-// top-level <div> per line, `<br>` as filler for a blank line. That one-block-per-
-// line shape is inverted directly here rather than tracked with running state, so
-// there is no "are we at the start of the document" case left to get wrong. It does
-// not attempt to handle nested divs or arbitrary pasted markup.
-function isBrOnlyChild(el: Element): boolean {
-  const only = el.firstChild;
-  return (
-    el.childNodes.length === 1 &&
-    only !== null &&
-    only.nodeType === Node.ELEMENT_NODE &&
-    (only as Element).tagName === "BR"
-  );
+// General HTML → line-list conversion, not tied to any one producer's output shape
+// (earlier versions of this function assumed it only ever read HTML that
+// `commitPlainText` below had generated — that assumption was wrong: the HTML
+// source tab can commit arbitrary sanitised markup that also lands here whenever
+// it happens to be unstructured). Walks child nodes (not just element children, so
+// bare top-level text isn't silently dropped): text appends to the current line;
+// `<br>` ends it and starts a new one; a `div`/`p` ends the current line and
+// contributes its own rendered line(s); anything else contributes its flattened
+// text. A `<br>` with nothing meaningful after it in its own parent is filler
+// (that's what makes an empty `<div><br></div>` one blank line, not two) and does
+// not end the line.
+const BLOCK_TAGS = new Set(["DIV", "P"]);
+
+function hasVisibleContent(node: ChildNode): boolean {
+  if (node.nodeType === Node.TEXT_NODE) return (node as Text).data.trim().length > 0;
+  return node.nodeType === Node.ELEMENT_NODE;
 }
 
-function blockToLine(el: Element): string {
-  // `commitPlainText` renders a blank line as `<div><br></div>` — that <br> is
-  // filler so the empty div doesn't visually collapse, not a real line break.
-  if (isBrOnlyChild(el)) return "";
-  let text = "";
-  function walk(node: ParentNode) {
-    node.childNodes.forEach((child) => {
-      if (child.nodeType === Node.TEXT_NODE) {
-        text += (child as Text).data;
-      } else if (child.nodeType === Node.ELEMENT_NODE) {
-        const childEl = child as Element;
-        if (childEl.tagName === "BR") {
-          text += "\n";
-        } else {
-          walk(childEl);
-        }
-      }
-    });
-  }
-  walk(el);
-  return text;
+function linesOf(nodes: ChildNode[]): string[] {
+  const lines: string[] = [];
+  let current = "";
+  // True once `current` holds real, deliberate content for this line — as opposed
+  // to being merely unstarted. Without this, a block boundary can't tell "nothing
+  // came before me, don't flush a spurious blank line" apart from "an explicit
+  // empty line came before me, flush it" — that ambiguity is what caused the
+  // leading-blank-line regression found in review. Reset after every flush so each
+  // fresh line starts genuinely untouched again.
+  let dirty = false;
+
+  const flush = () => {
+    lines.push(current);
+    current = "";
+    dirty = false;
+  };
+
+  nodes.forEach((node, i) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      current += (node as Text).data;
+      dirty = true;
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    const el = node as Element;
+
+    if (el.tagName === "BR") {
+      const isFiller = !nodes.slice(i + 1).some(hasVisibleContent);
+      if (!isFiller) flush();
+      return;
+    }
+    if (BLOCK_TAGS.has(el.tagName)) {
+      if (dirty) flush();
+      const inner = linesOf(Array.from(el.childNodes));
+      lines.push(...(inner.length > 0 ? inner : [""]));
+      return;
+    }
+    current += el.textContent ?? "";
+    dirty = true;
+  });
+
+  if (dirty) flush();
+  return lines;
 }
 
 export function htmlToPlainLines(html: string): string {
   const doc = new DOMParser().parseFromString(sanitizeSignatureHtml(html), "text/html");
   doc.querySelectorAll("style, script, head").forEach((el) => el.remove());
-
-  const BLOCK = new Set(["DIV", "P"]);
-  const blocks = Array.from(doc.body.children).filter((el) => BLOCK.has(el.tagName));
-  // No top-level div/p at all — e.g. an empty signature, or bare text with no
-  // wrapping block. Fall back to the raw text content rather than producing nothing.
-  if (blocks.length === 0) return doc.body.textContent ?? "";
-
-  return blocks.map(blockToLine).join("\n");
+  return linesOf(Array.from(doc.body.childNodes)).join("\n");
 }
 
 // The guillemets and spaces cannot occur inside base64, so a placeholder is

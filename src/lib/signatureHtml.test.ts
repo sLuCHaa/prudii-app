@@ -146,6 +146,14 @@ describe("htmlToPlainLines", () => {
     expect(htmlToPlainLines("<div>&lt;</div>")).toBe("<");
   });
 
+  it("splits on a bare top-level <br> with no wrapping div", () => {
+    expect(htmlToPlainLines("Hello<br>World")).toBe("Hello\nWorld");
+  });
+
+  it("keeps loose top-level text between block siblings instead of dropping it", () => {
+    expect(htmlToPlainLines("<div>A</div>loose text<div>B</div>")).toBe("A\nloose text\nB");
+  });
+
   it("returns an empty string for an empty signature", () => {
     expect(htmlToPlainLines("")).toBe("");
   });

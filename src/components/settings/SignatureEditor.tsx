@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Code, Type, Eye } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { escapeHtml, sanitizeSignatureHtml } from "../../lib/sanitize";
@@ -57,6 +57,20 @@ export function SignatureEditor({ htmlValue, textValue, onChange }: SignatureEdi
     setSource(collapseDataUris(html).html);
   }, [html]);
 
+  // The plain-text tab's draft is held verbatim while the user types, never derived
+  // from `html` on every keystroke — that round trip through htmlToPlainLines is
+  // exactly what caused the newline/entity/leading-blank bugs found in review.
+  // Mirrors SignaturePreviewEditor's echo-suppression (`lastEmittedRef`): the effect
+  // only re-derives the draft from `html` when the change is genuinely external
+  // (mount, account switch, an edit committed from the Preview or HTML tab) —
+  // never when it's the echo of commitPlainText's own edit.
+  const [plainDraft, setPlainDraft] = useState(() => htmlToPlainLines(htmlValue));
+  const lastPlainEmittedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (html === lastPlainEmittedRef.current) return; // our own echo — ignore
+    setPlainDraft(htmlToPlainLines(html));
+  }, [html]);
+
   const commit = useCallback((newHtml: string) => {
     setHtml(newHtml);
     onChange(newHtml, derivePlainText(newHtml));
@@ -76,7 +90,9 @@ export function SignatureEditor({ htmlValue, textValue, onChange }: SignatureEdi
       .split("\n")
       .map((line) => `<div>${escapeHtml(line) || "<br>"}</div>`)
       .join("");
+    lastPlainEmittedRef.current = newHtml;
     setHtml(newHtml);
+    setPlainDraft(newText);
     onChange(newHtml, newText);
   }, [onChange]);
 
@@ -120,7 +136,7 @@ export function SignatureEditor({ htmlValue, textValue, onChange }: SignatureEdi
               </p>
             )}
             <textarea
-              value={structured ? derivedText : htmlToPlainLines(html)}
+              value={structured ? derivedText : plainDraft}
               readOnly={structured}
               onChange={(e) => commitPlainText(e.target.value)}
               className="w-full p-3 min-h-[240px] text-sm text-text bg-transparent resize-y disabled:opacity-60"
