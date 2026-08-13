@@ -25,6 +25,7 @@ import { listen, emit } from "@tauri-apps/api/event";
 import { saveDraft, syncAccount, fetchMailBody, suggestReplies, sendMail, scheduleSend, listTemplates, listAttachments, getAttachmentData, trashMail } from "../../lib/tauri";
 import type { AiRepliesEvent, EmailTemplate, ReplySuggestion } from "../../types";
 import { escapeHtml } from "../../lib/sanitize";
+import { fillEmptyParagraphs } from "../../lib/outgoingHtml";
 import { HtmlMailFrame } from "../layout/MailDetail";
 import { RecipientInput, type RecipientInputHandle } from "./RecipientInput";
 import type { Mail, SendMailRequest, Account, AppSettings } from "../../types";
@@ -1194,7 +1195,9 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   // rewrites href→data-href for our iframe and would break outgoing links.
   function buildOutgoingBody(): { bodyHtml: string; bodyText: string } {
     if (!editor) return { bodyHtml: quotedHtml, bodyText: "" };
-    const editorHtml = editor.getHTML();
+    // Only on the way out: the editor writes a blank line as `<p></p>`, which
+    // collapses to nothing when a mail client renders it.
+    const editorHtml = fillEmptyParagraphs(editor.getHTML());
     const editorText = editor.getText({ blockSeparator: '\n\n' });
     const bodyHtml = editorHtml + quotedHtml;
     const bodyText = editorText + (quotedHtml ? "\n\n" + quotedHtml.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim() : "");
