@@ -1773,6 +1773,16 @@ pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id:
         }
     }
 
+    // IMAP only: refuse before the local move below. Trashing used to read the
+    // current folder's `path` and hand it to the server as the source mailbox —
+    // for a local folder that is the plain display name, so the server op always
+    // failed (silently, it is only logged) while the mail had already been moved
+    // into the local Trash. Gmail and Outlook are unaffected: they addressed the
+    // message by its API id above and already returned.
+    if mail_is_in_local_folder(&db, &mail_id) {
+        return Err(LOCAL_FOLDER_NO_SERVER_OP.to_string());
+    }
+
     // Gather all info needed in a scoped block (before any await)
     let action: Option<TrashAction> = {
         let conn = db.lock_db();
@@ -2086,6 +2096,30 @@ pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id:
     Ok(())
 }
 
+/// Refusal shown when a server-side operation is asked for on a mail that sits in
+/// a local folder. Filing into a local folder never touched the server, and we
+/// keep no record of the mailbox the mail came from — its `uid` still belongs to
+/// that mailbox, and the local folder's `path` is only a display name. So there is
+/// no mailbox to MOVE/COPY from, and guessing one would send the display name to
+/// the server. Every IMAP path refuses with this instead.
+const LOCAL_FOLDER_NO_SERVER_OP: &str =
+    "This mail is filed in a local folder, which exists only in Prudii. The message itself is \
+     untouched in the server mailbox it was filed from, so there is nothing to move or delete \
+     on the server. Move it to another local folder here, or handle it in the original mailbox \
+     via your mail provider.";
+
+/// True when the mail's current folder is a local (client-only) folder.
+fn mail_is_in_local_folder(db: &Database, mail_id: &str) -> bool {
+    let conn = db.lock_db();
+    conn.query_row(
+        "SELECT COALESCE(f.is_local, 0) FROM mails m JOIN folders f ON m.folder_id = f.id WHERE m.id = ?1",
+        rusqlite::params![mail_id],
+        |row| row.get::<_, i32>(0),
+    )
+    .map(|v| v != 0)
+    .unwrap_or(false)
+}
+
 /// Re-home a mail in the local DB without touching the server, keeping the
 /// folder counters straight. Used for local-only folders.
 fn move_mail_locally(db: &Database, mail_id: &str, dest_folder_id: &str) -> Result<(), String> {
@@ -2239,11 +2273,7 @@ pub async fn move_mail(
     // A local folder keeps no record of the mailbox the mail came from, and its
     // UID belongs to that original mailbox — so there is nothing to MOVE from.
     if source_is_local {
-        return Err(
-            "This mail sits in a local folder and has no counterpart on the server to move. \
-             Move it back from the folder it was filed from, or file it locally instead."
-                .to_string(),
-        );
+        return Err(LOCAL_FOLDER_NO_SERVER_OP.to_string());
     }
 
     // Gather info needed for the move (read-only DB access).
@@ -2654,6 +2684,13 @@ pub async fn archive_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_i
             }
             ApiType::Imap => {}
         }
+    }
+
+    // IMAP only: a local folder's `path` is a display name, never a mailbox — it
+    // must not reach the server as the archive MOVE's source. Gmail and Outlook
+    // addressed the message by its API id above and already returned.
+    if mail_is_in_local_folder(&db, &mail_id) {
+        return Err(LOCAL_FOLDER_NO_SERVER_OP.to_string());
     }
 
     // Read all info needed from DB.
@@ -4494,7 +4531,7 @@ mod thread_dedupe_tests {
 
 #[cfg(test)]
 mod local_move_tests {
-    use super::move_mail_locally;
+    use super::{mail_is_in_local_folder, move_mail_locally};
     use crate::db::Database;
 
     /// Build a throwaway DB holding one account, an INBOX and a local folder,
@@ -4565,5 +4602,24 @@ mod local_move_tests {
     fn an_unknown_mail_is_reported_rather_than_silently_ignored() {
         let db = fixture("missing");
         assert!(move_mail_locally(&db, "nope", "local").is_err());
+    }
+
+    /// The predicate `trash_mail` and `archive_mail` gate their IMAP paths on:
+    /// it must flip only once the mail actually sits in the local folder, or the
+    /// folder's display name would be handed to the server as a mailbox name.
+    #[test]
+    fn a_mail_counts_as_local_only_after_it_has_been_filed() {
+        let db = fixture("is-local");
+        assert!(!mail_is_in_local_folder(&db, "m1"));
+        move_mail_locally(&db, "m1", "local").unwrap();
+        assert!(mail_is_in_local_folder(&db, "m1"));
+    }
+
+    /// A mail that no longer exists must not read as local — the callers treat a
+    /// missing row as "nothing to guard", and their own lookups report it.
+    #[test]
+    fn an_unknown_mail_does_not_count_as_local() {
+        let db = fixture("is-local-missing");
+        assert!(!mail_is_in_local_folder(&db, "nope"));
     }
 }
