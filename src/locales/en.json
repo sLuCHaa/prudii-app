@@ -665,6 +665,8 @@
     "previewTitle": "Signature preview",
     "derivedFromHtml": "Generated from the HTML signature.",
     "imagesCollapsed": "Embedded images are shortened for readability and restored on save.",
+    "imagePlaceholder": "image · {{kb}} KB",
+    "imagePlaceholderBroken": "An image placeholder was altered and can no longer be matched. Restore it or remove the whole <img> element — otherwise the image is lost.",
     "sanitized": "Unsafe markup was removed while saving."
   },
   "folderColors": {

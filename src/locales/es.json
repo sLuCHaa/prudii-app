@@ -665,6 +665,8 @@
     "previewTitle": "Vista previa de la firma",
     "derivedFromHtml": "Generado a partir de la firma HTML.",
     "imagesCollapsed": "Las imágenes incrustadas se acortan para facilitar la lectura y se restauran al guardar.",
+    "imagePlaceholder": "imagen · {{kb}} KB",
+    "imagePlaceholderBroken": "Se modificó un marcador de imagen y ya no se puede asociar. Restáuralo o elimina todo el elemento <img>; de lo contrario, la imagen se perderá.",
     "sanitized": "Se eliminó el marcado inseguro al guardar."
   },
   "folderColors": {

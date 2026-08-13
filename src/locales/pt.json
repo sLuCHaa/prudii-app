@@ -665,6 +665,8 @@
     "previewTitle": "Pré-visualização da assinatura",
     "derivedFromHtml": "Gerado a partir da assinatura HTML.",
     "imagesCollapsed": "As imagens incorporadas são reduzidas para facilitar a leitura e restauradas ao salvar.",
+    "imagePlaceholder": "imagem · {{kb}} KB",
+    "imagePlaceholderBroken": "Um marcador de imagem foi alterado e não pode mais ser associado. Restaure-o ou remova todo o elemento <img>; caso contrário, a imagem será perdida.",
     "sanitized": "Marcação insegura foi removida ao salvar."
   },
   "folderColors": {

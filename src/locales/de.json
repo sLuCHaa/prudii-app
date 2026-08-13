@@ -665,6 +665,8 @@
     "previewTitle": "Signatur-Vorschau",
     "derivedFromHtml": "Wird aus der HTML-Signatur erzeugt.",
     "imagesCollapsed": "Eingebettete Bilder sind gekürzt dargestellt und werden beim Speichern wiederhergestellt.",
+    "imagePlaceholder": "Bild · {{kb}} KB",
+    "imagePlaceholderBroken": "Ein Bild-Platzhalter wurde verändert und lässt sich nicht mehr zuordnen. Stelle ihn wieder her oder entferne das ganze <img>-Element — sonst geht das Bild verloren.",
     "sanitized": "Beim Speichern wurde unsicheres Markup entfernt."
   },
   "folderColors": {

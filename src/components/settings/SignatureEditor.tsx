@@ -6,6 +6,7 @@ import {
   collapseDataUris,
   derivePlainText,
   expandDataUris,
+  hasBrokenDataUri,
   hasStructure,
   htmlToPlainLines,
 } from "../../lib/signatureHtml";
@@ -50,12 +51,18 @@ export function SignatureEditor({ htmlValue, textValue, onChange }: SignatureEdi
   const derivedText = useMemo(() => derivePlainText(html), [html]);
 
   // The source view shows shortened data URIs; the originals live here and are
-  // put back before anything is stored.
-  const collapsed = useMemo(() => collapseDataUris(html), [html]);
+  // put back before anything is stored. The placeholder's readable half is
+  // translated — it is the only thing telling the user those few characters stand
+  // for the logo, so it must not stay German in a seven-locale app.
+  const imageLabel = useCallback(
+    (kb: number) => t("signature.imagePlaceholder", { kb }),
+    [t]
+  );
+  const collapsed = useMemo(() => collapseDataUris(html, imageLabel), [html, imageLabel]);
   const [source, setSource] = useState(collapsed.html);
   useEffect(() => {
-    setSource(collapseDataUris(html).html);
-  }, [html]);
+    setSource(collapsed.html);
+  }, [collapsed.html]);
 
   // The plain-text tab's draft is held verbatim while the user types, never derived
   // from `html` on every keystroke — that round trip through htmlToPlainLines is
@@ -80,6 +87,14 @@ export function SignatureEditor({ htmlValue, textValue, onChange }: SignatureEdi
   // rewritten under the caret and the caret jumps to the end.
   const commitSource = useCallback(() => {
     const expanded = expandDataUris(source, collapsed.images);
+    // A placeholder that was mangled rather than deleted expands into a `data:`
+    // URI with a non-base64 payload. Committing that would drop the real image
+    // bytes out of state for good, with nothing warning the user, so refuse and
+    // leave the textarea as typed so the edit can be undone.
+    if (hasBrokenDataUri(expanded)) {
+      setNotice(t("signature.imagePlaceholderBroken"));
+      return;
+    }
     const cleaned = cleanSignatureHtml(expanded);
     setNotice(elementCount(cleaned) < elementCount(expanded) ? t("signature.sanitized") : "");
     commit(cleaned);

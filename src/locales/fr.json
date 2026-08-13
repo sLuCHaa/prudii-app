@@ -665,6 +665,8 @@
     "previewTitle": "Aperçu de la signature",
     "derivedFromHtml": "Généré à partir de la signature HTML.",
     "imagesCollapsed": "Les images intégrées sont raccourcies pour la lisibilité et restaurées à l'enregistrement.",
+    "imagePlaceholder": "image · {{kb}} Ko",
+    "imagePlaceholderBroken": "Un espace réservé d'image a été modifié et ne peut plus être associé. Rétablissez-le ou supprimez tout l'élément <img>, sinon l'image sera perdue.",
     "sanitized": "Le balisage non sécurisé a été supprimé lors de l'enregistrement."
   },
   "folderColors": {

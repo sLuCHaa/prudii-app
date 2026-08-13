@@ -665,6 +665,8 @@
     "previewTitle": "签名预览",
     "derivedFromHtml": "由 HTML 签名生成。",
     "imagesCollapsed": "嵌入的图片已缩短以便阅读，保存时会恢复。",
+    "imagePlaceholder": "图片 · {{kb}} KB",
+    "imagePlaceholderBroken": "某个图片占位符已被修改，无法再匹配。请将其还原或删除整个 <img> 元素，否则图片将丢失。",
     "sanitized": "保存时已移除不安全的标记。"
   },
   "folderColors": {

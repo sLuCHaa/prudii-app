@@ -7,6 +7,7 @@ import {
   buildPreviewHtml,
   collapseDataUris,
   expandDataUris,
+  hasBrokenDataUri,
   hasStructure,
 } from "./signatureHtml";
 
@@ -80,7 +81,7 @@ describe("data URI collapsing", () => {
   it("round-trips losslessly", () => {
     const { html, images } = collapseDataUris(SIGNATURE);
     expect(html).not.toContain(PIXEL);
-    expect(html).toContain("Bild 1");
+    expect(html).toContain("‹1 · ");
     expect(images).toEqual([PIXEL]);
     expect(expandDataUris(html, images)).toContain(PIXEL);
   });
@@ -96,9 +97,69 @@ describe("data URI collapsing", () => {
       `<img src="${PIXEL}"><img src="${PIXEL}">`
     );
     expect(images).toHaveLength(2);
-    expect(html).toContain("Bild 1");
-    expect(html).toContain("Bild 2");
+    expect(html).toContain("‹1 · ");
+    expect(html).toContain("‹2 · ");
     expect(expandDataUris(html, images)).toBe(`<img src="${PIXEL}"><img src="${PIXEL}">`);
+  });
+
+  // The readable half is translated, so matching must never depend on its wording.
+  it("round-trips whatever language the label is in", () => {
+    const { html, images } = collapseDataUris(SIGNATURE, (kb) => `图片 · ${kb} KB`);
+    expect(html).toContain("图片");
+    expect(expandDataUris(html, images)).toContain(PIXEL);
+  });
+
+  it("keeps the index outside the translated label", () => {
+    const { html } = collapseDataUris(`<img src="${PIXEL}">`, () => "изображение");
+    expect(html).toContain("‹1 · изображение›");
+  });
+});
+
+describe("hasBrokenDataUri", () => {
+  const { html: collapsed, images } = collapseDataUris(SIGNATURE);
+
+  it("passes a signature whose placeholders all resolved", () => {
+    expect(hasBrokenDataUri(expandDataUris(collapsed, images))).toBe(false);
+  });
+
+  it("passes a signature with no images at all", () => {
+    expect(hasBrokenDataUri("<div>Patrick</div>")).toBe(false);
+  });
+
+  it("catches a placeholder whose closing guillemet was deleted", () => {
+    const mangled = collapsed.replace("›", "");
+    expect(hasBrokenDataUri(expandDataUris(mangled, images))).toBe(true);
+  });
+
+  it("catches a placeholder whose index no longer has an image", () => {
+    const renumbered = collapsed.replace("‹1 · ", "‹5 · ");
+    expect(hasBrokenDataUri(expandDataUris(renumbered, images))).toBe(true);
+  });
+
+  it("catches a placeholder the user typed over instead of deleting", () => {
+    const typedOver = `<img src="data:image/png;base64,Bild 1 - 11 KB">`;
+    expect(hasBrokenDataUri(expandDataUris(typedOver, images))).toBe(true);
+  });
+
+  it("catches an emptied payload rather than storing a blank image", () => {
+    expect(hasBrokenDataUri(`<img src="data:image/png;base64,">`)).toBe(true);
+  });
+
+  // Deleting the whole <img> is a legitimate edit and must stay allowed.
+  it("passes when the image element was removed outright", () => {
+    expect(hasBrokenDataUri("<table><tbody><tr><td>Patrick</td></tr></tbody></table>")).toBe(false);
+  });
+
+  // The closing paren must not be read as payload, or every CSS background image
+  // would be reported as damaged and the commit refused forever.
+  it("passes an intact image inside a css url()", () => {
+    expect(hasBrokenDataUri(`<div style="background:url(${PIXEL})">x</div>`)).toBe(false);
+  });
+
+  it("still catches a mangled placeholder inside a css url()", () => {
+    const { html, images } = collapseDataUris(`<div style="background:url(${PIXEL})">x</div>`);
+    const mangled = html.replace("‹", "");
+    expect(hasBrokenDataUri(expandDataUris(mangled, images))).toBe(true);
   });
 });
 
