@@ -755,6 +755,32 @@ fn process_header_batch(
     let mut new_count: u32 = 0;
     let mut new_mail_ids: Vec<String> = Vec::new();
 
+    // Message-IDs of mails this account has filed into a local folder. Filing is a
+    // purely local re-home: the message is still sitting in its original server
+    // mailbox, and moving it out lowers this folder's MAX(uid), so the next
+    // `UID <last_uid+1>:*` search hands it straight back. Nothing further down
+    // catches it — the claim-by-message-id UPDATE below only matches rows in *this*
+    // folder with uid IS NULL, and the unique index is (account_id, folder_id, uid),
+    // so INSERT OR IGNORE happily creates a second row. The mail would reappear in
+    // the source folder while also sitting in the local folder.
+    //
+    // Deliberately *not* fixed by widening `last_uid` across folders: IMAP UIDs are
+    // per-mailbox, so a shared high-water mark would silently skip real new mail.
+    // Mirrors the same filter in gmail::sync and outlook::sync.
+    let local_message_ids: HashSet<String> = {
+        let mut ids = HashSet::new();
+        if let Ok(mut stmt) = conn.prepare(
+            "SELECT m.message_id FROM mails m JOIN folders f ON m.folder_id = f.id \
+             WHERE m.account_id = ?1 AND m.message_id IS NOT NULL AND m.message_id != '' \
+             AND COALESCE(f.is_local, 0) = 1",
+        ) {
+            if let Ok(rows) = stmt.query_map(rusqlite::params![account_id], |row| row.get::<_, String>(0)) {
+                ids.extend(rows.filter_map(|r| r.ok()));
+            }
+        }
+        ids
+    };
+
     // Use Transaction so that any panic mid-loop auto-rolls-back on drop
     // instead of leaving a dangling BEGIN that blocks the next writer with SQLITE_BUSY.
     let tx = match conn.transaction() {
@@ -847,6 +873,16 @@ fn process_header_batch(
         let is_replied = fetched.flags.iter().any(|f| f.contains("Answered"));
 
         let mail_id = uuid::Uuid::new_v4().to_string();
+
+        // Already filed into a local folder (see `local_message_ids` above) —
+        // re-inserting it here would duplicate the mail, not recover it.
+        if !message_id.is_empty() && local_message_ids.contains(&message_id) {
+            log::debug!(
+                "sync_mails '{}': uid {} is filed in a local folder, skipping re-insert",
+                folder.name, fetched.uid
+            );
+            continue;
+        }
 
         // If a locally-moved mail exists with uid=NULL and matching message_id,
         // claim it by updating the UID instead of inserting a duplicate.
