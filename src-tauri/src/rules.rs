@@ -259,14 +259,14 @@ fn apply_actions(
         if !dest_folder_id.is_empty() && *dest_folder_id != mail.folder_id {
             // Verify the destination folder still exists; if it was deleted, skip
             // the move and log (other actions of this rule already ran).
-            let dest_path: Option<String> = conn
+            let dest: Option<(String, bool)> = conn
                 .query_row(
-                    "SELECT path FROM folders WHERE id = ?1",
+                    "SELECT path, COALESCE(is_local, 0) FROM folders WHERE id = ?1",
                     rusqlite::params![dest_folder_id],
-                    |row| row.get(0),
+                    |row| Ok((row.get(0)?, row.get::<_, i32>(1)? != 0)),
                 )
                 .ok();
-            let Some(dest_path) = dest_path else {
+            let Some((dest_path, dest_is_local)) = dest else {
                 log::warn!("rule {}: move target folder {} no longer exists; skipping move of mail {}", rule.id, dest_folder_id, mail_id);
                 return;
             };
@@ -275,6 +275,13 @@ fn apply_actions(
                 rusqlite::params![dest_folder_id, mail_id],
             ) {
                 log::warn!("rule {}: failed to move mail {} to folder {}: {}", rule.id, mail_id, dest_folder_id, e);
+            } else if dest_is_local {
+                // A local folder has no server counterpart: its `path` is only a
+                // display name and must never be sent as a Gmail label, a Graph
+                // folder id or an IMAP mailbox. Filing is local-only, exactly like
+                // the `dest_is_local` branch of the manual `move_mail` command, so
+                // no pending op is enqueued.
+                log::debug!("rule {}: moved mail {} into local folder {} (no server op)", rule.id, mail_id, dest_folder_id);
             } else {
                 let payload = serde_json::json!({
                     "api_id": mail.message_id,
