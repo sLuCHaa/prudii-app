@@ -86,6 +86,15 @@ export function SignatureEditor({ htmlValue, textValue, onChange }: SignatureEdi
   // Sanitizing runs on blur, never per keystroke — otherwise half-typed tags get
   // rewritten under the caret and the caret jumps to the end.
   const commitSource = useCallback(() => {
+    // Blurring without having typed anything must not rewrite the signature.
+    // sanitize + DOMParser + innerHTML normalises attribute quoting, tag case,
+    // entities and self-closing tags, so for a real Outlook- or Apple-Mail-built
+    // table signature the round trip almost always differs textually — enough to
+    // flip the settings form to dirty and, on save, silently replace what the
+    // user had with the re-serialised version. `collapsed.html` is exactly what
+    // was rendered into the box, so comparing against it detects "no edit".
+    if (source === collapsed.html) return;
+
     const expanded = expandDataUris(source, collapsed.images);
     // A placeholder that was mangled rather than deleted expands into a `data:`
     // URI with a non-base64 payload. Committing that would drop the real image
@@ -98,7 +107,7 @@ export function SignatureEditor({ htmlValue, textValue, onChange }: SignatureEdi
     const cleaned = cleanSignatureHtml(expanded);
     setNotice(elementCount(cleaned) < elementCount(expanded) ? t("signature.sanitized") : "");
     commit(cleaned);
-  }, [source, collapsed.images, commit, t]);
+  }, [source, collapsed, commit, t]);
 
   const commitPlainText = useCallback((newText: string) => {
     const newHtml = newText
