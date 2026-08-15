@@ -37,6 +37,22 @@ pub struct EmailMessage {
     pub attachments: Vec<EmailAttachment>,
 }
 
+/// Build the `Message-ID` header value for an outgoing mail.
+///
+/// lettre never generates one, and without it the local copy of a mail cannot be
+/// matched against the server's copy: a sent draft keeps its UID-less local row, so
+/// the follow-up move out of the Drafts folder finds nothing to move and the draft
+/// stays there. The domain comes from the sender address — lettre's own fallback
+/// would put the machine's hostname on the wire.
+pub fn generate_message_id(from_email: &str) -> String {
+    let domain = from_email
+        .rsplit_once('@')
+        .map(|(_, d)| d.trim())
+        .filter(|d| !d.is_empty() && !d.contains(char::is_whitespace))
+        .unwrap_or("localhost");
+    format!("<{}@{}>", uuid::Uuid::new_v4(), domain)
+}
+
 /// Ensure a message ID is wrapped in angle brackets per RFC 5322.
 fn ensure_angle_brackets(id: &str) -> String {
     let trimmed = id.trim();
@@ -102,6 +118,7 @@ fn build_lettre_message(config: &SmtpConfig, message: &EmailMessage) -> Result<M
 
     let mut email_builder = Message::builder()
         .from(from_mailbox)
+        .message_id(Some(generate_message_id(&config.email)))
         .subject(&message.subject);
 
     for to in &message.to {
@@ -292,5 +309,41 @@ mod tests {
         assert!(unfolded.contains("filename*=UTF-8''export-%C3%BCbersicht.xml"), "{unfolded}");
         assert!(!unfolded.contains("filename*0"), "regressed to RFC 2231 continuation");
         assert!(unfolded.contains("Content-Transfer-Encoding: base64"));
+    }
+
+    /// Without a Message-ID the local copy of an outgoing mail can never be matched
+    /// against the server's copy — a sent draft then stays in the Drafts folder.
+    #[test]
+    fn a_built_mail_carries_a_message_id_from_the_sender_domain() {
+        let message = EmailMessage {
+            to: vec!["to@example.com".into()],
+            cc: vec![],
+            bcc: vec![],
+            subject: "Bericht".into(),
+            body_text: "hi".into(),
+            body_html: None,
+            in_reply_to: None,
+            references: None,
+            attachments: vec![],
+        };
+
+        let raw = String::from_utf8_lossy(&build_message(config(), message).unwrap()).to_string();
+
+        let header = raw
+            .lines()
+            .find(|l| l.starts_with("Message-ID:"))
+            .unwrap_or_else(|| panic!("no Message-ID header in:\n{raw}"));
+        assert!(header.contains("@example.com>"), "{header}");
+    }
+
+    #[test]
+    fn a_message_id_never_leaks_the_hostname_for_a_malformed_sender() {
+        assert!(generate_message_id("not-an-address").ends_with("@localhost>"));
+        assert!(generate_message_id("user@example.com").ends_with("@example.com>"));
+        assert_ne!(
+            generate_message_id("user@example.com"),
+            generate_message_id("user@example.com"),
+            "every mail needs its own id"
+        );
     }
 }

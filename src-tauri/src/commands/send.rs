@@ -413,6 +413,7 @@ pub async fn save_draft(db: State<'_, Database>, pool: State<'_, ImapPool>, requ
     let from_mailbox_clone = from_mailbox.clone();
     let mut message_builder = Message::builder()
         .from(from_mailbox)
+        .message_id(Some(smtp::generate_message_id(&email)))
         .subject(&request.subject);
 
     // Add recipients — drafts may have no recipients yet, so use sender as placeholder.
