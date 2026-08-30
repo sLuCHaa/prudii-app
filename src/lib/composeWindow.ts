@@ -3,6 +3,8 @@ import { getCurrentWindow, currentMonitor } from "@tauri-apps/api/window";
 import { LogicalPosition } from "@tauri-apps/api/dpi";
 import { emitTo, listen } from "@tauri-apps/api/event";
 import { isMacOS } from "./platform";
+import i18n from "./i18n";
+import { useAppStore } from "../stores/appStore";
 import type { ComposeInitData } from "../components/compose/ComposeModal";
 
 let composeCounter = 0;
@@ -15,7 +17,9 @@ export async function openComposeWindow(data: ComposeInitData): Promise<void> {
   setTimeout(() => { opening = false; }, 300);
 
   try {
-    const label = `compose-${++composeCounter}`;
+    // Timestamp keeps labels unique even after a main-window reload resets the
+    // counter — a reused label of a still-open window makes creation fail.
+    const label = `compose-${Date.now()}-${++composeCounter}`;
 
     // Adaptive sizing based on current monitor (logical pixels)
     let composeW = 740;
@@ -133,10 +137,17 @@ export async function openComposeWindow(data: ComposeInitData): Promise<void> {
       }
     });
 
-    webview.once("tauri://error", () => {
+    webview.once("tauri://error", (e) => {
       if (readyUnlisten) { readyUnlisten(); readyUnlisten = null; }
+      reportOpenFailure(e.payload);
     });
   } catch (err) {
-    console.error("Failed to open compose window:", err);
+    reportOpenFailure(err);
   }
+}
+
+// This module only runs in the main window, so its store has a ToastContainer.
+function reportOpenFailure(err: unknown) {
+  console.error("Failed to open compose window:", err);
+  useAppStore.getState().addToast("error", i18n.t("compose.openFailedTitle"), i18n.t("errors.generic"));
 }

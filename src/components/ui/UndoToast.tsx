@@ -4,7 +4,9 @@ import { motion, AnimatePresence } from "motion/react";
 import { useTranslation } from "react-i18next";
 import { emit } from "@tauri-apps/api/event";
 import { useAppStore } from "../../stores/appStore";
-import { sendMail, syncAccount, trashMail } from "../../lib/tauri";
+import { sendMail, saveDraft, syncAccount, trashMail } from "../../lib/tauri";
+import { causeMessage } from "../../lib/errorToast";
+import { playSentSound } from "../../lib/sounds";
 import { GlowRing } from "../motion/GlowRing";
 
 type Phase = "countdown" | "sending" | "sent" | "error";
@@ -20,9 +22,14 @@ export function UndoToast() {
   const [phase, setPhase] = useState<Phase>("countdown");
   const [progress, setProgress] = useState(1);
   const [errorMsg, setErrorMsg] = useState("");
+  const [draftSaved, setDraftSaved] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef(0);
   const activeRef = useRef(false);
+  // A new send can arrive while the pill still shows the previous outcome
+  // (the error phase persists until dismissed) — a changed request must
+  // restart the countdown even though activeRef is still true.
+  const lastRequestRef = useRef<typeof undoSend.request>(null);
 
   const doSend = useCallback(async () => {
     if (!undoSend.request) return;
@@ -47,18 +54,30 @@ export function UndoToast() {
       // now instead of waiting for the sync that follows to report back.
       emit("mails-changed", { account_id: undoSend.request.account_id });
       syncAccount(undoSend.request.account_id).catch(() => {});
+      if (useAppStore.getState().appSettings.notification_sound) playSentSound();
       setPhase("sent");
       setTimeout(() => {
         clearUndoSend();
       }, 2000);
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : String(err));
+      console.error("[undoSend]", err);
+      // The compose window is long gone — the snapshot in the store is the only
+      // copy of the message. Park it in Drafts so nothing can be lost, then keep
+      // the pill up (no auto-dismiss) with a one-click restore.
+      const savedAsDraft = await saveDraft(undoSend.request)
+        .then(() => {
+          emit("mails-changed", { account_id: undoSend.request!.account_id });
+          return true;
+        })
+        .catch((draftErr) => {
+          console.error("[undoSend] draft backstop failed", draftErr);
+          return false;
+        });
+      setDraftSaved(savedAsDraft);
+      setErrorMsg(causeMessage(err));
       setPhase("error");
-      setTimeout(() => {
-        clearUndoSend();
-      }, 5000);
     }
-  }, [undoSend.request, clearUndoSend]);
+  }, [undoSend.request, undoSend.composeMode, undoSend.composeMail, clearUndoSend, t]);
 
   useEffect(() => {
     if (!undoSend.active) {
@@ -72,9 +91,10 @@ export function UndoToast() {
       return;
     }
 
-    // Already running — don't restart
-    if (activeRef.current) return;
+    // Already running for this request — don't restart
+    if (activeRef.current && lastRequestRef.current === undoSend.request) return;
     activeRef.current = true;
+    lastRequestRef.current = undoSend.request;
     setPhase("countdown");
     setProgress(1);
 
@@ -107,6 +127,19 @@ export function UndoToast() {
     }
     activeRef.current = false;
     cancelUndoSend();
+  }
+
+  // Reopens a compose window with the full snapshot — same path as Undo.
+  function handleRestore() {
+    activeRef.current = false;
+    setPhase("countdown");
+    cancelUndoSend();
+  }
+
+  function handleDismissError() {
+    activeRef.current = false;
+    setPhase("countdown");
+    clearUndoSend();
   }
 
   const visible = undoSend.active || phase === "sending" || phase === "sent" || phase === "error";
@@ -159,7 +192,26 @@ export function UndoToast() {
               <div className="w-6 h-6 rounded-full bg-danger/20 flex items-center justify-center shrink-0">
                 <X className="w-4 h-4 text-danger" />
               </div>
-              <span className="text-sm text-danger truncate max-w-[300px]">{errorMsg}</span>
+              <div className="flex-1 min-w-0 max-w-[360px]">
+                <p className="text-sm font-medium text-text">{t("undoSend.sendFailedTitle")}</p>
+                <p className="text-xs text-text-secondary mt-0.5 line-clamp-2">
+                  {errorMsg}
+                  {draftSaved ? ` ${t("undoSend.savedAsDraft")}` : ""}
+                </p>
+              </div>
+              <button
+                onClick={handleRestore}
+                className="px-3 py-1 rounded-lg text-sm font-medium text-accent hover:bg-accent/10 transition-colors shrink-0"
+              >
+                {t("undoSend.restore")}
+              </button>
+              <button
+                onClick={handleDismissError}
+                className="p-1 rounded hover:bg-hover transition-colors text-text-tertiary shrink-0"
+                aria-label={t("common.close")}
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             </>
           )}
         </motion.div>

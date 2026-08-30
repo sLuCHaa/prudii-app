@@ -5,6 +5,7 @@ import { getCurrentWindow, currentMonitor } from "@tauri-apps/api/window";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { DialogProvider } from "../ui/DialogProvider";
+import { ToastContainer } from "../ui/Toast";
 import { ComposeForm } from "./ComposeModal";
 import type { ComposeInitData, ComposeMode, ComposeFormHandle } from "./ComposeModal";
 import { isMacOS } from "../../lib/platform";
@@ -223,6 +224,9 @@ export function ComposeWindow() {
             </div>
           )}
       </div>
+      {/* Each webview has its own store instance — without this, toasts raised
+          inside the compose window (attachment failures etc.) are never shown. */}
+      <ToastContainer />
     </DialogProvider>
     </QueryClientProvider>
   );

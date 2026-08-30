@@ -15,6 +15,9 @@ interface RecipientInputProps {
   fieldId?: "to" | "cc" | "bcc";
   onChipDroppedFromField?: (sourceField: "to" | "cc" | "bcc", recipient: string) => void;
   blockedEmails?: string[];
+  /** Fires when typed-but-uncommitted text appears/disappears, so the send
+      button can count an address that was never chipped via Enter/comma. */
+  onPendingChange?: (hasPending: boolean) => void;
 }
 
 export interface RecipientInputHandle {
@@ -32,6 +35,7 @@ export const RecipientInput = forwardRef<RecipientInputHandle, RecipientInputPro
   fieldId,
   onChipDroppedFromField,
   blockedEmails = [],
+  onPendingChange,
 }: RecipientInputProps, ref) {
   const emailOf = (raw: string) => {
     const m = raw.match(/<([^>]+)>/);
@@ -47,6 +51,10 @@ export const RecipientInput = forwardRef<RecipientInputHandle, RecipientInputPro
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  useEffect(() => {
+    onPendingChange?.(inputValue.trim().length > 0);
+  }, [inputValue, onPendingChange]);
 
   const commitValue = useCallback(
     (raw: string) => {

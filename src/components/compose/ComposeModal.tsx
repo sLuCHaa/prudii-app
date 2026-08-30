@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from "react";
 import type { ReactNode } from "react";
 import { formatDistanceToNowStrict } from "date-fns";
+import { dateLocale } from "../../lib/dateUtils";
 import { PulseDot } from "../motion/PulseDot";
 import { GradientAvatar } from "../motion/GradientAvatar";
 import { SPRING_SNAPPY } from "../motion/tokens";
@@ -628,6 +629,9 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   const [attachments, setAttachments] = useState<AttachmentFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  // Typed-but-not-chipped text in the To field still counts as a recipient
+  // (handleSend commits it), so it must not leave the send button greyed out.
+  const [toHasPending, setToHasPending] = useState(false);
   const [showDiscardDialog, setShowDiscardDialog] = useState(false);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
@@ -1339,6 +1343,8 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         if (sentAccount && (sentAccount.provider === "google" || sentAccount.provider === "microsoft") && sentAccount.auth_type === "oauth") {
           syncAccount(request.account_id).catch(() => {});
         }
+        // The window is about to be destroyed — confirmation lives in the main window.
+        emit("mail-sent");
         onClose();
       }).catch((err) => {
         setSendError(err instanceof Error ? err.message : String(err));
@@ -1479,7 +1485,11 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     setShowScheduleMenu(false);
     const isoDate = scheduledDate.toISOString().replace("T", " ").replace("Z", "");
     scheduleSend(request, isoDate)
-      .then(() => onClose())
+      .then(() => {
+        // The window is about to be destroyed — confirmation lives in the main window.
+        emit("mail-scheduled", { scheduled_at: scheduledDate.toISOString() });
+        onClose();
+      })
       .catch((err) => setSendError(err instanceof Error ? err.message : String(err)))
       .finally(() => setSending(false));
   }
@@ -1511,7 +1521,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
 
   function handleDiscardClick() {
     const hasContent = editor ? editor.getText().trim().length > 0 : false;
-    if (hasContent || subject.trim() || to.length > 0 || attachments.length > 0) {
+    if (hasContent || subject.trim() || to.length > 0 || cc.length > 0 || bcc.length > 0 || attachments.length > 0) {
       setShowDiscardDialog(true);
     } else {
       onClose();
@@ -1520,7 +1530,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   handleDiscardRef.current = handleDiscardClick;
 
   // Expose requestClose so ComposeWindow can trigger the discard check
-  useImperativeHandle(ref, () => ({ requestClose: handleDiscardClick }), [editor, subject, to, attachments]);
+  useImperativeHandle(ref, () => ({ requestClose: handleDiscardClick }), [editor, subject, to, cc, bcc, attachments]);
 
   async function handleSaveDraft() {
     if (!fromAccountId || !editor) return;
@@ -1686,6 +1696,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
               fieldId="to"
               onChipDroppedFromField={(src, rec) => handleDropToField("to", src, rec)}
               blockedEmails={[...emailsOf(cc), ...emailsOf(bcc)]}
+              onPendingChange={setToHasPending}
             />
             <div className="flex items-center gap-1 text-xs text-text-tertiary ml-2 pt-1.5">
               {!showCc && (
@@ -1946,7 +1957,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
               ) : lastSavedAt ? (
                 <>
                   <PulseDot color="var(--c-success)" size={6} ringCount={0} />
-                  <span>{t("compose.savedAgo", { time: formatDistanceToNowStrict(lastSavedAt, { addSuffix: true }) })}</span>
+                  <span>{t("compose.savedAgo", { time: formatDistanceToNowStrict(lastSavedAt, { addSuffix: true, locale: dateLocale() }) })}</span>
                 </>
               ) : null}
             </div>
@@ -1954,10 +1965,10 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
               ref={scheduleBtnRef}
               className="relative flex items-stretch gap-0 rounded-xl [box-shadow:0_2px_8px_rgba(59,130,246,0.25)]"
             >
-              <SendButton onSend={handleSend} disabled={to.length === 0} />
+              <SendButton onSend={handleSend} disabled={to.length === 0 && !toHasPending} />
               <button
                 onClick={() => setShowScheduleMenu(!showScheduleMenu)}
-                disabled={to.length === 0 || sending}
+                disabled={(to.length === 0 && !toHasPending) || sending}
                 className="flex items-center px-2 bg-accent text-white rounded-r-xl border-l border-white/20 disabled:opacity-50 transition-[filter] duration-200 hover:brightness-110 active:brightness-95"
               >
                 <ChevronDown className="w-4 h-4" />
