@@ -21,7 +21,7 @@ use tauri::{Manager, State};
 /// group, a copy with an empty body (both body_html and body_text empty)
 /// always collapses into a copy that has a body, and two copies with the
 /// same non-empty body collapse into one; two copies with different
-/// non-empty bodies are kept as distinct messages — a group can end up with
+/// non-empty bodies are kept as distinct messages â€” a group can end up with
 /// several surviving slots once bodies genuinely differ. Input is ordered by
 /// date ASC; an incoming copy is checked against every existing slot in its
 /// group (not just the most recent one), and collapses into the first slot
@@ -29,7 +29,7 @@ use tauri::{Manager, State};
 /// later, fuller copy.
 ///
 /// Mails with empty/placeholder subject or empty from-email are skipped by
-/// the grouping entirely — these are likely incomplete (e.g. Outlook delta
+/// the grouping entirely â€” these are likely incomplete (e.g. Outlook delta
 /// sync returned only IDs) and would falsely collapse multiple distinct
 /// mails that happen to share the same blank key.
 fn dedupe_thread_copies(mails: Vec<Mail>) -> Vec<Mail> {
@@ -91,7 +91,7 @@ fn dedup_mails(mails: Vec<Mail>) -> Vec<Mail> {
     }).collect();
 
     // Pass 2: dedup by subject+date+from_email (cross-account)
-    // Skip dedup for mails with empty/placeholder subject OR empty from — these are
+    // Skip dedup for mails with empty/placeholder subject OR empty from â€” these are
     // likely incomplete (e.g. Outlook delta sync returned only IDs) and would falsely
     // collapse multiple distinct mails into one.
     let mut seen_content = HashSet::new();
@@ -104,12 +104,12 @@ fn dedup_mails(mails: Vec<Mail>) -> Vec<Mail> {
     }).collect();
 
     if result.len() < original_count {
-        log::info!("dedup_mails: {} → {} ({} removed)", original_count, result.len(), original_count - result.len());
+        log::info!("dedup_mails: {} â†’ {} ({} removed)", original_count, result.len(), original_count - result.len());
     }
     result
 }
 
-/// API type for an account — determines which backend to use.
+/// API type for an account â€” determines which backend to use.
 enum ApiType {
     Gmail,
     Outlook,
@@ -129,7 +129,7 @@ fn delete_pending_op_bg(db_path: &std::path::Path, mail_id: &str, op_type: &str)
 }
 
 /// Persist a message's new Graph ID after a server-side move.
-/// Outlook Graph message IDs are mutable — every folder move assigns a new one,
+/// Outlook Graph message IDs are mutable â€” every folder move assigns a new one,
 /// so the stored ID must be refreshed or later body fetches / mail ops 404.
 fn update_mail_message_id_bg(db_path: &std::path::Path, mail_id: &str, new_graph_id: &str) {
     if let Ok(conn) = rusqlite::Connection::open(db_path) {
@@ -218,7 +218,7 @@ fn filter_clause(filter: &Option<String>, prefix: &str) -> String {
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_mails(db: State<'_, Database>, folder_id: String, limit: Option<u32>, offset: Option<u32>, folder_filter: Option<String>) -> Result<Vec<Mail>, String> {
     super::catch_panic(|| {
     let limit = limit.unwrap_or(500).min(2000);
@@ -283,7 +283,7 @@ pub fn list_mails(db: State<'_, Database>, folder_id: String, limit: Option<u32>
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_all_inbox_mails(db: State<'_, Database>, limit: Option<u32>, offset: Option<u32>, folder_filter: Option<String>) -> Result<Vec<Mail>, String> {
     super::catch_panic(|| {
     let limit = limit.unwrap_or(500).min(2000);
@@ -353,7 +353,7 @@ pub fn list_all_inbox_mails(db: State<'_, Database>, limit: Option<u32>, offset:
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_filtered_mails(
     db: State<'_, Database>,
     filter_type: String,
@@ -415,7 +415,7 @@ pub fn list_filtered_mails(
         })
     };
 
-    // All queries use parameterized placeholders — no string interpolation
+    // All queries use parameterized placeholders â€” no string interpolation
     let mails = match (filter_type.as_str(), &account_id) {
         ("starred", Some(acc_id)) => {
             let sql = format!("{} WHERE is_starred = 1 AND account_id = ?1{} ORDER BY date DESC LIMIT ?2 OFFSET ?3", BASE_SELECT, extra);
@@ -523,14 +523,14 @@ fn get_mail_inner(db: &Database, mail_id: &str) -> Result<Option<Mail>, String> 
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_mail(db: State<'_, Database>, mail_id: String) -> Result<Option<Mail>, String> {
     super::catch_panic(|| {
         get_mail_inner(&db, &mail_id)
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_attachments(
     db: State<'_, Database>,
     mail_id: String,
@@ -566,7 +566,7 @@ pub fn list_attachments(
 
 /// Read an attachment file and return its content as a base64 data URL
 /// for reliable in-webview preview (bypasses asset protocol scope issues).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_attachment_preview(
     db: State<'_, Database>,
     attachment_id: String,
@@ -605,7 +605,7 @@ pub fn get_attachment_preview(
 /// The payload of an attachment being carried into a new mail (reply, forward, or a
 /// reopened draft).
 ///
-/// Unlike `get_attachment_preview`, this never answers "nothing" — every failure is
+/// Unlike `get_attachment_preview`, this never answers "nothing" â€” every failure is
 /// an error naming the cause. A preview that quietly comes back empty just looks
 /// blank; an attachment that quietly comes back empty gets sent as a mail with a
 /// missing file, which is exactly what we are here to prevent.
@@ -617,7 +617,7 @@ pub struct AttachmentPayload {
     pub size: u64,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_attachment_data(
     db: State<'_, Database>,
     attachment_id: String,
@@ -659,7 +659,7 @@ pub fn get_attachment_data(
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn open_attachment(
     db: State<'_, Database>,
     attachment_id: String,
@@ -759,7 +759,7 @@ pub async fn fetch_mail_body(
 ) -> Result<Mail, String> {
     let t_start = std::time::Instant::now();
 
-    // Check if body is already cached in DB — skip fetch if so.
+    // Check if body is already cached in DB â€” skip fetch if so.
     // Also verify that mails flagged with attachments actually have attachment records;
     // if not, re-fetch to populate them (handles mails cached before attachment fixes).
     let can_use_cache = {
@@ -846,7 +846,7 @@ pub async fn fetch_mail_body(
                 return get_mail_inner(&db, &mail_id)?
                     .ok_or_else(|| "Mail not found".to_string());
             }
-            // Still no body — proceed with our own fetch
+            // Still no body â€” proceed with our own fetch
         }
     }
 
@@ -1057,7 +1057,7 @@ pub async fn toggle_star(db: State<'_, Database>, pool: State<'_, ImapPool>, mai
     Ok(new_val)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn toggle_pin(db: State<'_, Database>, mail_id: String) -> Result<bool, String> {
     super::catch_panic(|| {
         let current: bool = {
@@ -1084,7 +1084,7 @@ pub fn toggle_pin(db: State<'_, Database>, mail_id: String) -> Result<bool, Stri
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn snooze_mail(db: State<'_, Database>, mail_id: String, until: String) -> Result<(), String> {
     super::catch_panic(|| {
         let conn = db.lock_db();
@@ -1112,7 +1112,7 @@ pub fn snooze_mail(db: State<'_, Database>, mail_id: String, until: String) -> R
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn unsnooze_mail(db: State<'_, Database>, mail_id: String) -> Result<(), String> {
     super::catch_panic(|| {
         let conn = db.lock_db();
@@ -1140,7 +1140,7 @@ pub fn unsnooze_mail(db: State<'_, Database>, mail_id: String) -> Result<(), Str
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_snoozed_mails(db: State<'_, Database>, account_id: Option<String>) -> Result<Vec<Mail>, String> {
     super::catch_panic(|| {
         let conn = db.lock_db();
@@ -1210,7 +1210,7 @@ pub fn list_snoozed_mails(db: State<'_, Database>, account_id: Option<String>) -
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn check_snoozed_mails(db: State<'_, Database>) -> Result<u32, String> {
     super::catch_panic(|| {
         let conn = db.lock_db();
@@ -1224,7 +1224,7 @@ pub fn check_snoozed_mails(db: State<'_, Database>) -> Result<u32, String> {
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn count_snoozed_mails(db: State<'_, Database>) -> Result<u32, String> {
     super::catch_panic(|| {
         let conn = db.lock_db();
@@ -1540,7 +1540,7 @@ pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id:
         let (api_type, provider, auth_type) = get_api_type(&db, &account_id);
         match api_type {
             ApiType::Gmail => {
-                // Check if already in trash → permanent delete
+                // Check if already in trash â†’ permanent delete
                 let in_trash: bool = {
                     let conn = db.lock_db();
                     conn.query_row(
@@ -1757,7 +1757,7 @@ pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id:
                                 let client = outlook::api::OutlookClient::new(&credential);
                                 match outlook::messages::trash_message(&client, &api_msg_id, &trash_path).await {
                                     Ok(new_id) => {
-                                        // Graph IDs change on move — persist the new one
+                                        // Graph IDs change on move â€” persist the new one
                                         update_mail_message_id_bg(&db_path, &op_mail_id, &new_id);
                                         delete_pending_op_bg(&db_path, &op_mail_id, "trash");
                                     }
@@ -1774,7 +1774,7 @@ pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id:
     }
 
     // IMAP only: refuse before the local move below. Trashing used to read the
-    // current folder's `path` and hand it to the server as the source mailbox —
+    // current folder's `path` and hand it to the server as the source mailbox â€”
     // for a local folder that is the plain display name, so the server op always
     // failed (silently, it is only logged) while the mail had already been moved
     // into the local Trash. Gmail and Outlook are unaffected: they addressed the
@@ -1909,7 +1909,7 @@ pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id:
                     }
                     Err(e) => {
                         log::error!(
-                            "MoveToTrash: local move of {} failed ({}) — running the server operation anyway",
+                            "MoveToTrash: local move of {} failed ({}) â€” running the server operation anyway",
                             mail_id, e
                         );
                     }
@@ -1934,7 +1934,7 @@ pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id:
             let db_path = db.data_dir.join("prudii.db");
             let op_mail_id = mail_id.clone();
 
-            // IMAP operation in background — don't block the UI
+            // IMAP operation in background â€” don't block the UI
             let app = app.clone();
             let account_id_for_registry = account_id.clone();
             crate::task_registry::spawn_for_account(&account_id_for_registry, async move {
@@ -1985,7 +1985,7 @@ pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id:
                         }
                     }
                 } else {
-                    log::warn!("MoveToTrash: Could not resolve UID for mail — server operation skipped");
+                    log::warn!("MoveToTrash: Could not resolve UID for mail â€” server operation skipped");
                     pool.return_session(&account_id, session).await;
                 }
             });
@@ -2098,7 +2098,7 @@ pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id:
 
 /// Refusal shown when a server-side operation is asked for on a mail that sits in
 /// a local folder. Filing into a local folder never touched the server, and we
-/// keep no record of the mailbox the mail came from — its `uid` still belongs to
+/// keep no record of the mailbox the mail came from â€” its `uid` still belongs to
 /// that mailbox, and the local folder's `path` is only a display name. So there is
 /// no mailbox to MOVE/COPY from, and guessing one would send the display name to
 /// the server. Every IMAP path refuses with this instead.
@@ -2160,7 +2160,7 @@ pub async fn move_mail(
     mail_id: String,
     dest_folder_id: String,
 ) -> Result<(), String> {
-    // A local folder has no counterpart on the server — its `path` is just the
+    // A local folder has no counterpart on the server â€” its `path` is just the
     // display name, so it must never be sent as a label or mailbox name.
     let (dest_path, dest_is_local): (String, bool) = {
         let conn = db.lock_db();
@@ -2187,7 +2187,7 @@ pub async fn move_mail(
         let (api_type, provider, auth_type) = get_api_type(&db, &account_id);
         match api_type {
             ApiType::Gmail => {
-                // Coming out of a local folder there is no label to strip — the
+                // Coming out of a local folder there is no label to strip â€” the
                 // message still carries whatever labels it had on the server.
                 let source_label = if source_is_local { String::new() } else { source_path.clone() };
                 let dest_label = dest_path.clone();
@@ -2200,7 +2200,7 @@ pub async fn move_mail(
                     .await
                     .map_err(|e| format!("Gmail move failed: {}", e))?;
 
-                // Server first — a failed move must leave the mail where it is
+                // Server first â€” a failed move must leave the mail where it is
                 // instead of stranding it in a folder it never reached.
                 {
                     let conn = db.lock_db();
@@ -2238,7 +2238,7 @@ pub async fn move_mail(
                     .await
                     .map_err(|e| format!("Outlook move failed: {}", e))?;
 
-                // Server first — a failed move must leave the mail where it is
+                // Server first â€” a failed move must leave the mail where it is
                 // instead of stranding it in a folder it never reached.
                 {
                     let conn = db.lock_db();
@@ -2247,7 +2247,7 @@ pub async fn move_mail(
                         rusqlite::params![mail_id],
                         |row| Ok((row.get(0)?, row.get::<_, i32>(1)? != 0)),
                     ).unwrap_or_default();
-                    // Graph IDs change on move — persist the new one
+                    // Graph IDs change on move â€” persist the new one
                     let _ = conn.execute(
                         "UPDATE mails SET folder_id = ?1, uid = NULL, message_id = ?2 WHERE id = ?3",
                         rusqlite::params![dest_folder_id, new_graph_id, mail_id],
@@ -2271,7 +2271,7 @@ pub async fn move_mail(
     }
 
     // A local folder keeps no record of the mailbox the mail came from, and its
-    // UID belongs to that original mailbox — so there is nothing to MOVE from.
+    // UID belongs to that original mailbox â€” so there is nothing to MOVE from.
     if source_is_local {
         return Err(LOCAL_FOLDER_NO_SERVER_OP.to_string());
     }
@@ -2330,7 +2330,7 @@ pub async fn move_mail(
         None => {
             let _ = session.logout().await;
             pool.release(&account_id);
-            return Err("Mail UID is not yet synced — please wait for the next sync to complete and try again.".to_string());
+            return Err("Mail UID is not yet synced â€” please wait for the next sync to complete and try again.".to_string());
         }
     };
 
@@ -2343,7 +2343,7 @@ pub async fn move_mail(
 
     result.map_err(|e| format!("Failed to move mail on server: {}", e))?;
 
-    // IMAP succeeded — delete local copy. Next sync re-inserts with correct UID.
+    // IMAP succeeded â€” delete local copy. Next sync re-inserts with correct UID.
     let conn = db.lock_db();
     let (source_fid, is_read): (String, bool) = conn.query_row(
         "SELECT folder_id, is_read FROM mails WHERE id = ?1",
@@ -2367,7 +2367,7 @@ pub async fn move_mail(
 
 /// Get all mails in the same thread as the given mail.
 /// Thread detection uses message_id, in_reply_to, and references headers.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_thread_mails(db: State<'_, Database>, mail_id: String) -> Result<Vec<Mail>, String> {
     let conn = db.lock_db();
 
@@ -2671,7 +2671,7 @@ pub async fn archive_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_i
                             let client = outlook::api::OutlookClient::new(&credential);
                             match outlook::messages::archive_message(&client, &api_msg_id, &archive_path).await {
                                 Ok(new_id) => {
-                                    // Graph IDs change on move — persist the new one
+                                    // Graph IDs change on move â€” persist the new one
                                     update_mail_message_id_bg(&db_path, &op_mail_id, &new_id);
                                     delete_pending_op_bg(&db_path, &op_mail_id, "archive");
                                 }
@@ -2686,7 +2686,7 @@ pub async fn archive_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_i
         }
     }
 
-    // IMAP only: a local folder's `path` is a display name, never a mailbox — it
+    // IMAP only: a local folder's `path` is a display name, never a mailbox â€” it
     // must not reach the server as the archive MOVE's source. Gmail and Outlook
     // addressed the message by its API id above and already returned.
     if mail_is_in_local_folder(&db, &mail_id) {
@@ -2695,7 +2695,7 @@ pub async fn archive_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_i
 
     // Read all info needed from DB.
     // `uid` may be NULL locally if a previous move cleared it before the next sync
-    // re-learned the new UID — keep it optional and resolve via Message-ID later.
+    // re-learned the new UID â€” keep it optional and resolve via Message-ID later.
     let (account_id, source_folder_path, archive_folder_id, archive_folder_path, uid_opt, message_id, imap_host, imap_port, email, auth_type, provider) = {
         let conn = db.lock_db();
 
@@ -2731,9 +2731,9 @@ pub async fn archive_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_i
         Some(u) => u,
         None => {
             if !message_id.is_empty() {
-                log::info!("archive_mail: uid is NULL for mail {} (message_id={}) — waiting for sync", mail_id, message_id);
+                log::info!("archive_mail: uid is NULL for mail {} (message_id={}) â€” waiting for sync", mail_id, message_id);
             }
-            return Err("Mail UID is not yet synced — please wait for the next sync to complete and try again.".to_string());
+            return Err("Mail UID is not yet synced â€” please wait for the next sync to complete and try again.".to_string());
         }
     };
 
@@ -2815,7 +2815,7 @@ pub async fn archive_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_i
 }
 
 /// Set color flags on a mail. flags is a list of color names (e.g., ["red", "blue"])
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_mail_flags(db: State<'_, Database>, mail_id: String, flags: Vec<String>) -> Result<Vec<String>, String> {
     let conn = db.lock_db();
     let flags_str = flags.join(",");
@@ -2829,7 +2829,7 @@ pub fn set_mail_flags(db: State<'_, Database>, mail_id: String, flags: Vec<Strin
     Ok(flags)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn toggle_mail_flag(db: State<'_, Database>, mail_id: String, flag: String) -> Result<Vec<String>, String> {
     let conn = db.lock_db();
 
@@ -2860,7 +2860,7 @@ pub fn toggle_mail_flag(db: State<'_, Database>, mail_id: String, flag: String) 
 }
 
 /// List all mails across all accounts for a given folder type (inbox, sent, trash, etc.)
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_combined_folder_mails(db: State<'_, Database>, folder_type: String, limit: Option<u32>, offset: Option<u32>, folder_filter: Option<String>) -> Result<Vec<Mail>, String> {
     super::catch_panic(|| {
     let limit = limit.unwrap_or(500).min(2000);
@@ -2931,7 +2931,7 @@ pub fn list_combined_folder_mails(db: State<'_, Database>, folder_type: String, 
 }
 
 /// Count mails in a specific folder (from DB, not metadata)
-#[tauri::command]
+#[tauri::command(async)]
 pub fn count_folder_mails(db: State<'_, Database>, folder_id: String) -> Result<u32, String> {
     super::catch_panic(|| {
         let conn = db.lock_db();
@@ -2948,7 +2948,7 @@ pub fn count_folder_mails(db: State<'_, Database>, folder_id: String) -> Result<
 
 /// Total number of locally indexed mails (optionally scoped to one account).
 /// Used by the search empty state to show how many mails were searched.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn count_searchable_mails(db: State<'_, Database>, account_id: Option<String>) -> Result<u32, String> {
     super::catch_panic(|| {
         let conn = db.lock_db();
@@ -2978,7 +2978,7 @@ pub async fn empty_spam(app: tauri::AppHandle, db: State<'_, Database>, account_
 }
 
 /// Count mails across all accounts for a given folder type (trash, spam, etc.)
-#[tauri::command]
+#[tauri::command(async)]
 pub fn count_combined_folder_mails(db: State<'_, Database>, folder_type: String) -> Result<u32, String> {
     super::catch_panic(|| {
         let conn = db.lock_db();
@@ -3028,7 +3028,7 @@ async fn empty_all_by_type(app: tauri::AppHandle, db: State<'_, Database>, folde
 
 /// Search contacts by name or email from previously seen senders/recipients.
 /// Returns up to 8 matches sorted by frequency.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn search_contacts(
     db: State<'_, Database>,
     query: String,
@@ -3331,7 +3331,7 @@ async fn empty_folder_by_type(app: tauri::AppHandle, db: State<'_, Database>, ac
                         "EmptyFolder: server expunge for '{}' timed out after 180s, dropping connection",
                         folder_path
                     );
-                    // Session state is unknown mid-command — drop without logout.
+                    // Session state is unknown mid-command â€” drop without logout.
                     drop(session);
                     pool.release(&account_id);
                 }
@@ -3347,7 +3347,7 @@ static PREFETCHING_FOLDERS: std::sync::LazyLock<Mutex<HashSet<String>>> =
     std::sync::LazyLock::new(|| Mutex::new(HashSet::new()));
 
 /// Background-prefetch bodies for the most recent mails in a folder.
-/// Called by frontend when user navigates to a folder — fire-and-forget.
+/// Called by frontend when user navigates to a folder â€” fire-and-forget.
 /// Bodies are cached in DB so subsequent clicks load instantly.
 #[tauri::command]
 pub async fn prefetch_folder(
@@ -3377,7 +3377,7 @@ pub async fn prefetch_folder(
     };
 
     let Some((folder_path, account_id_for_registry)) = folder_info else {
-        // Folder vanished — release the claim and bail.
+        // Folder vanished â€” release the claim and bail.
         let mut p = PREFETCHING_FOLDERS.lock().unwrap_or_else(|e| e.into_inner());
         p.remove(&folder_id);
         return Ok(());
@@ -3395,7 +3395,7 @@ pub async fn prefetch_folder(
         let pool = app.state::<ImapPool>();
         let account_id = account_id_for_spawn;
 
-        // API accounts (Gmail/Outlook) don't use IMAP prefetch — bodies fetched on-demand
+        // API accounts (Gmail/Outlook) don't use IMAP prefetch â€” bodies fetched on-demand
         {
             let (api_type, _, _) = get_api_type(&db, &account_id);
             if matches!(api_type, ApiType::Gmail | ApiType::Outlook) {
@@ -3831,7 +3831,7 @@ pub async fn batch_update_mails(
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn classify_unclassified_mails(db: State<'_, Database>) -> Result<i32, String> {
     let conn = db.lock_db();
     Ok(crate::classify::classify_unclassified(&conn))
@@ -3839,7 +3839,7 @@ pub fn classify_unclassified_mails(db: State<'_, Database>) -> Result<i32, Strin
 
 use crate::models::{InboxSplit, SplitConditions};
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_inbox_splits(db: State<'_, Database>) -> Result<Vec<InboxSplit>, String> {
     let conn = db.lock_db();
     let mut stmt = conn.prepare(
@@ -3862,7 +3862,7 @@ pub fn list_inbox_splits(db: State<'_, Database>) -> Result<Vec<InboxSplit>, Str
     Ok(rows)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_inbox_split(
     db: State<'_, Database>,
     name: String,
@@ -3884,7 +3884,7 @@ pub fn create_inbox_split(
     Ok(InboxSplit { id, name, position: max_pos + 1, icon, conditions, is_default: false })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn update_inbox_split(
     db: State<'_, Database>,
     id: String,
@@ -3901,7 +3901,7 @@ pub fn update_inbox_split(
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_inbox_split(db: State<'_, Database>, id: String) -> Result<(), String> {
     let conn = db.lock_db();
     conn.execute("DELETE FROM inbox_splits WHERE id = ?1 AND is_default = 0", rusqlite::params![id])
@@ -3909,7 +3909,7 @@ pub fn delete_inbox_split(db: State<'_, Database>, id: String) -> Result<(), Str
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_split_inbox_mails(
     db: State<'_, Database>,
     split_id: String,
@@ -3964,7 +3964,7 @@ pub fn list_split_inbox_mails(
 
         let sql = format!(
             "SELECT {} FROM mails WHERE {} ORDER BY date DESC LIMIT {} OFFSET {}",
-            MAIL_SELECT_COLUMNS, where_parts.join(" AND "), lim, off
+            MAIL_LIST_COLUMNS, where_parts.join(" AND "), lim, off
         );
 
         let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
@@ -3990,7 +3990,7 @@ pub fn list_split_inbox_mails(
 
     let sql = format!(
         "SELECT {} FROM mails WHERE {} ORDER BY date DESC LIMIT {} OFFSET {}",
-        MAIL_SELECT_COLUMNS, where_parts.join(" AND "), lim, off
+        MAIL_LIST_COLUMNS, where_parts.join(" AND "), lim, off
     );
 
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
@@ -4002,7 +4002,9 @@ pub fn list_split_inbox_mails(
     Ok(rows)
 }
 
-const MAIL_SELECT_COLUMNS: &str = "id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, body_text, body_html, is_read, is_starred, is_flagged, is_replied, is_forwarded, has_attachments, thread_id, in_reply_to, size_bytes, COALESCE(flags, ''), COALESCE(list_unsubscribe, ''), COALESCE(is_pinned, 0), COALESCE(snoozed_until, ''), COALESCE(reply_to_json, '[]'), COALESCE(auto_labels, ''), COALESCE(\"references\", '')";
+// List views never render bodies — shipping them over IPC for a whole page of
+// mails is pure transfer cost (the sibling list_* commands blank them too).
+const MAIL_LIST_COLUMNS: &str = "id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, '' as body_text, '' as body_html, is_read, is_starred, is_flagged, is_replied, is_forwarded, has_attachments, thread_id, in_reply_to, size_bytes, COALESCE(flags, ''), COALESCE(list_unsubscribe, ''), COALESCE(is_pinned, 0), COALESCE(snoozed_until, ''), COALESCE(reply_to_json, '[]'), COALESCE(auto_labels, ''), COALESCE(\"references\", '')";
 
 fn map_mail_row(row: &rusqlite::Row) -> rusqlite::Result<Mail> {
     let to_json: String = row.get(8)?;
@@ -4083,7 +4085,7 @@ fn build_split_where(cond: &SplitConditions, params: &mut Vec<Box<dyn rusqlite::
     parts.join(" OR ")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn search_attachments(
     db: State<'_, Database>,
     query: String,
@@ -4235,7 +4237,7 @@ pub fn search_attachments(
     Ok(results)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn count_attachments(
     db: State<'_, Database>,
     query: String,
@@ -4615,7 +4617,7 @@ mod local_move_tests {
         assert!(mail_is_in_local_folder(&db, "m1"));
     }
 
-    /// A mail that no longer exists must not read as local — the callers treat a
+    /// A mail that no longer exists must not read as local â€” the callers treat a
     /// missing row as "nothing to guard", and their own lookups report it.
     #[test]
     fn an_unknown_mail_does_not_count_as_local() {

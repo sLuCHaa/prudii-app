@@ -3,7 +3,7 @@ use crate::models::EmailTemplate;
 use tauri::State;
 use uuid::Uuid;
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_templates(db: State<'_, Database>) -> Result<Vec<EmailTemplate>, String> {
     super::catch_panic(|| {
         let conn = db.lock_db();
@@ -31,7 +31,7 @@ pub fn list_templates(db: State<'_, Database>) -> Result<Vec<EmailTemplate>, Str
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_template(
     db: State<'_, Database>,
     name: String,
@@ -70,7 +70,7 @@ pub fn create_template(
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn update_template(
     db: State<'_, Database>,
     id: String,
@@ -90,7 +90,7 @@ pub fn update_template(
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_template(db: State<'_, Database>, id: String) -> Result<(), String> {
     super::catch_panic(|| {
         let conn = db.lock_db();

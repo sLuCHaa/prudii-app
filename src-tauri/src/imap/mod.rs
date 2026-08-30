@@ -625,6 +625,26 @@ pub async fn sync_mails(
     let mut all_new_mail_ids: Vec<String> = Vec::new();
     let batch_size = 500;
 
+    // Message-IDs of mails this account has filed into a local folder — computed
+    // once per sync, not per 500-message chunk (it scans the whole account).
+    // See the duplicate-prevention notes at the skip site in process_header_batch.
+    let local_message_ids: HashSet<String> = if uids.is_empty() {
+        HashSet::new()
+    } else {
+        let conn = db.lock_db();
+        let mut ids = HashSet::new();
+        if let Ok(mut stmt) = conn.prepare(
+            "SELECT m.message_id FROM mails m JOIN folders f ON m.folder_id = f.id \
+             WHERE m.account_id = ?1 AND m.message_id IS NOT NULL AND m.message_id != '' \
+             AND COALESCE(f.is_local, 0) = 1",
+        ) {
+            if let Ok(rows) = stmt.query_map(rusqlite::params![account_id], |row| row.get::<_, String>(0)) {
+                ids.extend(rows.filter_map(|r| r.ok()));
+            }
+        }
+        ids
+    };
+
     for chunk in uids.chunks(batch_size) {
         // The chunk is a run of consecutive entries from the sorted UID list,
         // so first:last addresses exactly these messages.
@@ -653,7 +673,7 @@ pub async fn sync_mails(
         if batch.is_empty() {
             continue;
         }
-        let (count, ids) = process_header_batch(&batch, &parser, account_id, folder, db);
+        let (count, ids) = process_header_batch(&batch, &parser, account_id, folder, db, &local_message_ids);
         new_count += count;
         all_new_mail_ids.extend(ids);
 
@@ -741,56 +761,55 @@ fn update_folder_counts(
     Ok(())
 }
 
+/// Header fields extracted from one fetched message, parsed without the DB lock.
+struct ParsedHeader {
+    uid: u32,
+    size: u32,
+    subject: String,
+    from_name: String,
+    from_email: String,
+    to_json: String,
+    cc_json: String,
+    bcc_json: String,
+    reply_to_json: String,
+    date: String,
+    message_id: String,
+    in_reply_to: Option<String>,
+    thread_id: Option<String>,
+    has_attachments: bool,
+    list_unsubscribe: String,
+    references_str: String,
+    is_read: bool,
+    is_starred: bool,
+    is_replied: bool,
+}
+
 /// Process a batch of header-only fetches: parse headers, insert into DB.
 /// Returns (new_count, new_mail_ids) for rule engine integration.
+///
+/// `local_message_ids` (computed once per sync by the caller): mails this account
+/// has filed into a local folder. Filing is a purely local re-home: the message is
+/// still sitting in its original server mailbox, and moving it out lowers this
+/// folder's MAX(uid), so the next `UID <last_uid+1>:*` search hands it straight
+/// back. Nothing further down catches it — the claim-by-message-id UPDATE below
+/// only matches rows in *this* folder with uid IS NULL, and the unique index is
+/// (account_id, folder_id, uid), so INSERT OR IGNORE happily creates a second row.
+/// The mail would reappear in the source folder while also sitting in the local
+/// folder. Deliberately *not* fixed by widening `last_uid` across folders: IMAP
+/// UIDs are per-mailbox, so a shared high-water mark would silently skip real new
+/// mail. Mirrors the same filter in gmail::sync and outlook::sync.
 fn process_header_batch(
     batch: &[FetchedMail],
     parser: &MessageParser,
     account_id: &str,
     folder: &Folder,
     db: &Database,
+    local_message_ids: &HashSet<String>,
 ) -> (u32, Vec<String>) {
-    let mut guard = db.lock_db();
-    let conn = &mut *guard;
-    let mut new_count: u32 = 0;
-    let mut new_mail_ids: Vec<String> = Vec::new();
-
-    // Message-IDs of mails this account has filed into a local folder. Filing is a
-    // purely local re-home: the message is still sitting in its original server
-    // mailbox, and moving it out lowers this folder's MAX(uid), so the next
-    // `UID <last_uid+1>:*` search hands it straight back. Nothing further down
-    // catches it — the claim-by-message-id UPDATE below only matches rows in *this*
-    // folder with uid IS NULL, and the unique index is (account_id, folder_id, uid),
-    // so INSERT OR IGNORE happily creates a second row. The mail would reappear in
-    // the source folder while also sitting in the local folder.
-    //
-    // Deliberately *not* fixed by widening `last_uid` across folders: IMAP UIDs are
-    // per-mailbox, so a shared high-water mark would silently skip real new mail.
-    // Mirrors the same filter in gmail::sync and outlook::sync.
-    let local_message_ids: HashSet<String> = {
-        let mut ids = HashSet::new();
-        if let Ok(mut stmt) = conn.prepare(
-            "SELECT m.message_id FROM mails m JOIN folders f ON m.folder_id = f.id \
-             WHERE m.account_id = ?1 AND m.message_id IS NOT NULL AND m.message_id != '' \
-             AND COALESCE(f.is_local, 0) = 1",
-        ) {
-            if let Ok(rows) = stmt.query_map(rusqlite::params![account_id], |row| row.get::<_, String>(0)) {
-                ids.extend(rows.filter_map(|r| r.ok()));
-            }
-        }
-        ids
-    };
-
-    // Use Transaction so that any panic mid-loop auto-rolls-back on drop
-    // instead of leaving a dangling BEGIN that blocks the next writer with SQLITE_BUSY.
-    let tx = match conn.transaction() {
-        Ok(tx) => tx,
-        Err(e) => {
-            log::error!("Failed to begin batch insert transaction: {}", e);
-            return (0, Vec::new());
-        }
-    };
-
+    // MIME parsing is CPU-bound and needs no database access — do all of it
+    // BEFORE taking the DB mutex. Holding the lock across the parse blocked
+    // every UI-facing read for the duration of a 500-message batch.
+    let mut parsed_batch: Vec<ParsedHeader> = Vec::with_capacity(batch.len());
     for fetched in batch {
         let parsed = parser.parse(&fetched.raw_bytes);
 
@@ -872,24 +891,49 @@ fn process_header_batch(
         let is_starred = fetched.flags.iter().any(|f| f.contains("Flagged"));
         let is_replied = fetched.flags.iter().any(|f| f.contains("Answered"));
 
+        parsed_batch.push(ParsedHeader {
+            uid: fetched.uid,
+            size: fetched.size,
+            subject, from_name, from_email, to_json, cc_json, bcc_json, reply_to_json,
+            date, message_id, in_reply_to, thread_id, has_attachments, list_unsubscribe,
+            references_str, is_read, is_starred, is_replied,
+        });
+    }
+
+    let mut guard = db.lock_db();
+    let conn = &mut *guard;
+    let mut new_count: u32 = 0;
+    let mut new_mail_ids: Vec<String> = Vec::new();
+
+    // Use Transaction so that any panic mid-loop auto-rolls-back on drop
+    // instead of leaving a dangling BEGIN that blocks the next writer with SQLITE_BUSY.
+    let tx = match conn.transaction() {
+        Ok(tx) => tx,
+        Err(e) => {
+            log::error!("Failed to begin batch insert transaction: {}", e);
+            return (0, Vec::new());
+        }
+    };
+
+    for p in &parsed_batch {
         let mail_id = uuid::Uuid::new_v4().to_string();
 
-        // Already filed into a local folder (see `local_message_ids` above) —
+        // Already filed into a local folder (see `local_message_ids` docs) —
         // re-inserting it here would duplicate the mail, not recover it.
-        if !message_id.is_empty() && local_message_ids.contains(&message_id) {
+        if !p.message_id.is_empty() && local_message_ids.contains(&p.message_id) {
             log::debug!(
                 "sync_mails '{}': uid {} is filed in a local folder, skipping re-insert",
-                folder.name, fetched.uid
+                folder.name, p.uid
             );
             continue;
         }
 
         // If a locally-moved mail exists with uid=NULL and matching message_id,
         // claim it by updating the UID instead of inserting a duplicate.
-        if !message_id.is_empty() {
+        if !p.message_id.is_empty() {
             let claimed = tx.execute(
                 "UPDATE mails SET uid = ?1 WHERE account_id = ?2 AND folder_id = ?3 AND message_id = ?4 AND uid IS NULL",
-                rusqlite::params![fetched.uid, account_id, folder.id, message_id],
+                rusqlite::params![p.uid, account_id, folder.id, p.message_id],
             ).unwrap_or(0);
             if claimed > 0 {
                 continue;
@@ -899,11 +943,11 @@ fn process_header_batch(
         let insert_result = tx.execute(
             "INSERT OR IGNORE INTO mails (id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, body_text, body_html, is_read, is_starred, is_flagged, is_replied, is_forwarded, has_attachments, thread_id, in_reply_to, size_bytes, list_unsubscribe, reply_to_json, \"references\") VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, '', '', '', ?13, ?14, 0, ?15, 0, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
             rusqlite::params![
-                mail_id, account_id, folder.id, message_id, fetched.uid,
-                subject, from_name, from_email, to_json, cc_json, bcc_json, date,
-                is_read as i32, is_starred as i32, is_replied as i32,
-                has_attachments as i32, thread_id, in_reply_to, fetched.size as i64,
-                list_unsubscribe, reply_to_json, references_str,
+                mail_id, account_id, folder.id, p.message_id, p.uid,
+                p.subject, p.from_name, p.from_email, p.to_json, p.cc_json, p.bcc_json, p.date,
+                p.is_read as i32, p.is_starred as i32, p.is_replied as i32,
+                p.has_attachments as i32, p.thread_id, p.in_reply_to, p.size as i64,
+                p.list_unsubscribe, p.reply_to_json, p.references_str,
             ],
         );
 
@@ -911,7 +955,7 @@ fn process_header_batch(
             if rows > 0 {
                 if let Err(e) = tx.execute(
                     "INSERT INTO mails_fts (mail_id, subject, from_email, from_name, body_text) VALUES (?1, ?2, ?3, ?4, '')",
-                    rusqlite::params![mail_id, subject, from_email, from_name],
+                    rusqlite::params![mail_id, p.subject, p.from_email, p.from_name],
                 ) {
                     log::error!("FTS insert failed for mail {}: {}", mail_id, e);
                 }

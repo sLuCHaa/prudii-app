@@ -30,7 +30,7 @@ fn get_folder_api_type(db: &Database, account_id: &str) -> (FolderApiType, Strin
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_accounts(db: State<'_, Database>) -> Result<Vec<Account>, String> {
     let conn = db.lock_db();
     let mut stmt = conn
@@ -70,7 +70,7 @@ pub fn list_accounts(db: State<'_, Database>) -> Result<Vec<Account>, String> {
     Ok(accounts)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_account(
     app: tauri::AppHandle,
     db: State<'_, Database>,
@@ -169,7 +169,7 @@ pub fn create_account(
 
 /// Re-store a password in the system credential manager for an existing account.
 /// Used when the keyring entry is missing (e.g., after migration from plaintext storage).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn store_account_password(
     db: State<'_, Database>,
     account_id: String,
@@ -195,7 +195,7 @@ pub fn store_account_password(
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn update_account_signature(
     db: State<'_, Database>,
     account_id: String,
@@ -242,7 +242,7 @@ pub fn update_account_signature(
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn update_account_sync_interval(
     db: State<'_, Database>,
     account_id: String,
@@ -265,7 +265,7 @@ pub fn update_account_sync_interval(
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn update_account_settings(
     db: State<'_, Database>,
     account_id: String,
@@ -375,7 +375,7 @@ pub async fn delete_account(
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_folders(
     db: State<'_, Database>,
     account_id: String,
@@ -408,7 +408,7 @@ pub fn list_folders(
     Ok(folders)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn update_folder_color(
     db: State<'_, Database>,
     folder_id: String,

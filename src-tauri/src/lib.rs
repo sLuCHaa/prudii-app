@@ -428,11 +428,17 @@ pub fn run() {
             // Temp directory for PDF preview downloads (redirected from user Downloads)
             let temp_dir = app_data_dir.join("temp_previews");
             let _ = std::fs::create_dir_all(&temp_dir);
-            // Clean up stale temp preview files from previous sessions
-            if let Ok(entries) = std::fs::read_dir(&temp_dir) {
-                for entry in entries.flatten() {
-                    let _ = std::fs::remove_file(entry.path());
-                }
+            // Clean up stale temp preview files from previous sessions — in the
+            // background: filesystem churn must not sit between launch and first paint.
+            {
+                let cleanup_dir = temp_dir.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Ok(entries) = std::fs::read_dir(&cleanup_dir) {
+                        for entry in entries.flatten() {
+                            let _ = std::fs::remove_file(entry.path());
+                        }
+                    }
+                });
             }
 
             // Create main window programmatically so we can register on_download
@@ -472,9 +478,12 @@ pub fn run() {
 
             // One-time-ish cleanup of dead per-user uninstall registry entries from
             // old installs (user-scope, no admin). Safe: only removes entries whose
-            // uninstaller file is gone.
+            // uninstaller file is gone. Runs in the background — it enumerates
+            // every HKCU uninstall subkey and must not delay first paint.
             #[cfg(all(windows, not(debug_assertions)))]
-            cleanup_dead_uninstall_entries();
+            tauri::async_runtime::spawn(async move {
+                cleanup_dead_uninstall_entries();
+            });
 
             let mut win_builder = WebviewWindowBuilder::new(app, "main", Default::default())
                 .title("Prudii Mail")

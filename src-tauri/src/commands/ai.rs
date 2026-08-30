@@ -560,7 +560,7 @@ fn extract_json_array(text: &str) -> String {
     text.to_string()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn clear_ai_cache(
     db: State<'_, Database>,
     mail_id: Option<String>,

@@ -76,6 +76,11 @@ impl Database {
         // Composite indexes for common query patterns (folder listing, starred view)
         let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_mails_folder_date ON mails(folder_id, date DESC);");
         let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_mails_starred_date ON mails(is_starred, date DESC) WHERE is_starred = 1;");
+        // list_mails orders by is_pinned DESC, date DESC — without the pinned
+        // column in the index SQLite sorts the whole folder on every page.
+        let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_mails_folder_pinned_date ON mails(folder_id, is_pinned DESC, date DESC);");
+        // search_attachments/count_attachments filter on is_inline = 0
+        let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_attachments_inline ON attachments(is_inline, mail_id);");
 
         let _ = conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS ai_cache (
@@ -138,6 +143,11 @@ impl Database {
         let _ = conn.execute_batch("ALTER TABLE mails ADD COLUMN auto_labels TEXT DEFAULT '';");
         let _ = conn.execute_batch(
             "CREATE INDEX IF NOT EXISTS idx_mails_auto_labels ON mails(auto_labels) WHERE auto_labels != '';"
+        );
+        // classify_unclassified filters on the OPPOSITE predicate — without
+        // this the classifier full-scans the mails table on every sync.
+        let _ = conn.execute_batch(
+            "CREATE INDEX IF NOT EXISTS idx_mails_unclassified ON mails(id) WHERE auto_labels = '' OR auto_labels IS NULL;"
         );
 
         // Inbox splits table for split inbox feature

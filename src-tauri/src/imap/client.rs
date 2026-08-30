@@ -121,13 +121,19 @@ impl ImapClient {
 
         let t1 = std::time::Instant::now();
 
-        let mut root_store = rustls::RootCertStore::empty();
-        root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-        let tls_config = rustls::ClientConfig::builder()
-            .with_root_certificates(root_store)
-            .with_no_client_auth();
-        let connector =
-            tokio_rustls::TlsConnector::from(std::sync::Arc::new(tls_config));
+        // Built once — cloning ~150 roots and rebuilding the config on every
+        // connect (IDLE reconnects, pool refills) is measurable waste.
+        static TLS_CONFIG: std::sync::LazyLock<std::sync::Arc<rustls::ClientConfig>> =
+            std::sync::LazyLock::new(|| {
+                let mut root_store = rustls::RootCertStore::empty();
+                root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+                std::sync::Arc::new(
+                    rustls::ClientConfig::builder()
+                        .with_root_certificates(root_store)
+                        .with_no_client_auth(),
+                )
+            });
+        let connector = tokio_rustls::TlsConnector::from(TLS_CONFIG.clone());
         let server_name = rustls::pki_types::ServerName::try_from(host.to_string())
             .context("Invalid server name")?;
         let tls_stream = tokio::time::timeout(

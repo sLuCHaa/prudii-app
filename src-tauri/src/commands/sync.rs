@@ -1756,7 +1756,7 @@ pub fn sanitize_fts_query(query: &str) -> String {
     tokens.join(" ")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn search_mails(
     db: State<'_, Database>,
     query: String,
@@ -1769,29 +1769,52 @@ pub fn search_mails(
 
     let conn = db.lock_db();
 
-    // FTS5 search — use snippet() for contextual excerpts with highlight markers
+    // FTS5 search, rank-limited FIRST: `ORDER BY m.date` straight on the MATCH
+    // forced SQLite to materialize every hit, join it, and compute two
+    // snippet() calls per row before discarding all but 50 — hundreds of ms
+    // per keystroke on a common term. Ranking inside the FTS subquery caps
+    // that work at the top hits; the small set is then date-sorted.
+    // (Account-scoped search over-fetches to 500 hits before filtering, so a
+    // busy shared term can still fill its 50 rows.)
     let sql = if account_id.is_some() {
-        "SELECT m.id, m.subject,
-                COALESCE(NULLIF(snippet(mails_fts, 4, '[[hl]]', '[[/hl]]', '…', 48), ''), NULLIF(m.snippet, ''), NULLIF(snippet(mails_fts, 1, '[[hl]]', '[[/hl]]', '…', 48), ''), SUBSTR(m.body_text, 1, 300)) as snippet,
+        "WITH hits AS (
+             SELECT mail_id, rank,
+                    snippet(mails_fts, 4, '[[hl]]', '[[/hl]]', '…', 48) AS snip_body,
+                    snippet(mails_fts, 1, '[[hl]]', '[[/hl]]', '…', 48) AS snip_subject
+             FROM mails_fts
+             WHERE mails_fts MATCH ?1
+             ORDER BY rank
+             LIMIT 500
+         )
+         SELECT m.id, m.subject,
+                COALESCE(NULLIF(hits.snip_body, ''), NULLIF(m.snippet, ''), NULLIF(hits.snip_subject, ''), SUBSTR(m.body_text, 1, 300)) as snippet,
                 m.from_name, m.from_email, m.date, m.folder_id,
                 COALESCE(f.name, '') as folder_name,
-                m.is_read, m.has_attachments, rank
-         FROM mails_fts fts
-         JOIN mails m ON m.id = fts.mail_id
+                m.is_read, m.has_attachments, hits.rank
+         FROM hits
+         JOIN mails m ON m.id = hits.mail_id
          LEFT JOIN folders f ON f.id = m.folder_id
-         WHERE mails_fts MATCH ?1 AND m.account_id = ?2
+         WHERE m.account_id = ?2
          ORDER BY m.date DESC
          LIMIT 50"
     } else {
-        "SELECT m.id, m.subject,
-                COALESCE(NULLIF(snippet(mails_fts, 4, '[[hl]]', '[[/hl]]', '…', 48), ''), NULLIF(m.snippet, ''), NULLIF(snippet(mails_fts, 1, '[[hl]]', '[[/hl]]', '…', 48), ''), SUBSTR(m.body_text, 1, 300)) as snippet,
+        "WITH hits AS (
+             SELECT mail_id, rank,
+                    snippet(mails_fts, 4, '[[hl]]', '[[/hl]]', '…', 48) AS snip_body,
+                    snippet(mails_fts, 1, '[[hl]]', '[[/hl]]', '…', 48) AS snip_subject
+             FROM mails_fts
+             WHERE mails_fts MATCH ?1
+             ORDER BY rank
+             LIMIT 200
+         )
+         SELECT m.id, m.subject,
+                COALESCE(NULLIF(hits.snip_body, ''), NULLIF(m.snippet, ''), NULLIF(hits.snip_subject, ''), SUBSTR(m.body_text, 1, 300)) as snippet,
                 m.from_name, m.from_email, m.date, m.folder_id,
                 COALESCE(f.name, '') as folder_name,
-                m.is_read, m.has_attachments, rank
-         FROM mails_fts fts
-         JOIN mails m ON m.id = fts.mail_id
+                m.is_read, m.has_attachments, hits.rank
+         FROM hits
+         JOIN mails m ON m.id = hits.mail_id
          LEFT JOIN folders f ON f.id = m.folder_id
-         WHERE mails_fts MATCH ?1
          ORDER BY m.date DESC
          LIMIT 50"
     };

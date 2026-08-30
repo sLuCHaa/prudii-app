@@ -2,7 +2,7 @@ use crate::db::Database;
 use crate::models::{CreateRuleRequest, MailRule};
 use tauri::State;
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_rules(
     db: State<'_, Database>,
     account_id: String,
@@ -41,7 +41,7 @@ pub fn list_rules(
     Ok(rules)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_rule(
     db: State<'_, Database>,
     request: CreateRuleRequest,
@@ -97,7 +97,7 @@ pub fn create_rule(
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn update_rule(
     db: State<'_, Database>,
     rule: MailRule,
@@ -126,7 +126,7 @@ pub fn update_rule(
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_rule(
     db: State<'_, Database>,
     rule_id: String,
@@ -140,7 +140,7 @@ pub fn delete_rule(
 /// Apply all enabled rules to the mails currently in the account's Inbox.
 /// Returns the number of mails a rule matched. Resulting actions are queued as
 /// `pending_ops` (by the engine), so they reach the server on the next sync.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn apply_rules_now(
     db: State<'_, Database>,
     account_id: String,

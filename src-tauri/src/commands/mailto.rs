@@ -321,7 +321,7 @@ fn dirs_desktop_path() -> std::path::PathBuf {
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn register_mailto_handler() -> Result<(), String> {
     catch_panic(|| {
         #[cfg(windows)]
@@ -346,7 +346,7 @@ pub fn register_mailto_handler() -> Result<(), String> {
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn unregister_mailto_handler() -> Result<(), String> {
     catch_panic(|| {
         #[cfg(windows)]
@@ -364,7 +364,7 @@ pub fn unregister_mailto_handler() -> Result<(), String> {
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn is_mailto_handler() -> Result<bool, String> {
     catch_panic(|| {
         #[cfg(windows)]

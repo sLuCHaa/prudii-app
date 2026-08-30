@@ -3,64 +3,56 @@ use crate::models::AppSettings;
 use tauri::State;
 use tauri_plugin_autostart::ManagerExt;
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_app_settings(db: State<'_, Database>) -> Result<AppSettings, String> {
     super::catch_panic(|| {
         let conn = db.lock_db();
 
-        fn get_bool(conn: &rusqlite::Connection, key: &str, default: bool) -> bool {
-            conn.query_row(
-                "SELECT value FROM app_settings WHERE key = ?1",
-                rusqlite::params![key],
-                |row| row.get::<_, String>(0),
-            )
-            .map(|v| v == "true" || v == "1")
-            .unwrap_or(default)
+        // One round-trip for the whole table instead of one query_row per key.
+        let mut values = std::collections::HashMap::<String, String>::new();
+        let mut stmt = conn
+            .prepare("SELECT key, value FROM app_settings")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+            .map_err(|e| e.to_string())?;
+        for row in rows.flatten() {
+            values.insert(row.0, row.1);
         }
 
-        fn get_string(conn: &rusqlite::Connection, key: &str, default: &str) -> String {
-            conn.query_row(
-                "SELECT value FROM app_settings WHERE key = ?1",
-                rusqlite::params![key],
-                |row| row.get::<_, String>(0),
-            )
-            .unwrap_or_else(|_| default.to_string())
-        }
-
-        fn get_u32(conn: &rusqlite::Connection, key: &str, default: u32) -> u32 {
-            conn.query_row(
-                "SELECT value FROM app_settings WHERE key = ?1",
-                rusqlite::params![key],
-                |row| row.get::<_, String>(0),
-            )
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(default)
-        }
+        let get_bool = |key: &str, default: bool| -> bool {
+            values.get(key).map(|v| v == "true" || v == "1").unwrap_or(default)
+        };
+        let get_string = |key: &str, default: &str| -> String {
+            values.get(key).cloned().unwrap_or_else(|| default.to_string())
+        };
+        let get_u32 = |key: &str, default: u32| -> u32 {
+            values.get(key).and_then(|v| v.parse().ok()).unwrap_or(default)
+        };
 
         Ok(AppSettings {
-            launch_on_startup: get_bool(&conn, "launch_on_startup", false),
-            show_in_tray: get_bool(&conn, "show_in_tray", true),
-            use_24h_clock: get_bool(&conn, "use_24h_clock", true),
-            show_all_unread_counts: get_bool(&conn, "show_all_unread_counts", false),
-            notifications_enabled: get_bool(&conn, "notifications_enabled", true),
-            notification_sound: get_bool(&conn, "notification_sound", true),
-            language: get_string(&conn, "language", "system"),
-            density: get_string(&conn, "density", "comfortable"),
-            accent_color: get_string(&conn, "accent_color", "blue"),
-            ai_enabled: get_bool(&conn, "ai_enabled", false),
-            ollama_url: get_string(&conn, "ollama_url", "http://localhost:11434"),
-            ai_model: get_string(&conn, "ai_model", ""),
-            undo_send_delay: get_u32(&conn, "undo_send_delay", 5),
+            launch_on_startup: get_bool("launch_on_startup", false),
+            show_in_tray: get_bool("show_in_tray", true),
+            use_24h_clock: get_bool("use_24h_clock", true),
+            show_all_unread_counts: get_bool("show_all_unread_counts", false),
+            notifications_enabled: get_bool("notifications_enabled", true),
+            notification_sound: get_bool("notification_sound", true),
+            language: get_string("language", "system"),
+            density: get_string("density", "comfortable"),
+            accent_color: get_string("accent_color", "blue"),
+            ai_enabled: get_bool("ai_enabled", false),
+            ollama_url: get_string("ollama_url", "http://localhost:11434"),
+            ai_model: get_string("ai_model", ""),
+            undo_send_delay: get_u32("undo_send_delay", 5),
             // "" = never explicitly set — the frontend must not override localStorage with it
-            theme_mode: get_string(&conn, "theme_mode", ""),
-            transparent_sidebar: get_bool(&conn, "transparent_sidebar", true),
-            strip_tracking_params: get_bool(&conn, "strip_tracking_params", true),
+            theme_mode: get_string("theme_mode", ""),
+            transparent_sidebar: get_bool("transparent_sidebar", true),
+            strip_tracking_params: get_bool("strip_tracking_params", true),
         })
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn update_app_settings(
     db: State<'_, Database>,
     app: tauri::AppHandle,

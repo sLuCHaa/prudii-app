@@ -600,7 +600,7 @@ pub async fn license_login(
     Ok(read_cache(&conn))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn license_logout(db: State<'_, Database>) -> Result<(), String> {
     super::catch_panic(|| {
         let conn = db.lock_db();
@@ -612,7 +612,7 @@ pub fn license_logout(db: State<'_, Database>) -> Result<(), String> {
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_license_info(db: State<'_, Database>) -> Result<LicenseInfo, String> {
     super::catch_panic(|| {
         let conn = db.lock_db();
@@ -916,7 +916,7 @@ pub async fn activate_license_key(
     Ok(read_cache(&conn))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn check_feature(db: State<'_, Database>, feature: String) -> Result<bool, String> {
     super::catch_panic(|| {
         let conn = db.lock_db();
@@ -931,7 +931,7 @@ pub fn check_feature(db: State<'_, Database>, feature: String) -> Result<bool, S
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_device_id() -> Result<String, String> {
     Ok(compute_device_id())
 }

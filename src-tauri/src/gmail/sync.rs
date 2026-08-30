@@ -215,10 +215,14 @@ pub async fn reconcile_folder(
 
     {
         let conn = db.lock_db();
-        for id in &stale {
-            let _ = conn.execute("DELETE FROM mails WHERE id = ?1", rusqlite::params![id]);
-        }
-        let _ = conn.execute("DELETE FROM mails_fts WHERE mail_id NOT IN (SELECT id FROM mails)", []);
+        // One transaction — per-row autocommit fsyncs each delete separately.
+        if let Ok(tx) = conn.unchecked_transaction() {
+            for id in &stale {
+                let _ = tx.execute("DELETE FROM mails WHERE id = ?1", rusqlite::params![id]);
+            }
+            let _ = tx.execute("DELETE FROM mails_fts WHERE mail_id NOT IN (SELECT id FROM mails)", []);
+            let _ = tx.commit();
+        };
     }
     log::info!(
         "Gmail reconcile '{}': removed {} stale mails (no longer under label on server)",
@@ -356,15 +360,18 @@ pub async fn initial_sync_folder(
         }
 
         let conn = db.lock_db();
+        // One transaction per batch — autocommit fsyncs every insert on its own.
+        let tx = conn.unchecked_transaction()?;
         for msg in &batch_result.messages {
             synced_ids.insert(msg.id.clone());
-            if insert_message_from_metadata(&conn, msg, folder, account_id)? {
+            if insert_message_from_metadata(&tx, msg, folder, account_id)? {
                 new_count += 1;
             }
             if let Some(ref hid) = msg.history_id {
                 latest_history_id = Some(hid.clone());
             }
         }
+        tx.commit()?;
         drop(conn);
 
         if let Some((app_handle, folder_idx, folder_count, base_new)) = app {
@@ -427,15 +434,17 @@ pub async fn initial_sync_folder(
                     }
 
                     let conn = db.lock_db();
+                    let tx = conn.unchecked_transaction()?;
                     for msg in &batch_result.messages {
                         synced_ids.insert(msg.id.clone());
-                        if insert_message_from_metadata(&conn, msg, folder, account_id)? {
+                        if insert_message_from_metadata(&tx, msg, folder, account_id)? {
                             new_count += 1;
                         }
                         if let Some(ref hid) = msg.history_id {
                             latest_history_id = Some(hid.clone());
                         }
                     }
+                    tx.commit()?;
                     drop(conn);
 
                     for id in chunk {
