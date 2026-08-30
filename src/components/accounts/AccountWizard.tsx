@@ -73,7 +73,7 @@ function StepperHeader({ current }: { current: number }) {
 }
 
 export function AccountWizard() {
-  const { setShowAccountWizard } = useAppStore();
+  const setShowAccountWizard = useAppStore((s) => s.setShowAccountWizard);
   const createAccount = useCreateAccount();
   const syncAccount = useSyncAccount();
   const { data: appConfig } = useAppConfig();

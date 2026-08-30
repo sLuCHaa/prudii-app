@@ -1174,6 +1174,7 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
     countSnoozedMails().then(setSnoozedCount).catch((e) => console.error("[countSnoozedMails]", e));
     listScheduledMails().then((mails) => setScheduledCount(mails.length)).catch((e) => console.error("[listScheduledMails]", e));
     const interval = setInterval(() => {
+      if (document.hidden) return;
       countSnoozedMails().then(setSnoozedCount).catch((e) => console.error("[countSnoozedMails]", e));
       listScheduledMails().then((mails) => setScheduledCount(mails.length)).catch((e) => console.error("[listScheduledMails]", e));
     }, 60000);

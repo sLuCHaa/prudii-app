@@ -34,16 +34,20 @@ import { useTranslation } from "react-i18next";
 
 function DragPreview({
   mail,
-  position,
+  initialPosition,
   grabOffset,
-  width
+  width,
+  nodeRef,
 }: {
   mail: Mail | null;
-  position: { x: number; y: number };
+  initialPosition: { x: number; y: number };
   grabOffset: { x: number; y: number };
   width: number;
+  // The drag handler moves this node imperatively (style.left/top) — going
+  // through React state re-rendered the whole list per drag event.
+  nodeRef: React.MutableRefObject<HTMLDivElement | null>;
 }) {
-  const previewRef = useRef<HTMLDivElement>(null);
+  const previewRef = useRef<HTMLDivElement | null>(null);
   const appSettings = useAppStore((s) => s.appSettings);
   const { t } = useTranslation();
 
@@ -60,12 +64,15 @@ function DragPreview({
 
   return createPortal(
     <div
-      ref={previewRef}
+      ref={(el) => {
+        previewRef.current = el;
+        nodeRef.current = el;
+      }}
       className="fixed pointer-events-none z-9999"
       style={{
         // Position so the cursor stays where you grabbed it
-        left: position.x - grabOffset.x,
-        top: position.y - grabOffset.y,
+        left: initialPosition.x - grabOffset.x,
+        top: initialPosition.y - grabOffset.y,
         transform: "rotate(1deg)",
       }}
     >
@@ -203,7 +210,10 @@ function ScheduledMailsView() {
 
   useEffect(() => {
     fetchScheduled();
-    const interval = setInterval(fetchScheduled, 30000);
+    const interval = setInterval(() => {
+      if (document.hidden) return;
+      fetchScheduled();
+    }, 30000);
     return () => clearInterval(interval);
   }, [fetchScheduled]);
 
@@ -493,16 +503,20 @@ function VirtualMailList({
     return items;
   }, [filteredMails, dateGroupLabels]);
 
+  // Row padding varies by density (index.css data-density rules):
+  // compact py-1.5 → ~60px, comfortable py-2.5 → ~68px, spacious py-4 → ~80px.
+  // Read once per render — estimateSize runs for every index, and a DOM
+  // attribute read per item adds up on long folders.
+  const density = document.documentElement.getAttribute("data-density");
+  const rowEstimate = density === "compact" ? 60 : density === "spacious" ? 80 : 68;
+
   const rowVirtualizer = useVirtualizer({
     count: virtualItems.length + (hasNextPage || isFetchingNextPage ? 1 : 0),
     getScrollElement: () => listRef.current,
     estimateSize: (i) => {
       if (i >= virtualItems.length) return 40;
       if (virtualItems[i].kind === "separator") return 32;
-      // Row padding varies by density (index.css data-density rules):
-      // compact py-1.5 → ~60px, comfortable py-2.5 → ~68px, spacious py-4 → ~80px
-      const density = document.documentElement.getAttribute("data-density");
-      return density === "compact" ? 60 : density === "spacious" ? 80 : 68;
+      return rowEstimate;
     },
     overscan: 8,
     measureElement: (el: Element) => el.getBoundingClientRect().height,
@@ -565,7 +579,7 @@ function VirtualMailList({
   return (
     <div
       ref={listRef}
-      className="flex-1 overflow-y-auto"
+      className="flex-1 overflow-y-auto overscroll-contain"
       style={{ contain: "strict" }}
       onScroll={handleListScroll}
     >
@@ -656,7 +670,7 @@ function VirtualMailList({
                 onDragStart={(e) => handleDragStart(e, mail)}
                 onDrag={handleDrag}
                 onDragEnd={handleDragEnd}
-                className={`relative group/mail mail-item-draggable select-none w-full text-left px-4 py-2.5 border-b border-border-light transition-all cursor-pointer ${
+                className={`relative group/mail mail-item-draggable select-none w-full text-left px-4 py-2.5 border-b border-border-light transition-colors cursor-pointer ${
                   isSelected
                     ? "bg-accent/15"
                     : selectedMailId === mail.id
@@ -985,8 +999,12 @@ export function MailList() {
   const [contextMenu, setContextMenu] = useState<{ mail: Mail; x: number; y: number; bulk: boolean } | null>(null);
   const [snoozeMenuId, setSnoozeMenuId] = useState<string | null>(null);
   const [draggingMail, setDraggingMail] = useState<Mail | null>(null);
-  const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
-  const [grabOffset, setGrabOffset] = useState({ x: 0, y: 0 });
+  // Drag position lives in refs, written straight onto the preview node —
+  // routing it through state re-rendered the entire virtualized list on
+  // every drag event, the single worst interactive stutter in the app.
+  const dragStartPosition = useRef({ x: 0, y: 0 });
+  const grabOffset = useRef({ x: 0, y: 0 });
+  const dragPreviewRef = useRef<HTMLDivElement | null>(null);
   const [dragItemWidth, setDragItemWidth] = useState(320);
   const mailItemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const listRef = useRef<HTMLDivElement>(null);
@@ -995,7 +1013,11 @@ export function MailList() {
   const handleDrag = useCallback((e: DragEvent<HTMLDivElement>) => {
     // During drag, clientX/clientY can be 0 at the end - ignore those
     if (e.clientX !== 0 && e.clientY !== 0) {
-      setDragPosition({ x: e.clientX, y: e.clientY });
+      const el = dragPreviewRef.current;
+      if (el) {
+        el.style.left = `${e.clientX - grabOffset.current.x}px`;
+        el.style.top = `${e.clientY - grabOffset.current.y}px`;
+      }
     }
   }, []);
 
@@ -1012,10 +1034,10 @@ export function MailList() {
     const itemEl = mailItemRefs.current.get(mail.id);
     if (itemEl) {
       const rect = itemEl.getBoundingClientRect();
-      setGrabOffset({
+      grabOffset.current = {
         x: e.clientX - rect.left,
         y: e.clientY - rect.top,
-      });
+      };
       setDragItemWidth(rect.width);
 
       gsap.to(itemEl, {
@@ -1026,7 +1048,7 @@ export function MailList() {
       });
     }
 
-    setDragPosition({ x: e.clientX, y: e.clientY });
+    dragStartPosition.current = { x: e.clientX, y: e.clientY };
     setDraggingMail(mail);
   }, []);
 
@@ -1444,6 +1466,35 @@ export function MailList() {
         return;
       }
 
+      // 'a'/'e' archive the selection — the triage keystroke every mail
+      // client binds (bare 'a' opened the account wizard before; that moved
+      // to Ctrl+Shift+A in App.tsx).
+      if ((e.key === "a" || e.key === "e") && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (contextMenu) return;
+        if (multiSelectMode && selectedMailIds.size > 0) {
+          e.preventDefault();
+          const ids = Array.from(selectedMailIds);
+          setMails(mails.filter((m) => !selectedMailIds.has(m.id)));
+          clearSelection();
+          runMailAction(() => batchUpdateMails(ids, "archive"), {
+            errorKey: "errors.archive",
+            invalidate: invalidateMailQueries,
+          });
+        } else if (selectedMailIndex >= 0 && filteredMails[selectedMailIndex]) {
+          e.preventDefault();
+          const mail = filteredMails[selectedMailIndex];
+          const preActionVisible = filteredMails.length;
+          setPendingRemoveId(mail.id);
+          runMailAction(() => archiveMail(mail.id), {
+            errorKey: "errors.archive",
+            invalidate: invalidateMailQueries,
+            onPendingClear: () => setPendingRemoveId(null),
+            onSuccess: () => handleArchiveSuccess([mail.id], preActionVisible),
+          });
+        }
+        return;
+      }
+
       if (e.key === "j" || e.key === "ArrowDown") {
         e.preventDefault();
         selectMail(Math.min(selectedMailIndex + 1, filteredMails.length - 1));
@@ -1458,7 +1509,7 @@ export function MailList() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [filteredMails, selectedMailIndex, selectMail, setSelectedMailId, multiSelectMode, selectedMailIds, clearSelection, selectAllMails, setMails, mails, isSearchActive, searchResultsData, selectedMailId, contextMenu]);
+  }, [filteredMails, selectedMailIndex, selectMail, setSelectedMailId, multiSelectMode, selectedMailIds, clearSelection, selectAllMails, setMails, mails, isSearchActive, searchResultsData, selectedMailId, contextMenu, invalidateMailQueries, handleArchiveSuccess, setPendingRemoveId]);
 
   // Each view starts at the top — without this, the previous folder's scroll
   // offset carried over and landed the new folder mid-list.
@@ -1826,7 +1877,7 @@ export function MailList() {
         </LoadingCrossfade>
       )}
 
-      <DragPreview mail={draggingMail} position={dragPosition} grabOffset={grabOffset} width={dragItemWidth} />
+      <DragPreview mail={draggingMail} initialPosition={dragStartPosition.current} grabOffset={grabOffset.current} width={dragItemWidth} nodeRef={dragPreviewRef} />
 
       {contextMenu && (
         <MailContextMenu

@@ -10,6 +10,8 @@ interface ResizeHandleProps {
 
 export function ResizeHandle({ onResize, onResizeStart, onResizeEnd, onReset }: ResizeHandleProps) {
   const startX = useRef(0);
+  const pendingDelta = useRef(0);
+  const rafId = useRef<number | null>(null);
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -17,15 +19,30 @@ export function ResizeHandle({ onResize, onResizeStart, onResizeEnd, onReset }: 
       startX.current = e.clientX;
       onResizeStart?.();
 
+      // Coalesce mousemove into one resize per frame — the raw event rate
+      // re-rendered all three panes 60-120 times per second of dragging.
+      const flush = () => {
+        rafId.current = null;
+        const delta = pendingDelta.current;
+        pendingDelta.current = 0;
+        if (delta !== 0) onResize(delta);
+      };
+
       const handleMouseMove = (e: MouseEvent) => {
-        const delta = e.clientX - startX.current;
+        pendingDelta.current += e.clientX - startX.current;
         startX.current = e.clientX;
-        onResize(delta);
+        if (rafId.current === null) {
+          rafId.current = requestAnimationFrame(flush);
+        }
       };
 
       const handleMouseUp = () => {
         document.removeEventListener("mousemove", handleMouseMove);
         document.removeEventListener("mouseup", handleMouseUp);
+        if (rafId.current !== null) {
+          cancelAnimationFrame(rafId.current);
+          flush();
+        }
         document.body.style.cursor = "";
         document.body.style.userSelect = "";
         onResizeEnd?.();

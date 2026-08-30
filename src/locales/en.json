@@ -113,6 +113,7 @@
   "compose": {
     "compose": "Compose",
     "newMessage": "New Message",
+    "openFailedTitle": "Could not open the compose window",
     "reply": "Reply",
     "replyAll": "Reply All",
     "forward": "Forward",
@@ -684,6 +685,9 @@
     "sending": "Sending message...",
     "undo": "Undo",
     "messageSent": "Message sent",
+    "sendFailedTitle": "Sending failed",
+    "savedAsDraft": "A copy was saved to Drafts.",
+    "restore": "Restore",
     "draftCleanupFailedTitle": "Could not remove the draft"
   },
   "rules": {
@@ -764,14 +768,21 @@
     "title": "Keyboard Shortcuts",
     "inputHint": "Press ? to view shortcuts",
     "navigation": "Navigation",
+    "mail": "Mail",
     "compose": "Compose",
     "app": "App",
     "desc": {
       "nextPrev": "Next / previous mail",
       "openMail": "Open selected mail",
+      "search": "Search",
+      "archive": "Archive",
+      "trashSelected": "Move selection to Trash",
+      "selectAll": "Select all",
+      "clearSelection": "Clear selection",
       "newMessage": "New message",
       "commandPalette": "Command palette",
       "toggleSidebar": "Toggle sidebar",
+      "addAccount": "Add account",
       "thisHelp": "This help"
     }
   },

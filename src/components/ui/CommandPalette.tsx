@@ -3,6 +3,7 @@ import { Search, Inbox, Send, FileText, Archive, Star, Settings, Trash2, Pencil,
 import { motion, AnimatePresence } from "motion/react";
 import { SPRING_BOUNCY } from "../motion/tokens";
 import { useAppStore } from "../../stores/appStore";
+import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
 import { changeLanguage } from "../../lib/i18n";
 import { updateAppSettings } from "../../lib/tauri";
@@ -32,6 +33,8 @@ export function CommandPalette() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // useShallow-scoped: an unselected useAppStore() re-renders this
+  // always-mounted component on every store write in the app.
   const {
     accounts,
     folders,
@@ -48,7 +51,25 @@ export function CommandPalette() {
     appSettings,
     setAppSettings,
     toggleSidebar,
-  } = useAppStore();
+  } = useAppStore(
+    useShallow((s) => ({
+      accounts: s.accounts,
+      folders: s.folders,
+      setSelectedFolderId: s.setSelectedFolderId,
+      setSelectedAccountId: s.setSelectedAccountId,
+      setActiveFilter: s.setActiveFilter,
+      setShowAllInboxes: s.setShowAllInboxes,
+      setActiveCombinedFolder: s.setActiveCombinedFolder,
+      setShowSettings: s.setShowSettings,
+      openCompose: s.openCompose,
+      setSearchOpen: s.setSearchOpen,
+      themeMode: s.themeMode,
+      setThemeMode: s.setThemeMode,
+      appSettings: s.appSettings,
+      setAppSettings: s.setAppSettings,
+      toggleSidebar: s.toggleSidebar,
+    }))
+  );
 
   // Expose help-overlay opener via a custom event so App.tsx can respond
   const openHelp = useCallback(() => {
@@ -57,6 +78,8 @@ export function CommandPalette() {
   }, []);
 
   const commands: CommandItem[] = useMemo(() => {
+    // Closed palette: skip building ~40 items with JSX icons on every render.
+    if (!open) return [];
     const items: CommandItem[] = [];
 
     const groupActions = t("commandPalette.group.actions");
@@ -263,7 +286,7 @@ export function CommandPalette() {
     }
 
     return items;
-  }, [accounts, folders, t, themeMode, appSettings, openHelp, toggleSidebar]);
+  }, [open, accounts, folders, t, themeMode, appSettings, openHelp, toggleSidebar]);
 
   const recentIds = useMemo(() => (query === "" ? getRecentCommands() : []), [query]);
   const recentCommands = useMemo(() => {

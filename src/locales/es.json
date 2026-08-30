@@ -113,6 +113,7 @@
   "compose": {
     "compose": "Redactar",
     "newMessage": "Nuevo mensaje",
+    "openFailedTitle": "No se pudo abrir la ventana de redacción",
     "reply": "Responder",
     "replyAll": "Responder a todos",
     "forward": "Reenviar",
@@ -684,6 +685,9 @@
     "sending": "Enviando mensaje...",
     "undo": "Deshacer",
     "messageSent": "Mensaje enviado",
+    "sendFailedTitle": "No se pudo enviar",
+    "savedAsDraft": "Se guardó una copia en Borradores.",
+    "restore": "Restaurar",
     "draftCleanupFailedTitle": "No se pudo eliminar el borrador"
   },
   "rules": {
@@ -764,14 +768,21 @@
     "title": "Atajos de teclado",
     "inputHint": "Presiona ? para ver los atajos",
     "navigation": "Navegación",
+    "mail": "Correo",
     "compose": "Redactar",
     "app": "Aplicación",
     "desc": {
       "nextPrev": "Correo siguiente / anterior",
       "openMail": "Abrir correo seleccionado",
+      "search": "Buscar",
+      "archive": "Archivar",
+      "trashSelected": "Mover selección a la papelera",
+      "selectAll": "Seleccionar todo",
+      "clearSelection": "Quitar selección",
       "newMessage": "Nuevo mensaje",
       "commandPalette": "Paleta de comandos",
       "toggleSidebar": "Alternar barra lateral",
+      "addAccount": "Añadir cuenta",
       "thisHelp": "Esta ayuda"
     }
   },

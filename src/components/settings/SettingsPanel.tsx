@@ -3,6 +3,7 @@ import { X, Sun, Moon, Monitor, Trash2, ChevronRight, ArrowLeft, Save, RefreshCw
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "../../stores/appStore";
+import { useShallow } from "zustand/react/shallow";
 import { useAccounts, useDeleteAccount } from "../../hooks/useAccounts";
 import { useScroller } from "../../hooks/useScroller";
 import { updateAccountSignature, updateAccountSyncInterval, updateAccountSettings, storeAccountPassword, getAppSettings, updateAppSettings, registerMailtoHandler, unregisterMailtoHandler, isMailtoHandler } from "../../lib/tauri";
@@ -562,7 +563,22 @@ function InfoPanel() {
 export function SettingsPanel() {
   const { t } = useTranslation();
   const scrollRef = useScroller<HTMLDivElement>();
-  const { setShowSettings, setShowAccountWizard, themeMode, setThemeMode, setSelectedAccountId, setSelectedFolderId, setSelectedMailId, appSettings, setAppSettings, hasFeature } = useAppStore();
+  // useShallow-scoped: an unselected useAppStore() re-renders the whole
+  // settings panel on every store write (sync ticks, toasts, selection).
+  const { setShowSettings, setShowAccountWizard, themeMode, setThemeMode, setSelectedAccountId, setSelectedFolderId, setSelectedMailId, appSettings, setAppSettings, hasFeature } = useAppStore(
+    useShallow((s) => ({
+      setShowSettings: s.setShowSettings,
+      setShowAccountWizard: s.setShowAccountWizard,
+      themeMode: s.themeMode,
+      setThemeMode: s.setThemeMode,
+      setSelectedAccountId: s.setSelectedAccountId,
+      setSelectedFolderId: s.setSelectedFolderId,
+      setSelectedMailId: s.setSelectedMailId,
+      appSettings: s.appSettings,
+      setAppSettings: s.setAppSettings,
+      hasFeature: s.hasFeature,
+    }))
+  );
   const addToast = useAppStore((s) => s.addToast);
   const { data: accounts, refetch: refetchAccounts } = useAccounts();
   const deleteAccount = useDeleteAccount();

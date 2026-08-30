@@ -113,6 +113,7 @@
   "compose": {
     "compose": "撰写",
     "newMessage": "新邮件",
+    "openFailedTitle": "无法打开撰写窗口",
     "reply": "回复",
     "replyAll": "全部回复",
     "forward": "转发",
@@ -684,6 +685,9 @@
     "sending": "正在发送消息...",
     "undo": "撤销",
     "messageSent": "消息已发送",
+    "sendFailedTitle": "发送失败",
+    "savedAsDraft": "副本已保存到草稿箱。",
+    "restore": "恢复",
     "draftCleanupFailedTitle": "无法删除草稿"
   },
   "rules": {
@@ -764,14 +768,21 @@
     "title": "键盘快捷键",
     "inputHint": "按 ? 查看快捷键",
     "navigation": "导航",
+    "mail": "邮件",
     "compose": "撰写",
     "app": "应用",
     "desc": {
       "nextPrev": "下一封 / 上一封邮件",
       "openMail": "打开选定的邮件",
+      "search": "搜索",
+      "archive": "归档",
+      "trashSelected": "将所选移至废纸篓",
+      "selectAll": "全选",
+      "clearSelection": "取消选择",
       "newMessage": "新邮件",
       "commandPalette": "命令面板",
       "toggleSidebar": "切换侧边栏",
+      "addAccount": "添加账户",
       "thisHelp": "此帮助"
     }
   },

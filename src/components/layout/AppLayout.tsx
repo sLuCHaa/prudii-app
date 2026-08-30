@@ -102,10 +102,15 @@ export function AppLayout() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [toggleSidebar]);
 
+  // Persist only when the drag ends — a synchronous localStorage write per
+  // mousemove stutters the divider.
+  const sidebarWidthRef = useRef(0);
+  const mailListWidthRef = useRef(0);
+
   const handleSidebarResize = useCallback((delta: number) => {
     setSidebarWidth((w) => {
       const next = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, w + delta));
-      localStorage.setItem("sidebar-width", String(next));
+      sidebarWidthRef.current = next;
       return next;
     });
   }, []);
@@ -113,9 +118,17 @@ export function AppLayout() {
   const handleMailListResize = useCallback((delta: number) => {
     setMailListWidth((w) => {
       const next = Math.min(MAILLIST_MAX, Math.max(MAILLIST_MIN, w + delta));
-      localStorage.setItem("maillist-width", String(next));
+      mailListWidthRef.current = next;
       return next;
     });
+  }, []);
+
+  const saveSidebarWidth = useCallback(() => {
+    if (sidebarWidthRef.current > 0) localStorage.setItem("sidebar-width", String(sidebarWidthRef.current));
+  }, []);
+
+  const saveMailListWidth = useCallback(() => {
+    if (mailListWidthRef.current > 0) localStorage.setItem("maillist-width", String(mailListWidthRef.current));
   }, []);
 
   const resetSidebarWidth = useCallback(() => {
@@ -151,7 +164,10 @@ export function AppLayout() {
               <ResizeHandle
                 onResize={handleSidebarResize}
                 onResizeStart={() => setIsResizing(true)}
-                onResizeEnd={() => setIsResizing(false)}
+                onResizeEnd={() => {
+                  setIsResizing(false);
+                  saveSidebarWidth();
+                }}
                 onReset={resetSidebarWidth}
               />
             )}
@@ -166,7 +182,7 @@ export function AppLayout() {
                   <MailList />
                 </div>
 
-                <ResizeHandle onResize={handleMailListResize} onReset={resetMailListWidth} />
+                <ResizeHandle onResize={handleMailListResize} onResizeEnd={saveMailListWidth} onReset={resetMailListWidth} />
 
                 <div className="flex-1 min-w-0 bg-bg">
                   <MailDetail />

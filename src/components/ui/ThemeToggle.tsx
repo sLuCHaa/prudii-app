@@ -4,7 +4,10 @@ import { useAppStore } from "../../stores/appStore";
 const MODES = ["light", "dark", "system"] as const;
 
 export function ThemeToggle() {
-  const { themeMode, setThemeMode } = useAppStore();
+  // Selector-scoped: an unselected useAppStore() re-renders the sidebar
+  // subtree on every store write.
+  const themeMode = useAppStore((s) => s.themeMode);
+  const setThemeMode = useAppStore((s) => s.setThemeMode);
 
   function cycleTheme() {
     const idx = MODES.indexOf(themeMode);

@@ -113,6 +113,7 @@
   "compose": {
     "compose": "Escrever",
     "newMessage": "Nova Mensagem",
+    "openFailedTitle": "Não foi possível abrir a janela de composição",
     "reply": "Responder",
     "replyAll": "Responder a Todos",
     "forward": "Encaminhar",
@@ -684,6 +685,9 @@
     "sending": "Enviando mensagem...",
     "undo": "Desfazer",
     "messageSent": "Mensagem enviada",
+    "sendFailedTitle": "Falha no envio",
+    "savedAsDraft": "Uma cópia foi salva em Rascunhos.",
+    "restore": "Restaurar",
     "draftCleanupFailedTitle": "Não foi possível remover o rascunho"
   },
   "rules": {
@@ -764,14 +768,21 @@
     "title": "Atalhos de Teclado",
     "inputHint": "Pressione ? para ver atalhos",
     "navigation": "Navegação",
+    "mail": "E-mail",
     "compose": "Escrever",
     "app": "Aplicativo",
     "desc": {
       "nextPrev": "Email anterior / próximo",
       "openMail": "Abrir email selecionado",
+      "search": "Pesquisar",
+      "archive": "Arquivar",
+      "trashSelected": "Mover seleção para a lixeira",
+      "selectAll": "Selecionar tudo",
+      "clearSelection": "Limpar seleção",
       "newMessage": "Nova mensagem",
       "commandPalette": "Paleta de comandos",
       "toggleSidebar": "Alternar barra lateral",
+      "addAccount": "Adicionar conta",
       "thisHelp": "Esta ajuda"
     }
   },

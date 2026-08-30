@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback, memo, useMemo } from "react";
 import { Tooltip } from "../ui/Tooltip";
 import { parseISO } from "date-fns";
 import { Reply, ReplyAll, Forward, Archive, Paperclip, FileText, Image, Film, Music, File, Loader2, Download, ChevronDown, ChevronRight, MessageSquare, Copy, Check, Code, Eye, FileType, Printer, MailMinus, ImageOff } from "lucide-react";
+import { SkeletonText } from "../ui/Skeleton";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -672,8 +673,14 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, sing
           </div>
 
           {loading ? (
-            <div className="py-8 flex items-center justify-center">
-              <Loader2 className="w-5 h-5 text-accent animate-spin" />
+            // Content-shaped placeholder instead of a lone spinner — the ~64px
+            // spinner box caused a hard layout jump when the body arrived.
+            <div className="py-4 space-y-3">
+              <SkeletonText lines={3} />
+              <div className="h-2" />
+              <SkeletonText lines={4} />
+              <div className="h-2" />
+              <SkeletonText lines={2} />
             </div>
           ) : bodyError ? (
             <div className="py-4 text-center">
@@ -1311,7 +1318,7 @@ export function ThreadView({ mail }: ThreadViewProps) {
         )}
       </div>
 
-      <div ref={messagesScrollRef} className="relative flex-1 overflow-y-auto px-4 pt-1 pb-4">
+      <div ref={messagesScrollRef} className="relative flex-1 overflow-y-auto overscroll-contain px-4 pt-1 pb-4">
         <ThreadMessages
           threadMails={threadMails}
           isSingleMail={isSingleMail}

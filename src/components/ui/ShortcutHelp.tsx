@@ -13,6 +13,16 @@ const SHORTCUTS: { groupKey: string; items: { keys: string; descKey: string }[] 
     items: [
       { keys: "j / k", descKey: "nextPrev" },
       { keys: "Enter", descKey: "openMail" },
+      { keys: "/", descKey: "search" },
+    ],
+  },
+  {
+    groupKey: "mail",
+    items: [
+      { keys: "a / e", descKey: "archive" },
+      { keys: "Del", descKey: "trashSelected" },
+      { keys: "Ctrl+A", descKey: "selectAll" },
+      { keys: "Esc", descKey: "clearSelection" },
     ],
   },
   {
@@ -26,6 +36,7 @@ const SHORTCUTS: { groupKey: string; items: { keys: string; descKey: string }[] 
     items: [
       { keys: "Ctrl+K", descKey: "commandPalette" },
       { keys: "Ctrl+B", descKey: "toggleSidebar" },
+      { keys: "Ctrl+Shift+A", descKey: "addAccount" },
       { keys: "?", descKey: "thisHelp" },
     ],
   },

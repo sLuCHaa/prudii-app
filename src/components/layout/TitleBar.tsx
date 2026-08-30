@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { Minus, Square, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Copy, Minus, Square, X } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";
@@ -15,6 +15,22 @@ export function TitleBar() {
   const appWindow = useMemo(() => getCurrentWindow(), []);
   const setShowSettings = useAppStore((s) => s.setShowSettings);
   const appSettings = useAppStore((s) => s.appSettings);
+
+  // The middle caption button must read "restore" while maximized — a stuck
+  // maximize glyph is the wrong affordance for Windows users.
+  const [maximized, setMaximized] = useState(false);
+  useEffect(() => {
+    if (isMacOS) return;
+    let disposed = false;
+    const update = () =>
+      appWindow.isMaximized().then((m) => { if (!disposed) setMaximized(m); }).catch(() => {});
+    update();
+    const unlisten = appWindow.onResized(update);
+    return () => {
+      disposed = true;
+      unlisten.then((fn) => fn());
+    };
+  }, [appWindow]);
 
   const handleClose = () => {
     // Defer to next event loop tick so the native mouse tracking loop
@@ -73,10 +89,12 @@ export function TitleBar() {
             <button
               onClick={() => appWindow.toggleMaximize()}
               className="inline-flex items-center justify-center w-11 h-full hover:bg-hover transition-colors"
-              title={t("titleBar.maximize", { defaultValue: "Maximize" })}
-              aria-label={t("titleBar.maximize", { defaultValue: "Maximize" })}
+              title={maximized ? t("titleBar.restore", { defaultValue: "Restore" }) : t("titleBar.maximize", { defaultValue: "Maximize" })}
+              aria-label={maximized ? t("titleBar.restore", { defaultValue: "Restore" }) : t("titleBar.maximize", { defaultValue: "Maximize" })}
             >
-              <Square className="w-4 h-4 text-text-secondary pointer-events-none" />
+              {maximized
+                ? <Copy className="w-3.5 h-3.5 text-text-secondary pointer-events-none scale-x-[-1]" />
+                : <Square className="w-4 h-4 text-text-secondary pointer-events-none" />}
             </button>
             <button
               onClick={handleClose}

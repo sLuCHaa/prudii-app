@@ -50,7 +50,11 @@ export function StackedToast({
       : "bottom-6 right-6";
 
   return (
-    <div className={`fixed ${posClass} z-100 flex flex-col gap-2 pointer-events-none`}>
+    <div
+      role="status"
+      aria-live="polite"
+      className={`fixed ${posClass} z-100 flex flex-col gap-2 pointer-events-none`}
+    >
       <AnimatePresence initial={false}>
         {visible.map((toast, idx) => {
           const reverseIdx = visible.length - 1 - idx; // 0 = newest

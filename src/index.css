@@ -173,6 +173,7 @@
   --color-bg-secondary: var(--c-bg-secondary);
   --color-bg-tertiary:  var(--c-bg-tertiary);
   --color-surface:      var(--c-surface);
+  --color-surface-alt:  var(--c-bg-tertiary);
   --color-sidebar:      var(--c-sidebar);
   --color-border:       var(--c-border);
   --color-border-light: var(--c-border-light);
@@ -661,14 +662,26 @@ button:focus-visible,
   transition: box-shadow 0.15s ease;
 }
 
-/* Folder drop target pulse animation */
+/* Folder drop target pulse: a scaling pseudo-element ring instead of an
+   animated box-shadow — shadows repaint every frame and stack with drag cost. */
 @keyframes folder-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
-  50% { box-shadow: 0 0 0 4px rgba(59, 130, 246, 0); }
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 0; transform: scale(1.04); }
 }
 
 .folder-drop-target {
+  position: relative;
+}
+
+.folder-drop-target::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border: 2px solid rgba(59, 130, 246, 0.6);
+  border-radius: inherit;
+  pointer-events: none;
   animation: folder-pulse 1s ease-in-out infinite;
+  will-change: transform, opacity;
 }
 
 /* ─── Sidebar base (opaque; ambient tint layers on top, see SidebarAmbient) ─── */

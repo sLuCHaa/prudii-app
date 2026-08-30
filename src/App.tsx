@@ -28,6 +28,7 @@ import { backfillBodies, getAppSettings, checkLicenseStartup, getStartupMailto, 
 import { checkForUpdate } from "./lib/updater";
 import { installGlobalTooltips } from "./lib/globalTooltips";
 import { checkFirstHundredOnce } from "./lib/achievements";
+import { playSentSound } from "./lib/sounds";
 import { useDialog } from "./components/ui/DialogProvider";
 import { useTranslation } from "react-i18next";
 import i18next from "i18next";
@@ -39,9 +40,19 @@ const queryClient = new QueryClient({
       retry: 1,
       staleTime: 30_000,
       refetchOnReconnect: true,
+      refetchOnWindowFocus: false,
     },
   },
 });
+
+// Refresh only the queries currently on screen; hidden views refetch when
+// they next mount instead of all re-hitting the DB at once.
+function refreshMailQueries(accountId: string) {
+  queryClient.invalidateQueries({ queryKey: ["folders", accountId], refetchType: "active" });
+  for (const key of ["mails", "filtered-mails", "all-inbox-mails", "combined-folder-mails", "split-inbox-mails"]) {
+    queryClient.invalidateQueries({ queryKey: [key], refetchType: "active" });
+  }
+}
 
 function AppInner() {
   // Once per launch in production; never in dev (rebuilds relaunch the app).
@@ -142,14 +153,7 @@ function AppInner() {
       if (progress.status === "skipped") return;
       if (progress.status === "done") {
         useAppStore.getState().setSyncProgress(progress.account_id, progress);
-        // Refetch all mail-related queries now that sync is actually complete.
-        // refetchQueries forces an immediate refetch (not just marking stale).
-        queryClient.refetchQueries({ queryKey: ["folders", progress.account_id] });
-        queryClient.refetchQueries({ queryKey: ["mails"] });
-        queryClient.refetchQueries({ queryKey: ["filtered-mails"] });
-        queryClient.refetchQueries({ queryKey: ["all-inbox-mails"] });
-        queryClient.refetchQueries({ queryKey: ["combined-folder-mails"] });
-        queryClient.refetchQueries({ queryKey: ["split-inbox-mails"] });
+        refreshMailQueries(progress.account_id);
         queryClient.invalidateQueries({ queryKey: ["accounts"] });
         // Backfill mail bodies in the background for FTS search
         backfillBodies(progress.account_id).catch(() => {});
@@ -303,12 +307,7 @@ function AppInner() {
   // waiting for the sync that follows it.
   useEffect(() => {
     const unlisten = listen<{ account_id: string }>("mails-changed", (event) => {
-      queryClient.refetchQueries({ queryKey: ["folders", event.payload.account_id] });
-      queryClient.refetchQueries({ queryKey: ["mails"] });
-      queryClient.refetchQueries({ queryKey: ["filtered-mails"] });
-      queryClient.refetchQueries({ queryKey: ["all-inbox-mails"] });
-      queryClient.refetchQueries({ queryKey: ["combined-folder-mails"] });
-      queryClient.refetchQueries({ queryKey: ["split-inbox-mails"] });
+      refreshMailQueries(event.payload.account_id);
     });
     return () => { unlisten.then((fn) => fn()); };
   }, []);
@@ -333,29 +332,17 @@ function AppInner() {
     }).catch(() => {});
   }, []);
 
+  // One shared 5-minute tick for due snoozes and scheduled sends.
   useEffect(() => {
+    const refreshLists = () => {
+      queryClient.invalidateQueries({ queryKey: ["mails"], refetchType: "active" });
+      queryClient.invalidateQueries({ queryKey: ["all-inbox-mails"], refetchType: "active" });
+      queryClient.invalidateQueries({ queryKey: ["combined-folder-mails"], refetchType: "active" });
+    };
     const interval = setInterval(() => {
       if (document.hidden) return;
-      checkSnoozedMails().then((count) => {
-        if (count > 0) {
-          queryClient.refetchQueries({ queryKey: ["mails"] });
-          queryClient.refetchQueries({ queryKey: ["all-inbox-mails"] });
-          queryClient.refetchQueries({ queryKey: ["combined-folder-mails"] });
-        }
-      }).catch(() => {});
-    }, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [queryClient]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (document.hidden) return;
-      checkScheduledMails().then((count) => {
-        if (count > 0) {
-          queryClient.refetchQueries({ queryKey: ["mails"] });
-          queryClient.refetchQueries({ queryKey: ["all-inbox-mails"] });
-        }
-      }).catch(() => {});
+      checkSnoozedMails().then((count) => { if (count > 0) refreshLists(); }).catch(() => {});
+      checkScheduledMails().then((count) => { if (count > 0) refreshLists(); }).catch(() => {});
     }, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [queryClient]);
@@ -376,9 +363,34 @@ function AppInner() {
     return () => { unlisten.then((fn) => fn()); };
   }, [dialog, t]);
 
+  // Send/schedule confirmations from compose windows — those windows destroy
+  // themselves before the outcome is visible, so the feedback lives here.
+  const addToast = useAppStore((s) => s.addToast);
+  useEffect(() => {
+    const sentFeedback = (message?: string) => {
+      if (useAppStore.getState().appSettings.notification_sound) playSentSound();
+      addToast("success", t("undoSend.messageSent"), message);
+    };
+    const unlistenSent = listen("mail-sent", () => sentFeedback());
+    const unlistenScheduled = listen<{ scheduled_at: string }>("mail-scheduled", (event) => {
+      addToast(
+        "success",
+        t("scheduled.mailScheduled"),
+        new Date(event.payload.scheduled_at).toLocaleString(),
+      );
+    });
+    const unlistenScheduledSent = listen<{ subject: string }>("scheduled-mail-sent", (event) => {
+      sentFeedback(event.payload.subject);
+    });
+    return () => {
+      unlistenSent.then((fn) => fn());
+      unlistenScheduled.then((fn) => fn());
+      unlistenScheduledSent.then((fn) => fn());
+    };
+  }, [addToast, t]);
+
   // Mail was sent successfully via SMTP but saving to Sent folder failed.
   // Non-blocking warning so user knows (mail was delivered, just not archived locally).
-  const addToast = useAppStore((s) => s.addToast);
   useEffect(() => {
     const unlisten = listen<{ account_id: string; error: string }>(
       "sent-folder-save-failed",
@@ -423,17 +435,20 @@ function AppInner() {
       const target = e.target as HTMLElement;
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
 
-      // 'c' for compose (placeholder)
-      if (e.key === "c" && !e.ctrlKey && !e.metaKey) {
-        // Compose - placeholder
+      if (e.key === "c" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        useAppStore.getState().openCompose("new");
       }
 
-      // '/' for search - handled by MailList
       if (e.key === "/") {
         e.preventDefault();
+        useAppStore.getState().setSearchOpen(true);
       }
 
-      if (e.key === "a" && !e.ctrlKey && !e.metaKey) {
+      // Bare 'a' belongs to archive (MailList) — the wizard is a rare,
+      // once-per-install action and must not fire mid-triage.
+      if (e.key === "A" && (e.ctrlKey || e.metaKey) && e.shiftKey) {
+        e.preventDefault();
         if (useAppStore.getState().canAddAccount()) {
           setShowAccountWizard(true);
         }
@@ -472,7 +487,9 @@ function AppInner() {
   }, [layoutReady, splashDone]);
 
   if (showSplash) {
-    return <SplashScreen onComplete={() => setSplashDone(true)} duration={1200} />;
+    // Short brand moment only — the real gate is layoutReady. A long fixed
+    // duration here is pure added startup latency on every cold launch.
+    return <SplashScreen onComplete={() => setSplashDone(true)} duration={400} />;
   }
 
   return (

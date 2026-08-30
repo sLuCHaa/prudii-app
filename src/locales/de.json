@@ -113,6 +113,7 @@
   "compose": {
     "compose": "Verfassen",
     "newMessage": "Neue Nachricht",
+    "openFailedTitle": "Verfassen-Fenster konnte nicht geöffnet werden",
     "reply": "Antworten",
     "replyAll": "Allen antworten",
     "forward": "Weiterleiten",
@@ -684,6 +685,9 @@
     "sending": "Nachricht wird gesendet...",
     "undo": "Rückgängig",
     "messageSent": "Nachricht gesendet",
+    "sendFailedTitle": "Senden fehlgeschlagen",
+    "savedAsDraft": "Eine Kopie wurde in Entwürfen gespeichert.",
+    "restore": "Wiederherstellen",
     "draftCleanupFailedTitle": "Entwurf konnte nicht entfernt werden"
   },
   "rules": {
@@ -764,14 +768,21 @@
     "title": "Tastenkürzel",
     "inputHint": "Drücke ?, um Tastenkürzel anzuzeigen",
     "navigation": "Navigation",
+    "mail": "E-Mail",
     "compose": "Verfassen",
     "app": "App",
     "desc": {
       "nextPrev": "Nächstes / vorheriges E-Mail",
       "openMail": "Ausgewähltes E-Mail öffnen",
+      "search": "Suchen",
+      "archive": "Archivieren",
+      "trashSelected": "Auswahl in den Papierkorb",
+      "selectAll": "Alle auswählen",
+      "clearSelection": "Auswahl aufheben",
       "newMessage": "Neue Nachricht",
       "commandPalette": "Befehlspalette",
       "toggleSidebar": "Seitenleiste umschalten",
+      "addAccount": "Konto hinzufügen",
       "thisHelp": "Diese Hilfe"
     }
   },

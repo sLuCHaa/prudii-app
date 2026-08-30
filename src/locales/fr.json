@@ -113,6 +113,7 @@
   "compose": {
     "compose": "Rédiger",
     "newMessage": "Nouveau message",
+    "openFailedTitle": "Impossible d'ouvrir la fenêtre de rédaction",
     "reply": "Répondre",
     "replyAll": "Répondre à tous",
     "forward": "Transférer",
@@ -684,6 +685,9 @@
     "sending": "Envoi du message...",
     "undo": "Annuler",
     "messageSent": "Message envoyé",
+    "sendFailedTitle": "Échec de l'envoi",
+    "savedAsDraft": "Une copie a été enregistrée dans Brouillons.",
+    "restore": "Restaurer",
     "draftCleanupFailedTitle": "Impossible de supprimer le brouillon"
   },
   "rules": {
@@ -764,14 +768,21 @@
     "title": "Raccourcis clavier",
     "inputHint": "Appuyez sur ? pour voir les raccourcis",
     "navigation": "Navigation",
+    "mail": "Courrier",
     "compose": "Rédiger",
     "app": "Application",
     "desc": {
       "nextPrev": "Email suivant / précédent",
       "openMail": "Ouvrir l'email sélectionné",
+      "search": "Rechercher",
+      "archive": "Archiver",
+      "trashSelected": "Déplacer la sélection vers la corbeille",
+      "selectAll": "Tout sélectionner",
+      "clearSelection": "Annuler la sélection",
       "newMessage": "Nouveau message",
       "commandPalette": "Palette de commandes",
       "toggleSidebar": "Basculer la barre latérale",
+      "addAccount": "Ajouter un compte",
       "thisHelp": "Cette aide"
     }
   },
