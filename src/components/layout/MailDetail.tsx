@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import { motion, useReducedMotion } from "motion/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "../../stores/appStore";
 import { markAsRead, getMail } from "../../lib/tauri";
@@ -185,6 +186,7 @@ function NoSelectionState() {
 
 export function MailDetail() {
   const { t } = useTranslation();
+  const reduceMotion = useReducedMotion();
   const mails = useAppStore((s) => s.mails);
   const selectedMailId = useAppStore((s) => s.selectedMailId);
   const setMails = useAppStore((s) => s.setMails);
@@ -234,9 +236,19 @@ export function MailDetail() {
 
   // Always use ThreadView — it handles both single mails and conversations.
   // Single mails display as a thread with one message card.
+  // Keyed on the mail: switching mails remounts the thread with a short fade
+  // instead of hard-cutting — j/k triage reads as one flowing motion.
   return (
     <div ref={contentRef} className="flex flex-col h-full">
-      <ThreadView mail={mail} />
+      <motion.div
+        key={mail.id}
+        initial={reduceMotion ? false : { opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.12, ease: "easeOut" }}
+        className="flex flex-col h-full min-h-0"
+      >
+        <ThreadView mail={mail} />
+      </motion.div>
     </div>
   );
 }

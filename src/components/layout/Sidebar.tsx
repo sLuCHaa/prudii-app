@@ -42,6 +42,7 @@ import { Button, IconButton } from "../ui/Button";
 import { CardButton } from "../ui/TabButton";
 import { useDialog } from "../ui/DialogProvider";
 import { SidebarAmbient } from "./SidebarAmbient";
+import { Collapse } from "../motion/Collapse";
 import { createFolder, deleteFolder, renameFolder, updateFolderColor, moveMail, emptyTrash, emptySpam, prefetchFolder, countFolderMails, countCombinedFolderMails, emptyAllTrash, emptyAllSpam, countSnoozedMails, listScheduledMails, forceResyncAccount, syncFolder } from "../../lib/tauri";
 import { useQueryClient } from "@tanstack/react-query";
 import type { BackfillProgress, FolderType, Account as AccountType, Folder as FolderT, MailFlag } from "../../types";
@@ -782,9 +783,9 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
           />
         </button>
 
-        {expanded && folders && (
+        <Collapse open={!!(expanded && folders)}>
           <div className="mt-0.5 space-y-0.5">
-            {folders.map((folder) => (
+            {(folders ?? []).map((folder) => (
               <button
                 key={folder.id}
                 ref={(el) => setFolderRef(folder.id, el)}
@@ -811,7 +812,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
               </button>
             ))}
           </div>
-        )}
+        </Collapse>
 
         {contextMenu && (
           <FolderContextMenu
@@ -1113,7 +1114,7 @@ function CombinedFoldersSection({ collapsed }: { collapsed: boolean }) {
         <span className="font-semibold text-[11px] uppercase tracking-wider text-text-tertiary">{t("sidebar.combinedFolders")}</span>
       </button>
 
-      {expanded && (
+      <Collapse open={expanded}>
         <div className="ml-4 mt-0.5 space-y-0.5">
           {combinedFolders.map((cf) => (
             <button
@@ -1131,7 +1132,7 @@ function CombinedFoldersSection({ collapsed }: { collapsed: boolean }) {
             </button>
           ))}
         </div>
-      )}
+      </Collapse>
 
       {contextMenu && createPortal(
         <div

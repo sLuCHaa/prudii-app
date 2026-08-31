@@ -1361,17 +1361,22 @@ export function ThreadView({ mail }: ThreadViewProps) {
       </div>
 
       <div ref={messagesScrollRef} className="relative flex-1 overflow-y-auto overscroll-contain px-4 pt-1 pb-4">
-        <ThreadMessages
-          threadMails={threadMails}
-          isSingleMail={isSingleMail}
-          loading={loading}
-          selectedMailId={mail.id}
-          onReply={handleReply}
-          onReplyAll={handleReplyAll}
-          onForward={handleForward}
-          onLinkClick={handleLinkClick}
-          onUpdateMail={handleUpdateThreadMail}
-        />
+        {/* Reading measure: on a maximized window plain-text mails otherwise
+            stretch across the full pane width. HTML newsletters bring their
+            own (narrower) layout and are unaffected. */}
+        <div className="mx-auto w-full max-w-[840px]">
+          <ThreadMessages
+            threadMails={threadMails}
+            isSingleMail={isSingleMail}
+            loading={loading}
+            selectedMailId={mail.id}
+            onReply={handleReply}
+            onReplyAll={handleReplyAll}
+            onForward={handleForward}
+            onLinkClick={handleLinkClick}
+            onUpdateMail={handleUpdateThreadMail}
+          />
+        </div>
       </div>
     </div>
   );

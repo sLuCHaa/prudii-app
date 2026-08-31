@@ -25,6 +25,7 @@ import { MagnifierIcon, StarIcon } from "../icons";
 import { MailListSkeleton } from "../ui/MailListSkeleton";
 import { Skeleton } from "../ui/Skeleton";
 import { LoadingCrossfade } from "../motion/LoadingCrossfade";
+import { InboxZeroFlight } from "../motion/InboxZeroFlight";
 import { ENTRANCE, prefersReducedMotion } from "../motion/tokens";
 import { formatMailDate, getDateGroup } from "../../lib/dateUtils";
 import { runMailAction, toastError, causeMessage } from "../../lib/errorToast";
@@ -998,6 +999,7 @@ export function MailList() {
   const dialog = useDialog();
   const [contextMenu, setContextMenu] = useState<{ mail: Mail; x: number; y: number; bulk: boolean } | null>(null);
   const [snoozeMenuId, setSnoozeMenuId] = useState<string | null>(null);
+  const [inboxZeroFlight, setInboxZeroFlight] = useState(false);
   const [draggingMail, setDraggingMail] = useState<Mail | null>(null);
   // Drag position lives in refs, written straight onto the preview node —
   // routing it through state re-rendered the entire virtualized list on
@@ -1366,6 +1368,8 @@ export function MailList() {
 
       if (remaining === 0) {
         const streak = recordInboxZeroDay();
+        // The last mail just left — send the paper planes off after it.
+        setInboxZeroFlight(true);
         s.addToast(
           "success",
           t("achievements.inboxZeroToast"),
@@ -1570,7 +1574,8 @@ export function MailList() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-surface">
+    <div className="relative flex flex-col h-full bg-surface">
+      {inboxZeroFlight && <InboxZeroFlight onDone={() => setInboxZeroFlight(false)} />}
       {multiSelectMode && selectedMailIds.size > 0 ? (
         <div className="px-4 py-2 border-b border-border no-select flex items-center justify-between bg-accent/5">
           <div className="flex items-center gap-2">
