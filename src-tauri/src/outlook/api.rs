@@ -862,6 +862,11 @@ pub struct SendAttachment {
     pub name: String,
     pub content_type: String,
     pub content_bytes: String, // base64
+    /// cid: referenced from the HTML body — Graph renders these inline.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_inline: Option<bool>,
 }
 
 /// Payload for POST /me/messages/{id}/reply

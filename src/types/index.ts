@@ -210,6 +210,9 @@ export interface SendAttachment {
   /// Expected byte length after decoding. The backend refuses to send an attachment
   /// whose payload does not match, so truncation cannot pass unnoticed.
   size?: number;
+  /// Set for images referenced as cid: from the HTML body (quoted signature
+  /// logos); the backend sends them as inline parts instead of listed files.
+  content_id?: string;
 }
 
 export interface SendMailRequest {

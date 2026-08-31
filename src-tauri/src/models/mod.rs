@@ -167,6 +167,10 @@ pub struct SendAttachment {
     /// Optional for drafts persisted by older builds, which did not record it.
     #[serde(default)]
     pub size: Option<u64>,
+    /// Set for images referenced as `cid:` from the HTML body (quoted signature
+    /// logos etc.); they go out as inline parts, not listed attachments.
+    #[serde(default)]
+    pub content_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

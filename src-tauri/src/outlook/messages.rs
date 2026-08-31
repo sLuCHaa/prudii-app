@@ -275,7 +275,7 @@ pub async fn send_mail(
     subject: &str,
     body_text: &str,
     body_html: Option<&str>,
-    attachments: &[(String, String, Vec<u8>)], // (name, mime_type, data)
+    attachments: &[(String, String, Vec<u8>, Option<String>)], // (name, mime_type, data, content_id)
 ) -> Result<()> {
     let to_recipients: Vec<GraphRecipient> = to.iter()
         .filter(|a| !a.trim().is_empty())
@@ -301,12 +301,14 @@ pub async fn send_mail(
     let graph_attachments: Option<Vec<SendAttachment>> = if attachments.is_empty() {
         None
     } else {
-        Some(attachments.iter().map(|(name, mime_type, data)| {
+        Some(attachments.iter().map(|(name, mime_type, data, content_id)| {
             SendAttachment {
                 odata_type: "#microsoft.graph.fileAttachment".to_string(),
                 name: name.clone(),
                 content_type: mime_type.clone(),
                 content_bytes: base64::engine::general_purpose::STANDARD.encode(data),
+                content_id: content_id.clone(),
+                is_inline: content_id.as_ref().map(|_| true),
             }
         }).collect())
     };
@@ -343,7 +345,7 @@ pub async fn reply_mail(
     subject: &str,
     body_text: &str,
     body_html: Option<&str>,
-    attachments: &[(String, String, Vec<u8>)],
+    attachments: &[(String, String, Vec<u8>, Option<String>)],
 ) -> Result<()> {
     let to_recipients: Vec<GraphRecipient> = to.iter()
         .filter(|a| !a.trim().is_empty())
@@ -369,12 +371,14 @@ pub async fn reply_mail(
     let graph_attachments: Option<Vec<SendAttachment>> = if attachments.is_empty() {
         None
     } else {
-        Some(attachments.iter().map(|(name, mime_type, data)| {
+        Some(attachments.iter().map(|(name, mime_type, data, content_id)| {
             SendAttachment {
                 odata_type: "#microsoft.graph.fileAttachment".to_string(),
                 name: name.clone(),
                 content_type: mime_type.clone(),
                 content_bytes: base64::engine::general_purpose::STANDARD.encode(data),
+                content_id: content_id.clone(),
+                is_inline: content_id.as_ref().map(|_| true),
             }
         }).collect())
     };
@@ -402,7 +406,7 @@ pub async fn save_draft(
     subject: &str,
     body_text: &str,
     body_html: Option<&str>,
-    attachments: &[(String, String, Vec<u8>)], // (name, mime_type, data)
+    attachments: &[(String, String, Vec<u8>, Option<String>)], // (name, mime_type, data, content_id)
 ) -> Result<()> {
     let to_recipients: Vec<GraphRecipient> = to.iter()
         .filter(|a| !a.trim().is_empty())
@@ -428,12 +432,14 @@ pub async fn save_draft(
     let graph_attachments: Option<Vec<SendAttachment>> = if attachments.is_empty() {
         None
     } else {
-        Some(attachments.iter().map(|(name, mime_type, data)| {
+        Some(attachments.iter().map(|(name, mime_type, data, content_id)| {
             SendAttachment {
                 odata_type: "#microsoft.graph.fileAttachment".to_string(),
                 name: name.clone(),
                 content_type: mime_type.clone(),
                 content_bytes: base64::engine::general_purpose::STANDARD.encode(data),
+                content_id: content_id.clone(),
+                is_inline: content_id.as_ref().map(|_| true),
             }
         }).collect())
     };

@@ -7,7 +7,7 @@ use lettre::{
 use std::time::Duration;
 
 pub mod attachment;
-pub use attachment::attachment_part;
+pub use attachment::{attachment_part, inline_attachment_part};
 
 pub struct SmtpConfig {
     pub host: String,
@@ -23,6 +23,10 @@ pub struct EmailAttachment {
     pub name: String,
     pub mime_type: String,
     pub data: Vec<u8>,
+    /// Set for images referenced as `cid:` from the HTML body (quoted signature
+    /// logos etc.) — they become inline parts in a multipart/related container
+    /// instead of regular attachments.
+    pub content_id: Option<String>,
 }
 
 pub struct EmailMessage {
@@ -149,29 +153,59 @@ fn build_lettre_message(config: &SmtpConfig, message: &EmailMessage) -> Result<M
         email_builder = email_builder.references(bracketed.join(" "));
     }
 
-    let email = if !message.attachments.is_empty() {
-        let body_part = if let Some(html) = &message.body_html {
-            MultiPart::alternative()
-                .singlepart(SinglePart::builder().header(ContentType::TEXT_PLAIN).body(message.body_text.clone()))
-                .singlepart(SinglePart::builder().header(ContentType::TEXT_HTML).body(html.clone()))
+    // Inline parts (cid: referenced from the HTML) live in a multipart/related
+    // container around the HTML part; everything else stays a regular
+    // attachment in the mixed container. Inline without an HTML body would be
+    // unreferenced — degrade those to regular attachments defensively.
+    let (inline, regular): (Vec<&EmailAttachment>, Vec<&EmailAttachment>) = message
+        .attachments
+        .iter()
+        .partition(|a| a.content_id.is_some() && message.body_html.is_some());
+
+    let html_side = message.body_html.as_ref().map(|html| {
+        let html_part = SinglePart::builder().header(ContentType::TEXT_HTML).body(html.clone());
+        if inline.is_empty() {
+            HtmlSide::Single(html_part)
         } else {
-            MultiPart::alternative().singlepart(SinglePart::builder().header(ContentType::TEXT_PLAIN).body(message.body_text.clone()))
+            let mut related = MultiPart::related().singlepart(html_part);
+            for att in &inline {
+                let cid = att.content_id.as_deref().unwrap_or_default();
+                related = related.singlepart(inline_attachment_part(&att.name, &att.mime_type, att.data.clone(), cid));
+            }
+            HtmlSide::Related(related)
+        }
+    });
+
+    enum HtmlSide {
+        Single(SinglePart),
+        Related(MultiPart),
+    }
+
+    let text_part = SinglePart::builder().header(ContentType::TEXT_PLAIN).body(message.body_text.clone());
+
+    let email = if !regular.is_empty() {
+        let body_part = match html_side {
+            Some(HtmlSide::Single(html_part)) => MultiPart::alternative().singlepart(text_part).singlepart(html_part),
+            Some(HtmlSide::Related(related)) => MultiPart::alternative().singlepart(text_part).multipart(related),
+            None => MultiPart::alternative().singlepart(text_part),
         };
 
         let mut mixed = MultiPart::mixed().multipart(body_part);
-        for att in &message.attachments {
+        for att in &regular {
             mixed = mixed.singlepart(attachment_part(&att.name, &att.mime_type, att.data.clone()));
         }
 
         email_builder.multipart(mixed).context("Failed to build email message")?
-    } else if let Some(html) = &message.body_html {
-        email_builder.multipart(
-            MultiPart::alternative()
-                .singlepart(SinglePart::builder().header(ContentType::TEXT_PLAIN).body(message.body_text.clone()))
-                .singlepart(SinglePart::builder().header(ContentType::TEXT_HTML).body(html.clone())),
-        ).context("Failed to build email message")?
     } else {
-        email_builder.body(message.body_text.clone()).context("Failed to build email message")?
+        match html_side {
+            Some(HtmlSide::Single(html_part)) => email_builder.multipart(
+                MultiPart::alternative().singlepart(text_part).singlepart(html_part),
+            ).context("Failed to build email message")?,
+            Some(HtmlSide::Related(related)) => email_builder.multipart(
+                MultiPart::alternative().singlepart(text_part).multipart(related),
+            ).context("Failed to build email message")?,
+            None => email_builder.body(message.body_text.clone()).context("Failed to build email message")?,
+        }
     };
 
     Ok(email)
@@ -282,6 +316,73 @@ mod tests {
         }
     }
 
+    fn message_with(html: Option<&str>, attachments: Vec<EmailAttachment>) -> EmailMessage {
+        EmailMessage {
+            to: vec!["to@example.com".into()],
+            cc: vec![],
+            bcc: vec![],
+            subject: "Test".into(),
+            body_text: "hi".into(),
+            body_html: html.map(|h| h.to_string()),
+            in_reply_to: None,
+            references: None,
+            attachments,
+        }
+    }
+
+    fn att(name: &str, mime: &str, content_id: Option<&str>) -> EmailAttachment {
+        EmailAttachment {
+            name: name.into(),
+            mime_type: mime.into(),
+            data: vec![1, 2, 3],
+            content_id: content_id.map(String::from),
+        }
+    }
+
+    /// The reply-quote case: an embedded signature image travels as an inline
+    /// part inside multipart/related, referenced by Content-ID — never as a
+    /// local file:// path and never as a listed attachment.
+    #[test]
+    fn cid_attachments_become_inline_parts_in_a_related_container() {
+        let message = message_with(
+            Some("<p>Hi</p><img src=\"cid:inline-1@prudii\">"),
+            vec![
+                att("logo.png", "image/png", Some("inline-1@prudii")),
+                att("report.pdf", "application/pdf", None),
+            ],
+        );
+
+        let raw = String::from_utf8_lossy(&build_message(config(), message).unwrap()).to_string();
+        let unfolded = raw.replace("\r\n ", "").replace("\r\n\t", "");
+
+        assert!(unfolded.contains("multipart/related"), "{unfolded}");
+        assert!(unfolded.contains("Content-ID: <inline-1@prudii>"), "{unfolded}");
+        assert!(unfolded.contains("Content-Disposition: inline; filename=\"logo.png\""), "{unfolded}");
+        assert!(unfolded.contains("Content-Disposition: attachment; filename=\"report.pdf\""), "{unfolded}");
+    }
+
+    #[test]
+    fn without_cid_attachments_no_related_container_is_emitted() {
+        let message = message_with(
+            Some("<p>Hi</p>"),
+            vec![att("report.pdf", "application/pdf", None)],
+        );
+        let raw = String::from_utf8_lossy(&build_message(config(), message).unwrap()).to_string();
+        assert!(!raw.contains("multipart/related"), "{raw}");
+        assert!(raw.contains("multipart/mixed"), "{raw}");
+    }
+
+    #[test]
+    fn inline_only_mail_needs_no_mixed_container() {
+        let message = message_with(
+            Some("<img src=\"cid:inline-1@prudii\">"),
+            vec![att("logo.png", "image/png", Some("inline-1@prudii"))],
+        );
+        let raw = String::from_utf8_lossy(&build_message(config(), message).unwrap()).to_string();
+        assert!(raw.contains("multipart/related"), "{raw}");
+        assert!(!raw.contains("multipart/mixed"), "{raw}");
+    }
+
     /// Guards the whole outgoing path, not just the helper: a mail built for the wire
     /// must carry the RFC 6266 filename form, never lettre's `filename*0*` continuation.
     #[test]
@@ -299,6 +400,7 @@ mod tests {
                 name: "export-übersicht.xml".into(),
                 mime_type: "text/xml".into(),
                 data: b"<root/>".to_vec(),
+                content_id: None,
             }],
         };
 

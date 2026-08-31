@@ -1,5 +1,55 @@
 import { describe, it, expect } from "vitest";
-import { fillEmptyParagraphs } from "./outgoingHtml";
+import { fillEmptyParagraphs, extractLocalImages, dropImagesByCid } from "./outgoingHtml";
+
+describe("extractLocalImages", () => {
+  it("rewrites file:// image sources to cid: and reports the local paths", () => {
+    const html = '<p>Hi</p><blockquote><img src="file://C:\\Users\\x\\attachments\\m1\\logo.png" width="80"></blockquote>';
+    const { html: out, images } = extractLocalImages(html);
+    expect(images).toEqual([{ path: "C:\\Users\\x\\attachments\\m1\\logo.png", cid: "inline-1@prudii" }]);
+    expect(out).toContain('src="cid:inline-1@prudii"');
+    expect(out).not.toContain("file://");
+    expect(out).toContain('width="80"');
+  });
+
+  it("reuses one cid when the same file appears twice", () => {
+    const html = '<img src="file://C:\\a\\x.png"><img src="file://C:\\a\\x.png">';
+    const { html: out, images } = extractLocalImages(html);
+    expect(images).toHaveLength(1);
+    expect(out.match(/cid:inline-1@prudii/g)).toHaveLength(2);
+  });
+
+  it("assigns distinct cids to distinct files", () => {
+    const html = '<img src="file://C:\\a\\x.png"><img src="file://C:\\a\\y.png">';
+    const { images } = extractLocalImages(html);
+    expect(images.map((i) => i.cid)).toEqual(["inline-1@prudii", "inline-2@prudii"]);
+  });
+
+  it("tolerates file:/// with three slashes and percent-encoded paths", () => {
+    const html = '<img src="file:///C:/Users/x/gr%C3%B6%C3%9Fe.png">';
+    const { images } = extractLocalImages(html);
+    expect(images[0].path).toBe("C:/Users/x/größe.png");
+  });
+
+  it("leaves html without local images byte-identical", () => {
+    const html = '<p>Text</p><img src="data:image/png;base64,AAA"><img src="https://x.de/a.png">';
+    const { html: out, images } = extractLocalImages(html);
+    expect(out).toBe(html);
+    expect(images).toHaveLength(0);
+  });
+});
+
+describe("dropImagesByCid", () => {
+  it("removes exactly the unresolvable images", () => {
+    const html = '<img src="cid:inline-1@prudii"><p>A</p><img src="cid:inline-2@prudii">';
+    const out = dropImagesByCid(html, ["inline-2@prudii"]);
+    expect(out).toBe('<img src="cid:inline-1@prudii"><p>A</p>');
+  });
+
+  it("is a no-op for an empty cid list", () => {
+    const html = '<img src="cid:inline-1@prudii">';
+    expect(dropImagesByCid(html, [])).toBe(html);
+  });
+});
 
 describe("fillEmptyParagraphs", () => {
   it("gives an empty paragraph a line break so it renders as a blank line", () => {

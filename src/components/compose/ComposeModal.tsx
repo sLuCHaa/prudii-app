@@ -27,10 +27,10 @@ import { saveDraft, syncAccount, fetchMailBody, suggestReplies, sendMail, schedu
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AiRepliesEvent, EmailTemplate, ReplySuggestion } from "../../types";
 import { escapeHtml } from "../../lib/sanitize";
-import { fillEmptyParagraphs } from "../../lib/outgoingHtml";
+import { fillEmptyParagraphs, extractLocalImages, dropImagesByCid } from "../../lib/outgoingHtml";
 import { HtmlMailFrame } from "../layout/MailDetail";
 import { RecipientInput, type RecipientInputHandle } from "./RecipientInput";
-import type { Mail, SendMailRequest, Account, AppSettings } from "../../types";
+import type { Mail, SendMailRequest, SendAttachment, Attachment, Account, AppSettings } from "../../types";
 
 interface AttachmentFile {
   id: string;
@@ -416,6 +416,54 @@ function cleanEmailHtml(html: string): string {
     .replace(/<o:p\b[^>]*\/>/gi, "")
     .replace(/\sstyle="[^"]*mso-[^"]*"/gi, "")
     .replace(/<!--\[if[\s\S]*?<!\[endif\]-->/gi, "");
+}
+
+/**
+ * Turn `file://` images in outgoing HTML (quoted signature logos etc.) into
+ * cid: inline attachments. Sending the local paths verbatim leaked the
+ * machine's filesystem layout and arrived as broken images — and every
+ * further reply quoted the broken reference onward.
+ */
+async function resolveQuotedInlineImages(
+  bodyHtml: string,
+  originalMail: Mail | null,
+): Promise<{ html: string; inlineAttachments: SendAttachment[] }> {
+  const { html, images } = extractLocalImages(bodyHtml);
+  if (images.length === 0) return { html: bodyHtml, inlineAttachments: [] };
+
+  const normalize = (p: string) => p.replace(/\//g, "\\").toLowerCase();
+  const stored = originalMail
+    ? await listAttachments(originalMail.id).catch(() => [] as Attachment[])
+    : [];
+  const byPath = new Map(
+    stored.filter((a) => a.local_path).map((a) => [normalize(a.local_path!), a])
+  );
+
+  const inlineAttachments: SendAttachment[] = [];
+  const unresolved: string[] = [];
+  for (const ref of images) {
+    const att = byPath.get(normalize(ref.path));
+    if (!att) {
+      unresolved.push(ref.cid);
+      continue;
+    }
+    try {
+      const payload = await getAttachmentData(att.id);
+      inlineAttachments.push({
+        name: payload.name,
+        mime_type: payload.mime_type,
+        data: payload.data,
+        size: payload.size,
+        content_id: ref.cid,
+      });
+    } catch {
+      unresolved.push(ref.cid);
+    }
+  }
+
+  // A reference we cannot back with a file must not go out at all — a dangling
+  // cid: renders as a broken image, a file:// path leaks the local disk.
+  return { html: dropImagesByCid(html, unresolved), inlineAttachments };
 }
 
 function generateReplyBodyHtml(mail: Mail): string {
@@ -1337,7 +1385,10 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       return false;
     }
 
-    const { bodyHtml, bodyText } = buildOutgoingBody();
+    const { bodyHtml: localHtml, bodyText } = buildOutgoingBody();
+    // Quoted signature images are stored as file:// paths for display — they
+    // must leave as cid: inline attachments, never as local paths.
+    const { html: bodyHtml, inlineAttachments } = await resolveQuotedInlineImages(localHtml, originalMail ?? null);
 
     const request: SendMailRequest = {
       account_id: fromAccountId,
@@ -1349,12 +1400,15 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       body_html: bodyHtml,
       in_reply_to: originalMail?.message_id || undefined,
       references: buildReferencesChain(originalMail),
-      attachments: attachments.map((att) => ({
-        name: att.name,
-        mime_type: att.type,
-        data: att.data,
-        size: att.size,
-      })),
+      attachments: [
+        ...attachments.map((att) => ({
+          name: att.name,
+          mime_type: att.type,
+          data: att.data,
+          size: att.size,
+        })),
+        ...inlineAttachments,
+      ],
     };
 
     const snapshot: ComposeSnapshot = {
@@ -1362,7 +1416,8 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       cc: [...effCc],
       bcc: [...effBcc],
       subject,
-      bodyHtml,
+      // The snapshot restores a local compose window — keep the file:// form.
+      bodyHtml: localHtml,
       bodyText,
       fromAccountId,
       attachments: attachments.map((att) => ({
@@ -1514,7 +1569,9 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       return;
     }
 
-    const { bodyHtml, bodyText } = buildOutgoingBody();
+    const { bodyHtml: localHtml, bodyText } = buildOutgoingBody();
+    // Same as handleSend: quoted signature images leave as cid: inline parts.
+    const { html: bodyHtml, inlineAttachments } = await resolveQuotedInlineImages(localHtml, originalMail ?? null);
 
     const request: SendMailRequest = {
       account_id: fromAccountId,
@@ -1526,12 +1583,15 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       body_html: bodyHtml,
       in_reply_to: originalMail?.message_id || undefined,
       references: buildReferencesChain(originalMail),
-      attachments: attachments.map((att) => ({
-        name: att.name,
-        mime_type: att.type,
-        data: att.data,
-        size: att.size,
-      })),
+      attachments: [
+        ...attachments.map((att) => ({
+          name: att.name,
+          mime_type: att.type,
+          data: att.data,
+          size: att.size,
+        })),
+        ...inlineAttachments,
+      ],
     };
 
     setSending(true);
@@ -1594,8 +1654,11 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     try {
       const editorHtml = editor.getHTML();
       const editorText = editor.getText({ blockSeparator: '\n\n' });
-      const bodyHtml = editorHtml + quotedHtml;
+      const localHtml = editorHtml + quotedHtml;
       const bodyText = editorText + (quotedHtml ? "\n\n" + quotedHtml.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim() : "");
+      // The draft is APPENDed to the server's Drafts folder — quoted signature
+      // images must go as cid: inline parts there too, never as local paths.
+      const { html: bodyHtml, inlineAttachments } = await resolveQuotedInlineImages(localHtml, originalMail ?? null);
 
       const request: SendMailRequest = {
         account_id: fromAccountId,
@@ -1610,14 +1673,17 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         // Only attachments whose bytes are present go into the draft — a failed one
         // would be baked in as an empty file and the send guard could never clear it.
         // The user is told which ones were left out.
-        attachments: attachments
-          .filter((att) => att.status === "ready")
-          .map((att) => ({
-            name: att.name,
-            mime_type: att.type,
-            data: att.data,
-            size: att.size,
-          })),
+        attachments: [
+          ...attachments
+            .filter((att) => att.status === "ready")
+            .map((att) => ({
+              name: att.name,
+              mime_type: att.type,
+              data: att.data,
+              size: att.size,
+            })),
+          ...inlineAttachments,
+        ],
       };
 
       const omitted = attachments.filter((att) => att.status !== "ready");

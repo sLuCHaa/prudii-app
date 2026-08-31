@@ -28,3 +28,67 @@ export function fillEmptyParagraphs(html: string): string {
   // `>`, which holds for what the editor produces.
   return html.replace(/<p([^>]*)>\s*<\/p>/gi, "<p$1><br></p>");
 }
+
+export interface LocalImageRef {
+  /** Absolute local path of the stored attachment file. */
+  path: string;
+  /** Content-ID assigned for the outgoing message (without angle brackets). */
+  cid: string;
+}
+
+/**
+ * Rewrite `file://` image sources to `cid:` references and report the local
+ * paths so the caller can attach the files as inline parts.
+ *
+ * Quoted reply/forward HTML carries embedded images (signature logos etc.) as
+ * `file://` paths — the backend rewrote their cid: references to the locally
+ * stored files for display. Sending those paths verbatim leaks the local
+ * filesystem layout to the recipient and renders as broken images on their
+ * machine; every further reply then quotes the broken reference onward.
+ *
+ * Same contract as fillEmptyParagraphs: targeted string replacement, never a
+ * DOM round-trip — everything not explicitly matched stays byte-identical.
+ */
+export function extractLocalImages(html: string): { html: string; images: LocalImageRef[] } {
+  const images: LocalImageRef[] = [];
+  const cidByPath = new Map<string, string>();
+
+  const out = html.replace(
+    /(<img\b[^>]*?\bsrc=)(["'])(file:\/\/[^"']+)\2/gi,
+    (_m, pre: string, quote: string, src: string) => {
+      const path = decodeFileUrl(src);
+      let cid = cidByPath.get(path);
+      if (!cid) {
+        cid = `inline-${cidByPath.size + 1}@prudii`;
+        cidByPath.set(path, cid);
+        images.push({ path, cid });
+      }
+      return `${pre}${quote}cid:${cid}${quote}`;
+    }
+  );
+
+  return { html: out, images };
+}
+
+function decodeFileUrl(src: string): string {
+  // The backend writes raw platform paths ("file://C:\..."), but HTML that
+  // passed through the editor may come back percent-encoded and with the
+  // three-slash form ("file:///C:/...").
+  let path = src.slice("file://".length);
+  if (/^\/[A-Za-z]:/.test(path)) path = path.slice(1);
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    return path;
+  }
+}
+
+/** Remove the `<img>` tags whose cid: reference could not be resolved to a file. */
+export function dropImagesByCid(html: string, cids: string[]): string {
+  let out = html;
+  for (const cid of cids) {
+    const escaped = cid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    out = out.replace(new RegExp(`<img\\b[^>]*\\bsrc=(["'])cid:${escaped}\\1[^>]*>`, "gi"), "");
+  }
+  return out;
+}

@@ -45,6 +45,7 @@ fn decode_attachments(attachments: Option<Vec<SendAttachment>>) -> Result<Vec<Em
                 name: att.name,
                 mime_type: att.mime_type,
                 data,
+                content_id: att.content_id,
             })
         })
         .collect()
@@ -152,9 +153,9 @@ pub async fn send_mail(app: AppHandle, db: State<'_, Database>, pool: State<'_, 
             .map_err(|e| format!("Gmail send failed: {}", e))?;
     } else if is_outlook_api {
         // Send via Microsoft Graph API — JSON payload, no SMTP
-        let att_tuples: Vec<(String, String, Vec<u8>)> = message.attachments
+        let att_tuples: Vec<(String, String, Vec<u8>, Option<String>)> = message.attachments
             .into_iter()
-            .map(|a| (a.name, a.mime_type, a.data))
+            .map(|a| (a.name, a.mime_type, a.data, a.content_id))
             .collect();
 
         let client = crate::outlook::api::OutlookClient::new(&credential);
@@ -379,9 +380,9 @@ pub async fn save_draft(db: State<'_, Database>, pool: State<'_, ImapPool>, requ
 
     if is_outlook_api {
         // Outlook Graph API: POST /me/messages creates a draft
-        let attachments: Vec<(String, String, Vec<u8>)> = decode_attachments(request.attachments.clone())?
+        let attachments: Vec<(String, String, Vec<u8>, Option<String>)> = decode_attachments(request.attachments.clone())?
             .into_iter()
-            .map(|att| (smtp::attachment::repair_encoded_name(&att.name), att.mime_type, att.data))
+            .map(|att| (smtp::attachment::repair_encoded_name(&att.name), att.mime_type, att.data, att.content_id))
             .collect();
 
         let client = crate::outlook::api::OutlookClient::new(&credential);
@@ -471,40 +472,52 @@ pub async fn save_draft(db: State<'_, Database>, pool: State<'_, ImapPool>, requ
         message_builder = message_builder.references(bracketed.join(" "));
     }
 
-    let attachments: Vec<(String, String, Vec<u8>)> = decode_attachments(request.attachments.clone())?
-        .into_iter()
-        .map(|att| (att.name, att.mime_type, att.data))
-        .collect();
+    let attachments = decode_attachments(request.attachments.clone())?;
+    // Mirrors build_lettre_message: cid-referenced images live in a
+    // multipart/related container around the HTML part, so a draft synced back
+    // from the server round-trips its embedded images like any received mail.
+    let (inline, regular): (Vec<&smtp::EmailAttachment>, Vec<&smtp::EmailAttachment>) = attachments
+        .iter()
+        .partition(|a| a.content_id.is_some() && request.body_html.is_some());
 
-    let message = if attachments.is_empty() {
-        if let Some(ref html) = request.body_html {
-            message_builder
-                .multipart(
-                    MultiPart::alternative()
-                        .singlepart(SinglePart::plain(request.body_text.clone()))
-                        .singlepart(SinglePart::html(html.clone())),
-                )
-                .map_err(|e| format!("Failed to build message: {}", e))?
+    enum HtmlSide {
+        Single(SinglePart),
+        Related(MultiPart),
+    }
+    let html_side = request.body_html.as_ref().map(|html| {
+        let html_part = SinglePart::html(html.clone());
+        if inline.is_empty() {
+            HtmlSide::Single(html_part)
         } else {
-            message_builder
-                .body(request.body_text.clone())
-                .map_err(|e| format!("Failed to build message: {}", e))?
+            let mut related = MultiPart::related().singlepart(html_part);
+            for att in &inline {
+                let cid = att.content_id.as_deref().unwrap_or_default();
+                related = related.singlepart(smtp::inline_attachment_part(&att.name, &att.mime_type, att.data.clone(), cid));
+            }
+            HtmlSide::Related(related)
         }
+    });
+    let text_part = SinglePart::plain(request.body_text.clone());
+
+    let message = if regular.is_empty() {
+        match html_side {
+            Some(HtmlSide::Single(h)) => message_builder
+                .multipart(MultiPart::alternative().singlepart(text_part).singlepart(h)),
+            Some(HtmlSide::Related(r)) => message_builder
+                .multipart(MultiPart::alternative().singlepart(text_part).multipart(r)),
+            None => message_builder.body(request.body_text.clone()),
+        }
+        .map_err(|e| format!("Failed to build message: {}", e))?
     } else {
-        let body_part = if let Some(ref html) = request.body_html {
-            MultiPart::alternative()
-                .singlepart(SinglePart::plain(request.body_text.clone()))
-                .singlepart(SinglePart::html(html.clone()))
-        } else {
-            MultiPart::alternative()
-                .singlepart(SinglePart::plain(request.body_text.clone()))
+        let body_part = match html_side {
+            Some(HtmlSide::Single(h)) => MultiPart::alternative().singlepart(text_part).singlepart(h),
+            Some(HtmlSide::Related(r)) => MultiPart::alternative().singlepart(text_part).multipart(r),
+            None => MultiPart::alternative().singlepart(text_part),
         };
-
         let mut mixed = MultiPart::mixed().multipart(body_part);
-        for (name, mime_type, data) in attachments {
-            mixed = mixed.singlepart(smtp::attachment_part(&name, &mime_type, data));
+        for att in &regular {
+            mixed = mixed.singlepart(smtp::attachment_part(&att.name, &att.mime_type, att.data.clone()));
         }
-
         message_builder
             .multipart(mixed)
             .map_err(|e| format!("Failed to build message: {}", e))?

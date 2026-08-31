@@ -137,6 +137,52 @@ pub fn attachment_part(name: &str, mime_type: &str, data: Vec<u8>) -> SinglePart
         .body(data)
 }
 
+/// Content-ID carrying a pre-formatted value — lettre has no builder for it.
+#[derive(Debug, Clone)]
+struct RawContentId(String);
+
+impl Header for RawContentId {
+    fn name() -> HeaderName {
+        HeaderName::new_from_ascii_str("Content-ID")
+    }
+
+    fn parse(s: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(Self(s.to_string()))
+    }
+
+    fn display(&self) -> HeaderValue {
+        HeaderValue::new(Self::name(), self.0.clone())
+    }
+}
+
+/// Build the MIME part for an image embedded in the HTML body (`cid:` reference).
+/// Lives inside multipart/related next to the HTML part; the inline disposition
+/// plus Content-ID make clients render it in place instead of listing it.
+pub fn inline_attachment_part(name: &str, mime_type: &str, data: Vec<u8>, content_id: &str) -> SinglePart {
+    let name = repair_encoded_name(name);
+    let content_type: ContentType = mime_type
+        .parse()
+        .unwrap_or_else(|_| "application/octet-stream".parse().expect("static mime type"));
+
+    let ascii = ascii_fallback(&name);
+    let disposition = if name.is_ascii() {
+        format!("inline; filename=\"{}\"", ascii)
+    } else {
+        format!(
+            "inline; filename=\"{}\"; filename*=UTF-8''{}",
+            ascii,
+            pct_encode(&name)
+        )
+    };
+
+    SinglePart::builder()
+        .header(content_type)
+        .header(ContentTransferEncoding::Base64)
+        .header(RawContentDisposition(disposition))
+        .header(RawContentId(format!("<{}>", content_id.trim_matches(|c| c == '<' || c == '>'))))
+        .body(data)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
