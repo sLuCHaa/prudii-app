@@ -380,10 +380,6 @@ pub async fn incremental_sync_folder(
                     rusqlite::params![account_id, msg.id],
                 ).unwrap_or(0);
                 if deleted_count > 0 {
-                    let _ = conn.execute(
-                        "DELETE FROM mails_fts WHERE mail_id NOT IN (SELECT id FROM mails)",
-                        [],
-                    );
                     changes += 1;
                 }
                 continue;
@@ -603,13 +599,7 @@ fn insert_message_from_graph(
     );
 
     match result {
-        Ok(rows) if rows > 0 => {
-            let _ = conn.execute(
-                "INSERT INTO mails_fts (mail_id, subject, from_email, from_name, body_text) VALUES (?1, ?2, ?3, ?4, '')",
-                rusqlite::params![mail_id, subject, from_email, from_name],
-            );
-            Ok(true)
-        }
+        Ok(rows) if rows > 0 => Ok(true),
         Ok(_) => Ok(false), // Duplicate (caught by INSERT OR IGNORE)
         Err(e) => {
             if e.to_string().contains("UNIQUE") {

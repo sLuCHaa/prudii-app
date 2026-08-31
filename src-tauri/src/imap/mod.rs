@@ -209,10 +209,6 @@ pub async fn sync_folders(
                     };
 
                     let _ = conn.execute(
-                        "DELETE FROM mails_fts WHERE mail_id IN (SELECT id FROM mails WHERE folder_id = ?1)",
-                        rusqlite::params![remove_id],
-                    );
-                    let _ = conn.execute(
                         "DELETE FROM folders WHERE id = ?1",
                         rusqlite::params![remove_id],
                     );
@@ -264,10 +260,6 @@ pub async fn sync_folders(
 
     if !stale_folders.is_empty() {
         for (stale_id, stale_path) in &stale_folders {
-            let _ = conn.execute(
-                "DELETE FROM mails_fts WHERE mail_id IN (SELECT id FROM mails WHERE folder_id = ?1)",
-                rusqlite::params![stale_id],
-            );
             let _ = conn.execute("DELETE FROM mails WHERE folder_id = ?1", rusqlite::params![stale_id]);
             let _ = conn.execute("DELETE FROM folders WHERE id = ?1", rusqlite::params![stale_id]);
             log::info!("Removed stale folder '{}' (no longer on server)", stale_path);
@@ -417,10 +409,6 @@ async fn reconcile_and_sync_flags(
                 let conn = db.lock_db();
                 for stale_id in &stale_ids {
                     let _ = conn.execute(
-                        "DELETE FROM mails_fts WHERE mail_id = ?1",
-                        rusqlite::params![stale_id],
-                    );
-                    let _ = conn.execute(
                         "DELETE FROM mails WHERE id = ?1",
                         rusqlite::params![stale_id],
                     );
@@ -507,9 +495,6 @@ pub async fn sync_mails(
                 "DELETE FROM mails WHERE folder_id = ?1 AND uid IS NOT NULL",
                 rusqlite::params![folder.id],
             ).unwrap_or(0);
-            if n > 0 {
-                let _ = conn.execute("DELETE FROM mails_fts WHERE mail_id NOT IN (SELECT id FROM mails)", []);
-            }
             n
         };
         if removed > 0 {
@@ -530,7 +515,6 @@ pub async fn sync_mails(
         );
         let conn = db.lock_db();
         let _ = conn.execute("DELETE FROM mails WHERE folder_id = ?1", rusqlite::params![folder.id]);
-        let _ = conn.execute("DELETE FROM mails_fts WHERE mail_id NOT IN (SELECT id FROM mails)", []);
         drop(conn);
     }
     // Case 2: UIDNEXT unchanged — check for missing or stale local mails
@@ -953,12 +937,6 @@ fn process_header_batch(
 
         if let Ok(rows) = insert_result {
             if rows > 0 {
-                if let Err(e) = tx.execute(
-                    "INSERT INTO mails_fts (mail_id, subject, from_email, from_name, body_text) VALUES (?1, ?2, ?3, ?4, '')",
-                    rusqlite::params![mail_id, p.subject, p.from_email, p.from_name],
-                ) {
-                    log::error!("FTS insert failed for mail {}: {}", mail_id, e);
-                }
                 new_mail_ids.push(mail_id.clone());
                 new_count += 1;
             }
@@ -1082,11 +1060,6 @@ pub fn insert_local_sent_mail(
         ],
     )
     .context("Failed to insert local sent mail")?;
-
-    let _ = conn.execute(
-        "INSERT INTO mails_fts (mail_id, subject, from_email, from_name, body_text) VALUES (?1, ?2, ?3, ?4, ?5)",
-        rusqlite::params![mail_id, subject, from_email, from_name, body_text],
-    );
 
     Ok(mail_id)
 }
@@ -1318,11 +1291,6 @@ pub async fn store_body_and_attachments(db: &Database, mail_id: &str, body_bytes
             "UPDATE mails SET body_text = ?1, body_html = ?2, snippet = ?3, has_attachments = ?4 WHERE id = ?5",
             rusqlite::params![body_text, body_html, snippet, (real_attachment_count > 0) as i32, mail_id],
         )?;
-
-        let _ = conn.execute(
-            "UPDATE mails_fts SET body_text = ?1 WHERE mail_id = ?2",
-            rusqlite::params![body_text, mail_id],
-        );
     } else {
         anyhow::bail!("Body konnte nicht geparst werden für Mail {}", mail_id);
     }
@@ -1542,10 +1510,6 @@ pub async fn backfill_folder_bodies(
                 let _ = conn.execute(
                     "UPDATE mails SET body_text = ?1, body_html = ?2, snippet = ?3, has_attachments = ?4 WHERE id = ?5",
                     rusqlite::params![body_text, body_html, snippet, (real_attachment_count > 0) as i32, mail_id],
-                );
-                let _ = conn.execute(
-                    "UPDATE mails_fts SET body_text = ?1 WHERE mail_id = ?2",
-                    rusqlite::params![body_text, mail_id],
                 );
 
                 processed += 1;
@@ -2029,4 +1993,145 @@ pub async fn append_to_folder(
         .context(format!("Failed to append message to {}", folder_path))?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod header_batch_tests {
+    use super::{process_header_batch, FetchedMail};
+    use crate::db::Database;
+    use crate::models::Folder;
+    use mail_parser::MessageParser;
+    use std::collections::HashSet;
+
+    fn fixture(tag: &str) -> Database {
+        let dir = std::env::temp_dir().join(format!("prudii-header-batch-{}-{}", tag, std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let db = Database::new(dir).expect("temp db");
+        {
+            let conn = db.lock_db();
+            conn.execute(
+                "INSERT INTO accounts (id, email, display_name, provider, imap_host, smtp_host) \
+                 VALUES ('acc', 'a@x.de', 'A', 'imap', 'imap.x.de', 'smtp.x.de')",
+                [],
+            ).unwrap();
+            conn.execute(
+                "INSERT INTO folders (id, account_id, name, folder_type, path, unread_count, total_count) \
+                 VALUES ('inbox', 'acc', 'INBOX', 'inbox', 'INBOX', 0, 0)",
+                [],
+            ).unwrap();
+        }
+        db
+    }
+
+    fn inbox() -> Folder {
+        Folder {
+            id: "inbox".into(),
+            account_id: "acc".into(),
+            name: "INBOX".into(),
+            folder_type: "inbox".into(),
+            path: "INBOX".into(),
+            unread_count: 0,
+            total_count: 0,
+            is_local: false,
+            color: String::new(),
+        }
+    }
+
+    fn fetched(uid: u32, subject: &str, message_id: &str, refs: Option<&str>) -> FetchedMail {
+        let mut raw = format!(
+            "From: Alice <alice@example.com>\r\nTo: Bob <bob@example.com>\r\nSubject: {}\r\nMessage-ID: {}\r\nDate: Mon, 05 Jan 2026 10:00:00 +0000\r\n",
+            subject, message_id
+        );
+        if let Some(r) = refs {
+            raw.push_str(&format!("References: {}\r\n", r));
+        }
+        raw.push_str("\r\n");
+        let size = raw.len() as u32;
+        FetchedMail { uid, raw_bytes: raw.into_bytes(), flags: vec![r"\Seen".to_string()], size }
+    }
+
+    #[test]
+    fn inserts_parse_headers_and_index_search() {
+        let db = fixture("insert");
+        let parser = MessageParser::default();
+        let batch = vec![
+            fetched(1, "Quarterly numbers", "<q1@example.com>", None),
+            fetched(2, "Re: Quarterly numbers", "<q2@example.com>", Some("<q1@example.com>")),
+        ];
+        let (count, ids) = process_header_batch(&batch, &parser, "acc", &inbox(), &db, &HashSet::new());
+        assert_eq!(count, 2);
+        assert_eq!(ids.len(), 2);
+
+        let conn = db.lock_db();
+        let subj: String = conn.query_row(
+            "SELECT subject FROM mails WHERE uid = 1", [], |r| r.get(0),
+        ).unwrap();
+        assert_eq!(subj, "Quarterly numbers");
+
+        // Reply threads onto the parent via References (mail_parser hands the
+        // header value back without angle brackets)
+        let thread: String = conn.query_row(
+            "SELECT thread_id FROM mails WHERE uid = 2", [], |r| r.get(0),
+        ).unwrap();
+        assert_eq!(thread, "q1@example.com");
+
+        // The FTS trigger indexed the freshly inserted headers
+        let hits: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM mails_fts WHERE mails_fts MATCH 'quarterly'", [], |r| r.get(0),
+        ).unwrap();
+        assert_eq!(hits, 2);
+    }
+
+    #[test]
+    fn refetch_of_same_uids_is_idempotent() {
+        let db = fixture("refetch");
+        let parser = MessageParser::default();
+        let batch = vec![fetched(7, "Once", "<once@example.com>", None)];
+        let (first, _) = process_header_batch(&batch, &parser, "acc", &inbox(), &db, &HashSet::new());
+        let (second, _) = process_header_batch(&batch, &parser, "acc", &inbox(), &db, &HashSet::new());
+        assert_eq!(first, 1);
+        assert_eq!(second, 0, "unique (account, folder, uid) makes refetch a no-op");
+
+        let conn = db.lock_db();
+        let rows: i64 = conn.query_row("SELECT COUNT(*) FROM mails", [], |r| r.get(0)).unwrap();
+        assert_eq!(rows, 1);
+    }
+
+    #[test]
+    fn mail_filed_into_local_folder_is_not_reinserted() {
+        let db = fixture("localskip");
+        let parser = MessageParser::default();
+        let mut local_ids = HashSet::new();
+        local_ids.insert("filed@example.com".to_string());
+
+        let batch = vec![fetched(3, "Filed away", "<filed@example.com>", None)];
+        let (count, _) = process_header_batch(&batch, &parser, "acc", &inbox(), &db, &local_ids);
+        assert_eq!(count, 0, "locally filed mail must not reappear in the source folder");
+    }
+
+    #[test]
+    fn locally_moved_row_is_claimed_by_uid_instead_of_duplicated() {
+        let db = fixture("claim");
+        {
+            let conn = db.lock_db();
+            // A locally-moved mail: sits in this folder with no UID yet.
+            // message_id stored the way the parser produces it (no brackets).
+            conn.execute(
+                "INSERT INTO mails (id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, body_text, body_html, is_read, is_starred, is_flagged, is_replied, is_forwarded, has_attachments, size_bytes) \
+                 VALUES ('moved', 'acc', 'inbox', 'moved@example.com', NULL, 'Moved', 'A', 'alice@example.com', '[]', '[]', '[]', '2026-01-01T00:00:00Z', '', '', '', 0, 0, 0, 0, 0, 0, 0)",
+                [],
+            ).unwrap();
+        }
+        let parser = MessageParser::default();
+        let batch = vec![fetched(42, "Moved", "<moved@example.com>", None)];
+        let (count, _) = process_header_batch(&batch, &parser, "acc", &inbox(), &db, &HashSet::new());
+        assert_eq!(count, 0, "claimed, not inserted");
+
+        let conn = db.lock_db();
+        let (rows, uid): (i64, Option<u32>) = conn.query_row(
+            "SELECT COUNT(*), MAX(uid) FROM mails WHERE account_id = 'acc'", [], |r| Ok((r.get(0)?, r.get(1)?)),
+        ).unwrap();
+        assert_eq!(rows, 1);
+        assert_eq!(uid, Some(42), "existing row got the server UID");
+    }
 }

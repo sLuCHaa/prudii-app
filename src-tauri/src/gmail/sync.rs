@@ -220,7 +220,6 @@ pub async fn reconcile_folder(
             for id in &stale {
                 let _ = tx.execute("DELETE FROM mails WHERE id = ?1", rusqlite::params![id]);
             }
-            let _ = tx.execute("DELETE FROM mails_fts WHERE mail_id NOT IN (SELECT id FROM mails)", []);
             let _ = tx.commit();
         };
     }
@@ -602,13 +601,7 @@ fn insert_message_from_metadata(
     );
 
     match result {
-        Ok(rows) if rows > 0 => {
-            let _ = conn.execute(
-                "INSERT INTO mails_fts (mail_id, subject, from_email, from_name, body_text) VALUES (?1, ?2, ?3, ?4, '')",
-                rusqlite::params![mail_id, subject, from_email, from_name],
-            );
-            Ok(true)
-        }
+        Ok(rows) if rows > 0 => Ok(true),
         Ok(_) => Ok(false), // Duplicate (caught by INSERT OR IGNORE)
         Err(e) => {
             if e.to_string().contains("UNIQUE") {

@@ -89,15 +89,38 @@ CREATE TABLE IF NOT EXISTS drafts (
     FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
 );
 
--- Full-Text Search (standalone table, not external content)
+-- Full-Text Search: external content over mails, synced by the triggers below.
+-- The previous standalone table keyed on an UNINDEXED mail_id column, so every
+-- body write and delete had to full-scan the entire FTS index; rowid-addressed
+-- external content makes those O(1) and the triggers replace all the manual
+-- maintenance the sync paths used to do.
+-- (v38 migration in db/mod.rs drops the old table and rebuilds this one.)
 CREATE VIRTUAL TABLE IF NOT EXISTS mails_fts USING fts5(
-    mail_id UNINDEXED,
     subject,
     from_email,
     from_name,
     body_text,
+    content='mails',
+    content_rowid='rowid',
     tokenize='unicode61'
 );
+
+CREATE TRIGGER IF NOT EXISTS mails_fts_ai AFTER INSERT ON mails BEGIN
+    INSERT INTO mails_fts(rowid, subject, from_email, from_name, body_text)
+    VALUES (new.rowid, new.subject, new.from_email, new.from_name, new.body_text);
+END;
+
+CREATE TRIGGER IF NOT EXISTS mails_fts_ad AFTER DELETE ON mails BEGIN
+    INSERT INTO mails_fts(mails_fts, rowid, subject, from_email, from_name, body_text)
+    VALUES ('delete', old.rowid, old.subject, old.from_email, old.from_name, old.body_text);
+END;
+
+CREATE TRIGGER IF NOT EXISTS mails_fts_au AFTER UPDATE OF subject, from_email, from_name, body_text ON mails BEGIN
+    INSERT INTO mails_fts(mails_fts, rowid, subject, from_email, from_name, body_text)
+    VALUES ('delete', old.rowid, old.subject, old.from_email, old.from_name, old.body_text);
+    INSERT INTO mails_fts(rowid, subject, from_email, from_name, body_text)
+    VALUES (new.rowid, new.subject, new.from_email, new.from_name, new.body_text);
+END;
 
 CREATE TABLE IF NOT EXISTS mail_rules (
     id TEXT PRIMARY KEY,

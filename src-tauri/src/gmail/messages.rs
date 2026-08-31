@@ -161,11 +161,6 @@ pub async fn fetch_message_body(
             "UPDATE mails SET body_text = ?1, body_html = ?2, snippet = ?3, has_attachments = ?4 WHERE id = ?5",
             rusqlite::params![body_text, body_html, snippet, has_attachments as i32, mail_id],
         )?;
-
-        let _ = conn.execute(
-            "UPDATE mails_fts SET body_text = ?1 WHERE mail_id = ?2",
-            rusqlite::params![body_text, mail_id],
-        );
     }
 
     Ok(())

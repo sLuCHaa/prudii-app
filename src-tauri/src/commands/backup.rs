@@ -1163,11 +1163,9 @@ fn do_restore_backup_inner(
         });
 
         let conn = db.lock_db();
-        conn.execute_batch("DELETE FROM mails_fts;").map_err(|e| e.to_string())?;
-        conn.execute_batch(
-            "INSERT INTO mails_fts (mail_id, subject, from_email, from_name, body_text)
-             SELECT id, subject, from_email, from_name, body_text FROM mails;"
-        ).map_err(|e| e.to_string())?;
+        // External-content FTS: 'rebuild' wipes and re-indexes from the mails table.
+        conn.execute_batch("INSERT INTO mails_fts(mails_fts) VALUES('rebuild');")
+            .map_err(|e| e.to_string())?;
     }
 
     if manifest.includes.attachments {

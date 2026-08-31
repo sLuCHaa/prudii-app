@@ -649,11 +649,20 @@ pub async fn list_scheduled_mails(
 #[tauri::command]
 pub async fn check_scheduled_mails(
     app: AppHandle,
-    db: State<'_, Database>,
+    _db: State<'_, Database>,
 ) -> Result<i32, String> {
+    run_scheduled_check(&app).await
+}
+
+/// Send every due scheduled mail. Called by the frontend command above and by
+/// the Rust-side timer in lib.rs — the timer exists because a JS interval only
+/// fires while the main window is visible, so mails scheduled for 09:00 never
+/// went out while the app sat in the tray.
+pub async fn run_scheduled_check(app: &AppHandle) -> Result<i32, String> {
     const MAX_RETRIES: i32 = 3;
 
     let due_drafts: Vec<(String, String, String, String, String, String, String, String, String, String, String, i32)> = {
+        let db = app.state::<Database>();
         let conn = db.lock_db();
         let mut stmt = conn.prepare(
             "SELECT id, account_id, COALESCE(subject, ''), COALESCE(to_addresses, '[]'), \
@@ -724,6 +733,7 @@ pub async fn check_scheduled_mails(
                 let _ = app.emit("scheduled-mail-sent", serde_json::json!({
                     "draft_id": draft_id,
                     "subject": subject,
+                    "account_id": account_id,
                 }));
             }
             Err(e) => {

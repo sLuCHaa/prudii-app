@@ -3,7 +3,7 @@ use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
-const SCHEMA_VERSION: u32 = 37;
+const SCHEMA_VERSION: u32 = 38;
 
 pub struct Database {
     pub conn: Mutex<Connection>,
@@ -148,6 +148,74 @@ impl Database {
         // this the classifier full-scans the mails table on every sync.
         let _ = conn.execute_batch(
             "CREATE INDEX IF NOT EXISTS idx_mails_unclassified ON mails(id) WHERE auto_labels = '' OR auto_labels IS NULL;"
+        );
+
+        // v38: bracket-normalized message-id columns for thread lookup.
+        // Message-IDs are stored inconsistently (with/without <>) depending on
+        // the sync path; get_thread_mails used to strip brackets with REPLACE()
+        // inside the WHERE clause, which made every lookup an unindexable full
+        // scan × 3. VIRTUAL generated columns stay correct on every insert path
+        // without touching the writers, and the indexes make thread lookup a
+        // handful of point reads.
+        let _ = conn.execute_batch(
+            "ALTER TABLE mails ADD COLUMN message_id_norm TEXT GENERATED ALWAYS AS (REPLACE(REPLACE(COALESCE(message_id, ''), '<', ''), '>', '')) VIRTUAL;"
+        );
+        let _ = conn.execute_batch(
+            "ALTER TABLE mails ADD COLUMN in_reply_to_norm TEXT GENERATED ALWAYS AS (REPLACE(REPLACE(COALESCE(in_reply_to, ''), '<', ''), '>', '')) VIRTUAL;"
+        );
+        let _ = conn.execute_batch(
+            "ALTER TABLE mails ADD COLUMN thread_id_norm TEXT GENERATED ALWAYS AS (REPLACE(REPLACE(COALESCE(thread_id, ''), '<', ''), '>', '')) VIRTUAL;"
+        );
+        let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_mails_msgid_norm ON mails(account_id, message_id_norm);");
+        let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_mails_irt_norm ON mails(account_id, in_reply_to_norm);");
+        let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_mails_tid_norm ON mails(account_id, thread_id_norm);");
+
+        // v38: swap mails_fts from a standalone table (mail_id UNINDEXED — every
+        // body write/delete full-scanned the whole index) to external content
+        // over mails, kept in sync by the triggers in schema.sql.
+        // MUST run before any migration below that writes mails rows: on an old
+        // database the triggers created by schema.sql already exist while the
+        // OLD table is still in place, and a fired trigger against it would
+        // fail the migration. One-time index rebuild on upgrade.
+        if prev_version < 38 {
+            let t0 = std::time::Instant::now();
+            let _ = conn.execute_batch("DROP TABLE IF EXISTS mails_fts;");
+            let _ = conn.execute_batch(
+                "CREATE VIRTUAL TABLE mails_fts USING fts5(
+                    subject,
+                    from_email,
+                    from_name,
+                    body_text,
+                    content='mails',
+                    content_rowid='rowid',
+                    tokenize='unicode61'
+                );"
+            );
+            let _ = conn.execute_batch("INSERT INTO mails_fts(mails_fts) VALUES('rebuild');");
+            log::info!("DB v38: rebuilt mails_fts as external content in {:?}", t0.elapsed());
+        }
+
+        // v38: compose-window autosave snapshots (crash/quit safety net).
+        let _ = conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS compose_autosaves (
+                id TEXT PRIMARY KEY,
+                payload TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );"
+        );
+
+        // v38: contacts table for recipient autocomplete — populated
+        // incrementally from synced mail (see contacts.rs). Searching this
+        // instead of LIKE-scanning the whole mails table per keystroke.
+        let _ = conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS contacts (
+                account_id TEXT NOT NULL,
+                email TEXT NOT NULL,
+                name TEXT NOT NULL DEFAULT '',
+                last_seen TEXT NOT NULL DEFAULT '',
+                frequency INTEGER NOT NULL DEFAULT 1,
+                PRIMARY KEY (account_id, email)
+            );"
         );
 
         // Inbox splits table for split inbox feature
@@ -386,24 +454,8 @@ impl Database {
             if api_dupes > 0 || general_dupes > 0 {
                 log::info!("DB cleanup: removed {} API duplicates + {} general duplicates", api_dupes, general_dupes);
             }
-            // Clean up orphaned FTS entries from deleted duplicates
-            let fts_orphans: usize = conn.execute(
-                "DELETE FROM mails_fts WHERE mail_id NOT IN (SELECT id FROM mails)",
-                [],
-            ).unwrap_or(0);
-            if fts_orphans > 0 {
-                log::info!("DB cleanup: removed {} orphaned FTS entries", fts_orphans);
-            }
-            // Backfill missing FTS entries for mails that were never indexed
-            let fts_backfill: usize = conn.execute(
-                "INSERT INTO mails_fts (mail_id, subject, from_email, from_name, body_text)
-                 SELECT id, subject, from_email, from_name, COALESCE(body_text, '')
-                 FROM mails WHERE id NOT IN (SELECT mail_id FROM mails_fts)",
-                [],
-            ).unwrap_or(0);
-            if fts_backfill > 0 {
-                log::info!("DB cleanup: backfilled {} missing FTS entries", fts_backfill);
-            }
+            // FTS orphan cleanup / backfill removed in v38: mails_fts is
+            // external content kept in sync by triggers — it cannot drift.
         }
         // Ensure the API dedup index exists (recreate if it failed before due to duplicates).
         // Mails without a Message-ID are excluded: SQLite treats empty strings as equal, so

@@ -1,6 +1,7 @@
 pub mod accounts;
 pub mod ai;
 pub mod app_config;
+pub mod autosave;
 pub mod backup;
 pub mod connectivity;
 pub mod license;

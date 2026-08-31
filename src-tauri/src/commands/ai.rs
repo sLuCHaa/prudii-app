@@ -695,7 +695,7 @@ fn run_attachment_search(
              JOIN mails m ON m.id = a.mail_id
              LEFT JOIN folders f ON f.id = m.folder_id
              WHERE {where_clause}
-               AND (a.mail_id IN (SELECT mail_id FROM mails_fts WHERE mails_fts MATCH ?{fts_param})
+               AND (a.mail_id IN (SELECT m2.id FROM mails_fts JOIN mails m2 ON m2.rowid = mails_fts.rowid WHERE mails_fts MATCH ?{fts_param})
                     OR a.filename LIKE ?{like_param})
              ORDER BY m.date DESC
              LIMIT ?{lim_param}"

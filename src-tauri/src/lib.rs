@@ -3,6 +3,7 @@ pub mod classify;
 pub mod cleanup_guard;
 pub mod commands;
 pub mod connectivity;
+pub mod contacts;
 pub mod credentials;
 pub mod db;
 pub mod gmail;
@@ -600,6 +601,36 @@ pub fn run() {
             app.manage(database);
             app.manage(ImapPool::new());
 
+            // Scheduled sends fire from Rust so they go out even while the
+            // window is hidden to tray (a JS interval pauses with the window).
+            // First check shortly after launch catches mails that came due
+            // while the app was closed; then every minute.
+            {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+                    loop {
+                        if let Err(e) = crate::commands::send::run_scheduled_check(&handle).await {
+                            log::warn!("scheduled-send check failed: {}", e);
+                        }
+                        tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+                    }
+                });
+            }
+
+            // Initial contacts fold (first run after the migration walks the
+            // whole mailbox) — delayed and in the background so it never
+            // competes with the launch path. Later runs happen after each sync.
+            {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_secs(20)).await;
+                    let db = handle.state::<Database>();
+                    let conn = db.lock_db();
+                    crate::contacts::update_contacts_incremental(&conn);
+                });
+            }
+
             // Save geometry when the window is closed (e.g. title-bar close / OS quit).
             {
                 let win = window.clone();
@@ -1008,6 +1039,9 @@ pub fn run() {
             commands::send::cancel_scheduled_send,
             commands::send::list_scheduled_mails,
             commands::send::check_scheduled_mails,
+            commands::autosave::save_compose_autosave,
+            commands::autosave::delete_compose_autosave,
+            commands::autosave::list_compose_autosaves,
             commands::backup::create_backup,
             commands::backup::preview_restore,
             commands::backup::restore_backup,

@@ -115,7 +115,6 @@ pub fn create_account(
         }
         conn.execute_batch("BEGIN").map_err(|e| format!("Failed to start cleanup transaction: {}", e))?;
         for (table, query) in [
-            ("mails_fts", "DELETE FROM mails_fts WHERE mail_id IN (SELECT id FROM mails WHERE account_id = ?1)"),
             ("attachments", "DELETE FROM attachments WHERE mail_id IN (SELECT id FROM mails WHERE account_id = ?1)"),
             ("mails", "DELETE FROM mails WHERE account_id = ?1"),
             ("folders", "DELETE FROM folders WHERE account_id = ?1"),
@@ -347,10 +346,6 @@ pub async fn delete_account(
     conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
     let tx_result = (|| -> Result<(), rusqlite::Error> {
         conn.execute(
-            "DELETE FROM mails_fts WHERE mail_id IN (SELECT id FROM mails WHERE account_id = ?1)",
-            rusqlite::params![account_id],
-        )?;
-        conn.execute(
             "DELETE FROM attachments WHERE mail_id IN (SELECT id FROM mails WHERE account_id = ?1)",
             rusqlite::params![account_id],
         )?;
@@ -572,10 +567,6 @@ pub async fn delete_folder(
     let conn = db.lock_db();
     conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
     let tx_result = (|| -> Result<(), rusqlite::Error> {
-        conn.execute(
-            "DELETE FROM mails_fts WHERE mail_id IN (SELECT id FROM mails WHERE folder_id = ?1)",
-            rusqlite::params![folder_id],
-        )?;
         conn.execute(
             "DELETE FROM attachments WHERE mail_id IN (SELECT id FROM mails WHERE folder_id = ?1)",
             rusqlite::params![folder_id],

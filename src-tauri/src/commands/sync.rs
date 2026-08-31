@@ -464,10 +464,6 @@ fn dedup_archive_folder(
 
     if deleted > 0 {
         log::info!("Gmail dedup: Removed {} duplicate mails from archive folder", deleted);
-        let _ = conn.execute(
-            "DELETE FROM mails_fts WHERE mail_id NOT IN (SELECT id FROM mails)",
-            [],
-        );
     }
 
     // Update total_count to reflect actual deduplicated count
@@ -508,6 +504,14 @@ async fn do_sync_account(app: AppHandle, account: Account, account_id: String, c
     let _sync_guard = crate::cleanup_guard::SetGuard::new(&SYNCING_ACCOUNTS, account_id.clone());
 
     do_sync_account_inner(&app, account, &account_id, &credential, &auth_type).await;
+
+    // Fold newly-synced senders/recipients into the contacts table so
+    // recipient autocomplete stays current (incremental, no-op when idle).
+    {
+        let db = app.state::<Database>();
+        let conn = db.lock_db();
+        crate::contacts::update_contacts_incremental(&conn);
+    }
 }
 
 async fn do_sync_account_inner(app: &AppHandle, account: Account, account_id: &str, credential: &str, auth_type: &str) {
@@ -1762,12 +1766,20 @@ pub fn search_mails(
     query: String,
     account_id: Option<String>,
 ) -> Result<Vec<SearchResult>, String> {
-    let safe_query = sanitize_fts_query(&query);
+    let conn = db.lock_db();
+    search_mails_inner(&conn, &query, account_id.as_deref())
+}
+
+/// Command body, separated so integration tests can run it against a fixture DB.
+pub fn search_mails_inner(
+    conn: &rusqlite::Connection,
+    query: &str,
+    account_id: Option<&str>,
+) -> Result<Vec<SearchResult>, String> {
+    let safe_query = sanitize_fts_query(query);
     if safe_query.is_empty() {
         return Ok(Vec::new());
     }
-
-    let conn = db.lock_db();
 
     // FTS5 search, rank-limited FIRST: `ORDER BY m.date` straight on the MATCH
     // forced SQLite to materialize every hit, join it, and compute two
@@ -1776,11 +1788,13 @@ pub fn search_mails(
     // that work at the top hits; the small set is then date-sorted.
     // (Account-scoped search over-fetches to 500 hits before filtering, so a
     // busy shared term can still fill its 50 rows.)
+    // External-content FTS: rows are addressed by mails.rowid; column order is
+    // subject(0), from_email(1), from_name(2), body_text(3).
     let sql = if account_id.is_some() {
         "WITH hits AS (
-             SELECT mail_id, rank,
-                    snippet(mails_fts, 4, '[[hl]]', '[[/hl]]', '…', 48) AS snip_body,
-                    snippet(mails_fts, 1, '[[hl]]', '[[/hl]]', '…', 48) AS snip_subject
+             SELECT rowid AS mail_rowid, rank,
+                    snippet(mails_fts, 3, '[[hl]]', '[[/hl]]', '…', 48) AS snip_body,
+                    snippet(mails_fts, 0, '[[hl]]', '[[/hl]]', '…', 48) AS snip_subject
              FROM mails_fts
              WHERE mails_fts MATCH ?1
              ORDER BY rank
@@ -1792,16 +1806,16 @@ pub fn search_mails(
                 COALESCE(f.name, '') as folder_name,
                 m.is_read, m.has_attachments, hits.rank
          FROM hits
-         JOIN mails m ON m.id = hits.mail_id
+         JOIN mails m ON m.rowid = hits.mail_rowid
          LEFT JOIN folders f ON f.id = m.folder_id
          WHERE m.account_id = ?2
          ORDER BY m.date DESC
          LIMIT 50"
     } else {
         "WITH hits AS (
-             SELECT mail_id, rank,
-                    snippet(mails_fts, 4, '[[hl]]', '[[/hl]]', '…', 48) AS snip_body,
-                    snippet(mails_fts, 1, '[[hl]]', '[[/hl]]', '…', 48) AS snip_subject
+             SELECT rowid AS mail_rowid, rank,
+                    snippet(mails_fts, 3, '[[hl]]', '[[/hl]]', '…', 48) AS snip_body,
+                    snippet(mails_fts, 0, '[[hl]]', '[[/hl]]', '…', 48) AS snip_subject
              FROM mails_fts
              WHERE mails_fts MATCH ?1
              ORDER BY rank
@@ -1813,7 +1827,7 @@ pub fn search_mails(
                 COALESCE(f.name, '') as folder_name,
                 m.is_read, m.has_attachments, hits.rank
          FROM hits
-         JOIN mails m ON m.id = hits.mail_id
+         JOIN mails m ON m.rowid = hits.mail_rowid
          LEFT JOIN folders f ON f.id = m.folder_id
          ORDER BY m.date DESC
          LIMIT 50"
@@ -1870,10 +1884,6 @@ pub async fn force_resync_account(
             "DELETE FROM mails WHERE account_id = ?1",
             rusqlite::params![account_id],
         ).map_err(|e| e.to_string())?;
-        let _ = conn.execute(
-            "DELETE FROM mails_fts WHERE mail_id NOT IN (SELECT id FROM mails)",
-            [],
-        );
         let _ = conn.execute(
             "UPDATE accounts SET gmail_history_id = '' WHERE id = ?1",
             rusqlite::params![account_id],

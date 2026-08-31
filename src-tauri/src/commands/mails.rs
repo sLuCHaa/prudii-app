@@ -83,11 +83,16 @@ fn dedupe_thread_copies(mails: Vec<Mail>) -> Vec<Mail> {
 fn dedup_mails(mails: Vec<Mail>) -> Vec<Mail> {
     let original_count = mails.len();
 
-    // Pass 1: dedup by message_id (within same sync source)
+    // Pass 1: dedup by message_id (within same sync source). Bracket-normalized:
+    // the same message can be stored as "<x>" by one sync path and "x" by another.
     let mut seen_ids = HashSet::new();
     let pass1: Vec<Mail> = mails.into_iter().filter(|m| {
-        let key = if m.message_id.is_empty() { &m.id } else { &m.message_id };
-        seen_ids.insert(key.clone())
+        let key = if m.message_id.is_empty() {
+            m.id.clone()
+        } else {
+            m.message_id.trim_matches(|c| c == '<' || c == '>').to_string()
+        };
+        seen_ids.insert(key)
     }).collect();
 
     // Pass 2: dedup by subject+date+from_email (cross-account)
@@ -1559,7 +1564,6 @@ pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id:
                             rusqlite::params![mail_id],
                             |row| Ok((row.get(0)?, row.get::<_, i32>(1)? != 0)),
                         ).unwrap_or_default();
-                        let _ = conn.execute("DELETE FROM mails_fts WHERE mail_id = ?1", rusqlite::params![mail_id]);
                         let _ = conn.execute("DELETE FROM attachments WHERE mail_id = ?1", rusqlite::params![mail_id]);
                         let _ = conn.execute("DELETE FROM mails WHERE id = ?1", rusqlite::params![mail_id]);
                         if !folder_id.is_empty() {
@@ -1668,7 +1672,6 @@ pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id:
                             rusqlite::params![mail_id],
                             |row| Ok((row.get(0)?, row.get::<_, i32>(1)? != 0)),
                         ).unwrap_or_default();
-                        let _ = conn.execute("DELETE FROM mails_fts WHERE mail_id = ?1", rusqlite::params![mail_id]);
                         let _ = conn.execute("DELETE FROM attachments WHERE mail_id = ?1", rusqlite::params![mail_id]);
                         let _ = conn.execute("DELETE FROM mails WHERE id = ?1", rusqlite::params![mail_id]);
                         if !folder_id.is_empty() {
@@ -2014,7 +2017,6 @@ pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id:
                 ).unwrap_or_default();
                 conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
                 let tx_result = (|| -> Result<(), rusqlite::Error> {
-                    conn.execute("DELETE FROM mails_fts WHERE mail_id = ?1", rusqlite::params![mail_id])?;
                     conn.execute("DELETE FROM attachments WHERE mail_id = ?1", rusqlite::params![mail_id])?;
                     conn.execute("DELETE FROM mails WHERE id = ?1", rusqlite::params![mail_id])?;
                     if !del_folder_id.is_empty() {
@@ -2350,7 +2352,6 @@ pub async fn move_mail(
         rusqlite::params![mail_id],
         |row| Ok((row.get(0)?, row.get::<_, i32>(1)? != 0)),
     ).unwrap_or_default();
-    let _ = conn.execute("DELETE FROM mails_fts WHERE mail_id = ?1", rusqlite::params![mail_id]);
     let _ = conn.execute("DELETE FROM attachments WHERE mail_id = ?1", rusqlite::params![mail_id]);
     conn.execute("DELETE FROM mails WHERE id = ?1", rusqlite::params![mail_id])
         .map_err(|e| e.to_string())?;
@@ -2370,7 +2371,11 @@ pub async fn move_mail(
 #[tauri::command(async)]
 pub fn get_thread_mails(db: State<'_, Database>, mail_id: String) -> Result<Vec<Mail>, String> {
     let conn = db.lock_db();
+    get_thread_mails_inner(&conn, &mail_id)
+}
 
+/// Command body, separated so integration tests can run it against a fixture DB.
+pub fn get_thread_mails_inner(conn: &rusqlite::Connection, mail_id: &str) -> Result<Vec<Mail>, String> {
     fn query_single_mail(conn: &rusqlite::Connection, mail_id: &str) -> Result<Mail, String> {
         conn.query_row(
             "SELECT id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, body_text, body_html, is_read, is_starred, is_flagged, is_replied, is_forwarded, has_attachments, thread_id, in_reply_to, size_bytes, COALESCE(flags, '') as flags, COALESCE(list_unsubscribe, '') as list_unsubscribe, COALESCE(is_pinned, 0) as is_pinned, COALESCE(snoozed_until, '') as snoozed_until, COALESCE(reply_to_json, '[]') as reply_to_json, COALESCE(\"references\", '') FROM mails WHERE id = ?1",
@@ -2462,24 +2467,26 @@ pub fn get_thread_mails(db: State<'_, Database>, mail_id: String) -> Result<Vec<
     }
 
     if related_ids.is_empty() {
-        return query_single_mail(&conn, &mail_id).map(|m| vec![m]);
+        return query_single_mail(conn, mail_id).map(|m| vec![m]);
     }
 
     let placeholders: Vec<String> = related_ids.iter().enumerate().map(|(i, _)| format!("?{}", i + 1)).collect();
     let placeholder_str = placeholders.join(", ");
 
-    // Match message_id, in_reply_to, and thread_id within the same account.
-    // Also match with angle brackets stripped (REPLACE) for cross-format compatibility.
-    // Use GROUP BY with NULLIF to properly handle empty message_id strings.
+    // Match message_id, in_reply_to, and thread_id within the same account via
+    // the bracket-normalized generated columns (indexed — see db/mod.rs). The
+    // old REPLACE()-in-WHERE variant full-scanned the table three times per
+    // click, plus a full-account GROUP BY to collapse cross-folder duplicates;
+    // dedup_mails/dedupe_thread_copies below do that in Rust over the already
+    // small thread set instead.
     let account_param_idx = related_ids.len() + 1;
     let simple_query = format!(
         "SELECT m.id, m.account_id, m.folder_id, m.message_id, m.uid, m.subject, m.from_name, m.from_email, m.to_json, m.cc_json, m.bcc_json, m.date, m.snippet, m.body_text, m.body_html, m.is_read, m.is_starred, m.is_flagged, m.is_replied, m.is_forwarded, m.has_attachments, m.thread_id, m.in_reply_to, m.size_bytes, COALESCE(m.flags, '') as flags, COALESCE(m.list_unsubscribe, '') as list_unsubscribe, COALESCE(m.is_pinned, 0) as is_pinned, COALESCE(m.snoozed_until, '') as snoozed_until, COALESCE(m.reply_to_json, '[]') as reply_to_json, COALESCE(m.\"references\", '')
          FROM mails m
          WHERE m.account_id = ?{1}
-           AND (REPLACE(REPLACE(m.message_id, '<', ''), '>', '') IN ({0})
-            OR REPLACE(REPLACE(COALESCE(m.in_reply_to, ''), '<', ''), '>', '') IN ({0})
-            OR REPLACE(REPLACE(COALESCE(m.thread_id, ''), '<', ''), '>', '') IN ({0}))
-           AND m.rowid IN (SELECT MIN(rowid) FROM mails WHERE account_id = ?{1} GROUP BY COALESCE(NULLIF(message_id, ''), id))
+           AND (m.message_id_norm IN ({0})
+            OR m.in_reply_to_norm IN ({0})
+            OR m.thread_id_norm IN ({0}))
          ORDER BY m.date ASC",
         placeholder_str, account_param_idx
     );
@@ -2540,7 +2547,7 @@ pub fn get_thread_mails(db: State<'_, Database>, mail_id: String) -> Result<Vec<
 
     // If we found no mails (shouldn't happen), return the single mail
     if mails.is_empty() {
-        return query_single_mail(&conn, &mail_id).map(|m| vec![m]);
+        return query_single_mail(conn, mail_id).map(|m| vec![m]);
     }
 
     let result = dedup_mails(mails);
@@ -2550,7 +2557,7 @@ pub fn get_thread_mails(db: State<'_, Database>, mail_id: String) -> Result<Vec<
     // Must run AFTER dedupe_thread_copies so the safety net can't itself be
     // collapsed away by it.
     if !result.iter().any(|m| m.id == mail_id) {
-        if let Ok(clicked_mail) = query_single_mail(&conn, &mail_id) {
+        if let Ok(clicked_mail) = query_single_mail(conn, mail_id) {
             result.push(clicked_mail);
         }
     }
@@ -3040,67 +3047,21 @@ pub fn search_contacts(
 
     let conn = db.lock_db();
 
+    // Queries the incrementally-maintained contacts table (see contacts.rs).
+    // The old version LIKE-scanned the whole mails table plus two json_each
+    // expansions on every keystroke, freezing the app while typing a recipient.
     let sql = if account_id.is_some() {
-        "SELECT email, name, SUM(freq) as total_freq FROM (
-            SELECT from_email as email, from_name as name, COUNT(*) as freq
-            FROM mails
-            WHERE (from_email LIKE '%' || ?1 || '%' OR from_name LIKE '%' || ?1 || '%')
-              AND account_id = ?2
-            GROUP BY from_email
-
-            UNION ALL
-
-            SELECT json_extract(j.value, '$.email') as email,
-                   json_extract(j.value, '$.name') as name, COUNT(*) as freq
-            FROM mails, json_each(mails.to_json) as j
-            WHERE (json_extract(j.value, '$.email') LIKE '%' || ?1 || '%'
-                OR json_extract(j.value, '$.name') LIKE '%' || ?1 || '%')
-              AND mails.account_id = ?2
-            GROUP BY email
-
-            UNION ALL
-
-            SELECT json_extract(j.value, '$.email') as email,
-                   json_extract(j.value, '$.name') as name, COUNT(*) as freq
-            FROM mails, json_each(mails.cc_json) as j
-            WHERE (json_extract(j.value, '$.email') LIKE '%' || ?1 || '%'
-                OR json_extract(j.value, '$.name') LIKE '%' || ?1 || '%')
-              AND mails.account_id = ?2
-            GROUP BY email
-        )
-        WHERE email != '' AND email IS NOT NULL
-        GROUP BY email
-        ORDER BY total_freq DESC
-        LIMIT 8"
+        "SELECT email, name, frequency FROM contacts
+         WHERE account_id = ?2
+           AND (email LIKE '%' || ?1 || '%' OR name LIKE '%' || ?1 || '%')
+         ORDER BY frequency DESC
+         LIMIT 8"
     } else {
-        "SELECT email, name, SUM(freq) as total_freq FROM (
-            SELECT from_email as email, from_name as name, COUNT(*) as freq
-            FROM mails
-            WHERE (from_email LIKE '%' || ?1 || '%' OR from_name LIKE '%' || ?1 || '%')
-            GROUP BY from_email
-
-            UNION ALL
-
-            SELECT json_extract(j.value, '$.email') as email,
-                   json_extract(j.value, '$.name') as name, COUNT(*) as freq
-            FROM mails, json_each(mails.to_json) as j
-            WHERE (json_extract(j.value, '$.email') LIKE '%' || ?1 || '%'
-                OR json_extract(j.value, '$.name') LIKE '%' || ?1 || '%')
-            GROUP BY email
-
-            UNION ALL
-
-            SELECT json_extract(j.value, '$.email') as email,
-                   json_extract(j.value, '$.name') as name, COUNT(*) as freq
-            FROM mails, json_each(mails.cc_json) as j
-            WHERE (json_extract(j.value, '$.email') LIKE '%' || ?1 || '%'
-                OR json_extract(j.value, '$.name') LIKE '%' || ?1 || '%')
-            GROUP BY email
-        )
-        WHERE email != '' AND email IS NOT NULL
-        GROUP BY email
-        ORDER BY total_freq DESC
-        LIMIT 8"
+        "SELECT email, MAX(name), SUM(frequency) as total_freq FROM contacts
+         WHERE (email LIKE '%' || ?1 || '%' OR name LIKE '%' || ?1 || '%')
+         GROUP BY email
+         ORDER BY total_freq DESC
+         LIMIT 8"
     };
 
     let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
@@ -3168,7 +3129,6 @@ async fn empty_folder_by_type(app: tauri::AppHandle, db: State<'_, Database>, ac
             {
                 let conn = db.lock_db();
                 let _ = conn.execute_batch("BEGIN");
-                let _ = conn.execute("DELETE FROM mails_fts WHERE mail_id IN (SELECT id FROM mails WHERE folder_id = ?1)", rusqlite::params![folder_id]);
                 let _ = conn.execute("DELETE FROM attachments WHERE mail_id IN (SELECT id FROM mails WHERE folder_id = ?1)", rusqlite::params![folder_id]);
                 let _ = conn.execute("DELETE FROM mails WHERE folder_id = ?1", rusqlite::params![folder_id]);
                 let _ = conn.execute("UPDATE folders SET unread_count = 0, total_count = 0 WHERE id = ?1", rusqlite::params![folder_id]);
@@ -3242,16 +3202,12 @@ async fn empty_folder_by_type(app: tauri::AppHandle, db: State<'_, Database>, ac
         return Ok(0);
     }
 
-    // Delete locally FIRST in a transaction (FTS + attachments + mails)
+    // Delete locally FIRST in a transaction (attachments + mails; FTS follows via trigger)
     let deleted_count: usize = {
         let conn = db.lock_db();
         conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
 
         let result = (|| -> Result<usize, rusqlite::Error> {
-            conn.execute(
-                "DELETE FROM mails_fts WHERE mail_id IN (SELECT id FROM mails WHERE folder_id = ?1)",
-                rusqlite::params![folder_id],
-            )?;
             conn.execute(
                 "DELETE FROM attachments WHERE mail_id IN (SELECT id FROM mails WHERE folder_id = ?1)",
                 rusqlite::params![folder_id],
@@ -4185,7 +4141,7 @@ pub fn search_attachments(
              JOIN mails m ON m.id = a.mail_id
              LEFT JOIN folders f ON f.id = m.folder_id
              WHERE {where_clause}
-               AND (a.mail_id IN (SELECT mail_id FROM mails_fts WHERE mails_fts MATCH ?{fts_param})
+               AND (a.mail_id IN (SELECT m2.id FROM mails_fts JOIN mails m2 ON m2.rowid = mails_fts.rowid WHERE mails_fts MATCH ?{fts_param})
                     OR a.filename LIKE ?{like_param})
              ORDER BY {sort_col}
              LIMIT ?{lim_param} OFFSET ?{off_param}"
@@ -4313,7 +4269,7 @@ pub fn count_attachments(
              FROM attachments a
              JOIN mails m ON m.id = a.mail_id
              WHERE {where_clause}
-               AND (a.mail_id IN (SELECT mail_id FROM mails_fts WHERE mails_fts MATCH ?{fts_param})
+               AND (a.mail_id IN (SELECT m2.id FROM mails_fts JOIN mails m2 ON m2.rowid = mails_fts.rowid WHERE mails_fts MATCH ?{fts_param})
                     OR a.filename LIKE ?{like_param})"
         )
     } else {
@@ -4444,6 +4400,76 @@ pub async fn bulk_save_attachments(
         failed,
         dest_path: dest_path.to_string_lossy().to_string(),
     })
+}
+
+#[cfg(test)]
+mod dedup_mails_tests {
+    use super::dedup_mails;
+    use crate::models::{Mail, MailAddress};
+
+    fn mail(id: &str, message_id: &str, subject: &str, date: &str, from: &str) -> Mail {
+        Mail {
+            id: id.into(),
+            message_id: message_id.into(),
+            subject: subject.into(),
+            date: date.into(),
+            from: MailAddress { name: "A".into(), email: from.into() },
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn collapses_same_message_id_across_bracket_formats() {
+        // The same message stored as "<x>" by one sync path and "x" by another
+        let mails = vec![
+            mail("1", "<abc@example.com>", "Hi", "2026-01-01T10:00:00Z", "a@x.de"),
+            mail("2", "abc@example.com", "Hi", "2026-01-01T10:00:00Z", "a@x.de"),
+        ];
+        let out = dedup_mails(mails);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].id, "1", "first (earliest) copy wins");
+    }
+
+    #[test]
+    fn keeps_distinct_messages() {
+        let mails = vec![
+            mail("1", "<a@x>", "One", "2026-01-01T10:00:00Z", "a@x.de"),
+            mail("2", "<b@x>", "Two", "2026-01-01T11:00:00Z", "a@x.de"),
+        ];
+        assert_eq!(dedup_mails(mails).len(), 2);
+    }
+
+    #[test]
+    fn message_id_less_mails_key_on_their_row_id() {
+        // Two drafts without Message-ID must never collapse into one
+        let mails = vec![
+            mail("1", "", "Draft", "2026-01-01T10:00:00Z", "a@x.de"),
+            mail("2", "", "Draft", "2026-01-02T10:00:00Z", "a@x.de"),
+        ];
+        assert_eq!(dedup_mails(mails).len(), 2);
+    }
+
+    #[test]
+    fn content_pass_collapses_cross_account_copy() {
+        // Same subject+date+sender under different message ids (e.g. the same
+        // mail fetched through two accounts) collapses in pass 2
+        let mails = vec![
+            mail("1", "<a@x>", "Same", "2026-01-01T10:00:00Z", "a@x.de"),
+            mail("2", "<b@y>", "Same", "2026-01-01T10:00:00Z", "a@x.de"),
+        ];
+        assert_eq!(dedup_mails(mails).len(), 1);
+    }
+
+    #[test]
+    fn incomplete_metadata_is_never_deduped() {
+        // Delta syncs can hand back rows with only IDs — collapsing those by
+        // (empty subject, empty from) would merge unrelated mails
+        let mut a = mail("1", "<a@x>", "", "2026-01-01T10:00:00Z", "");
+        a.subject = "".into();
+        let mut b = mail("2", "<b@x>", "", "2026-01-01T10:00:00Z", "");
+        b.subject = "".into();
+        assert_eq!(dedup_mails(vec![a, b]).len(), 2);
+    }
 }
 
 #[cfg(test)]
