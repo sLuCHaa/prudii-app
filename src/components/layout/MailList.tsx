@@ -20,6 +20,7 @@ import type { ScheduledMail, SearchResult } from "../../types";
 import { useDialog } from "../ui/DialogProvider";
 import { EmptyState, InboxZeroState, NoSearchResultsState } from "../ui/EmptyState";
 import { incrementArchivedToday, recordInboxZeroDay } from "../../lib/achievements";
+import { BatchActionBar } from "./BatchActionBar";
 import { SearchBar } from "./SearchBar";
 import { MagnifierIcon, StarIcon } from "../icons";
 import { MailListSkeleton } from "../ui/MailListSkeleton";
@@ -1380,6 +1381,46 @@ export function MailList() {
     [currentFolder, t],
   );
 
+  const batchIds = useCallback(() => Array.from(useAppStore.getState().selectedMailIds), []);
+
+  const handleBatchArchive = useCallback(() => {
+    const ids = batchIds();
+    if (ids.length === 0) return;
+    const preActionVisible = filteredMails.length;
+    const idSet = new Set(ids);
+    setMails(useAppStore.getState().mails.filter((m) => !idSet.has(m.id)));
+    clearSelection();
+    runMailAction(() => batchUpdateMails(ids, "archive"), {
+      errorKey: "errors.archive",
+      invalidate: invalidateMailQueries,
+      onSuccess: () => handleArchiveSuccess(ids, preActionVisible),
+    });
+  }, [batchIds, filteredMails.length, setMails, clearSelection, invalidateMailQueries, handleArchiveSuccess]);
+
+  const handleBatchTrash = useCallback(() => {
+    const ids = batchIds();
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    setMails(useAppStore.getState().mails.filter((m) => !idSet.has(m.id)));
+    clearSelection();
+    runMailAction(() => batchUpdateMails(ids, "trash"), {
+      errorKey: "errors.batchUpdate",
+      invalidate: invalidateMailQueries,
+    });
+  }, [batchIds, setMails, clearSelection, invalidateMailQueries]);
+
+  const handleBatchRead = useCallback((read: boolean) => {
+    const ids = batchIds();
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    setMails(useAppStore.getState().mails.map((m) => (idSet.has(m.id) ? { ...m, is_read: read } : m)));
+    clearSelection();
+    runMailAction(() => batchUpdateMails(ids, read ? "mark_read" : "mark_unread"), {
+      errorKey: "errors.batchUpdate",
+      invalidate: invalidateMailQueries,
+    });
+  }, [batchIds, setMails, clearSelection, invalidateMailQueries]);
+
   const selectMail = useCallback(
     (index: number) => {
       if (index >= 0 && index < filteredMails.length) {
@@ -1576,6 +1617,14 @@ export function MailList() {
   return (
     <div className="relative flex flex-col h-full bg-surface">
       {inboxZeroFlight && <InboxZeroFlight onDone={() => setInboxZeroFlight(false)} />}
+      <BatchActionBar
+        count={multiSelectMode ? selectedMailIds.size : 0}
+        onArchive={handleBatchArchive}
+        onTrash={handleBatchTrash}
+        onMarkRead={() => handleBatchRead(true)}
+        onMarkUnread={() => handleBatchRead(false)}
+        onClear={clearSelection}
+      />
       {multiSelectMode && selectedMailIds.size > 0 ? (
         <div className="px-4 py-2 border-b border-border no-select flex items-center justify-between bg-accent/5">
           <div className="flex items-center gap-2">
