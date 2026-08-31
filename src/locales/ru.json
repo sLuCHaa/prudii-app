@@ -310,7 +310,16 @@
     "selected": "{{count}} выбрано",
     "selectedSuffix": "выбрано",
     "markAllRead": "Отметить как прочитанное",
-    "markAllUnread": "Отметить как непрочитанное"
+    "markAllUnread": "Отметить как непрочитанное",
+    "selectedCount_one": "Выбрано: {{count}}",
+    "selectedCount_few": "Выбрано: {{count}}",
+    "selectedCount_many": "Выбрано: {{count}}",
+    "selectedCount_other": "Выбрано: {{count}}",
+    "batchArchive": "Архивировать",
+    "batchTrash": "Удалить",
+    "batchMarkRead": "Прочитано",
+    "batchMarkUnread": "Не прочитано",
+    "batchClear": "Снять выделение"
   },
   "search": {
     "placeholder": "Поиск писем...",

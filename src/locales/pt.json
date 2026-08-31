@@ -306,7 +306,14 @@
     "selected": "{{count}} selecionados",
     "selectedSuffix": "selecionados",
     "markAllRead": "Marcar como lido",
-    "markAllUnread": "Marcar como não lido"
+    "markAllUnread": "Marcar como não lido",
+    "selectedCount_one": "{{count}} selecionado",
+    "selectedCount_other": "{{count}} selecionados",
+    "batchArchive": "Arquivar",
+    "batchTrash": "Excluir",
+    "batchMarkRead": "Marcar lido",
+    "batchMarkUnread": "Marcar não lido",
+    "batchClear": "Limpar seleção"
   },
   "search": {
     "placeholder": "Buscar emails...",
