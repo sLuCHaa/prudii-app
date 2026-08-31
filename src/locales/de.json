@@ -179,7 +179,7 @@
     "editQuote": "Zitat bearbeiten",
     "draftSavingNow": "Speichert…",
     "draftSavedAt": "Gespeichert {{time}}",
-    "savedAgo": "Gespeichert {{time}}",
+    "savedAgo": "Automatisch gesichert {{time}}",
     "attachmentsSize": "Gesamt: {{size}}",
     "attachmentsSizeWarning": "nähert sich dem 25-MB-Limit"
   },

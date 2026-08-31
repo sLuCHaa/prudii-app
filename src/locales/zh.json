@@ -178,7 +178,7 @@
     "editQuote": "编辑引用",
     "draftSavingNow": "保存中…",
     "draftSavedAt": "已保存 {{time}}",
-    "savedAgo": "已保存 {{time}}",
+    "savedAgo": "已自动保存 {{time}}",
     "attachmentsSize": "合计：{{size}}",
     "attachmentsSizeWarning": "接近 25 MB 限制"
   },

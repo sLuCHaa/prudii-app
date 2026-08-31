@@ -179,7 +179,7 @@
     "editQuote": "Edit quote",
     "draftSavingNow": "Saving…",
     "draftSavedAt": "Saved {{time}}",
-    "savedAgo": "Saved {{time}}",
+    "savedAgo": "Auto-saved {{time}}",
     "attachmentsSize": "Total: {{size}}",
     "attachmentsSizeWarning": "approaching 25 MB limit"
   },

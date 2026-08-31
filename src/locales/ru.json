@@ -183,7 +183,7 @@
     "editQuote": "Изменить цитату",
     "draftSavingNow": "Сохранение…",
     "draftSavedAt": "Сохранено {{time}}",
-    "savedAgo": "Сохранено {{time}}",
+    "savedAgo": "Автосохранение {{time}}",
     "attachmentsSize": "Итого: {{size}}",
     "attachmentsSizeWarning": "близко к лимиту 25 МБ"
   },
