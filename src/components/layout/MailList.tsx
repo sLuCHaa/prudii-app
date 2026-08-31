@@ -799,7 +799,7 @@ function VirtualMailList({
                 onDragStart={(e) => handleDragStart(e, mail)}
                 onDrag={handleDrag}
                 onDragEnd={handleDragEnd}
-                className="relative group/mail mail-item-draggable select-none w-full text-left px-4 py-2.5 border-b border-border-light transition-colors cursor-pointer"
+                className="relative group/mail mail-item-draggable select-none w-full text-left border-b border-border-light transition-colors cursor-pointer"
               >
                 {/* Reveal layers for trackpad swipe. Shown only while a swipe
                     episode is active (inline opacity, same lifecycle as the
@@ -809,9 +809,12 @@ function VirtualMailList({
                   <span className="flex items-center gap-1.5 text-success text-xs font-medium"><Archive className="w-4 h-4" />{t("mailList.batchArchive")}</span>
                   <span className="flex items-center gap-1.5 text-danger text-xs font-medium">{t("mailList.batchTrash")}<Trash2 className="w-4 h-4" /></span>
                 </div>
+                {/* Padding lives here, not on the row root: the backgrounds
+                    below must paint edge-to-edge (the selected/hover tint
+                    otherwise renders as an inset box inside the row). */}
                 <div
                   ref={(el) => { if (el) swipeTargets.current.set(mail.id, el); else swipeTargets.current.delete(mail.id); }}
-                  className={`relative transition-colors ${
+                  className={`relative px-4 py-2.5 transition-colors ${
                     isSelected
                       ? "bg-accent/15"
                       : selectedMailId === mail.id
@@ -868,7 +871,9 @@ function VirtualMailList({
                           toggleMailSelection(mail.id);
                         }}
                       >
-                        <div className="w-7 h-7 rounded-full border-2 border-border-light hover:border-accent flex items-center justify-center transition-colors" />
+                        {/* Opaque fill: row backgrounds can be alpha tints, and
+                            the old border-light ring was invisible on them. */}
+                        <div className="w-7 h-7 rounded-full bg-surface border-2 border-accent hover:bg-accent/10 flex items-center justify-center transition-colors" />
                       </div>
                     </div>
                   )}
