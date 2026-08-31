@@ -24,7 +24,7 @@ import { useAppStore } from "./stores/appStore";
 import { useSyncAll } from "./hooks/useSync";
 import { useAutoSync } from "./hooks/useAutoSync";
 import { useConnectivity } from "./hooks/useConnectivity";
-import { backfillBodies, getAppSettings, checkLicenseStartup, getStartupMailto, checkSnoozedMails, classifyUnclassifiedMails, listComposeAutosaves, deleteComposeAutosave } from "./lib/tauri";
+import { backfillBodies, bootstrapState, getAppSettings, checkLicenseStartup, getStartupMailto, checkSnoozedMails, classifyUnclassifiedMails, listComposeAutosaves, deleteComposeAutosave } from "./lib/tauri";
 import { checkForUpdate } from "./lib/updater";
 import { installGlobalTooltips } from "./lib/globalTooltips";
 import { checkFirstHundredOnce } from "./lib/achievements";
@@ -32,7 +32,7 @@ import { playSentSound } from "./lib/sounds";
 import { useDialog } from "./components/ui/DialogProvider";
 import { useTranslation } from "react-i18next";
 import i18next from "i18next";
-import type { BackfillProgress, BackupProgress, SyncProgress } from "./types";
+import type { BackfillProgress, BackupProgress, Folder, SyncProgress } from "./types";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -456,12 +456,15 @@ function AppInner() {
         .catch(() => {});
     };
 
-    runCheck();
+    // Deferred so it never competes with startup work for the first paint —
+    // an update check is not time-critical the way first render is.
+    const timeout = window.setTimeout(runCheck, 10_000);
     const interval = window.setInterval(runCheck, RECHECK_INTERVAL);
     window.addEventListener("online", runCheck);
 
     return () => {
       cancelled = true;
+      clearTimeout(timeout);
       clearInterval(interval);
       window.removeEventListener("online", runCheck);
     };
@@ -513,6 +516,43 @@ function AppInner() {
       window.removeEventListener("prudii:open-help", handleOpenHelp);
     };
   }, [setShowAccountWizard, setShowHelp]);
+
+  // Warm the caches the accounts -> folders -> mails hook chain reads from,
+  // in one Rust round trip, instead of first paint waiting on three of them
+  // running sequentially. selectedFolderId isn't persisted across launches (appStore.ts
+  // has no localStorage/persist for it), so there's nothing to read here —
+  // null is passed and the backend falls back to the first inbox. A failure
+  // (or the hooks simply winning the race) just leaves the normal chain to
+  // fetch for itself; nothing here is required for correctness.
+  const bootstrapped = useRef(false);
+  useEffect(() => {
+    if (bootstrapped.current) return;
+    bootstrapped.current = true;
+    bootstrapState(null).then((state) => {
+      queryClient.setQueryData(["accounts"], state.accounts);
+      const byAccount = new Map<string, Folder[]>();
+      for (const f of state.folders) {
+        const list = byAccount.get(f.account_id) ?? [];
+        list.push(f);
+        byAccount.set(f.account_id, list);
+      }
+      for (const [accountId, folders] of byAccount) {
+        queryClient.setQueryData(["folders", accountId], folders);
+      }
+      if (state.folder_id) {
+        // Matches useMails's queryKey exactly: filterKey is undefined for the
+        // default "all" folder filter, and it's a real (non-omitted) array
+        // element, so the key must stay a 3-tuple here too.
+        queryClient.setQueryData(["mails", state.folder_id, undefined], {
+          pages: [state.mails],
+          pageParams: [0],
+        });
+      }
+      // accounts/folders are mirrored into the store by effects in Sidebar.tsx
+      // fed from useAccounts()/useFolders() — those hooks hydrate from the
+      // cache just seeded above, so the store needs no direct write here.
+    }).catch(() => { /* boot falls back to the normal 3-hop chain */ });
+  }, []);
 
   // The splash gates on the layout chunk plus a minimum display time.
   useEffect(() => {

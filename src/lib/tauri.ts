@@ -559,3 +559,16 @@ export async function invalidateConnections(): Promise<void> {
 export async function setDockBadge(count: number | null): Promise<void> {
   return invoke("set_dock_badge", { count });
 }
+
+export interface BootstrapState {
+  accounts: Account[];
+  folders: Folder[]; // all accounts, flat
+  folder_id: string | null; // the folder `mails` below belongs to
+  mails: Mail[]; // first page of that folder
+}
+
+/// Single startup round trip replacing list_accounts + list_folders x N +
+/// list_mails, used to warm the query caches before the normal hook chain runs.
+export async function bootstrapState(lastFolderId: string | null): Promise<BootstrapState> {
+  return invoke("bootstrap_state", { lastFolderId });
+}
