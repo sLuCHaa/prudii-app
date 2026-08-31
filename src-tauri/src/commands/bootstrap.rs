@@ -15,8 +15,10 @@ pub struct BootstrapState {
 
 #[tauri::command(async)]
 pub fn bootstrap_state(db: State<'_, Database>, last_folder_id: Option<String>) -> Result<BootstrapState, String> {
-    let conn = db.lock_db();
-    bootstrap_state_inner(&conn, last_folder_id)
+    super::catch_panic(|| {
+        let conn = db.lock_db();
+        bootstrap_state_inner(&conn, last_folder_id)
+    })
 }
 
 /// Command body, separated so integration tests can run it against a fixture DB.
