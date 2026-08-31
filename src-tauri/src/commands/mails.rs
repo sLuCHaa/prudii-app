@@ -226,10 +226,16 @@ fn filter_clause(filter: &Option<String>, prefix: &str) -> String {
 #[tauri::command(async)]
 pub fn list_mails(db: State<'_, Database>, folder_id: String, limit: Option<u32>, offset: Option<u32>, folder_filter: Option<String>) -> Result<Vec<Mail>, String> {
     super::catch_panic(|| {
+        let conn = db.lock_db();
+        list_mails_inner(&conn, &folder_id, limit, offset, &folder_filter)
+    })
+}
+
+/// Command body, separated so integration tests can run it against a fixture DB.
+pub fn list_mails_inner(conn: &rusqlite::Connection, folder_id: &str, limit: Option<u32>, offset: Option<u32>, folder_filter: &Option<String>) -> Result<Vec<Mail>, String> {
     let limit = limit.unwrap_or(500).min(2000);
     let offset = offset.unwrap_or(0);
-    let extra = filter_clause(&folder_filter, "");
-    let conn = db.lock_db();
+    let extra = filter_clause(folder_filter, "");
     let sql = format!("SELECT id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, '' as body_text, '' as body_html, is_read, is_starred, is_flagged, is_replied, is_forwarded, has_attachments, thread_id, in_reply_to, size_bytes, COALESCE(flags, '') as flags, COALESCE(list_unsubscribe, '') as list_unsubscribe, COALESCE(is_pinned, 0) as is_pinned, COALESCE(snoozed_until, '') as snoozed_until, COALESCE(reply_to_json, '[]') as reply_to_json, COALESCE(\"references\", '') FROM mails WHERE folder_id = ?1 AND (snoozed_until IS NULL OR snoozed_until = '' OR snoozed_until <= datetime('now')){} ORDER BY is_pinned DESC, date DESC LIMIT ?2 OFFSET ?3", extra);
     let mut stmt = conn
         .prepare(&sql)
@@ -285,7 +291,6 @@ pub fn list_mails(db: State<'_, Database>, folder_id: String, limit: Option<u32>
         .map_err(|e| e.to_string())?;
 
     Ok(dedup_mails(mails))
-    })
 }
 
 #[tauri::command(async)]

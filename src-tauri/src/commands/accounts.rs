@@ -33,6 +33,11 @@ fn get_folder_api_type(db: &Database, account_id: &str) -> (FolderApiType, Strin
 #[tauri::command(async)]
 pub fn list_accounts(db: State<'_, Database>) -> Result<Vec<Account>, String> {
     let conn = db.lock_db();
+    list_accounts_inner(&conn)
+}
+
+/// Command body, separated so integration tests can run it against a fixture DB.
+pub fn list_accounts_inner(conn: &rusqlite::Connection) -> Result<Vec<Account>, String> {
     let mut stmt = conn
         .prepare(
             "SELECT id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port, COALESCE(smtp_security, 'ssl') as smtp_security, auth_type, COALESCE(signature_html, '') as signature_html, COALESCE(signature_text, '') as signature_text, COALESCE(signature_on_compose, 1) as signature_on_compose, COALESCE(signature_on_reply, 1) as signature_on_reply, COALESCE(sync_interval_minutes, 0) as sync_interval_minutes, COALESCE(load_external_images, 'always') as load_external_images, created_at, updated_at FROM accounts ORDER BY created_at ASC",
@@ -376,6 +381,11 @@ pub fn list_folders(
     account_id: String,
 ) -> Result<Vec<Folder>, String> {
     let conn = db.lock_db();
+    list_folders_inner(&conn, &account_id)
+}
+
+/// Command body, separated so integration tests can run it against a fixture DB.
+pub fn list_folders_inner(conn: &rusqlite::Connection, account_id: &str) -> Result<Vec<Folder>, String> {
     let mut stmt = conn
         .prepare(
             "SELECT id, account_id, name, folder_type, path, unread_count, total_count, COALESCE(is_local, 0) as is_local, COALESCE(color, '') as color FROM folders WHERE account_id = ?1 ORDER BY is_local ASC, CASE folder_type WHEN 'inbox' THEN 1 WHEN 'sent' THEN 2 WHEN 'drafts' THEN 3 WHEN 'archive' THEN 4 WHEN 'spam' THEN 5 WHEN 'trash' THEN 6 ELSE 7 END, name ASC",
