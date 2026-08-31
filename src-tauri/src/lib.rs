@@ -17,6 +17,8 @@ pub mod pool;
 pub mod rules;
 pub mod smtp;
 pub mod task_registry;
+#[cfg(windows)]
+pub mod win_caption;
 pub mod window_geometry;
 
 use db::Database;
@@ -1039,6 +1041,8 @@ pub fn run() {
             commands::send::cancel_scheduled_send,
             commands::send::list_scheduled_mails,
             commands::send::check_scheduled_mails,
+            commands::native::set_caption_max_rect,
+            commands::native::show_system_menu,
             commands::autosave::save_compose_autosave,
             commands::autosave::delete_compose_autosave,
             commands::autosave::list_compose_autosaves,

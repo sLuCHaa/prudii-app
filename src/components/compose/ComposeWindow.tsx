@@ -10,6 +10,7 @@ import { deleteComposeAutosave } from "../../lib/tauri";
 import { ComposeForm } from "./ComposeModal";
 import type { ComposeInitData, ComposeMode, ComposeFormHandle } from "./ComposeModal";
 import { isMacOS } from "../../lib/platform";
+import { useWindowsCaptionMaxButton, showSystemMenu } from "../../hooks/useWindowsCaption";
 
 // Standalone QueryClient for the compose window (needed because ComposeForm
 // internally calls useAccounts() which requires a QueryClientProvider context).
@@ -98,6 +99,8 @@ export function ComposeWindow() {
 
   const [maximized, setMaximized] = useState(false);
   const sizeSaveTimer = useRef<number | null>(null);
+  // Snap Layouts flyout + native hover for the maximize button (Windows).
+  const { ref: maxButtonRef, hovered: maxHovered } = useWindowsCaptionMaxButton();
 
   // Track native maximize state and persist the free-form size.
   useEffect(() => {
@@ -199,6 +202,7 @@ export function ComposeWindow() {
               page, not a window. */}
           <div
             data-tauri-drag-region
+            onContextMenu={showSystemMenu}
             className={`flex items-center justify-between h-9 border-b border-border bg-bg-secondary select-none shrink-0 ${isMacOS ? "pl-[88px] pr-4" : "pl-4"}`}
           >
             <h2 data-tauri-drag-region className="flex items-center gap-2 text-sm font-semibold text-text">
@@ -217,8 +221,9 @@ export function ComposeWindow() {
                   <Minus className="w-4 h-4 text-text-secondary pointer-events-none" />
                 </button>
                 <button
+                  ref={maxButtonRef}
                   onClick={handleToggleMaximize}
-                  className="inline-flex items-center justify-center w-11 h-full hover:bg-hover transition-colors"
+                  className={`inline-flex items-center justify-center w-11 h-full transition-colors ${maxHovered ? "bg-hover" : "hover:bg-hover"}`}
                   title={maximized ? t("titleBar.restore", { defaultValue: "Restore" }) : t("titleBar.maximize", { defaultValue: "Maximize" })}
                   aria-label={maximized ? t("titleBar.restore", { defaultValue: "Restore" }) : t("titleBar.maximize", { defaultValue: "Maximize" })}
                 >

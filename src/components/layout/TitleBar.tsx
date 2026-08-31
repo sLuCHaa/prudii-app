@@ -8,6 +8,7 @@ import { hideToTray, quitApp } from "../../lib/tauri";
 import { isMacOS } from "../../lib/platform";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { PrivacyBadge } from "../ui/PrivacyBadge";
+import { useWindowsCaptionMaxButton, showSystemMenu } from "../../hooks/useWindowsCaption";
 import AppLogo from "../../assets/logo.webp";
 
 export function TitleBar() {
@@ -15,6 +16,10 @@ export function TitleBar() {
   const appWindow = useMemo(() => getCurrentWindow(), []);
   const setShowSettings = useAppStore((s) => s.setShowSettings);
   const appSettings = useAppStore((s) => s.appSettings);
+
+  // Snap Layouts: the maximize button is reported to the native side and its
+  // hover comes back as an event (the button lives in non-client space there).
+  const { ref: maxButtonRef, hovered: maxHovered } = useWindowsCaptionMaxButton();
 
   // The middle caption button must read "restore" while maximized — a stuck
   // maximize glyph is the wrong affordance for Windows users.
@@ -52,6 +57,7 @@ export function TitleBar() {
   return (
     <div
       data-tauri-drag-region
+      onContextMenu={showSystemMenu}
       className="flex items-center justify-between h-8 bg-sidebar border-b border-border no-select shrink-0"
     >
       {/* macOS: left padding clears the native traffic lights (overlay title bar) */}
@@ -87,8 +93,9 @@ export function TitleBar() {
               <Minus className="w-4 h-4 text-text-secondary pointer-events-none" />
             </button>
             <button
+              ref={maxButtonRef}
               onClick={() => appWindow.toggleMaximize()}
-              className="inline-flex items-center justify-center w-11 h-full hover:bg-hover transition-colors"
+              className={`inline-flex items-center justify-center w-11 h-full transition-colors ${maxHovered ? "bg-hover" : "hover:bg-hover"}`}
               title={maximized ? t("titleBar.restore", { defaultValue: "Restore" }) : t("titleBar.maximize", { defaultValue: "Maximize" })}
               aria-label={maximized ? t("titleBar.restore", { defaultValue: "Restore" }) : t("titleBar.maximize", { defaultValue: "Maximize" })}
             >
