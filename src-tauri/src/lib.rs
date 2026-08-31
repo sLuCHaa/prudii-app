@@ -977,6 +977,7 @@ pub fn run() {
             commands::mailto::register_mailto_handler,
             commands::mailto::unregister_mailto_handler,
             commands::mailto::is_mailto_handler,
+            commands::bootstrap::bootstrap_state,
             commands::accounts::list_accounts,
             commands::accounts::create_account,
             commands::accounts::store_account_password,
