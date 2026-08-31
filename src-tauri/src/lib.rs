@@ -18,6 +18,8 @@ pub mod rules;
 pub mod smtp;
 pub mod task_registry;
 #[cfg(windows)]
+pub mod win_badge;
+#[cfg(windows)]
 pub mod win_caption;
 pub mod window_geometry;
 
