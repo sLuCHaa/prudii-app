@@ -579,7 +579,7 @@ function VirtualMailList({
   }, [virtualItems.length, listRef]);
 
   // Swipe state lives entirely in refs; the row content is moved imperatively.
-  const swipe = useRef({ mailId: null as string | null, offset: 0, timer: 0 as number, fired: false });
+  const swipe = useRef({ mailId: null as string | null, offset: 0, timer: 0 as number, fired: false, firedAt: 0 });
   const swipeTargets = useRef(new Map<string, HTMLDivElement>());
 
   // The debounce timer above is per-gesture, not per-row-lifetime — if
@@ -612,6 +612,7 @@ function VirtualMailList({
     const action = decide(s.offset);
     if (action && el) {
       s.fired = true;
+      s.firedAt = performance.now();
       trigger(action, s.mailId);
       // Slide fully out in the swipe direction; the optimistic removal unmounts it.
       gsap.to(el, { x: s.offset > 0 ? 400 : -400, opacity: 0, duration: 0.18, ease: "power2.in", onComplete: clearRootOverflow });
@@ -619,8 +620,8 @@ function VirtualMailList({
       return;
     }
     if (action && !el) {
-      // Row unmounted mid-debounce (Finding 3b) — stale gesture, don't act
-      // on a mail that's no longer on screen.
+      // Row unmounted mid-debounce — stale gesture, don't act on a mail
+      // that's no longer on screen.
       s.mailId = null;
       s.offset = 0;
       return;
@@ -748,7 +749,15 @@ function VirtualMailList({
                     // Already actioned this row (latch held past settle) —
                     // ignore trailing wheel ticks (trackpad momentum) so a
                     // quick second swipe can't double-trigger the action.
-                    if (s.mailId === mail.id && s.fired) return;
+                    // Momentum dies within ~half a second; past that the same
+                    // mail id means the row legitimately re-appeared (e.g.
+                    // archived, then the archive folder opened), so release
+                    // the latch instead of deadening the gesture forever.
+                    if (s.mailId === mail.id && s.fired) {
+                      if (performance.now() - s.firedAt < 600) return;
+                      s.mailId = null;
+                      s.fired = false;
+                    }
                     if (s.mailId !== mail.id) {
                       settleSwipe(triggerSwipeAction);
                       s.mailId = mail.id;
