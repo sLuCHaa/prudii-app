@@ -42,10 +42,21 @@ pub fn show_system_menu(window: tauri::WebviewWindow, x: f64, y: f64) -> Result<
 }
 
 /// Dock/taskbar badge with the unread count. None clears the badge.
-/// macOS only — on other platforms Tauri returns Unsupported, which we swallow.
+/// Tauri's own badge is macOS only — on other platforms it returns Unsupported,
+/// which we swallow; Windows gets a drawn taskbar overlay icon instead. SYNC on
+/// purpose: the Windows overlay path needs the window's thread, which is where
+/// sync commands run.
 #[tauri::command]
 pub fn set_dock_badge(app: tauri::AppHandle, count: Option<i64>) -> Result<(), String> {
     use tauri::Manager;
+
+    #[cfg(windows)]
+    if let Some(window) = app.get_webview_window("main") {
+        if let Ok(hwnd) = window.hwnd() {
+            crate::win_badge::set_taskbar_badge(hwnd.0 as isize, count.filter(|n| *n > 0));
+        }
+    }
+
     if let Some(window) = app.get_webview_window("main") {
         let badge = match count {
             Some(n) if n > 0 => Some(n),
