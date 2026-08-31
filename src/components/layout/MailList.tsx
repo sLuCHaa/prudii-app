@@ -599,7 +599,10 @@ function VirtualMailList({
     // snooze dropdown, which is taller than the row.
     const clearRootOverflow = () => {
       const root = el && el.parentElement;
-      if (root) root.style.overflow = "";
+      if (!root) return;
+      root.style.overflow = "";
+      const reveal = root.firstElementChild as HTMLElement | null;
+      if (reveal) reveal.style.opacity = "";
     };
     if (s.fired) {
       // Already resolved by an earlier call (e.g. a new episode starting on
@@ -763,10 +766,13 @@ function VirtualMailList({
                       s.mailId = mail.id;
                       s.offset = 0;
                       s.fired = false;
-                      // Clip this row's own translation for the episode's
-                      // duration only — cleared again in settleSwipe's tween
-                      // onComplete once the gesture resolves.
+                      // Clip this row's own translation and show its reveal
+                      // labels for the episode's duration only — both cleared
+                      // again in settleSwipe's tween onComplete once the
+                      // gesture resolves.
                       el.style.overflow = "hidden";
+                      const reveal = el.firstElementChild as HTMLElement | null;
+                      if (reveal) reveal.style.opacity = "1";
                     }
                     s.offset = accumulate(s.offset, e.deltaX);
                     const target = swipeTargets.current.get(mail.id);
@@ -795,8 +801,11 @@ function VirtualMailList({
                 onDragEnd={handleDragEnd}
                 className="relative group/mail mail-item-draggable select-none w-full text-left px-4 py-2.5 border-b border-border-light transition-colors cursor-pointer"
               >
-                {/* Reveal layers for trackpad swipe */}
-                <div aria-hidden className="absolute inset-0 flex items-center justify-between px-5 pointer-events-none">
+                {/* Reveal layers for trackpad swipe. Shown only while a swipe
+                    episode is active (inline opacity, same lifecycle as the
+                    overflow clip): selection tints like bg-selected are alpha
+                    colors, so at rest the labels would shine through them. */}
+                <div aria-hidden className="absolute inset-0 flex items-center justify-between px-5 pointer-events-none opacity-0">
                   <span className="flex items-center gap-1.5 text-success text-xs font-medium"><Archive className="w-4 h-4" />{t("mailList.batchArchive")}</span>
                   <span className="flex items-center gap-1.5 text-danger text-xs font-medium">{t("mailList.batchTrash")}<Trash2 className="w-4 h-4" /></span>
                 </div>
