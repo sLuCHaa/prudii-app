@@ -307,13 +307,8 @@
     "selectedSuffix": "sélectionnés",
     "markAllRead": "Marquer comme lu",
     "markAllUnread": "Marquer comme non lu",
-    "selectedCount_one": "{{count}} sélectionné",
-    "selectedCount_other": "{{count}} sélectionnés",
     "batchArchive": "Archiver",
-    "batchTrash": "Supprimer",
-    "batchMarkRead": "Marquer lu",
-    "batchMarkUnread": "Marquer non lu",
-    "batchClear": "Annuler la sélection"
+    "batchTrash": "Supprimer"
   },
   "search": {
     "placeholder": "Rechercher dans les emails...",

@@ -306,12 +306,8 @@
     "selectedSuffix": "已选",
     "markAllRead": "标记为已读",
     "markAllUnread": "标记为未读",
-    "selectedCount_other": "已选择 {{count}} 封",
     "batchArchive": "归档",
-    "batchTrash": "删除",
-    "batchMarkRead": "标为已读",
-    "batchMarkUnread": "标为未读",
-    "batchClear": "取消选择"
+    "batchTrash": "删除"
   },
   "search": {
     "placeholder": "搜索邮件...",
