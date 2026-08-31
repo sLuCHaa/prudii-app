@@ -1235,8 +1235,15 @@ pub async fn store_body_and_attachments(db: &Database, mail_id: &str, body_bytes
             let disposition_inline = part.content_disposition()
                 .map(|cd| cd.ctype() == "inline")
                 .unwrap_or(false);
+            // Embedded via cid: in the HTML body — Outlook-style senders declare
+            // signature images "attachment" (with filename) while rendering them
+            // inline; the HTML reference is the ground truth.
+            let cid_in_html = is_image && content_id.as_deref()
+                .is_some_and(|cid| !cid.is_empty() && body_html.contains(&format!("cid:{}", cid)));
             let is_inline = if is_signature_part(&filename, mime_type.as_deref()) {
                 true // S/MIME/PGP signature — mail metadata, never a visible attachment
+            } else if cid_in_html {
+                true // rendered inside the message body — not a real attachment
             } else if disposition_inline && is_image && content_id.is_some() {
                 true // image with CID referenced in HTML — genuinely inline
             } else if !disposition_inline && content_id.is_some() && !has_real_filename && is_image {
@@ -1460,7 +1467,13 @@ pub async fn backfill_folder_bodies(
                     let disposition_inline = part.content_disposition()
                         .map(|cd| cd.ctype() == "inline")
                         .unwrap_or(false);
+                    // See store_body_and_attachments: a cid: reference in the
+                    // HTML outranks the declared disposition.
+                    let cid_in_html = is_image && content_id.as_deref()
+                        .is_some_and(|cid| !cid.is_empty() && body_html.contains(&format!("cid:{}", cid)));
                     let is_inline = if is_signature_part(&filename, mime_type.as_deref()) {
+                        true
+                    } else if cid_in_html {
                         true
                     } else if disposition_inline && is_image && content_id.is_some() {
                         true

@@ -3,7 +3,7 @@ use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
-const SCHEMA_VERSION: u32 = 38;
+const SCHEMA_VERSION: u32 = 39;
 
 pub struct Database {
     pub conn: Mutex<Connection>,
@@ -358,6 +358,34 @@ impl Database {
             ).unwrap_or(0);
             if cleared > 0 {
                 log::info!("DB v37 fix: cleared {} oversized inlined bodies for refetch", cleared);
+            }
+        }
+
+        // v39: embedded images (signature logos etc.) that senders declare as
+        // regular attachments. Their cid: reference was rewritten to the stored
+        // file's local_path at fetch time — that path appearing in body_html is
+        // the ground truth that the image renders inline. New fetches classify
+        // this correctly; this reclassifies what's already in the database.
+        if prev_version < 39 {
+            let reclassified: usize = conn.execute(
+                "UPDATE attachments SET is_inline = 1
+                 WHERE is_inline = 0
+                   AND LOWER(COALESCE(mime_type, '')) LIKE 'image/%'
+                   AND COALESCE(content_id, '') != ''
+                   AND COALESCE(local_path, '') != ''
+                   AND EXISTS (SELECT 1 FROM mails m WHERE m.id = attachments.mail_id
+                               AND instr(m.body_html, attachments.local_path) > 0)",
+                [],
+            ).unwrap_or(0);
+            let flags: usize = conn.execute(
+                "UPDATE mails SET has_attachments = 0
+                 WHERE has_attachments = 1
+                   AND (body_html != '' OR body_text != '')
+                   AND id NOT IN (SELECT mail_id FROM attachments WHERE is_inline = 0)",
+                [],
+            ).unwrap_or(0);
+            if reclassified > 0 || flags > 0 {
+                log::info!("DB v39: {} embedded images reclassified as inline, {} attachment flags cleared", reclassified, flags);
             }
         }
 

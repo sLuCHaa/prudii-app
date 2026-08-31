@@ -114,6 +114,59 @@ fn upgrade_from_standalone_fts_rebuilds_index() {
 }
 
 #[test]
+fn cid_referenced_image_is_inline_even_when_declared_attachment() {
+    // Outlook-style signature image: declared Content-Disposition: attachment
+    // with a filename, but referenced via cid: in the HTML — it renders inside
+    // the body and must not show up as a real attachment.
+    let dir = temp_dir("cid-inline");
+    let db = Database::new(dir.clone()).unwrap();
+    {
+        let conn = db.lock_db();
+        insert_mail(&conn, "m1", "Signed mail", "", "<sig@example.com>");
+    }
+
+    let raw = concat!(
+        "From: a@x.de\r\n",
+        "To: b@x.de\r\n",
+        "Subject: Signed mail\r\n",
+        "MIME-Version: 1.0\r\n",
+        "Content-Type: multipart/related; boundary=\"BOUND\"\r\n",
+        "\r\n",
+        "--BOUND\r\n",
+        "Content-Type: text/html; charset=utf-8\r\n",
+        "\r\n",
+        "<p>Hello</p><img src=\"cid:logo123\">\r\n",
+        "--BOUND\r\n",
+        "Content-Type: image/png; name=\"image001.png\"\r\n",
+        "Content-Disposition: attachment; filename=\"image001.png\"\r\n",
+        "Content-ID: <logo123>\r\n",
+        "Content-Transfer-Encoding: base64\r\n",
+        "\r\n",
+        "iVBORw0KGgoAAAANSUhEUg==\r\n",
+        "--BOUND--\r\n",
+    );
+
+    tauri::async_runtime::block_on(prudii_lib::imap::store_body_and_attachments(
+        &db, "m1", raw.as_bytes(),
+    ))
+    .unwrap();
+
+    let conn = db.lock_db();
+    let (is_inline, has_attachments): (i64, i64) = conn
+        .query_row(
+            "SELECT a.is_inline, m.has_attachments FROM attachments a JOIN mails m ON m.id = a.mail_id WHERE a.mail_id = 'm1'",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(is_inline, 1, "cid-referenced image is inline despite attachment disposition");
+    assert_eq!(has_attachments, 0, "mail must not advertise attachments for embedded images");
+
+    drop(conn);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn contacts_fold_populates_from_mails() {
     let dir = temp_dir("contacts");
     let db = Database::new(dir.clone()).unwrap();

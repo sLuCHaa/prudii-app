@@ -200,9 +200,10 @@ pub async fn fetch_message_body(
                 }
 
                 // Only images with Content-ID are truly inline (embedded in HTML).
-                // Outlook Graph API marks PDFs and other files as isInline too.
-                let is_inline = (att.is_inline.unwrap_or(false)
-                    && att.content_type.as_deref().map(|m| m.starts_with("image/")).unwrap_or(false)
+                // Outlook Graph API marks PDFs and other files as isInline too —
+                // and, inversely, declares embedded signature images isInline=false.
+                // Image + Content-ID is the reliable signal (same rule as Gmail).
+                let is_inline = (att.content_type.as_deref().map(|m| m.starts_with("image/")).unwrap_or(false)
                     && att.content_id.is_some())
                     || crate::imap::is_signature_part(&filename, att.content_type.as_deref());
                 downloaded.push(DownloadedAttachment {
