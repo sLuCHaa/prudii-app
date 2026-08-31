@@ -97,10 +97,12 @@ fn taskbar() -> Option<ITaskbarList3> {
     Some(list)
 }
 
-/// The shell's taskbar object for this thread. WebView2 has already put the
-/// thread in an STA, so RPC_E_CHANGED_MODE only confirms the apartment we
-/// asked for; the matching CoUninitialize is skipped on purpose — the
-/// apartment outlives us and is not ours to tear down.
+/// The shell's taskbar object for this thread. A thread already in an STA
+/// answers our COINIT_APARTMENTTHREADED with S_FALSE (fine); an MTA thread
+/// answers RPC_E_CHANGED_MODE, which we tolerate too — CoCreateInstance then
+/// hands back a proxy into the host STA and SetOverlayIcon still works. The
+/// matching CoUninitialize is skipped on purpose — the apartment outlives us
+/// and is not ours to tear down.
 fn taskbar_list() -> Option<ITaskbarList3> {
     unsafe {
         let hr = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
