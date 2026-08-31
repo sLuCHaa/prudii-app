@@ -29,6 +29,7 @@ import { InboxZeroFlight } from "../motion/InboxZeroFlight";
 import { ENTRANCE, prefersReducedMotion } from "../motion/tokens";
 import { formatMailDate, getDateGroup } from "../../lib/dateUtils";
 import { runMailAction, toastError, causeMessage } from "../../lib/errorToast";
+import { accumulate, decide, isHorizontalIntent } from "../../lib/swipe";
 import { MAIL_FLAG_COLORS } from "../../types";
 import type { Mail } from "../../types";
 import { useTranslation } from "react-i18next";
@@ -577,6 +578,49 @@ function VirtualMailList({
     });
   }, [virtualItems.length, listRef]);
 
+  // Swipe state lives entirely in refs; the row content is moved imperatively.
+  const swipe = useRef({ mailId: null as string | null, offset: 0, timer: 0 as number, fired: false });
+  const swipeTargets = useRef(new Map<string, HTMLDivElement>());
+
+  const settleSwipe = useCallback((trigger: (action: "archive" | "trash", mailId: string) => void) => {
+    const s = swipe.current;
+    if (!s.mailId) return;
+    const el = swipeTargets.current.get(s.mailId);
+    const action = decide(s.offset);
+    if (action && !s.fired) {
+      s.fired = true;
+      trigger(action, s.mailId);
+      // Slide fully out in the swipe direction; the optimistic removal unmounts it.
+      if (el) gsap.to(el, { x: s.offset > 0 ? 400 : -400, opacity: 0, duration: 0.18, ease: "power2.in" });
+    } else if (el) {
+      gsap.to(el, { x: 0, duration: 0.25, ease: "elastic.out(0.9, 0.6)" });
+    }
+    s.mailId = null;
+    s.offset = 0;
+  }, []);
+
+  // Reuses the exact archive/trash action bodies from the hover button and
+  // context-menu handlers below — swipe just needs them addressable by id.
+  const triggerSwipeAction = useCallback((action: "archive" | "trash", mailId: string) => {
+    if (action === "archive") {
+      const preActionVisible = filteredMails.length;
+      setPendingRemoveId(mailId);
+      runMailAction(() => archiveMail(mailId), {
+        errorKey: "errors.archive",
+        invalidate: invalidateMailQueries,
+        onPendingClear: () => setPendingRemoveId(null),
+        onSuccess: () => onArchiveSuccess([mailId], preActionVisible),
+      });
+    } else {
+      setPendingRemoveId(mailId);
+      runMailAction(() => trashMail(mailId), {
+        errorKey: "errors.trash",
+        invalidate: invalidateMailQueries,
+        onPendingClear: () => setPendingRemoveId(null),
+      });
+    }
+  }, [filteredMails, setPendingRemoveId, invalidateMailQueries, archiveMail, trashMail, onArchiveSuccess]);
+
   return (
     <div
       ref={listRef}
@@ -657,7 +701,36 @@ function VirtualMailList({
               }}
             >
               <div
-                ref={(el) => setMailItemRef(mail.id, el)}
+                ref={(el) => {
+                  setMailItemRef(mail.id, el);
+                  if (!el) return;
+                  // Non-passive: React's onWheel is registered passive at the
+                  // root, so e.preventDefault() there would silently no-op
+                  // (and warn). A native listener is the only way to actually
+                  // suppress the browser's horizontal scroll/navigation here.
+                  const handleWheel = (e: WheelEvent) => {
+                    if (prefersReducedMotion() || multiSelectMode) return;
+                    if (!isHorizontalIntent(e.deltaX, e.deltaY)) return;
+                    e.preventDefault();
+                    const s = swipe.current;
+                    if (s.mailId !== mail.id) {
+                      settleSwipe(triggerSwipeAction);
+                      s.mailId = mail.id;
+                      s.offset = 0;
+                      s.fired = false;
+                    }
+                    s.offset = accumulate(s.offset, e.deltaX);
+                    const target = swipeTargets.current.get(mail.id);
+                    if (target) gsap.set(target, { x: s.offset });
+                    window.clearTimeout(s.timer);
+                    s.timer = window.setTimeout(() => settleSwipe(triggerSwipeAction), 140);
+                  };
+                  el.addEventListener("wheel", handleWheel, { passive: false });
+                  return () => {
+                    el.removeEventListener("wheel", handleWheel);
+                    setMailItemRef(mail.id, null);
+                  };
+                }}
                 role="button"
                 tabIndex={0}
                 onClick={(e) => handleMailClick(e, mail, mailIndex)}
@@ -671,16 +744,25 @@ function VirtualMailList({
                 onDragStart={(e) => handleDragStart(e, mail)}
                 onDrag={handleDrag}
                 onDragEnd={handleDragEnd}
-                className={`relative group/mail mail-item-draggable select-none w-full text-left px-4 py-2.5 border-b border-border-light transition-colors cursor-pointer ${
-                  isSelected
-                    ? "bg-accent/15"
-                    : selectedMailId === mail.id
-                    ? "bg-selected"
-                    : mailIndex === selectedMailIndex
-                    ? "bg-hover"
-                    : "hover:bg-hover"
-                }`}
+                className="relative overflow-hidden group/mail mail-item-draggable select-none w-full text-left px-4 py-2.5 border-b border-border-light transition-colors cursor-pointer"
               >
+                {/* Reveal layers for trackpad swipe */}
+                <div aria-hidden className="absolute inset-0 flex items-center justify-between px-5 pointer-events-none">
+                  <span className="flex items-center gap-1.5 text-success text-xs font-medium"><Archive className="w-4 h-4" />{t("mailList.batchArchive")}</span>
+                  <span className="flex items-center gap-1.5 text-danger text-xs font-medium">{t("mailList.batchTrash")}<Trash2 className="w-4 h-4" /></span>
+                </div>
+                <div
+                  ref={(el) => { if (el) swipeTargets.current.set(mail.id, el); else swipeTargets.current.delete(mail.id); }}
+                  className={`relative transition-colors ${
+                    isSelected
+                      ? "bg-accent/15"
+                      : selectedMailId === mail.id
+                      ? "bg-selected"
+                      : mailIndex === selectedMailIndex
+                      ? "bg-hover"
+                      : "bg-surface hover:bg-hover"
+                  }`}
+                >
                 {/* Left stripe: gold = starred, blue = unread — fixed colors so the
                     two are always clearly distinguishable (independent of theme/account color). */}
                 <div
@@ -767,6 +849,7 @@ function VirtualMailList({
 
                     <div className="mt-0.5 truncate text-xs text-text-tertiary">{mail.snippet}</div>
                   </div>
+                </div>
                 </div>
                 {!multiSelectMode && (
                   <div
