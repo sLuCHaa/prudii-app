@@ -1541,7 +1541,7 @@ export function MailList() {
     const el = mailItemRefs.current.get(pendingRemoveId);
     const removeId = pendingRemoveId;
 
-    if (el) {
+    if (el && !prefersReducedMotion()) {
       // Fade/slide only — height animation fights the virtualizer's absolute layout.
       gsap.to(el, {
         opacity: 0, x: -40,

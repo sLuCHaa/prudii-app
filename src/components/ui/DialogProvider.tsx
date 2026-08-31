@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import gsap from "gsap";
 import { Button } from "./Button";
 import { prefersReducedMotion } from "../motion/tokens";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
 
 type DialogType = "confirm" | "alert" | "danger" | "success" | "info";
 
@@ -65,6 +66,7 @@ function Dialog({ state, onClose }: { state: DialogState; onClose: (result: bool
   const { t } = useTranslation();
   const overlayRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const trapRef = useFocusTrap<HTMLDivElement>(state.isOpen);
 
   // Entrance is CSS (declarative from first paint); exit is gsap (must
   // precede unmount).
@@ -100,31 +102,9 @@ function Dialog({ state, onClose }: { state: DialogState; onClose: (result: bool
       } else if (e.key === "Enter") {
         // A stray Return must never confirm a destructive action.
         if (state.options?.type !== "danger") handleClose(true);
-      } else if (e.key === "Tab" && dialogRef.current) {
-        // Focus trap: keep Tab within the dialog
-        const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-        );
-        if (focusable.length === 0) return;
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        if (e.shiftKey) {
-          if (document.activeElement === first) {
-            e.preventDefault();
-            last.focus();
-          }
-        } else {
-          if (document.activeElement === last) {
-            e.preventDefault();
-            first.focus();
-          }
-        }
       }
-    }
-
-    if (dialogRef.current) {
-      const firstButton = dialogRef.current.querySelector<HTMLElement>("button");
-      firstButton?.focus();
+      // Tab containment + initial focus live in useFocusTrap (shared with
+      // every other modal).
     }
 
     document.addEventListener("keydown", handleKeyDown);
@@ -144,7 +124,13 @@ function Dialog({ state, onClose }: { state: DialogState; onClose: (result: bool
       onClick={(e) => e.target === e.currentTarget && handleClose(false)}
     >
       <div
-        ref={dialogRef}
+        ref={(el) => {
+          dialogRef.current = el;
+          trapRef.current = el;
+        }}
+        role={type === "danger" ? "alertdialog" : "dialog"}
+        aria-modal="true"
+        aria-labelledby="app-dialog-title"
         className="bg-surface rounded-xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden modal-panel-enter"
       >
         <div className="p-6">
@@ -154,7 +140,7 @@ function Dialog({ state, onClose }: { state: DialogState; onClose: (result: bool
             </div>
 
             <div className="flex-1 min-w-0 pt-1">
-              <h3 className="text-lg font-semibold text-text mb-2">{title}</h3>
+              <h3 id="app-dialog-title" className="text-lg font-semibold text-text mb-2">{title}</h3>
               <p className="text-sm text-text-secondary leading-relaxed">{message}</p>
             </div>
           </div>

@@ -1,5 +1,6 @@
 import { useRef, useEffect } from "react";
 import gsap from "gsap";
+import { prefersReducedMotion } from "../motion/tokens";
 
 interface AnimatedSyncButtonProps {
   isSyncing: boolean;
@@ -26,7 +27,9 @@ export function AnimatedSyncButton({ isSyncing, onClick, size = 14, alwaysVisibl
         transformOrigin: "center center",
       });
 
-      if (pulseRef.current) {
+      // The rotation stays even under reduced motion — it IS the loading
+      // indicator; only the decorative pulse is skipped.
+      if (pulseRef.current && !prefersReducedMotion()) {
         gsap.to(pulseRef.current, {
           scale: 1.5,
           opacity: 0,

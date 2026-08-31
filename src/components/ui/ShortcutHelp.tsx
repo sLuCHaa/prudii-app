@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
 
 interface ShortcutHelpProps {
   isOpen: boolean;
@@ -45,7 +46,7 @@ const SHORTCUTS: { groupKey: string; items: { keys: string; descKey: string }[] 
 export function ShortcutHelp({ isOpen, onClose }: ShortcutHelpProps) {
   const { t } = useTranslation();
   const overlayRef = useRef<HTMLDivElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
+  const panelRef = useFocusTrap<HTMLDivElement>(isOpen);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -69,11 +70,14 @@ export function ShortcutHelp({ isOpen, onClose }: ShortcutHelpProps) {
     >
       <div
         ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="shortcut-help-title"
         className="w-full max-w-md bg-surface rounded-xl shadow-lg border border-border overflow-hidden modal-panel-enter"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <h2 className="font-heading text-base font-semibold text-text">
+          <h2 id="shortcut-help-title" className="font-heading text-base font-semibold text-text">
             {t("shortcuts.title")}
           </h2>
           <button

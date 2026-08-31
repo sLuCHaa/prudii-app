@@ -17,6 +17,7 @@ import { WizardStepTesting } from "./WizardStepTesting";
 import { WizardStepDone } from "./WizardStepDone";
 import { GlowRing } from "../motion/GlowRing";
 import { SPRING_BOUNCY } from "../motion/tokens";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
 
 type WizardStep = "provider" | "credentials" | "oauth_waiting" | "testing" | "done";
 
@@ -74,6 +75,7 @@ function StepperHeader({ current }: { current: number }) {
 
 export function AccountWizard() {
   const setShowAccountWizard = useAppStore((s) => s.setShowAccountWizard);
+  const trapRef = useFocusTrap<HTMLDivElement>(true);
   const createAccount = useCreateAccount();
   const syncAccount = useSyncAccount();
   const { data: appConfig } = useAppConfig();
@@ -270,7 +272,14 @@ export function AccountWizard() {
 
   return (
     <div className="fixed inset-0 modal-backdrop flex items-center justify-center z-50">
-      <div className="bg-surface rounded-xl w-full max-w-xl mx-4 overflow-hidden max-h-[90vh] flex flex-col modal-panel-enter" style={{ boxShadow: "var(--shadow-lg)" }}>
+      <div
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("shortcuts.desc.addAccount")}
+        className="bg-surface rounded-xl w-full max-w-xl mx-4 overflow-hidden max-h-[90vh] flex flex-col modal-panel-enter"
+        style={{ boxShadow: "var(--shadow-lg)" }}
+      >
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h2 className="text-lg font-semibold text-text">{t("wizard.addAccount")}</h2>
           <IconButton

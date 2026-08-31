@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from "react";
+import { motion } from "motion/react";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { X, Sun, Moon, Monitor, Trash2, ChevronRight, ArrowLeft, Save, RefreshCw, Server, Palette, Clock, FolderOpen, Power, AppWindow, Globe, Bell, Volume2, Image, Settings2, Users, Database, Filter, Info, Sparkles, Mail, Key, FileType, Lock, Send, Download, Eye, EyeOff, Plus, PanelLeft, Shield } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -563,6 +565,7 @@ function InfoPanel() {
 export function SettingsPanel() {
   const { t } = useTranslation();
   const scrollRef = useScroller<HTMLDivElement>();
+  const trapRef = useFocusTrap<HTMLDivElement>(true);
   // useShallow-scoped: an unselected useAppStore() re-renders the whole
   // settings panel on every store write (sync ticks, toasts, selection).
   const { setShowSettings, setShowAccountWizard, themeMode, setThemeMode, setSelectedAccountId, setSelectedFolderId, setSelectedMailId, appSettings, setAppSettings, hasFeature } = useAppStore(
@@ -725,6 +728,10 @@ export function SettingsPanel() {
       onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}
     >
       <div
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("settings.title")}
         className="bg-surface rounded-xl w-full max-w-6xl mx-4 overflow-hidden h-[80vh] flex flex-col modal-panel-enter"
         style={{ boxShadow: "var(--shadow-lg)" }}
       >
@@ -765,7 +772,16 @@ export function SettingsPanel() {
               ))}
             </div>
 
-            <div ref={scrollRef} className="p-4 space-y-6 overflow-y-auto flex-1">
+            <div ref={scrollRef} className="overflow-y-auto flex-1">
+              {/* Keyed on the tab so switching crossfades like the rest of the
+                  app instead of hard-cutting. */}
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.15, ease: "easeOut" }}
+                className="p-4 space-y-6"
+              >
 
               {activeTab === "general" && (
                 <>
@@ -1167,6 +1183,7 @@ export function SettingsPanel() {
               {activeTab === "info" && (
                 <InfoPanel />
               )}
+              </motion.div>
             </div>
           </>
         )}

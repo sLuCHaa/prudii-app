@@ -3,6 +3,7 @@ import { Pencil, Send } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";
 import gsap from "gsap";
+import { prefersReducedMotion } from "../motion/tokens";
 
 export function ComposeButton({ collapsed = false }: { collapsed?: boolean }) {
   const { t } = useTranslation();
@@ -22,6 +23,7 @@ export function ComposeButton({ collapsed = false }: { collapsed?: boolean }) {
   }, [hasAccounts]);
 
   function handleMouseEnter() {
+    if (prefersReducedMotion()) return;
     if (!buttonRef.current || !iconRef.current || !textRef.current) return;
 
     gsap.to(iconRef.current, {
@@ -45,6 +47,7 @@ export function ComposeButton({ collapsed = false }: { collapsed?: boolean }) {
   }
 
   function handleMouseLeave() {
+    if (prefersReducedMotion()) return;
     if (!iconRef.current || !textRef.current || !glowRef.current) return;
 
     gsap.to(iconRef.current, {
@@ -69,7 +72,11 @@ export function ComposeButton({ collapsed = false }: { collapsed?: boolean }) {
 
   function handleClick() {
     if (!hasAccounts) return;
-    if (!buttonRef.current || !particlesRef.current) return;
+    // Animation is skippable; opening the compose window never is.
+    if (prefersReducedMotion() || !buttonRef.current || !particlesRef.current) {
+      openCompose("new");
+      return;
+    }
 
     gsap.timeline()
       .to(buttonRef.current, {

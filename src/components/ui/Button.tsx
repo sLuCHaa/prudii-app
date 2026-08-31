@@ -1,6 +1,7 @@
 import { useRef, useEffect, cloneElement, isValidElement } from "react";
 import { Loader2 } from "lucide-react";
 import gsap from "gsap";
+import { prefersReducedMotion } from "../motion/tokens";
 
 export type ButtonVariant = "primary" | "danger" | "secondary" | "ghost" | "success";
 export type ButtonSize = "sm" | "md" | "lg";
@@ -77,14 +78,10 @@ export function Button({
     gsap.set(glowRef.current, { opacity: 0.3, scale: 1 });
   }, [animated, variant]);
 
+  // Hover is fill/glow only — native controls never grow on hover, and the
+  // 1.02 scale on every button was the single biggest "web page" tell.
   function handleMouseEnter(e: React.MouseEvent<HTMLButtonElement>) {
-    if (animated && buttonRef.current && !disabled && !loading) {
-      gsap.to(buttonRef.current, {
-        scale: 1.02,
-        duration: 0.2,
-        ease: "power2.out",
-      });
-
+    if (animated && !prefersReducedMotion() && !disabled && !loading) {
       if (glowRef.current && variant !== "secondary" && variant !== "ghost") {
         gsap.to(glowRef.current, {
           opacity: 0.7,
@@ -97,13 +94,7 @@ export function Button({
   }
 
   function handleMouseLeave(e: React.MouseEvent<HTMLButtonElement>) {
-    if (animated && buttonRef.current) {
-      gsap.to(buttonRef.current, {
-        scale: 1,
-        duration: 0.2,
-        ease: "power2.out",
-      });
-
+    if (animated && !prefersReducedMotion()) {
       if (glowRef.current && variant !== "secondary" && variant !== "ghost") {
         gsap.to(glowRef.current, {
           opacity: 0.3,

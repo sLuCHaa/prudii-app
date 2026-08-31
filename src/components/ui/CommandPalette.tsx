@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import { changeLanguage } from "../../lib/i18n";
 import { updateAppSettings } from "../../lib/tauri";
 import { getRecentCommands, recordCommandRun } from "../../lib/recentCommands";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { GradientAvatar } from "../motion/GradientAvatar";
 import type { Folder, Account, AccentColor, DensityMode } from "../../types";
 
@@ -32,6 +33,8 @@ export function CommandPalette() {
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  // The palette focuses its search input itself — the trap only contains Tab.
+  const trapRef = useFocusTrap<HTMLDivElement>(open, { initialFocus: false });
 
   // useShallow-scoped: an unselected useAppStore() re-renders this
   // always-mounted component on every store write in the app.
@@ -396,6 +399,10 @@ export function CommandPalette() {
             onClick={() => setOpen(false)}
           />
           <motion.div
+            ref={trapRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("shortcuts.desc.commandPalette")}
             initial={{ opacity: 0, y: -20, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.96, transition: { duration: 0.15 } }}

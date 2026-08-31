@@ -163,7 +163,12 @@ export function AppLayout() {
               style={{ width: sidebarCollapsed ? 52 : sidebarWidth, transition: isResizing ? "none" : "width 200ms ease" }}
               className="shrink-0 overflow-hidden"
             >
-              <Sidebar />
+              {/* Fixed inner width: without it every frame of the collapse
+                  animation re-wraps the sidebar's text and re-lays-out its
+                  list — the expensive part of the old stutter. */}
+              <div style={{ width: sidebarCollapsed ? 52 : sidebarWidth }} className="h-full">
+                <Sidebar />
+              </div>
             </div>
 
             {!sidebarCollapsed && (

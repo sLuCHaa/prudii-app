@@ -29,6 +29,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import gsap from "gsap";
+import { prefersReducedMotion } from "../motion/tokens";
 import { useAppStore, type MailFilter } from "../../stores/appStore";
 import { useAccounts, useFolders } from "../../hooks/useAccounts";
 import { useSyncAccount, useSyncAll } from "../../hooks/useSync";
@@ -92,7 +93,7 @@ function SyncProgressIndicator({ progress }: { progress: { message: string; fold
   }, [percent]);
 
   useEffect(() => {
-    if (!glowRef.current) return;
+    if (!glowRef.current || prefersReducedMotion()) return;
     gsap.to(glowRef.current, { opacity: 0.3, scale: 1.5, duration: 0.8, ease: "power1.inOut", yoyo: true, repeat: -1 });
     return () => { gsap.killTweensOf(glowRef.current); };
   }, []);
@@ -751,7 +752,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
 
   useEffect(() => {
     if (!dotRef.current) return;
-    if (isSyncing) {
+    if (isSyncing && !prefersReducedMotion()) {
       gsap.to(dotRef.current, {
         scale: 1.4, opacity: 0.6, duration: 0.6,
         ease: "power1.inOut", yoyo: true, repeat: -1,

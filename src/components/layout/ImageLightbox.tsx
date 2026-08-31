@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
 
 export interface ImageLightboxItem {
   id: string;
@@ -35,6 +36,7 @@ export function ImageLightbox({ images, initialIndex, onClose, onDownload }: Ima
   const [isPanning, setIsPanning] = useState(false);
   const panStart = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const trapRef = useFocusTrap<HTMLDivElement>(true);
 
   const current = images[index];
   const hasPrev = index > 0;
@@ -138,6 +140,10 @@ export function ImageLightbox({ images, initialIndex, onClose, onDownload }: Ima
 
   return createPortal(
     <div
+      ref={trapRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={current.filename}
       className="fixed inset-0 z-100 bg-black/85 backdrop-blur-sm flex flex-col"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >

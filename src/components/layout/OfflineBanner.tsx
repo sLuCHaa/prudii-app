@@ -22,7 +22,8 @@ export function OfflineBanner() {
   }
 
   return (
-    <div className={`reveal-y ${offline ? "reveal-open" : ""}`} aria-hidden={!offline}>
+    // Live region: going offline is announced to screen readers.
+    <div role="status" aria-live="polite" className={`reveal-y ${offline ? "reveal-open" : ""}`} aria-hidden={!offline}>
       <div className="min-h-0 overflow-hidden">
     <div className="flex items-center justify-between gap-2 px-4 py-2 bg-warning/10 border-b border-warning/30 text-xs text-text">
       <div className="flex items-center gap-2">
