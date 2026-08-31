@@ -407,7 +407,7 @@ ${BASE_STYLES}
       sandbox="allow-same-origin allow-scripts"
       style={{ width: "100%", height, border: "none", overflow: "hidden", background: "transparent" }}
       onLoad={resizeIframe}
-      title={t("mailDetail.emailContent")}
+      aria-label={t("mailDetail.emailContent")}
     />
   );
 });
