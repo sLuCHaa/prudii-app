@@ -117,7 +117,7 @@ const AttachmentItem = memo(function AttachmentItem({
   );
 });
 
-const AttachmentList = memo(function AttachmentList({ mailId }: { mailId: string }) {
+const AttachmentList = memo(function AttachmentList({ mailId, className = "mt-3 pt-3 border-t border-border-light" }: { mailId: string; className?: string }) {
   const { t } = useTranslation();
   const addToast = useAppStore((s) => s.addToast);
   const { data: attachments } = useAttachments(mailId);
@@ -149,7 +149,7 @@ const AttachmentList = memo(function AttachmentList({ mailId }: { mailId: string
   if (visible.length === 0) return null;
 
   return (
-    <div className="mt-3 pt-3 border-t border-border-light">
+    <div className={className}>
       <div className="flex items-center gap-1.5 mb-2">
         <Paperclip className="w-3.5 h-3.5 text-text-tertiary" />
         <span className="text-xs font-medium text-text-secondary">
@@ -672,6 +672,14 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, sing
             )}
           </div>
 
+          {/* Attachments live ABOVE the body: a forwarded conversation can
+              carry pages of quoted history, and the files were buried below
+              all of it. Shown when the flag is set OR the body is loaded
+              (header-sync flags can be inaccurate). */}
+          {(displayMail.has_attachments || displayMail.body_html || displayMail.body_text) && (
+            <AttachmentList mailId={displayMail.id} className="mb-3 pb-3 border-b border-border-light" />
+          )}
+
           {loading ? (
             // Content-shaped placeholder instead of a lone spinner — the ~64px
             // spinner box caused a hard layout jump when the body arrived.
@@ -749,10 +757,6 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, sing
           ) : (
             <p className="py-4 text-sm text-text-tertiary text-center">{t("mailDetail.noContent")}</p>
           )}
-
-          {/* Attachments — show when flag is set OR body is loaded (flag from header sync
-              can be inaccurate, but body-loaded mails may have undiscovered attachments) */}
-          {(displayMail.has_attachments || displayMail.body_html || displayMail.body_text) && <AttachmentList mailId={displayMail.id} />}
 
           {inlineLightbox && (
             <ImageLightbox
