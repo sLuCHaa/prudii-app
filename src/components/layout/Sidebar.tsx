@@ -43,6 +43,7 @@ import { CardButton } from "../ui/TabButton";
 import { useDialog } from "../ui/DialogProvider";
 import { SidebarAmbient } from "./SidebarAmbient";
 import { Collapse } from "../motion/Collapse";
+import { requestMailSweep, SWEEP_DURATION_MS } from "../motion/sweepMails";
 import { createFolder, deleteFolder, renameFolder, updateFolderColor, moveMail, emptyTrash, emptySpam, prefetchFolder, countFolderMails, countCombinedFolderMails, emptyAllTrash, emptyAllSpam, countSnoozedMails, listScheduledMails, forceResyncAccount, syncFolder } from "../../lib/tauri";
 import { useQueryClient } from "@tanstack/react-query";
 import type { BackfillProgress, FolderType, Account as AccountType, Folder as FolderT, MailFlag } from "../../types";
@@ -663,6 +664,11 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
         ? await emptyTrash(account.id)
         : await emptySpam(account.id);
 
+      // Let the open list sweep its rows away before the refetch snaps them out.
+      if (requestMailSweep(folder.id)) {
+        await new Promise((r) => setTimeout(r, SWEEP_DURATION_MS));
+      }
+
       queryClient.invalidateQueries({ queryKey: ["mails"] });
       queryClient.invalidateQueries({ queryKey: ["filtered-mails"] });
       queryClient.invalidateQueries({ queryKey: ["all-inbox-mails"] });
@@ -672,11 +678,9 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
         queryClient.refetchQueries({ queryKey: ["mails", folder.id] });
       }
 
-      await dialog.alert({
-        type: "success",
-        title: t("folder.emptiedTitle", { name: folderName }),
-        message: t("folder.emptiedMessage", { count }),
-      });
+      useAppStore
+        .getState()
+        .addToast("success", t("folder.emptiedTitle", { name: folderName }), t("folder.emptiedMessage", { count }));
     } catch (err) {
       await dialog.alert({
         type: "danger",
@@ -1041,17 +1045,21 @@ function CombinedFoldersSection({ collapsed }: { collapsed: boolean }) {
 
     try {
       const count = isTrash ? await emptyAllTrash() : await emptyAllSpam();
+
+      // Let the open combined view sweep its rows away before the refetch.
+      if (requestMailSweep(contextMenu.type)) {
+        await new Promise((r) => setTimeout(r, SWEEP_DURATION_MS));
+      }
+
       queryClient.invalidateQueries({ queryKey: ["mails"] });
       queryClient.invalidateQueries({ queryKey: ["filtered-mails"] });
       queryClient.invalidateQueries({ queryKey: ["all-inbox-mails"] });
       queryClient.invalidateQueries({ queryKey: ["combined-folder-mails"] });
       queryClient.invalidateQueries({ queryKey: ["folders"] });
 
-      await dialog.alert({
-        type: "success",
-        title: t("folder.emptiedTitle", { name: folderName }),
-        message: t("folder.emptiedMessage", { count }),
-      });
+      useAppStore
+        .getState()
+        .addToast("success", t("folder.emptiedTitle", { name: folderName }), t("folder.emptiedMessage", { count }));
     } catch (err) {
       await dialog.alert({
         type: "danger",

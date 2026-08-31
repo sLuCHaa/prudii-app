@@ -27,6 +27,7 @@ import { Skeleton } from "../ui/Skeleton";
 import { LoadingCrossfade } from "../motion/LoadingCrossfade";
 import { InboxZeroFlight } from "../motion/InboxZeroFlight";
 import { ENTRANCE, prefersReducedMotion } from "../motion/tokens";
+import { SWEEP_MAILS_EVENT, type SweepDetail } from "../motion/sweepMails";
 import { formatMailDate, getDateGroup } from "../../lib/dateUtils";
 import { runMailAction, toastError, causeMessage } from "../../lib/errorToast";
 import { accumulate, decide, isHorizontalIntent } from "../../lib/swipe";
@@ -1229,6 +1230,34 @@ export function MailList() {
       mailItemRefs.current.delete(id);
     }
   }, []);
+
+  // Folder-empty sweep: cascade the visible rows out toward the sidebar
+  // before the refetch clears them — the feedback lives in the list itself.
+  useEffect(() => {
+    const onSweep = (e: Event) => {
+      const detail = (e as CustomEvent<SweepDetail>).detail;
+      if (!detail) return;
+      if (detail.folderId !== selectedFolderId && detail.folderId !== activeCombinedFolder) return;
+      if (prefersReducedMotion()) return;
+      const rows = mails
+        .map((m) => mailItemRefs.current.get(m.id))
+        .filter((el): el is HTMLDivElement => Boolean(el));
+      if (rows.length === 0) return;
+      detail.handled = true;
+      // stagger.amount caps the cascade window regardless of row count so the
+      // total stays inside SWEEP_DURATION_MS.
+      gsap.to(rows, {
+        x: -90,
+        opacity: 0,
+        rotate: -1.5,
+        duration: 0.28,
+        ease: "power2.in",
+        stagger: { amount: 0.15 },
+      });
+    };
+    window.addEventListener(SWEEP_MAILS_EVENT, onSweep);
+    return () => window.removeEventListener(SWEEP_MAILS_EVENT, onSweep);
+  }, [mails, selectedFolderId, activeCombinedFolder]);
 
   // Folder filter key: pass to backend for server-side filtering (skip "all")
   const activeFilterKey = folderFilter !== "all" ? folderFilter : undefined;
