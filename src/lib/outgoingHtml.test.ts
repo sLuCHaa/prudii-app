@@ -1,5 +1,32 @@
 import { describe, it, expect } from "vitest";
-import { fillEmptyParagraphs, extractLocalImages, dropImagesByCid, decodeFileUrl } from "./outgoingHtml";
+import { fillEmptyParagraphs, inlineComposeStyles, extractLocalImages, dropImagesByCid, decodeFileUrl, OUTGOING_FONT_STACK } from "./outgoingHtml";
+
+describe("inlineComposeStyles", () => {
+  it("stamps margin and font onto bare paragraphs", () => {
+    const out = inlineComposeStyles("<p>Hallo</p>");
+    expect(out).toBe(`<p style="margin:0 0 0.5em 0;font-family:${OUTGOING_FONT_STACK}">Hallo</p>`);
+  });
+
+  it("keeps existing declarations and only adds what is missing", () => {
+    const out = inlineComposeStyles('<p style="text-align: center">M</p>');
+    expect(out).toContain("text-align: center");
+    expect(out).toContain("margin:0 0 0.5em 0");
+    expect(out).toContain("font-family:");
+    const withMargin = inlineComposeStyles('<p style="margin:0">M</p>');
+    expect(withMargin.match(/margin/g)).toHaveLength(1);
+    expect(withMargin).toContain("font-family:");
+  });
+
+  it("is idempotent", () => {
+    const once = inlineComposeStyles("<p>A</p><p><br></p>");
+    expect(inlineComposeStyles(once)).toBe(once);
+  });
+
+  it("leaves other tags and quoted markup untouched", () => {
+    const html = '<div>X</div><blockquote cite="a">Y</blockquote><img src="data:image/png;base64,AAA">';
+    expect(inlineComposeStyles(html)).toBe(html);
+  });
+});
 
 describe("decodeFileUrl", () => {
   it("strips the prefix from raw Windows paths without adding a root slash", () => {

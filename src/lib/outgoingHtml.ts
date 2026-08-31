@@ -29,6 +29,47 @@ export function fillEmptyParagraphs(html: string): string {
   return html.replace(/<p([^>]*)>\s*<\/p>/gi, "<p$1><br></p>");
 }
 
+/**
+ * Font stack for outgoing mail — distinctive but degrading gracefully: only
+ * fonts the recipient has installed can render, so every entry is an OS-bundled
+ * face (Avenir Next on Apple platforms, Candara/Segoe on Windows). Keep in sync
+ * with `.compose-editor .tiptap` in index.css so the editor shows the truth.
+ */
+export const OUTGOING_FONT_STACK =
+  "'Avenir Next', Avenir, Candara, 'Segoe UI', 'Trebuchet MS', Verdana, sans-serif";
+
+const OUTGOING_MARGIN = "margin:0 0 0.5em 0";
+
+/**
+ * Stamp the editor's paragraph spacing and font onto the outgoing HTML.
+ *
+ * The editor styles paragraphs via its stylesheet (`margin: 0 0 0.5em`), but a
+ * stylesheet does not travel with the mail — recipients fall back to the UA
+ * default of `1em 0`, which renders every break twice as wide as composed.
+ * Inline declarations are the only styling that survives all mail clients.
+ * Existing declarations win: a paragraph that already carries a margin or
+ * font-family keeps it, which also makes this idempotent. Same contract as
+ * fillEmptyParagraphs: targeted string replacement on editor output only —
+ * never applied to quoted foreign HTML.
+ */
+export function inlineComposeStyles(html: string): string {
+  return html.replace(/<p(\s[^>]*)?>/gi, (tag: string, attrs: string | undefined) => {
+    const attrStr = attrs ?? "";
+    const styleMatch = attrStr.match(/style\s*=\s*(["'])(.*?)\1/i);
+    const existing = styleMatch ? styleMatch[2] : "";
+    const delim = styleMatch ? styleMatch[1] : '"';
+    // The stack quotes font names with the character the attribute is NOT using.
+    const stack = delim === "'" ? OUTGOING_FONT_STACK.replace(/'/g, '"') : OUTGOING_FONT_STACK;
+    const additions: string[] = [];
+    if (!/margin/i.test(existing)) additions.push(OUTGOING_MARGIN);
+    if (!/font-family/i.test(existing)) additions.push(`font-family:${stack}`);
+    if (additions.length === 0) return tag;
+    if (!styleMatch) return `<p${attrStr} style="${additions.join(";")}">`;
+    const merged = `${additions.join(";")};${existing}`;
+    return `<p${attrStr.replace(styleMatch[0], `style=${delim}${merged}${delim}`)}>`;
+  });
+}
+
 export interface LocalImageRef {
   /** Absolute local path of the stored attachment file. */
   path: string;

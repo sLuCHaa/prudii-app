@@ -27,7 +27,7 @@ import { saveDraft, syncAccount, fetchMailBody, suggestReplies, sendMail, schedu
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AiRepliesEvent, EmailTemplate, ReplySuggestion } from "../../types";
 import { escapeHtml } from "../../lib/sanitize";
-import { fillEmptyParagraphs, extractLocalImages, dropImagesByCid } from "../../lib/outgoingHtml";
+import { fillEmptyParagraphs, inlineComposeStyles, extractLocalImages, dropImagesByCid } from "../../lib/outgoingHtml";
 import { HtmlMailFrame } from "../layout/MailDetail";
 import { RecipientInput, type RecipientInputHandle } from "./RecipientInput";
 import type { Mail, SendMailRequest, SendAttachment, Attachment, Account, AppSettings } from "../../types";
@@ -1301,8 +1301,9 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   function buildOutgoingBody(): { bodyHtml: string; bodyText: string } {
     if (!editor) return { bodyHtml: quotedHtml, bodyText: "" };
     // Only on the way out: the editor writes a blank line as `<p></p>`, which
-    // collapses to nothing when a mail client renders it.
-    const editorHtml = fillEmptyParagraphs(editor.getHTML());
+    // collapses to nothing when a mail client renders it — and its paragraph
+    // spacing/font live in our stylesheet, which does not travel with the mail.
+    const editorHtml = inlineComposeStyles(fillEmptyParagraphs(editor.getHTML()));
     const editorText = editor.getText({ blockSeparator: '\n\n' });
     const bodyHtml = editorHtml + quotedHtml;
     const bodyText = editorText + (quotedHtml ? "\n\n" + quotedHtml.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim() : "");

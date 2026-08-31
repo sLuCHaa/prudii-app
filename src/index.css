@@ -530,9 +530,11 @@ button:focus-visible,
    typing in the platform's native rendering is a large part of what makes a
    compose window feel like a mail app rather than a web page. The brand
    fonts stay on chrome (labels, buttons, titles). */
+/* Keep in sync with OUTGOING_FONT_STACK in src/lib/outgoingHtml.ts — the
+   editor must render the exact stack the mail will carry. */
 .compose-editor .tiptap,
 .compose-writing {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-family: 'Avenir Next', Avenir, Candara, 'Segoe UI', 'Trebuchet MS', Verdana, sans-serif;
 }
 
 .compose-editor .tiptap {
