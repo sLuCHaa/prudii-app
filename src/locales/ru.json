@@ -221,6 +221,7 @@
     "attachment_one": "{{count}} вложение",
     "attachment_other": "{{count}} вложений",
     "saveAttachment": "Сохранить вложение",
+    "goToMessage": "Перейти к письму",
     "htmlView": "HTML",
     "plainText": "Обычный текст",
     "noContent": "Нет содержимого",

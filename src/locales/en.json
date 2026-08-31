@@ -217,6 +217,7 @@
     "attachment_one": "{{count}} Attachment",
     "attachment_other": "{{count}} Attachments",
     "saveAttachment": "Save attachment",
+    "goToMessage": "Go to message",
     "htmlView": "HTML",
     "noContent": "No content",
     "emailContent": "Email content",

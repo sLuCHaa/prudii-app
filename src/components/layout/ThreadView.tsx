@@ -20,7 +20,7 @@ import { ContactAvatar } from "../ui/ContactAvatar";
 import { FlagPicker } from "../ui/FlagPicker";
 import type { MailFlag } from "../../types";
 import { StarIcon, TrashIcon } from "../icons";
-import { formatDateTime } from "../../lib/dateUtils";
+import { formatDateTime, formatMailDate } from "../../lib/dateUtils";
 import { sanitizeEmailHtml, escapeHtml, type TrackerInfo } from "../../lib/sanitize";
 import { TrackingIndicator } from "./TrackingIndicator";
 import { AiSummaryButton, AiSummaryPanel } from "../ai/AiSummary";
@@ -801,10 +801,11 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, sing
 
 interface ThreadAttachmentItemProps {
   attachment: Attachment;
-  senderName: string;
+  senderLabel: string;
+  onLocate: () => void;
 }
 
-const ThreadAttachmentItem = memo(function ThreadAttachmentItem({ attachment, senderName }: ThreadAttachmentItemProps) {
+const ThreadAttachmentItem = memo(function ThreadAttachmentItem({ attachment, senderLabel, onLocate }: ThreadAttachmentItemProps) {
   const { t } = useTranslation();
   const addToast = useAppStore((s) => s.addToast);
   const Icon = getFileIcon(attachment.mime_type);
@@ -830,19 +831,25 @@ const ThreadAttachmentItem = memo(function ThreadAttachmentItem({ attachment, se
 
   return (
     <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border hover:bg-hover transition-colors group text-xs">
-      <button
-        onClick={handleOpen}
-        className="flex items-center gap-2 text-left min-w-0 flex-1"
-      >
-        <Icon className="w-4 h-4 text-text-tertiary shrink-0" />
-        <div className="min-w-0 flex-1">
-          <span className="text-text truncate block">{attachment.filename}</span>
-          <span className="text-text-tertiary text-[11px]">
-            {senderName}
-            {attachment.size_bytes ? ` · ${formatFileSize(attachment.size_bytes)}` : ""}
-          </span>
-        </div>
-      </button>
+      <div className="min-w-0 flex-1">
+        <button
+          onClick={handleOpen}
+          className="flex items-center gap-2 text-left min-w-0 w-full"
+        >
+          <Icon className="w-4 h-4 text-text-tertiary shrink-0" />
+          <span className="text-text truncate flex-1">{attachment.filename}</span>
+        </button>
+        {/* Own click target (buttons must not nest): jumps to the message the
+            attachment belongs to, so the label answers "from which mail?" */}
+        <button
+          onClick={onLocate}
+          title={t("mailDetail.goToMessage")}
+          className="block pl-6 max-w-full truncate text-left text-text-tertiary text-[11px] hover:text-accent transition-colors"
+        >
+          {senderLabel}
+          {attachment.size_bytes ? ` · ${formatFileSize(attachment.size_bytes)}` : ""}
+        </button>
+      </div>
       <button
         onClick={handleSave}
         disabled={saving}
@@ -858,11 +865,29 @@ const ThreadAttachmentItem = memo(function ThreadAttachmentItem({ attachment, se
 interface ThreadAttachmentsProps {
   threadMails: Mail[];
   loading: boolean;
+  onLocate: (mailId: string) => void;
 }
 
-const ThreadAttachments = memo(function ThreadAttachments({ threadMails, loading }: ThreadAttachmentsProps) {
+const ThreadAttachments = memo(function ThreadAttachments({ threadMails, loading, onLocate }: ThreadAttachmentsProps) {
   const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(false);
+  // Open by default — the whole point of the strip is seeing every attachment
+  // in the conversation without scrolling. Collapsing is remembered.
+  const [expanded, setExpanded] = useState(() => {
+    try {
+      return localStorage.getItem("thread-attachments-collapsed") !== "1";
+    } catch {
+      return true;
+    }
+  });
+  const toggleExpanded = () => {
+    setExpanded((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("thread-attachments-collapsed", next ? "0" : "1");
+      } catch { /* per-viewer convenience only */ }
+      return next;
+    });
+  };
 
   const mailsWithAttachments = useMemo(
     () => threadMails.filter((m) => m.has_attachments),
@@ -880,7 +905,7 @@ const ThreadAttachments = memo(function ThreadAttachments({ threadMails, loading
   return (
     <div className="border-b border-border bg-surface">
       <button
-        onClick={() => setExpanded((prev) => !prev)}
+        onClick={toggleExpanded}
         className="w-full px-6 py-2 flex items-center gap-2 text-xs text-text-secondary hover:bg-hover/50 transition-colors"
       >
         {expanded ? (
@@ -901,6 +926,7 @@ const ThreadAttachments = memo(function ThreadAttachments({ threadMails, loading
         <ThreadAttachmentsContent
           mailsWithAttachments={mailsWithAttachments}
           allBodiesLoaded={allBodiesLoaded}
+          onLocate={onLocate}
         />
       )}
     </div>
@@ -910,11 +936,13 @@ const ThreadAttachments = memo(function ThreadAttachments({ threadMails, loading
 interface ThreadAttachmentsContentProps {
   mailsWithAttachments: Mail[];
   allBodiesLoaded: boolean;
+  onLocate: (mailId: string) => void;
 }
 
 const ThreadAttachmentsContent = memo(function ThreadAttachmentsContent({
   mailsWithAttachments,
   allBodiesLoaded,
+  onLocate,
 }: ThreadAttachmentsContentProps) {
   const { t } = useTranslation();
   const mailsReady = mailsWithAttachments.filter((m) => m.body_html || m.body_text);
@@ -922,7 +950,7 @@ const ThreadAttachmentsContent = memo(function ThreadAttachmentsContent({
   return (
     <div className="px-6 pb-3">
       {mailsReady.map((m) => (
-        <MailAttachmentGroup key={m.id} mail={m} />
+        <MailAttachmentGroup key={m.id} mail={m} onLocate={onLocate} />
       ))}
       {!allBodiesLoaded && (
         <div className="flex items-center gap-2 py-2 text-xs text-text-tertiary">
@@ -934,17 +962,22 @@ const ThreadAttachmentsContent = memo(function ThreadAttachmentsContent({
   );
 });
 
-const MailAttachmentGroup = memo(function MailAttachmentGroup({ mail }: { mail: Mail }) {
+const MailAttachmentGroup = memo(function MailAttachmentGroup({ mail, onLocate }: { mail: Mail; onLocate: (mailId: string) => void }) {
   const { data: attachments } = useAttachments(mail.id);
+  const use24h = useAppStore((s) => s.appSettings.use_24h_clock);
   const visible = useMemo(() => attachments?.filter((a) => !a.is_inline) ?? [], [attachments]);
   const senderName = mail.from.name || mail.from.email;
+  // Date included: with two mails from the same sender the name alone
+  // doesn't say which message an attachment belongs to.
+  const senderLabel = `${senderName} · ${formatMailDate(mail.date, use24h)}`;
+  const locate = useCallback(() => onLocate(mail.id), [onLocate, mail.id]);
 
   if (visible.length === 0) return null;
 
   return (
     <div className="flex flex-wrap gap-1.5 mt-1.5">
       {visible.map((att) => (
-        <ThreadAttachmentItem key={att.id} attachment={att} senderName={senderName} />
+        <ThreadAttachmentItem key={att.id} attachment={att} senderLabel={senderLabel} onLocate={locate} />
       ))}
     </div>
   );
@@ -977,7 +1010,7 @@ function ThreadMessages({
   return (
     <div ref={messagesRef} className={isSingleMail ? "space-y-3" : "space-y-4"}>
       {threadMails.map((m, index) => (
-        <div key={m.id} className="message-card flex gap-3">
+        <div key={m.id} data-mail-id={m.id} className="message-card flex gap-3">
           {!isSingleMail && (
             <div className="flex flex-col items-center shrink-0 pt-3">
               <ContactAvatar name={m.from.name} email={m.from.email} size={28} />
@@ -1012,6 +1045,11 @@ interface ThreadViewProps {
 export function ThreadView({ mail }: ThreadViewProps) {
   const { t } = useTranslation();
   const messagesScrollRef = useScroller<HTMLDivElement>();
+  const scrollToMessage = useCallback((mailId: string) => {
+    messagesScrollRef.current
+      ?.querySelector(`[data-mail-id="${CSS.escape(mailId)}"]`)
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [messagesScrollRef]);
   const [threadMails, setThreadMails] = useState<Mail[]>([mail]);
   const [loading, setLoading] = useState(true);
   const openCompose = useAppStore((s) => s.openCompose);
@@ -1245,7 +1283,7 @@ export function ThreadView({ mail }: ThreadViewProps) {
       {showAiSummary && <AiSummaryPanel mailId={mail.id} threadMode={!isSingleMail} />}
       {showAiReplies && <AiReplySuggestionsPanel mailId={latestMail.id} threadMode={!isSingleMail} />}
 
-      {!isSingleMail && <ThreadAttachments threadMails={threadMails} loading={loading} />}
+      {!isSingleMail && <ThreadAttachments threadMails={threadMails} loading={loading} onLocate={scrollToMessage} />}
 
       <div className="flex items-center gap-0.5 px-4 py-1.5 border-b border-border bg-surface shrink-0">
         <Tooltip label={t("mailDetail.reply")}>

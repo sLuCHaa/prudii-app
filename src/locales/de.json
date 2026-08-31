@@ -217,6 +217,7 @@
     "attachment_one": "{{count}} Anhang",
     "attachment_other": "{{count}} Anhänge",
     "saveAttachment": "Anhang speichern",
+    "goToMessage": "Zur Nachricht springen",
     "htmlView": "HTML",
     "plainText": "Nur Text",
     "noContent": "Kein Inhalt",

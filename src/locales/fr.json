@@ -217,6 +217,7 @@
     "attachment_one": "{{count}} pièce jointe",
     "attachment_other": "{{count}} pièces jointes",
     "saveAttachment": "Enregistrer la pièce jointe",
+    "goToMessage": "Aller au message",
     "htmlView": "HTML",
     "plainText": "Texte brut",
     "noContent": "Aucun contenu",

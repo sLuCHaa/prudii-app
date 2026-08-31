@@ -216,6 +216,7 @@
     "attachment_one": "{{count}} 个附件",
     "attachment_other": "{{count}} 个附件",
     "saveAttachment": "保存附件",
+    "goToMessage": "跳转到邮件",
     "htmlView": "HTML",
     "plainText": "纯文本",
     "noContent": "无内容",
