@@ -56,6 +56,12 @@ export function AppLayout() {
       aiReplyText: s.composeAiReplyText,
       snapshot: s.undoSend.composeSnapshot,
     });
+    // Consume-once: while the undo countdown is active the snapshot must stay
+    // (it backs the failure recovery), but once a window has been opened with
+    // it, a later plain compose must not inherit the stale content.
+    if (s.undoSend.composeSnapshot && !s.undoSend.active) {
+      useAppStore.setState((st) => ({ undoSend: { ...st.undoSend, composeSnapshot: null } }));
+    }
     closeCompose();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [composeOpen]);

@@ -114,6 +114,8 @@
     "compose": "撰写",
     "newMessage": "新邮件",
     "openFailedTitle": "无法打开撰写窗口",
+    "restoreDraftsTitle": "恢复未发送的草稿？",
+    "restoreDraftsMessage_other": "应用关闭前有 {{count}} 封正在撰写的邮件未发送。要恢复吗？",
     "reply": "回复",
     "replyAll": "全部回复",
     "forward": "转发",

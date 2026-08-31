@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { DialogProvider } from "../ui/DialogProvider";
 import { ToastContainer } from "../ui/Toast";
+import { deleteComposeAutosave } from "../../lib/tauri";
 import { ComposeForm } from "./ComposeModal";
 import type { ComposeInitData, ComposeMode, ComposeFormHandle } from "./ComposeModal";
 import { isMacOS } from "../../lib/platform";
@@ -151,6 +152,11 @@ export function ComposeWindow() {
       closeUnlistenRef.current();
       closeUnlistenRef.current = null;
     }
+    // Every clean exit (send, save draft, discard) funnels through here — the
+    // crash-safety autosave must not survive it, or it would be offered for
+    // restore at next launch. Fired before destroy; the command outlives the
+    // webview because it runs in the Rust process.
+    deleteComposeAutosave(getCurrentWindow().label).catch(() => {});
     // destroy() closes immediately WITHOUT firing close-requested again,
     // so the discard dialog can never re-open.
     getCurrentWindow().destroy();

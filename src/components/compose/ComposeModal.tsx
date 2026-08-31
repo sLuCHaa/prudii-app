@@ -23,7 +23,8 @@ import { useScroller } from "../../hooks/useScroller";
 import { useDialog } from "../ui/DialogProvider";
 import { IconButton } from "../ui/Button";
 import { listen, emit } from "@tauri-apps/api/event";
-import { saveDraft, syncAccount, fetchMailBody, suggestReplies, sendMail, scheduleSend, listTemplates, listAttachments, getAttachmentData, trashMail } from "../../lib/tauri";
+import { saveDraft, syncAccount, fetchMailBody, suggestReplies, sendMail, scheduleSend, listTemplates, listAttachments, getAttachmentData, trashMail, saveComposeAutosave } from "../../lib/tauri";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AiRepliesEvent, EmailTemplate, ReplySuggestion } from "../../types";
 import { escapeHtml } from "../../lib/sanitize";
 import { fillEmptyParagraphs } from "../../lib/outgoingHtml";
@@ -702,6 +703,58 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     },
     content: "",
   });
+
+  // ── Autosave: crash/quit safety net ──────────────────────────────────────
+  // Snapshots the whole draft into SQLite keyed by this window's label; a
+  // clean close deletes it (ComposeWindow), leftovers are offered for restore
+  // at next launch (App.tsx). Editor keystrokes don't re-render this
+  // component, so dirtiness is tracked via the TipTap update event.
+  const autosaveDirty = useRef(false);
+  useEffect(() => {
+    if (!editor) return;
+    const markDirty = () => { autosaveDirty.current = true; };
+    editor.on("update", markDirty);
+    return () => { editor.off("update", markDirty); };
+  }, [editor]);
+  useEffect(() => {
+    autosaveDirty.current = true;
+  }, [to, cc, bcc, subject, attachments, fromAccountId]);
+
+  useEffect(() => {
+    if (!initData) return; // only real compose windows persist autosaves
+    const label = getCurrentWindow().label;
+    const interval = setInterval(() => {
+      if (!autosaveDirty.current || sending || savingDraft || !editor) return;
+      const hasContent =
+        editor.getText().trim().length > 0 || subject.trim().length > 0 ||
+        to.length > 0 || cc.length > 0 || bcc.length > 0 || attachments.length > 0;
+      if (!hasContent) return;
+      autosaveDirty.current = false;
+      const { bodyHtml, bodyText } = buildOutgoingBody();
+      const snapshot: ComposeSnapshot = {
+        to: [...to],
+        cc: [...cc],
+        bcc: [...bcc],
+        subject,
+        bodyHtml,
+        bodyText,
+        fromAccountId: fromAccountId ?? "",
+        attachments: attachments
+          .filter((att) => att.status === "ready")
+          .map((att) => ({ name: att.name, size: att.size, type: att.type, data: att.data })),
+        quotedHtml: quotedHtml || undefined,
+      };
+      const payload = JSON.stringify({ mode, originalMail: originalMail ?? null, snapshot });
+      saveComposeAutosave(label, payload)
+        .then(() => setLastSavedAt(new Date()))
+        .catch((err) => {
+          autosaveDirty.current = true;
+          console.error("[autosave]", err);
+        });
+    }, 5000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initData, editor, sending, savingDraft, to, cc, bcc, subject, attachments, fromAccountId, quotedHtml, mode, originalMail]);
 
   const getSignatureHtml = useCallback((accountId: string, isReplyOrForward: boolean): string => {
     const account = accounts?.find((a) => a.id === accountId);

@@ -131,6 +131,7 @@ interface AppState {
   openCompose: (mode: ComposeMode, mail?: Mail | null, aiReplyText?: string | null) => void;
   openMailto: (url: string) => void;
   closeCompose: () => void;
+  restoreComposeSnapshot: (mode: ComposeMode, mail: Mail | null, snapshot: ComposeSnapshot) => void;
 
   undoSend: UndoSendState;
   startUndoSend: (request: SendMailRequest, mode: ComposeMode, mail: Mail | null, snapshot: ComposeSnapshot) => void;
@@ -356,6 +357,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   openCompose: (mode, mail = null, aiReplyText = null) => set({ composeOpen: true, composeMode: mode, composeMail: mail, composeMailtoParams: null, composeAiReplyText: aiReplyText }),
   openMailto: (url) => set({ composeOpen: true, composeMode: "new" as ComposeMode, composeMail: null, composeMailtoParams: parseMailtoUrl(url), composeAiReplyText: null }),
   closeCompose: () => set({ composeOpen: false, composeMail: null, composeMailtoParams: null, composeAiReplyText: null }),
+  // Reopen a compose window with a full snapshot (autosave restore). Rides the
+  // undoSend.composeSnapshot channel that AppLayout already hands to new
+  // compose windows; AppLayout clears it after consuming (see consume-once).
+  restoreComposeSnapshot: (mode, mail, snapshot) => set((state) => ({
+    composeOpen: true,
+    composeMode: mode,
+    composeMail: mail,
+    composeMailtoParams: null,
+    composeAiReplyText: null,
+    undoSend: { ...state.undoSend, composeSnapshot: snapshot },
+  })),
 
   undoSend: { active: false, request: null, composeMode: "new" as ComposeMode, composeMail: null, composeSnapshot: null },
   startUndoSend: (request, mode, mail, snapshot) => set({

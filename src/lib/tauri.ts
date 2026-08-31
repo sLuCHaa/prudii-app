@@ -382,6 +382,24 @@ export async function checkScheduledMails(): Promise<number> {
   return invoke("check_scheduled_mails");
 }
 
+export interface ComposeAutosave {
+  id: string;
+  payload: string;
+  updated_at: string;
+}
+
+export async function saveComposeAutosave(id: string, payload: string): Promise<void> {
+  return invoke("save_compose_autosave", { id, payload });
+}
+
+export async function deleteComposeAutosave(id: string): Promise<void> {
+  return invoke("delete_compose_autosave", { id });
+}
+
+export async function listComposeAutosaves(): Promise<ComposeAutosave[]> {
+  return invoke("list_compose_autosaves");
+}
+
 export async function listInboxSplits(): Promise<InboxSplit[]> {
   return invoke("list_inbox_splits");
 }

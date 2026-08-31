@@ -24,7 +24,7 @@ import { useAppStore } from "./stores/appStore";
 import { useSyncAll } from "./hooks/useSync";
 import { useAutoSync } from "./hooks/useAutoSync";
 import { useConnectivity } from "./hooks/useConnectivity";
-import { backfillBodies, getAppSettings, checkLicenseStartup, getStartupMailto, checkSnoozedMails, checkScheduledMails, classifyUnclassifiedMails } from "./lib/tauri";
+import { backfillBodies, getAppSettings, checkLicenseStartup, getStartupMailto, checkSnoozedMails, classifyUnclassifiedMails, listComposeAutosaves, deleteComposeAutosave } from "./lib/tauri";
 import { checkForUpdate } from "./lib/updater";
 import { installGlobalTooltips } from "./lib/globalTooltips";
 import { checkFirstHundredOnce } from "./lib/achievements";
@@ -332,17 +332,53 @@ function AppInner() {
     }).catch(() => {});
   }, []);
 
-  // One shared 5-minute tick for due snoozes and scheduled sends.
+  // Offer restore of compose autosaves left behind by a crash or forced quit.
+  // Waits for accounts so the reopened window has a working from-selector.
+  const autosaveRestoreRan = useRef(false);
   useEffect(() => {
-    const refreshLists = () => {
-      queryClient.invalidateQueries({ queryKey: ["mails"], refetchType: "active" });
-      queryClient.invalidateQueries({ queryKey: ["all-inbox-mails"], refetchType: "active" });
-      queryClient.invalidateQueries({ queryKey: ["combined-folder-mails"], refetchType: "active" });
-    };
+    if (autosaveRestoreRan.current || accounts.length === 0) return;
+    autosaveRestoreRan.current = true;
+    listComposeAutosaves().then(async (rows) => {
+      if (rows.length === 0) return;
+      const ok = await dialog.confirm({
+        title: t("compose.restoreDraftsTitle"),
+        message: t("compose.restoreDraftsMessage", { count: rows.length }),
+        confirmLabel: t("undoSend.restore"),
+        cancelLabel: t("common.discard"),
+      });
+      for (const row of rows) {
+        if (ok) {
+          try {
+            const parsed = JSON.parse(row.payload) as {
+              mode?: import("./components/compose/ComposeModal").ComposeMode;
+              originalMail?: import("./types").Mail | null;
+              snapshot: import("./stores/appStore").ComposeSnapshot;
+            };
+            useAppStore.getState().restoreComposeSnapshot(parsed.mode ?? "new", parsed.originalMail ?? null, parsed.snapshot);
+            // composeWindow.ts swallows opens arriving within its 300ms
+            // duplicate-open guard — space multiple restores out.
+            await new Promise((resolve) => setTimeout(resolve, 600));
+          } catch (err) {
+            console.error("[autosave restore]", err);
+          }
+        }
+        deleteComposeAutosave(row.id).catch(() => {});
+      }
+    }).catch(() => {});
+  }, [accounts.length, dialog, t]);
+
+  // Wake due snoozes every 5 minutes. Scheduled sends are handled by the
+  // Rust-side timer (lib.rs), which also runs while the window is hidden.
+  useEffect(() => {
     const interval = setInterval(() => {
       if (document.hidden) return;
-      checkSnoozedMails().then((count) => { if (count > 0) refreshLists(); }).catch(() => {});
-      checkScheduledMails().then((count) => { if (count > 0) refreshLists(); }).catch(() => {});
+      checkSnoozedMails().then((count) => {
+        if (count > 0) {
+          queryClient.invalidateQueries({ queryKey: ["mails"], refetchType: "active" });
+          queryClient.invalidateQueries({ queryKey: ["all-inbox-mails"], refetchType: "active" });
+          queryClient.invalidateQueries({ queryKey: ["combined-folder-mails"], refetchType: "active" });
+        }
+      }).catch(() => {});
     }, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [queryClient]);
@@ -379,8 +415,9 @@ function AppInner() {
         new Date(event.payload.scheduled_at).toLocaleString(),
       );
     });
-    const unlistenScheduledSent = listen<{ subject: string }>("scheduled-mail-sent", (event) => {
+    const unlistenScheduledSent = listen<{ subject: string; account_id: string }>("scheduled-mail-sent", (event) => {
       sentFeedback(event.payload.subject);
+      refreshMailQueries(event.payload.account_id);
     });
     return () => {
       unlistenSent.then((fn) => fn());
