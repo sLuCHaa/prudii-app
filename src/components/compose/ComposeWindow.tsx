@@ -33,19 +33,34 @@ export function ComposeWindow() {
     // prevents a white flash before the web content paints. The content itself
     // fades in over a few frames so the window materializes instead of popping.
     const win = getCurrentWindow();
-    win.show().then(async () => {
-      // Windows can refuse to raise a window whose show() happened outside the
-      // user's click context (the compose-init handshake defers it) — the
-      // window then opens BEHIND whatever was focused meanwhile. The brief
-      // always-on-top pulse forces the raise on every platform.
-      try {
-        await win.setAlwaysOnTop(true);
-        await win.setFocus();
-      } finally {
-        await win.setAlwaysOnTop(false).catch(() => {});
-      }
-      requestAnimationFrame(() => setShown(true));
-    });
+    const reveal = () => requestAnimationFrame(() => setShown(true));
+    win
+      .show()
+      .then(() => {
+        // Revealing the content must never wait on focus calls — a rejected
+        // or hanging window API otherwise leaves the webview at opacity-0
+        // (a white empty window, as happened on macOS).
+        reveal();
+        if (isMacOS) {
+          win.setFocus().catch(() => {});
+          return;
+        }
+        // Windows refuses to raise a window whose show() happened outside the
+        // user's click context (the compose-init handshake defers it) — the
+        // window then opens BEHIND whatever was focused meanwhile. The brief
+        // always-on-top pulse forces the raise; strictly best-effort.
+        (async () => {
+          try {
+            await win.setAlwaysOnTop(true);
+            await win.setFocus();
+          } catch {
+            /* raising is cosmetic — never block anything on it */
+          } finally {
+            win.setAlwaysOnTop(false).catch(() => {});
+          }
+        })();
+      })
+      .catch(reveal);
   }, [initData]);
 
   // The webview's default right-click menu (Reload, browser items) breaks the
