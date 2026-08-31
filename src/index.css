@@ -53,23 +53,10 @@
   --c-scrollbar-hover: #94a3b8;
   --c-overlay:         rgba(0, 0, 0, 0.6);
 
-  /* Spacing (4px grid) */
-  --space-1:  0.25rem;  /* 4px */
-  --space-2:  0.5rem;   /* 8px */
-  --space-3:  0.75rem;  /* 12px */
-  --space-4:  1rem;     /* 16px */
-  --space-5:  1.25rem;  /* 20px */
-  --space-6:  1.5rem;   /* 24px */
-  --space-8:  2rem;     /* 32px */
-  --space-10: 2.5rem;   /* 40px */
-  --space-12: 3rem;     /* 48px */
-
-  /* Typography */
-  --text-xs:   0.75rem;    /* 12px */
-  --text-sm:   0.875rem;   /* 14px */
-  --text-base: 0.9375rem;  /* 15px */
-  --text-lg:   1.125rem;   /* 18px */
-  --text-xl:   1.25rem;    /* 20px */
+  /* Spacing: Tailwind's 4px-grid utilities (p-*, gap-*) ARE the spacing
+     system — no parallel token set. Typography sizes live in @theme
+     (only --text-base deviates from Tailwind's defaults). */
+  --text-sm: 0.875rem; /* referenced by the body rule below */
 
   --line-tight:   1.25;
   --line-snug:    1.375;
@@ -77,15 +64,7 @@
   --line-relaxed: 1.625;
   --line-loose:   1.75;
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
-  --shadow-md: 0 4px 6px rgba(0,0,0,0.07);
-  --shadow-lg: 0 10px 25px rgba(0,0,0,0.1);
-
-  /* Radius */
-  --radius-sm:   0.375rem;
-  --radius-md:   0.5rem;
-  --radius-lg:   0.75rem;
+  /* Shadows + radius scale live in @theme; only the non-Tailwind extras here */
   --radius-full: 9999px;
 
   /* Transitions & Easing */
@@ -96,24 +75,10 @@
   --duration-count: 600ms;
 
   --ease-smooth:  cubic-bezier(0.4, 0, 0.2, 1);
-  --ease-in:      cubic-bezier(0.4, 0, 1, 1);
   --ease-out:     cubic-bezier(0, 0, 0.2, 1);
-  --ease-in-out:  cubic-bezier(0.4, 0, 0.2, 1);
-  --ease-bounce:  cubic-bezier(0.68, -0.55, 0.265, 1.55);
-  --ease-spring:  cubic-bezier(0.175, 0.885, 0.32, 1.275);
-
-  /* Elevation (Enhanced Shadows) */
-  --elevation-0:  none;
-  --elevation-1:  0 1px 2px rgba(0,0,0,0.05);
-  --elevation-2:  0 2px 8px rgba(0,0,0,0.08);
-  --elevation-3:  0 8px 20px rgba(0,0,0,0.12);
-  --elevation-4:  0 16px 48px rgba(0,0,0,0.16);
 
   /* Backdrop Blur */
-  --blur-sm:  4px;
   --blur-md:  8px;
-  --blur-lg:  16px;
-  --blur-xl:  24px;
 }
 
 .dark {
@@ -155,16 +120,12 @@
   --c-scrollbar-hover: #64748b;
   --c-overlay:         rgba(0, 0, 0, 0.6);
 
-  /* Shadows (Dark Mode) */
+  /* Shadows (Dark Mode): stronger values for direct var(--shadow-*)
+     consumers (modal panels, scrollbar chrome). shadow-* utilities keep the
+     inlined light values — Tailwind resolves them at build time. */
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
   --shadow-md: 0 4px 6px rgba(0,0,0,0.3);
   --shadow-lg: 0 10px 25px rgba(0,0,0,0.4);
-
-  --elevation-0:  none;
-  --elevation-1:  0 1px 2px rgba(0,0,0,0.2);
-  --elevation-2:  0 2px 8px rgba(0,0,0,0.24);
-  --elevation-3:  0 8px 20px rgba(0,0,0,0.32);
-  --elevation-4:  0 16px 48px rgba(0,0,0,0.48);
 }
 
 /* ─── Tailwind Theme Mapping ─── */
@@ -198,6 +159,27 @@
 
   --font-heading: 'Amulya', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-body:    'Synonym', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  /* Radius — the documented scale wired into rounded-*. Rhythm: bare
+     `rounded` (4px) for chips/marks, sm/md (6/8px) for controls,
+     lg (12px) for panels/cards, xl (16px) for modals. Previously these
+     tokens existed only as dead :root declarations while the utilities
+     silently used Tailwind's smaller defaults. */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+
+  /* Reading size: base text is 15px by design, not the browser's 16px */
+  --text-base: 0.9375rem;
+  --text-base--line-height: 1.5;
+
+  /* Shadows — the documented ramp. Tailwind inlines these values into the
+     shadow-* utilities at build time; the .dark override below only reaches
+     direct var(--shadow-*) consumers (modal panels), same as before. */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.07);
+  --shadow-lg: 0 10px 25px rgba(0,0,0,0.1);
 }
 
 /* ─── Base ─── */
@@ -483,22 +465,25 @@ button:focus-visible,
 
 /* ─── Design System Documentation ─── */
 /*
-  SPACING SYSTEM (4px grid):
-  --space-1: 4px   | Icon gaps, tight spacing
-  --space-2: 8px   | Compact padding, small gaps
-  --space-3: 12px  | Default gaps between elements
-  --space-4: 16px  | Standard padding (buttons, cards)
-  --space-5: 20px  | Comfortable spacing
-  --space-6: 24px  | Section spacing, large gaps
-  --space-8: 32px  | Major section separation
+  SPACING (4px grid):
+  Tailwind's spacing utilities ARE the system — p-1 = 4px, p-2 = 8px,
+  p-3 = 12px (default gaps), p-4 = 16px (standard padding), p-6 = 24px
+  (section spacing). Never arbitrary pixel values.
 
-  TYPOGRAPHY:
-  Sizes:
-    --text-xs:   12px | Metadata, labels, captions
-    --text-sm:   14px | Body, list items, UI text
-    --text-base: 15px | Email content, reading text
-    --text-lg:   18px | Section headers, subjects
-    --text-xl:   20px | Page titles, large headers
+  RADIUS (wired into rounded-* via @theme):
+    rounded      4px  | Chips, marks, tiny controls
+    rounded-sm   6px  | Small controls
+    rounded-md   8px  | Buttons, inputs
+    rounded-lg  12px  | Panels, cards, list containers
+    rounded-xl  16px  | Modals, floating surfaces
+    rounded-full      | Pills, avatars
+
+  TYPOGRAPHY (text-* utilities; only base deviates from Tailwind):
+    text-xs:   12px | Metadata, labels, captions (12px floor — no smaller)
+    text-sm:   14px | Body, list items, UI text
+    text-base: 15px | Email content, reading text
+    text-lg:   18px | Section headers, subjects
+    text-xl:   20px | Page titles, large headers
 
   Line Heights:
     --line-tight:   1.25   | Headings, compact text
