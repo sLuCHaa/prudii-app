@@ -582,19 +582,51 @@ function VirtualMailList({
   const swipe = useRef({ mailId: null as string | null, offset: 0, timer: 0 as number, fired: false });
   const swipeTargets = useRef(new Map<string, HTMLDivElement>());
 
+  // The debounce timer above is per-gesture, not per-row-lifetime — if
+  // VirtualMailList (or the row) unmounts mid-debounce, a pending settle
+  // must not fire against a row no longer on screen.
+  useEffect(() => {
+    return () => window.clearTimeout(swipe.current.timer);
+  }, []);
+
   const settleSwipe = useCallback((trigger: (action: "archive" | "trash", mailId: string) => void) => {
     const s = swipe.current;
     if (!s.mailId) return;
     const el = swipeTargets.current.get(s.mailId);
+    // style.overflow is set on the row root at episode start (see the wheel
+    // handler) so the row clips its own translation only while a swipe is
+    // actually in flight — static overflow-hidden on the row clipped the
+    // snooze dropdown, which is taller than the row.
+    const clearRootOverflow = () => {
+      const root = el && el.parentElement;
+      if (root) root.style.overflow = "";
+    };
+    if (s.fired) {
+      // Already resolved by an earlier call (e.g. a new episode starting on
+      // a different row reclaims this one) — the fire-time tween below owns
+      // its own completion; just release the latch, nothing to animate.
+      s.mailId = null;
+      s.offset = 0;
+      return;
+    }
     const action = decide(s.offset);
-    if (action && !s.fired) {
+    if (action && el) {
       s.fired = true;
       trigger(action, s.mailId);
       // Slide fully out in the swipe direction; the optimistic removal unmounts it.
-      if (el) gsap.to(el, { x: s.offset > 0 ? 400 : -400, opacity: 0, duration: 0.18, ease: "power2.in" });
-    } else if (el) {
-      gsap.to(el, { x: 0, duration: 0.25, ease: "elastic.out(0.9, 0.6)" });
+      gsap.to(el, { x: s.offset > 0 ? 400 : -400, opacity: 0, duration: 0.18, ease: "power2.in", onComplete: clearRootOverflow });
+      s.offset = 0;
+      return;
     }
+    if (action && !el) {
+      // Row unmounted mid-debounce (Finding 3b) — stale gesture, don't act
+      // on a mail that's no longer on screen.
+      s.mailId = null;
+      s.offset = 0;
+      return;
+    }
+    // Under threshold: snap back.
+    if (el) gsap.to(el, { x: 0, duration: 0.25, ease: "elastic.out(0.9, 0.6)", onComplete: clearRootOverflow });
     s.mailId = null;
     s.offset = 0;
   }, []);
@@ -713,11 +745,19 @@ function VirtualMailList({
                     if (!isHorizontalIntent(e.deltaX, e.deltaY)) return;
                     e.preventDefault();
                     const s = swipe.current;
+                    // Already actioned this row (latch held past settle) —
+                    // ignore trailing wheel ticks (trackpad momentum) so a
+                    // quick second swipe can't double-trigger the action.
+                    if (s.mailId === mail.id && s.fired) return;
                     if (s.mailId !== mail.id) {
                       settleSwipe(triggerSwipeAction);
                       s.mailId = mail.id;
                       s.offset = 0;
                       s.fired = false;
+                      // Clip this row's own translation for the episode's
+                      // duration only — cleared again in settleSwipe's tween
+                      // onComplete once the gesture resolves.
+                      el.style.overflow = "hidden";
                     }
                     s.offset = accumulate(s.offset, e.deltaX);
                     const target = swipeTargets.current.get(mail.id);
@@ -744,7 +784,7 @@ function VirtualMailList({
                 onDragStart={(e) => handleDragStart(e, mail)}
                 onDrag={handleDrag}
                 onDragEnd={handleDragEnd}
-                className="relative overflow-hidden group/mail mail-item-draggable select-none w-full text-left px-4 py-2.5 border-b border-border-light transition-colors cursor-pointer"
+                className="relative group/mail mail-item-draggable select-none w-full text-left px-4 py-2.5 border-b border-border-light transition-colors cursor-pointer"
               >
                 {/* Reveal layers for trackpad swipe */}
                 <div aria-hidden className="absolute inset-0 flex items-center justify-between px-5 pointer-events-none">
