@@ -1,5 +1,19 @@
 import { describe, it, expect } from "vitest";
-import { fillEmptyParagraphs, extractLocalImages, dropImagesByCid } from "./outgoingHtml";
+import { fillEmptyParagraphs, extractLocalImages, dropImagesByCid, decodeFileUrl } from "./outgoingHtml";
+
+describe("decodeFileUrl", () => {
+  it("strips the prefix from raw Windows paths without adding a root slash", () => {
+    expect(decodeFileUrl("file://C:\\Users\\x\\logo.png")).toBe("C:\\Users\\x\\logo.png");
+  });
+
+  it("drops the URL root slash in front of a drive letter", () => {
+    expect(decodeFileUrl("file:///C:/Users/x/logo.png")).toBe("C:/Users/x/logo.png");
+  });
+
+  it("keeps the leading slash on POSIX paths", () => {
+    expect(decodeFileUrl("file:///Users/x/logo.png")).toBe("/Users/x/logo.png");
+  });
+});
 
 describe("extractLocalImages", () => {
   it("rewrites file:// image sources to cid: and reports the local paths", () => {

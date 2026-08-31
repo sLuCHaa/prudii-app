@@ -22,6 +22,7 @@ import type { MailFlag } from "../../types";
 import { StarIcon, TrashIcon } from "../icons";
 import { formatDateTime, formatMailDate } from "../../lib/dateUtils";
 import { sanitizeEmailHtml, escapeHtml, type TrackerInfo } from "../../lib/sanitize";
+import { decodeFileUrl } from "../../lib/outgoingHtml";
 import { TrackingIndicator } from "./TrackingIndicator";
 import { AiSummaryButton, AiSummaryPanel } from "../ai/AiSummary";
 import { AiReplyButton, AiReplySuggestionsPanel } from "../ai/AiReplySuggestions";
@@ -315,10 +316,7 @@ const HtmlMailFrame = memo(function HtmlMailFrame({ html, allowExternalImages = 
     const d = document.createElement("div");
     d.innerHTML = res.html;
     d.querySelectorAll('img[src^="file://"]').forEach((img) => {
-      const raw = (img.getAttribute("src") ?? "").replace(/^file:\/+/, "/");
-      let path = raw;
-      try { path = decodeURIComponent(raw); } catch { /* keep raw */ }
-      img.setAttribute("src", convertFileSrc(path));
+      img.setAttribute("src", convertFileSrc(decodeFileUrl(img.getAttribute("src") ?? "")));
     });
     return { html: d.innerHTML, trackers: res.trackers };
   }, [html, allowExternalImages]);

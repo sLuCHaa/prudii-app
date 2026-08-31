@@ -70,7 +70,7 @@ export function extractLocalImages(html: string): { html: string; images: LocalI
   return { html: out, images };
 }
 
-function decodeFileUrl(src: string): string {
+export function decodeFileUrl(src: string): string {
   // The backend writes raw platform paths ("file://C:\..."), but HTML that
   // passed through the editor may come back percent-encoded and with the
   // three-slash form ("file:///C:/...").
