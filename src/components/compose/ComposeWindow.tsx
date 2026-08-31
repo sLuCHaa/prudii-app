@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { X, Maximize2, Minimize2, Pencil, Reply, ReplyAll, Forward } from "lucide-react";
+import { X, Minus, Square, Copy, Pencil, Reply, ReplyAll, Forward } from "lucide-react";
 import { emit } from "@tauri-apps/api/event";
 import { getCurrentWindow, currentMonitor } from "@tauri-apps/api/window";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -32,8 +32,17 @@ export function ComposeWindow() {
     // prevents a white flash before the web content paints. The content itself
     // fades in over a few frames so the window materializes instead of popping.
     const win = getCurrentWindow();
-    win.show().then(() => {
-      win.setFocus();
+    win.show().then(async () => {
+      // Windows can refuse to raise a window whose show() happened outside the
+      // user's click context (the compose-init handshake defers it) — the
+      // window then opens BEHIND whatever was focused meanwhile. The brief
+      // always-on-top pulse forces the raise on every platform.
+      try {
+        await win.setAlwaysOnTop(true);
+        await win.setFocus();
+      } finally {
+        await win.setAlwaysOnTop(false).catch(() => {});
+      }
       requestAnimationFrame(() => setShown(true));
     });
   }, [initData]);
@@ -184,10 +193,13 @@ export function ComposeWindow() {
     <QueryClientProvider client={composeQueryClient}>
     <DialogProvider>
       <div className={`flex flex-col h-screen bg-surface text-text transition-opacity duration-150 ${shown ? "opacity-100" : "opacity-0"}`}>
-          {/* macOS: left padding clears the native traffic lights (overlay title bar) */}
+          {/* macOS: left padding clears the native traffic lights (overlay title bar).
+              Windows/Linux: full-height caption buttons like the main window —
+              the rounded mini-buttons (and the missing minimize) read as a web
+              page, not a window. */}
           <div
             data-tauri-drag-region
-            className={`flex items-center justify-between py-2 pr-4 border-b border-border bg-bg-secondary select-none shrink-0 ${isMacOS ? "pl-[88px]" : "pl-4"}`}
+            className={`flex items-center justify-between h-9 border-b border-border bg-bg-secondary select-none shrink-0 ${isMacOS ? "pl-[88px] pr-4" : "pl-4"}`}
           >
             <h2 data-tauri-drag-region className="flex items-center gap-2 text-sm font-semibold text-text">
               <ModeIcon className="w-4 h-4 text-accent shrink-0" />
@@ -195,21 +207,33 @@ export function ComposeWindow() {
             </h2>
             {/* macOS uses the native traffic lights instead (overlay title bar) */}
             {!isMacOS && (
-              <div className="flex items-center gap-1">
+              <div className="flex h-full items-stretch">
+                <button
+                  onClick={() => getCurrentWindow().minimize()}
+                  className="inline-flex items-center justify-center w-11 h-full hover:bg-hover transition-colors"
+                  title={t("titleBar.minimize", { defaultValue: "Minimize" })}
+                  aria-label={t("titleBar.minimize", { defaultValue: "Minimize" })}
+                >
+                  <Minus className="w-4 h-4 text-text-secondary pointer-events-none" />
+                </button>
                 <button
                   onClick={handleToggleMaximize}
-                  className="inline-flex items-center justify-center w-7 h-7 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
+                  className="inline-flex items-center justify-center w-11 h-full hover:bg-hover transition-colors"
+                  title={maximized ? t("titleBar.restore", { defaultValue: "Restore" }) : t("titleBar.maximize", { defaultValue: "Maximize" })}
+                  aria-label={maximized ? t("titleBar.restore", { defaultValue: "Restore" }) : t("titleBar.maximize", { defaultValue: "Maximize" })}
                 >
                   {maximized
-                    ? <Minimize2 className="w-3.5 h-3.5 pointer-events-none" />
-                    : <Maximize2 className="w-3.5 h-3.5 pointer-events-none" />
+                    ? <Copy className="w-3.5 h-3.5 text-text-secondary pointer-events-none scale-x-[-1]" />
+                    : <Square className="w-4 h-4 text-text-secondary pointer-events-none" />
                   }
                 </button>
                 <button
                   onClick={handleCloseRequest}
-                  className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-text-tertiary hover:bg-danger hover:text-white transition-colors"
+                  className="inline-flex items-center justify-center w-11 h-full hover:bg-danger/90 hover:text-white transition-colors"
+                  title={t("titleBar.close", { defaultValue: "Close" })}
+                  aria-label={t("titleBar.close", { defaultValue: "Close" })}
                 >
-                  <X className="w-4 h-4 pointer-events-none" />
+                  <X className="w-4 h-4 text-text-secondary pointer-events-none" />
                 </button>
               </div>
             )}
