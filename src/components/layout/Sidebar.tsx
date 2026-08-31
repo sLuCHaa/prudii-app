@@ -1270,7 +1270,7 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
     <div className="mb-3">
       <div className="px-2 pt-3 pb-1.5 flex items-center gap-2">
         <div className="h-px flex-1 bg-linear-to-r from-transparent via-border to-transparent" />
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-text-tertiary">
+        <span className="text-[11px] font-semibold uppercase tracking-widest text-text-tertiary">
           {t("sidebar.views")}
         </span>
         <div className="h-px flex-1 bg-linear-to-r from-border via-transparent to-transparent" />
@@ -1436,7 +1436,7 @@ export function Sidebar() {
           <>
             <div className="px-2 pt-3 pb-1.5 flex items-center gap-2">
               <div className="h-px flex-1 bg-linear-to-r from-transparent via-border to-transparent" />
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-text-tertiary">
+              <span className="text-[11px] font-semibold uppercase tracking-widest text-text-tertiary">
                 {t("sidebar.accounts")}
               </span>
               <div className="h-px flex-1 bg-linear-to-r from-border via-transparent to-transparent" />

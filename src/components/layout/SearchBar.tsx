@@ -68,7 +68,7 @@ export function SearchBar() {
         {isDebouncing ? (
           <Loader2 className="w-3.5 h-3.5 text-text-tertiary animate-spin shrink-0" />
         ) : resultCount !== undefined ? (
-          <span className="text-[10px] font-medium tabular-nums shrink-0 bg-accent/15 text-accent rounded-full px-1.5 py-0.5 leading-none">
+          <span className="text-[11px] font-medium tabular-nums shrink-0 bg-accent/15 text-accent rounded-full px-1.5 py-0.5 leading-none">
             {resultCount}
           </span>
         ) : null}

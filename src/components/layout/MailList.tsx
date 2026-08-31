@@ -355,7 +355,7 @@ function SearchResultsList({ results, isLoading, selectedMailId, setSelectedMail
   return (
     <div className="flex-1 overflow-y-auto scrollbar-thin">
       <div className="px-4 py-1.5 bg-surface sticky top-0 z-10 flex items-center gap-2">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-text-tertiary">
+        <span className="text-[11px] font-semibold uppercase tracking-widest text-text-tertiary">
           {t("mailDetail.searchResults", { count: results.length, query: useAppStore.getState().searchQuery })}
         </span>
         <div className="flex-1 h-px bg-border" />
@@ -392,7 +392,7 @@ function SearchResultsList({ results, isLoading, selectedMailId, setSelectedMail
                     <Paperclip className="w-3 h-3 text-text-tertiary" />
                   )}
                   {result.folder_name && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-alt text-text-tertiary">
+                    <span className="text-[11px] px-1.5 py-0.5 rounded bg-surface-alt text-text-tertiary">
                       {result.folder_name}
                     </span>
                   )}
@@ -631,7 +631,7 @@ function VirtualMailList({
                 }}
                 className="px-4 py-1.5 bg-surface flex items-center gap-2"
               >
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-text-tertiary">
+                <span className="text-[11px] font-semibold uppercase tracking-widest text-text-tertiary">
                   {item.label}
                 </span>
                 <div className="flex-1 h-px bg-border" />

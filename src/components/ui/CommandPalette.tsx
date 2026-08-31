@@ -463,7 +463,7 @@ export function CommandPalette() {
                             <HighlightedText text={item.label} query={isAccountSearch ? query.slice(1) : query} />
                           </span>
                           {item.shortcut && (
-                            <span className="ml-auto shrink-0 text-[10px] font-mono text-text-tertiary border border-border rounded px-1.5 py-0.5 bg-bg-secondary">
+                            <span className="ml-auto shrink-0 text-[11px] font-mono text-text-tertiary border border-border rounded px-1.5 py-0.5 bg-bg-secondary">
                               {item.shortcut}
                             </span>
                           )}

@@ -1980,7 +1980,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
                         )}
                       </div>
                       <span className="text-xs text-text truncate w-full text-center font-medium">{att.name}</span>
-                      <span className={`text-[10px] ${failed ? "text-danger" : "text-text-tertiary"}`}>
+                      <span className={`text-[11px] ${failed ? "text-danger" : "text-text-tertiary"}`}>
                         {failed
                           ? t("compose.attachmentFailed")
                           : loading

@@ -43,7 +43,7 @@ export function UpdateBanner() {
       {phase === "error" ? (
         <ShieldAlert className="w-4 h-4 text-danger shrink-0" />
       ) : phase === "ready" ? (
-        <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
+        <CheckCircle className="w-4 h-4 text-success shrink-0" />
       ) : busy ? (
         <Loader2 className="w-4 h-4 text-accent shrink-0 animate-spin" />
       ) : (

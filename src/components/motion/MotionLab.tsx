@@ -201,7 +201,7 @@ const SECTIONS: Section[] = [
             (e) => (
               <div key={e} className="flex flex-col items-center gap-2">
                 <GradientAvatar email={e} name={e.split("@")[0]} size={48} />
-                <div className="text-[10px] text-text-tertiary">{e}</div>
+                <div className="text-[11px] text-text-tertiary">{e}</div>
               </div>
             ),
           )}
@@ -243,7 +243,7 @@ export function MotionLab({ onClose }: { onClose: () => void }) {
             ✕
           </button>
         </div>
-        <div className="text-[10px] uppercase tracking-wider text-text-tertiary mb-2">
+        <div className="text-[11px] uppercase tracking-wider text-text-tertiary mb-2">
           Primitives
         </div>
         <nav className="flex flex-col gap-1">

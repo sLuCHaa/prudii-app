@@ -53,7 +53,7 @@ function StepperHeader({ current }: { current: number }) {
                   {isDone ? "✓" : i + 1}
                 </motion.div>
               </GlowRing>
-              <span className="text-[10px] text-text-tertiary font-medium">{t(labelKey)}</span>
+              <span className="text-[11px] text-text-tertiary font-medium">{t(labelKey)}</span>
             </div>
             {i < STEP_KEYS.length - 1 && (
               <div className="w-12 h-[2px] rounded-full bg-bg-tertiary overflow-hidden mb-4">

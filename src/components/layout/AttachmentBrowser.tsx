@@ -26,13 +26,13 @@ function getFileIcon(mimeType: string | null, filename: string) {
   const ext = filename.split(".").pop()?.toLowerCase() || "";
 
   if (mime.startsWith("image/") || ["png", "jpg", "jpeg", "gif", "webp", "svg"].includes(ext)) {
-    return <Image className="w-4 h-4 text-emerald-500" />;
+    return <Image className="w-4 h-4 text-success" />;
   }
   if (mime === "application/pdf" || ext === "pdf") {
-    return <FileText className="w-4 h-4 text-red-500" />;
+    return <FileText className="w-4 h-4 text-danger" />;
   }
   if (mime.includes("spreadsheet") || mime.includes("excel") || ["xlsx", "xls", "csv"].includes(ext)) {
-    return <FileSpreadsheet className="w-4 h-4 text-green-600" />;
+    return <FileSpreadsheet className="w-4 h-4 text-success" />;
   }
   if (mime.includes("word") || mime.includes("document") || ["docx", "doc"].includes(ext)) {
     return <FileText className="w-4 h-4 text-blue-600" />;
@@ -427,7 +427,7 @@ export function AttachmentBrowser() {
         <div className="flex-1 max-w-md relative flex items-center gap-2">
           {aiSearchMode ? (
             <div className="flex-1 relative">
-              <Sparkles className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-500" />
+              <Sparkles className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-accent" />
               <input
                 ref={aiInputRef}
                 type="text"
@@ -436,7 +436,7 @@ export function AttachmentBrowser() {
                 onKeyDown={(e) => { if (e.key === "Enter") handleAiSearch(); if (e.key === "Escape") clearAiResults(); }}
                 placeholder={t("attachments.aiSearchPlaceholder")}
                 disabled={aiSearching}
-                className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-purple-400/50 bg-purple-500/5 text-text text-sm focus:border-purple-500 transition-colors ring-1 ring-purple-400/20"
+                className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-accent/50 bg-accent/5 text-text text-sm focus:border-accent transition-colors ring-1 ring-accent/20"
               />
             </div>
           ) : (
@@ -463,7 +463,7 @@ export function AttachmentBrowser() {
               }}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 ${
                 aiSearchMode
-                  ? "bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-400/30"
+                  ? "bg-accent/15 text-accent border border-accent/30"
                   : "bg-bg-secondary text-text-tertiary border border-border hover:text-text-secondary hover:border-border-hover"
               }`}
               title={t("attachments.aiSearch")}
@@ -592,23 +592,23 @@ export function AttachmentBrowser() {
       </div>
 
       {aiSearching && (
-        <div className="px-6 py-2.5 border-b border-purple-300/30 bg-purple-500/5 flex items-center gap-2">
-          <Loader2 className="w-4 h-4 text-purple-500 animate-spin" />
-          <span className="text-xs text-purple-600 dark:text-purple-400 font-medium">{t("attachments.aiSearching")}</span>
+        <div className="px-6 py-2.5 border-b border-accent/30 bg-accent/5 flex items-center gap-2">
+          <Loader2 className="w-4 h-4 text-accent animate-spin" />
+          <span className="text-xs text-accent font-medium">{t("attachments.aiSearching")}</span>
         </div>
       )}
       {aiError && (
-        <div className="px-6 py-2.5 border-b border-red-300/30 bg-red-500/5 flex items-center gap-2">
-          <span className="text-xs text-red-600 dark:text-red-400">{t("attachments.aiError")}: {aiError}</span>
-          <button onClick={clearAiResults} className="ml-auto text-xs text-red-500 hover:text-red-600 font-medium">
+        <div className="px-6 py-2.5 border-b border-danger/30 bg-danger/5 flex items-center gap-2">
+          <span className="text-xs text-danger">{t("attachments.aiError")}: {aiError}</span>
+          <button onClick={clearAiResults} className="ml-auto text-xs text-danger hover:opacity-80 font-medium">
             {t("attachments.aiClearResults")}
           </button>
         </div>
       )}
       {aiResults && !aiError && (
-        <div className="px-6 py-2.5 border-b border-purple-300/30 bg-purple-500/5 flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-purple-500 shrink-0" />
-          <span className="text-xs text-purple-600 dark:text-purple-400 font-medium">
+        <div className="px-6 py-2.5 border-b border-accent/30 bg-accent/5 flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-accent shrink-0" />
+          <span className="text-xs text-accent font-medium">
             {aiResults.length === 0
               ? t("attachments.aiNoResults")
               : t("attachments.aiResults", { count: aiResults.length, query: aiParsedQuery })
@@ -616,7 +616,7 @@ export function AttachmentBrowser() {
           </span>
           <button
             onClick={clearAiResults}
-            className="ml-auto flex items-center gap-1 text-xs text-purple-500 hover:text-purple-600 dark:hover:text-purple-300 font-medium transition-colors"
+            className="ml-auto flex items-center gap-1 text-xs text-accent hover:text-accent-hover font-medium transition-colors"
           >
             <X className="w-3 h-3" />
             {t("attachments.aiClearResults")}

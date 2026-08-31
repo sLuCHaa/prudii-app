@@ -103,15 +103,15 @@ export function WizardStepDone({
           <p className="text-xs font-semibold text-text mb-1.5">{t("onboarding.welcomeTitle")}</p>
           <ul className="text-xs text-text-secondary space-y-1">
             <li className="flex items-center gap-2">
-              <kbd className="px-1.5 py-0.5 bg-bg border border-border rounded text-[10px]">?</kbd>
+              <kbd className="px-1.5 py-0.5 bg-bg border border-border rounded text-[11px]">?</kbd>
               <span>{t("onboarding.tipShortcuts")}</span>
             </li>
             <li className="flex items-center gap-2">
-              <kbd className="px-1.5 py-0.5 bg-bg border border-border rounded text-[10px]">Ctrl+K</kbd>
+              <kbd className="px-1.5 py-0.5 bg-bg border border-border rounded text-[11px]">Ctrl+K</kbd>
               <span>{t("onboarding.tipCommandPalette")}</span>
             </li>
             <li className="flex items-center gap-2">
-              <kbd className="px-1.5 py-0.5 bg-bg border border-border rounded text-[10px]">c</kbd>
+              <kbd className="px-1.5 py-0.5 bg-bg border border-border rounded text-[11px]">c</kbd>
               <span>{t("onboarding.tipCompose")}</span>
             </li>
           </ul>

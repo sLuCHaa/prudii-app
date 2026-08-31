@@ -157,8 +157,8 @@ export function LicenseSettings() {
   function getPlanColor() {
     if (!license) return "text-text-tertiary";
     switch (license.plan) {
-      case "team": return "text-green-500";
-      case "premium": return "text-purple-500";
+      case "team": return "text-success";
+      case "premium": return "text-accent";
       default: return "text-text-tertiary";
     }
   }
@@ -178,16 +178,16 @@ export function LicenseSettings() {
         <p className="text-xs text-text-tertiary mb-4">{t("settings.license.loginDesc")}</p>
 
         {license?.session_expired && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 mb-4">
-            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-            <p className="text-xs text-amber-600 dark:text-amber-400">{t("settings.license.sessionExpired")}</p>
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-warning/10 border border-warning/20 mb-4">
+            <AlertTriangle className="w-4 h-4 text-warning shrink-0" />
+            <p className="text-xs text-warning">{t("settings.license.sessionExpired")}</p>
           </div>
         )}
 
         {error && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 mb-4">
-            <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
-            <p className="text-xs text-red-500">{error}</p>
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-danger/10 border border-danger/20 mb-4">
+            <AlertTriangle className="w-4 h-4 text-danger shrink-0" />
+            <p className="text-xs text-danger">{error}</p>
           </div>
         )}
 
@@ -251,9 +251,9 @@ export function LicenseSettings() {
         <p className="text-xs text-text-tertiary mb-4">{t("settings.license.activateDesc")}</p>
 
         {error && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 mb-4">
-            <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
-            <p className="text-xs text-red-500">{error}</p>
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-danger/10 border border-danger/20 mb-4">
+            <AlertTriangle className="w-4 h-4 text-danger shrink-0" />
+            <p className="text-xs text-danger">{error}</p>
           </div>
         )}
 
@@ -342,10 +342,10 @@ export function LicenseSettings() {
           {/* Auth token expired/rejected — a soft hint. Paid features stay available
               under the grace period; signing in again just refreshes the session. */}
           {license.session_expired && (
-            <div className="p-4 rounded-lg border border-amber-500/30 bg-amber-500/10 space-y-3">
+            <div className="p-4 rounded-lg border border-warning/30 bg-warning/10 space-y-3">
               <div className="flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-                <p className="text-xs text-amber-600 dark:text-amber-400">{t("settings.license.sessionExpired")}</p>
+                <AlertTriangle className="w-4 h-4 text-warning shrink-0" />
+                <p className="text-xs text-warning">{t("settings.license.sessionExpired")}</p>
               </div>
               <Button variant="primary" size="sm" onClick={() => { setError(""); setView("login"); }}>
                 {t("settings.license.login")}
@@ -383,7 +383,7 @@ export function LicenseSettings() {
                     <div className="flex items-center gap-1">
                       <span className="text-xs font-mono text-text">{license.license_key}</span>
                       <button onClick={copyKey} className="p-1 hover:bg-hover rounded">
-                        {copied ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3 text-text-tertiary" />}
+                        {copied ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3 text-text-tertiary" />}
                       </button>
                     </div>
                   </div>
@@ -425,15 +425,15 @@ export function LicenseSettings() {
               </span>
             </div>
             {error && (
-              <div className="flex items-center gap-2 p-2 rounded bg-red-500/10 border border-red-500/20">
-                <AlertTriangle className="w-3 h-3 text-red-500 shrink-0" />
-                <p className="text-xs text-red-500">{error}</p>
+              <div className="flex items-center gap-2 p-2 rounded bg-danger/10 border border-danger/20">
+                <AlertTriangle className="w-3 h-3 text-danger shrink-0" />
+                <p className="text-xs text-danger">{error}</p>
               </div>
             )}
             {verifySuccess && (
-              <div className="flex items-center gap-2 p-2 rounded bg-green-500/10 border border-green-500/20">
-                <Check className="w-3 h-3 text-green-500 shrink-0" />
-                <p className="text-xs text-green-500">{t("settings.license.verifySuccess")}</p>
+              <div className="flex items-center gap-2 p-2 rounded bg-success/10 border border-success/20">
+                <Check className="w-3 h-3 text-success shrink-0" />
+                <p className="text-xs text-success">{t("settings.license.verifySuccess")}</p>
               </div>
             )}
             <Button variant="secondary" size="sm" loading={verifyLoading} onClick={handleVerify} icon={<RefreshCw />}>

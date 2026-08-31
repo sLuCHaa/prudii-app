@@ -71,7 +71,7 @@ export function UpdatePanel() {
 
           {status === "up-to-date" && (
             <div className="flex items-center gap-2 p-3 rounded-lg border border-border bg-bg-secondary">
-              <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
+              <CheckCircle className="w-4 h-4 text-success shrink-0" />
               <span className="text-sm text-text">{t("settings.update.upToDate")}</span>
             </div>
           )}
@@ -146,8 +146,8 @@ export function UpdatePanel() {
 
       {/* Ready — launching installer */}
       {status === "ready" && (
-        <div className="flex items-center gap-2 p-3 rounded-lg border border-green-500/30 bg-green-500/5">
-          <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
+        <div className="flex items-center gap-2 p-3 rounded-lg border border-success/30 bg-success/5">
+          <CheckCircle className="w-4 h-4 text-success shrink-0" />
           <span className="text-sm text-text">{t("settings.update.verified")}</span>
         </div>
       )}

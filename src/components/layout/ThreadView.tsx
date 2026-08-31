@@ -612,12 +612,12 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, sing
               {mail.from.name || mail.from.email}
             </span>
             {isDraft && (
-              <span className="px-1.5 py-0.5 text-[10px] font-medium bg-warning/15 text-warning rounded shrink-0">
+              <span className="px-1.5 py-0.5 text-[11px] font-medium bg-warning/15 text-warning rounded shrink-0">
                 {t("mailDetail.draft")}
               </span>
             )}
             {!singleMail && isLatest && !isDraft && (
-              <span className="px-1.5 py-0.5 text-[10px] font-medium bg-accent/10 text-accent rounded">
+              <span className="px-1.5 py-0.5 text-[11px] font-medium bg-accent/10 text-accent rounded">
                 {t("mailDetail.latest")}
               </span>
             )}

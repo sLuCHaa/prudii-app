@@ -29,13 +29,13 @@ function getLargeFileIcon(att: AttachmentWithContext) {
   const ext = att.filename.split(".").pop()?.toLowerCase() || "";
   const mime = att.mime_type?.toLowerCase() || "";
   if (mime.startsWith("image/") || IMAGE_EXTENSIONS.has(ext)) {
-    return <Image className="w-16 h-16 text-emerald-500/60" />;
+    return <Image className="w-16 h-16 text-success/60" />;
   }
   if (mime === "application/pdf" || ext === "pdf") {
-    return <FileText className="w-16 h-16 text-red-500/60" />;
+    return <FileText className="w-16 h-16 text-danger/60" />;
   }
   if (mime.includes("spreadsheet") || mime.includes("excel") || ["xlsx", "xls", "csv"].includes(ext)) {
-    return <FileSpreadsheet className="w-16 h-16 text-green-600/60" />;
+    return <FileSpreadsheet className="w-16 h-16 text-success/60" />;
   }
   if (mime.includes("word") || mime.includes("document") || ["docx", "doc"].includes(ext)) {
     return <FileText className="w-16 h-16 text-blue-600/60" />;

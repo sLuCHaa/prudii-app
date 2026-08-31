@@ -1,18 +1,18 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Check, X, Loader2 } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { Check, X, Send } from "lucide-react";
+import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { useTranslation } from "react-i18next";
 import { emit } from "@tauri-apps/api/event";
 import { useAppStore } from "../../stores/appStore";
 import { sendMail, saveDraft, syncAccount, trashMail } from "../../lib/tauri";
 import { causeMessage } from "../../lib/errorToast";
 import { playSentSound } from "../../lib/sounds";
-import { GlowRing } from "../motion/GlowRing";
 
 type Phase = "countdown" | "sending" | "sent" | "error";
 
 export function UndoToast() {
   const { t } = useTranslation();
+  const reduceMotion = useReducedMotion();
   const undoSend = useAppStore((s) => s.undoSend);
   const cancelUndoSend = useAppStore((s) => s.cancelUndoSend);
   const clearUndoSend = useAppStore((s) => s.clearUndoSend);
@@ -143,76 +143,121 @@ export function UndoToast() {
   }
 
   const visible = undoSend.active || phase === "sending" || phase === "sent" || phase === "error";
+  const subject = undoSend.request?.subject ?? "";
+  const secondsLeft = Math.ceil(progress * undoSendDelay);
 
   return (
     <AnimatePresence>
       {visible && (
         <motion.div
-          initial={{ opacity: 0, y: 60 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 60 }}
+          initial={{ opacity: 0, y: 60, scale: 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 60, scale: 0.96 }}
           transition={{ type: "spring", stiffness: 400, damping: 30 }}
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-100 flex items-center gap-3 px-4 py-3 rounded-xl bg-surface border border-border shadow-lg min-w-[280px]"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-100 overflow-hidden rounded-xl bg-surface border border-border shadow-lg min-w-[340px] max-w-[440px]"
         >
-          {phase === "countdown" && (
-            <>
-              <GlowRing progress={progress} size={28} strokeWidth={3}>
-                <span className="text-[10px] font-bold text-accent tabular-nums">
-                  {Math.ceil(progress * undoSendDelay)}
-                </span>
-              </GlowRing>
-              <span className="text-sm text-text flex-1">{t("undoSend.sending")}</span>
-              <button
-                onClick={handleUndo}
-                className="px-3 py-1 rounded-lg text-sm font-medium text-accent hover:bg-accent/10 transition-colors"
-              >
-                {t("undoSend.undo")}
-              </button>
-            </>
-          )}
+          <div className="flex items-center gap-3 px-4 py-3">
+            {(phase === "countdown" || phase === "sending") && (
+              <>
+                <div className="relative w-9 h-9 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
+                  <motion.div
+                    animate={
+                      reduceMotion
+                        ? undefined
+                        : phase === "sending"
+                          ? { x: [0, 3, 0], y: [0, -3, 0] }
+                          : { y: [0, -1.5, 0] }
+                    }
+                    transition={{ duration: phase === "sending" ? 0.7 : 2, repeat: Infinity, ease: "easeInOut" }}
+                  >
+                    <Send className="w-4 h-4 text-accent" />
+                  </motion.div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-text">
+                    {phase === "sending" ? t("common.sending") : t("undoSend.sending")}
+                  </p>
+                  {subject && (
+                    <p className="text-xs text-text-tertiary truncate mt-0.5">{subject}</p>
+                  )}
+                </div>
+                {phase === "countdown" && (
+                  <button
+                    onClick={handleUndo}
+                    className="shrink-0 px-3.5 py-1.5 rounded-lg text-sm font-medium bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
+                  >
+                    {t("undoSend.undo")}
+                    <span className="ml-1.5 tabular-nums text-accent/70">{secondsLeft}</span>
+                  </button>
+                )}
+              </>
+            )}
 
-          {phase === "sending" && (
-            <>
-              <Loader2 className="w-5 h-5 text-accent animate-spin shrink-0" />
-              <span className="text-sm text-text">{t("common.sending")}</span>
-            </>
-          )}
+            {phase === "sent" && (
+              <>
+                <motion.div
+                  initial={reduceMotion ? false : { scale: 0.4, rotate: -20 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 18 }}
+                  className="w-9 h-9 rounded-full bg-success/15 flex items-center justify-center shrink-0"
+                >
+                  <Check className="w-4.5 h-4.5 text-success" />
+                </motion.div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-text">{t("undoSend.messageSent")}</p>
+                  {subject && (
+                    <p className="text-xs text-text-tertiary truncate mt-0.5">{subject}</p>
+                  )}
+                </div>
+              </>
+            )}
 
-          {phase === "sent" && (
-            <>
-              <div className="w-6 h-6 rounded-full bg-success/20 flex items-center justify-center shrink-0">
-                <Check className="w-4 h-4 text-success" />
-              </div>
-              <span className="text-sm text-text">{t("undoSend.messageSent")}</span>
-            </>
-          )}
+            {phase === "error" && (
+              <>
+                <div className="w-9 h-9 rounded-full bg-danger/15 flex items-center justify-center shrink-0">
+                  <X className="w-4 h-4 text-danger" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-text">{t("undoSend.sendFailedTitle")}</p>
+                  <p className="text-xs text-text-secondary mt-0.5 line-clamp-2">
+                    {errorMsg}
+                    {draftSaved ? ` ${t("undoSend.savedAsDraft")}` : ""}
+                  </p>
+                </div>
+                <button
+                  onClick={handleRestore}
+                  className="shrink-0 px-3.5 py-1.5 rounded-lg text-sm font-medium bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
+                >
+                  {t("undoSend.restore")}
+                </button>
+                <button
+                  onClick={handleDismissError}
+                  className="p-1 rounded hover:bg-hover transition-colors text-text-tertiary shrink-0"
+                  aria-label={t("common.close")}
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </>
+            )}
+          </div>
 
-          {phase === "error" && (
-            <>
-              <div className="w-6 h-6 rounded-full bg-danger/20 flex items-center justify-center shrink-0">
-                <X className="w-4 h-4 text-danger" />
-              </div>
-              <div className="flex-1 min-w-0 max-w-[360px]">
-                <p className="text-sm font-medium text-text">{t("undoSend.sendFailedTitle")}</p>
-                <p className="text-xs text-text-secondary mt-0.5 line-clamp-2">
-                  {errorMsg}
-                  {draftSaved ? ` ${t("undoSend.savedAsDraft")}` : ""}
-                </p>
-              </div>
-              <button
-                onClick={handleRestore}
-                className="px-3 py-1 rounded-lg text-sm font-medium text-accent hover:bg-accent/10 transition-colors shrink-0"
-              >
-                {t("undoSend.restore")}
-              </button>
-              <button
-                onClick={handleDismissError}
-                className="p-1 rounded hover:bg-hover transition-colors text-text-tertiary shrink-0"
-                aria-label={t("common.close")}
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </>
+          {/* Draining time bar — the visual countdown. Width comes from the
+              50ms progress tick; during the actual send it pulses instead. */}
+          {(phase === "countdown" || phase === "sending") && (
+            <div className="h-0.5 w-full bg-accent/15">
+              {phase === "countdown" ? (
+                <div
+                  className="h-full bg-linear-to-r from-accent to-purple-500"
+                  style={{ width: `${progress * 100}%` }}
+                />
+              ) : (
+                <motion.div
+                  className="h-full bg-linear-to-r from-accent to-purple-500"
+                  animate={reduceMotion ? undefined : { opacity: [1, 0.4, 1] }}
+                  transition={{ duration: 1, repeat: Infinity, ease: "easeInOut" }}
+                />
+              )}
+            </div>
           )}
         </motion.div>
       )}

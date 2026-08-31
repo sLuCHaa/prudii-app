@@ -20,7 +20,7 @@ const TONE_KEYS: Record<string, string> = {
 
 const TONE_COLORS: Record<string, string> = {
   professional: "border-blue-500/30 bg-blue-500/5",
-  friendly: "border-green-500/30 bg-green-500/5",
+  friendly: "border-success/30 bg-success/5",
   concise: "border-orange-500/30 bg-orange-500/5",
 };
 
