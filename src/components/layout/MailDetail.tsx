@@ -3,8 +3,9 @@ import { motion, useReducedMotion } from "motion/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "../../stores/appStore";
 import { markAsRead, getMail } from "../../lib/tauri";
-import { MAIL_LINK_BRIDGE, MAIL_LINK_BRIDGE_CSP_HASH, relayBridgeKey } from "../../lib/mailLinkBridge";
+import { MAIL_LINK_BRIDGE, MAIL_LINK_BRIDGE_CSP_HASH, relayBridgeKey, parseBridgeContextMenu, type BridgeContextMenu } from "../../lib/mailLinkBridge";
 import { openMailUrl } from "../../lib/trackingParams";
+import { MailBodyContextMenu } from "./MailBodyContextMenu";
 import { EmptyState } from "../ui/EmptyState";
 import { DaylightSky, useAtmosphereLine } from "../motion/DaylightSky";
 import { ThreadView } from "./ThreadView";
@@ -65,6 +66,7 @@ export function HtmlMailFrame({ html, allowExternalImages = true, onIframeRef, o
   const darkMode = useAppStore((s) => s.darkMode);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(300);
+  const [bodyMenu, setBodyMenu] = useState<{ target: BridgeContextMenu; x: number; y: number } | null>(null);
   const { t } = useTranslation();
 
   const themeStyles = darkMode ? DARK_STYLES : LIGHT_STYLES;
@@ -103,24 +105,9 @@ ${BASE_STYLES}
     resizeIframe();
   }, [html, darkMode, resizeIframe]);
 
-  // The in-frame LINK_BRIDGE relays clicks here via postMessage. A parent-side
-  // listener on the iframe's contentDocument never fires on macOS/WKWebView.
-  useEffect(() => {
-    function handleMessage(e: MessageEvent) {
-      const iframe = iframeRef.current;
-      if (!iframe || e.source !== iframe.contentWindow) return;
-      if (relayBridgeKey(e.data)) return;
-      const data = e.data as { __prudiiLink?: string; __prudiiImage?: string } | null;
-      if (!data) return;
-
-      if (typeof data.__prudiiImage === "string") {
-        onImageClick?.(data.__prudiiImage);
-        return;
-      }
-
-      let href = data.__prudiiLink?.trim();
-      if (!href || href.startsWith("#")) return;
-
+  const openHref = useCallback(
+    (rawHref: string) => {
+      let href = rawHref;
       if (href.startsWith("//")) {
         href = "https:" + href;
       } else if (!/^[a-z][a-z0-9+.-]*:/i.test(href)) {
@@ -140,11 +127,41 @@ ${BASE_STYLES}
           console.warn("Failed to open URL:", href, err);
         });
       }
+    },
+    [onLinkClick]
+  );
+
+  // The in-frame LINK_BRIDGE relays clicks here via postMessage. A parent-side
+  // listener on the iframe's contentDocument never fires on macOS/WKWebView.
+  useEffect(() => {
+    function handleMessage(e: MessageEvent) {
+      const iframe = iframeRef.current;
+      if (!iframe || e.source !== iframe.contentWindow) return;
+      if (relayBridgeKey(e.data)) return;
+
+      const ctx = parseBridgeContextMenu(e.data);
+      if (ctx) {
+        const r = iframe.getBoundingClientRect();
+        setBodyMenu({ target: ctx, x: r.left + ctx.x, y: r.top + ctx.y });
+        return;
+      }
+
+      const data = e.data as { __prudiiLink?: string; __prudiiImage?: string } | null;
+      if (!data) return;
+
+      if (typeof data.__prudiiImage === "string") {
+        onImageClick?.(data.__prudiiImage);
+        return;
+      }
+
+      const href = data.__prudiiLink?.trim();
+      if (!href || href.startsWith("#")) return;
+      openHref(href);
     }
 
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [onLinkClick, onImageClick]);
+  }, [onImageClick, openHref]);
 
   // Forward ref to parent for print
   const setRef = useCallback((el: HTMLIFrameElement | null) => {
@@ -153,18 +170,30 @@ ${BASE_STYLES}
   }, [onIframeRef]);
 
   return (
-    <iframe
-      ref={setRef}
-      srcDoc={srcDoc}
-      sandbox="allow-same-origin allow-scripts"
-      onLoad={resizeIframe}
-      className="w-full border-0"
-      style={{
-        height: `${height}px`,
-        background: darkMode ? "#1e293b" : "#ffffff",
-      }}
-      title={t("mailDetail.emailContent")}
-    />
+    <>
+      <iframe
+        ref={setRef}
+        srcDoc={srcDoc}
+        sandbox="allow-same-origin allow-scripts"
+        onLoad={resizeIframe}
+        className="w-full border-0"
+        style={{
+          height: `${height}px`,
+          background: darkMode ? "#1e293b" : "#ffffff",
+        }}
+        title={t("mailDetail.emailContent")}
+      />
+      {bodyMenu && (
+        <MailBodyContextMenu
+          target={bodyMenu.target}
+          x={bodyMenu.x}
+          y={bodyMenu.y}
+          onClose={() => setBodyMenu(null)}
+          onOpenLink={openHref}
+          onOpenImage={onImageClick}
+        />
+      )}
+    </>
   );
 }
 

@@ -246,6 +246,13 @@
       "message": "为保护隐私，外部图片已被阻止。",
       "load": "加载图片"
     },
+    "bodyMenu": {
+      "openLink": "打开链接",
+      "copyLink": "复制链接",
+      "openImage": "打开图片",
+      "copyImageAddress": "复制图片地址",
+      "copy": "复制"
+    },
     "toLabel": "收件人",
     "ccLabel": "抄送"
   },

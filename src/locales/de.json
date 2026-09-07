@@ -247,6 +247,13 @@
       "message": "Externe Bilder aus Datenschutzgründen blockiert.",
       "load": "Bilder laden"
     },
+    "bodyMenu": {
+      "openLink": "Link öffnen",
+      "copyLink": "Link kopieren",
+      "openImage": "Bild öffnen",
+      "copyImageAddress": "Bildadresse kopieren",
+      "copy": "Kopieren"
+    },
     "toLabel": "An",
     "ccLabel": "Cc"
   },

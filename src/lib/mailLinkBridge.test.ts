@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { MAIL_LINK_BRIDGE, MAIL_LINK_BRIDGE_CSP_HASH, relayBridgeKey } from "./mailLinkBridge";
+import { MAIL_LINK_BRIDGE, MAIL_LINK_BRIDGE_CSP_HASH, relayBridgeKey, parseBridgeContextMenu } from "./mailLinkBridge";
 
 describe("MAIL_LINK_BRIDGE CSP hash", () => {
   it("matches the pinned hash constant", () => {
@@ -35,6 +35,14 @@ describe("relayBridgeKey", () => {
   it("ignores other bridge messages", () => {
     expect(relayBridgeKey({ __prudiiLink: "https://x" })).toBe(false);
     expect(relayBridgeKey(null)).toBe(false);
+  });
+});
+
+describe("parseBridgeContextMenu", () => {
+  it("accepts a context menu payload and rejects anything else", () => {
+    expect(parseBridgeContextMenu({ __prudiiContextMenu: { x: 5, y: 6, href: "https://a" } })).toEqual({ x: 5, y: 6, href: "https://a" });
+    expect(parseBridgeContextMenu({ __prudiiContextMenu: { x: "5", y: 6 } })).toBeNull();
+    expect(parseBridgeContextMenu({ __prudiiLink: "x" })).toBeNull();
   });
 });
 

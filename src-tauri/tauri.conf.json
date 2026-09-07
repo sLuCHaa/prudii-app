@@ -13,7 +13,7 @@
     "windows": [],
     "macOSPrivateApi": true,
     "security": {
-      "csp": "default-src 'self'; script-src 'self' 'sha256-RqALM+5HJSOMZwfeUa18GwAKhrs1lqdnXldoQf8sei0=' 'sha256-TXxKmjdlBr/Ifss8Da3ts62ucz6j5CWVJf3L00kcV8I='; style-src 'self' 'unsafe-inline'; img-src 'self' data: asset: http://asset.localhost https://asset.localhost https: http:; font-src 'self' data:; connect-src ipc: http://ipc.localhost; frame-src 'self' asset: blob: https://asset.localhost",
+      "csp": "default-src 'self'; script-src 'self' 'sha256-OdbYuxLwhcFcAtW9GGcX/D2/JKLX3dBcfQt9QhZbbAk=' 'sha256-TXxKmjdlBr/Ifss8Da3ts62ucz6j5CWVJf3L00kcV8I='; style-src 'self' 'unsafe-inline'; img-src 'self' data: asset: http://asset.localhost https://asset.localhost https: http:; font-src 'self' data:; connect-src ipc: http://ipc.localhost; frame-src 'self' asset: blob: https://asset.localhost",
       "dangerousDisableAssetCspModification": [
         "style-src"
       ],
