@@ -40,7 +40,16 @@ export function ComposeWindow() {
     // prevents a white flash before the web content paints. The content itself
     // fades in over a few frames so the window materializes instead of popping.
     const win = getCurrentWindow();
-    const reveal = () => requestAnimationFrame(() => setShown(true));
+    const reveal = () =>
+      requestAnimationFrame(() => {
+        setShown(true);
+        // Tauri's initial placement (the saved/cascaded position from
+        // composeWindow.ts) fires onMoved too; only start persisting moves
+        // once that settle has had a tick to happen.
+        setTimeout(() => {
+          userMoveArmed.current = true;
+        }, 0);
+      });
     win
       .show()
       .then(() => {
@@ -122,6 +131,8 @@ export function ComposeWindow() {
   const [maximized, setMaximized] = useState(false);
   const sizeSaveTimer = useRef<number | null>(null);
   const posSaveTimer = useRef<number | null>(null);
+  // Guards onMoved below against the window's initial placement (see reveal()).
+  const userMoveArmed = useRef(false);
   // Snap Layouts flyout + native hover for the maximize button (Windows).
   const { ref: maxButtonRef, hovered: maxHovered } = useWindowsCaptionMaxButton();
 
@@ -161,6 +172,7 @@ export function ComposeWindow() {
   useEffect(() => {
     const win = getCurrentWindow();
     const unlisten = win.onMoved(async () => {
+      if (!userMoveArmed.current) return;
       try {
         if (await win.isMaximized()) return;
         if (posSaveTimer.current !== null) clearTimeout(posSaveTimer.current);

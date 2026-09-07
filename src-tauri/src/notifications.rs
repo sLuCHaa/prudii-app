@@ -49,7 +49,8 @@ pub fn send_new_mail_notification(app: &AppHandle, account_id: &str, new_mails: 
 
     let Some(t) = build_new_mail_toast(account_id, db) else { return };
 
-    // Read language setting from DB, same as the tray menu.
+    // Called from sync, not menu setup, so the tray's already-resolved
+    // language isn't in scope here — re-read it from the DB.
     let lang = {
         let conn = db.lock_db();
         conn.query_row(

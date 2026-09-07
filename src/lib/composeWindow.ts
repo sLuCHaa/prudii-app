@@ -73,11 +73,13 @@ export async function openComposeWindow(data: ComposeInitData): Promise<void> {
       const saved = JSON.parse(localStorage.getItem("compose-window-pos") ?? "null");
       if (saved && typeof saved.x === "number" && typeof saved.y === "number") {
         const monitors = await availableMonitors();
+        // workArea excludes the taskbar/Dock — plain position/size would let a
+        // restored window sit underneath it.
         const rects = monitors.map((m) => ({
-          x: m.position.x / m.scaleFactor,
-          y: m.position.y / m.scaleFactor,
-          width: m.size.width / m.scaleFactor,
-          height: m.size.height / m.scaleFactor,
+          x: m.workArea.position.x / m.scaleFactor,
+          y: m.workArea.position.y / m.scaleFactor,
+          width: m.workArea.size.width / m.scaleFactor,
+          height: m.workArea.size.height / m.scaleFactor,
         }));
         const picked = pickComposePosition(saved, rects, cascadeOffset, { w: composeW, h: composeH });
         if (picked) {

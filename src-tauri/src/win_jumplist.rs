@@ -25,9 +25,8 @@ fn install_inner(label: &str) -> windows::core::Result<()> {
         ShellLink,
     };
 
-    // PKEY_Title = {F29F85E0-4FF9-1068-AB91-08002B27B3D9}, 2 — built by hand
-    // rather than pulling in the Win32_Storage_EnhancedStorage feature for
-    // one constant.
+    // PKEY_Title = {F29F85E0-4FF9-1068-AB91-08002B27B3D9}, 2 — built by hand to
+    // avoid pulling in Win32_Storage_EnhancedStorage for one constant.
     const PKEY_TITLE: PROPERTYKEY = PROPERTYKEY {
         fmtid: GUID::from_u128(0xF29F85E0_4FF9_1068_AB91_08002B27B3D9),
         pid: 2,
