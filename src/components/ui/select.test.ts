@@ -41,6 +41,11 @@ describe("Select", () => {
     const selected = Array.from(opts).find((o) => o.textContent?.includes("Alpha"));
     expect(selected?.getAttribute("aria-selected")).toBe("true");
 
+    // aria-controls links the trigger to the listbox
+    const listbox = document.querySelector('[role="listbox"]') as HTMLElement;
+    expect(listbox.id).toBeTruthy();
+    expect(trigger.getAttribute("aria-controls")).toBe(listbox.id);
+
     key("ArrowDown"); // move focus to Beta
     key("Enter");
 

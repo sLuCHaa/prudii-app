@@ -11,6 +11,7 @@ export interface ContextMenuProps {
   variant?: "menu" | "listbox";
   minWidth?: number;
   ariaLabel?: string;
+  id?: string;
 }
 
 const TYPEAHEAD_MS = 500;
@@ -30,9 +31,10 @@ interface PanelProps {
   onCloseAll: () => void;
   onCloseSelf?: () => void; // set for submenus: ArrowLeft/Escape return to the parent item
   measure: (el: HTMLElement) => { left: number; top: number };
+  id?: string;
 }
 
-function MenuPanel({ entries, position, variant, minWidth, ariaLabel, onCloseAll, onCloseSelf, measure }: PanelProps) {
+function MenuPanel({ entries, position, variant, minWidth, ariaLabel, onCloseAll, onCloseSelf, measure, id }: PanelProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState(position);
   const [focused, setFocused] = useState(() => {
@@ -124,6 +126,7 @@ function MenuPanel({ entries, position, variant, minWidth, ariaLabel, onCloseAll
     <>
       <div
         ref={ref}
+        id={id}
         role={isListbox ? "listbox" : "menu"}
         aria-label={ariaLabel}
         onKeyDown={onKeyDown}
@@ -183,7 +186,7 @@ function MenuPanel({ entries, position, variant, minWidth, ariaLabel, onCloseAll
   );
 }
 
-export function ContextMenu({ entries, x, y, onClose, variant = "menu", minWidth, ariaLabel }: ContextMenuProps) {
+export function ContextMenu({ entries, x, y, onClose, variant = "menu", minWidth, ariaLabel, id }: ContextMenuProps) {
   // Captured during render: child effects (which focus the first item) run
   // before this component's effects, so an effect would record the menu itself.
   const previous = useRef<HTMLElement | null>(document.activeElement as HTMLElement | null);
@@ -214,7 +217,7 @@ export function ContextMenu({ entries, x, y, onClose, variant = "menu", minWidth
 
   return createPortal(
     <div ref={rootRef}>
-      <MenuPanel entries={entries} position={{ left: x, top: y }} variant={variant} minWidth={minWidth} ariaLabel={ariaLabel} onCloseAll={onClose} measure={measure} />
+      <MenuPanel entries={entries} position={{ left: x, top: y }} variant={variant} minWidth={minWidth} ariaLabel={ariaLabel} onCloseAll={onClose} measure={measure} id={id} />
     </div>,
     document.body,
   );

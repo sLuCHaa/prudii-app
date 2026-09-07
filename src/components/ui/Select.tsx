@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useId } from "react";
 import { ChevronDown } from "lucide-react";
 import { ContextMenu } from "./ContextMenu";
 import type { MenuEntry } from "../../lib/menuModel";
@@ -22,6 +22,7 @@ const DEFAULT_TRIGGER = "w-full flex items-center gap-2 px-3 py-2 rounded-lg bor
 
 export function Select({ value, options, onChange, placeholder, className = DEFAULT_TRIGGER, ariaLabel }: SelectProps) {
   const ref = useRef<HTMLButtonElement>(null);
+  const listboxId = useId();
   const [open, setOpen] = useState<{ x: number; y: number; w: number } | null>(null);
   const current = options.find((o) => o.value === value);
 
@@ -50,6 +51,7 @@ export function Select({ value, options, onChange, placeholder, className = DEFA
         role="combobox"
         aria-haspopup="listbox"
         aria-expanded={!!open}
+        aria-controls={open ? listboxId : undefined}
         aria-label={ariaLabel}
         onMouseDown={(e) => { if (open) e.preventDefault(); }}
         onClick={() => { if (open) setOpen(null); else openList(); }}
@@ -73,6 +75,7 @@ export function Select({ value, options, onChange, placeholder, className = DEFA
           minWidth={open.w}
           onClose={() => setOpen(null)}
           ariaLabel={ariaLabel}
+          id={listboxId}
         />
       )}
     </>
