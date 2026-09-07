@@ -67,7 +67,18 @@ fn is_system_dark_mode() -> bool {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+fn is_system_dark_mode() -> bool {
+    // GNOME/GTK expose the preference via gsettings; other desktops fall back to light.
+    let read = |schema: &str, key: &str| -> Option<String> {
+        let out = std::process::Command::new("gsettings").args(["get", schema, key]).output().ok()?;
+        Some(String::from_utf8_lossy(&out.stdout).to_ascii_lowercase())
+    };
+    read("org.gnome.desktop.interface", "color-scheme").map(|v| v.contains("prefer-dark")).unwrap_or(false)
+        || read("org.gnome.desktop.interface", "gtk-theme").map(|v| v.contains("dark")).unwrap_or(false)
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
 fn is_system_dark_mode() -> bool {
     false
 }
