@@ -57,6 +57,14 @@ pub fn set_dock_badge(app: tauri::AppHandle, count: Option<i64>) -> Result<(), S
         }
     }
 
+    if let Some(tray) = app.tray_by_id("main") {
+        let tooltip = match count.filter(|n| *n > 0) {
+            Some(n) => format!("Prudii Mail ({n})"),
+            None => "Prudii Mail".to_string(),
+        };
+        let _ = tray.set_tooltip(Some(tooltip));
+    }
+
     if let Some(window) = app.get_webview_window("main") {
         let badge = match count {
             Some(n) if n > 0 => Some(n),

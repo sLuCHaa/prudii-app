@@ -9,6 +9,7 @@ pub mod db;
 pub mod gmail;
 pub mod idle;
 pub mod imap;
+pub mod menu_labels;
 pub mod models;
 pub mod notifications;
 pub mod oauth;
@@ -668,14 +669,17 @@ pub fn run() {
                 )
                 .unwrap_or_else(|_| "en".to_string())
             };
-            let (show_label, quit_label) = match lang.as_str() {
-                "de" => ("Prudii Mail anzeigen", "Beenden"),
-                _ => ("Show Prudii Mail", "Quit"),
-            };
+            let labels = crate::menu_labels::for_lang(&lang);
 
-            let show_item = MenuItemBuilder::with_id("show", show_label).build(app)?;
-            let quit_item = MenuItemBuilder::with_id("quit", quit_label).build(app)?;
+            let new_message_item =
+                MenuItemBuilder::with_id("new_message", labels.new_message).build(app)?;
+            let sync_item = MenuItemBuilder::with_id("sync_all", labels.sync_all).build(app)?;
+            let show_item = MenuItemBuilder::with_id("show", labels.show).build(app)?;
+            let quit_item = MenuItemBuilder::with_id("quit", labels.quit).build(app)?;
             let tray_menu = MenuBuilder::new(app)
+                .item(&new_message_item)
+                .item(&sync_item)
+                .separator()
                 .item(&show_item)
                 .separator()
                 .item(&quit_item)
@@ -684,11 +688,24 @@ pub fn run() {
             let tray_icon = Image::from_path("icons/32x32.png")
                 .unwrap_or_else(|_| Image::from_bytes(include_bytes!("../icons/32x32.png")).unwrap());
 
-            let _tray = TrayIconBuilder::new()
+            let _tray = TrayIconBuilder::with_id("main")
                 .icon(tray_icon)
                 .menu(&tray_menu)
                 .tooltip("Prudii Mail")
                 .on_menu_event(|app, event| match event.id().as_ref() {
+                    "new_message" | "sync_all" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.unminimize();
+                            let _ = window.set_focus();
+                        }
+                        let id = if event.id().0 == "new_message" {
+                            "menu:new_message"
+                        } else {
+                            "menu:sync_all"
+                        };
+                        let _ = app.emit("menu", id);
+                    }
                     "show" => {
                         if let Some(window) = app.get_webview_window("main") {
                             let _ = window.show();
@@ -733,111 +750,7 @@ pub fn run() {
             {
                 use tauri::menu::{AboutMetadataBuilder, PredefinedMenuItem, SubmenuBuilder};
 
-                let (
-                    settings_label,
-                    new_message_label,
-                    sync_all_label,
-                    reply_label,
-                    reply_all_label,
-                    forward_label,
-                    file_title,
-                    edit_title,
-                    mailbox_title,
-                    message_title,
-                    window_title,
-                ) = match lang.as_str() {
-                    "de" => (
-                        "Einstellungen…",
-                        "Neue E-Mail",
-                        "Alle Konten abrufen",
-                        "Antworten",
-                        "Allen antworten",
-                        "Weiterleiten",
-                        "Ablage",
-                        "Bearbeiten",
-                        "Postfach",
-                        "E-Mail",
-                        "Fenster",
-                    ),
-                    "es" => (
-                        "Configuración…",
-                        "Nuevo mensaje",
-                        "Recibir todo el correo nuevo",
-                        "Responder",
-                        "Responder a todos",
-                        "Reenviar",
-                        "Archivo",
-                        "Edición",
-                        "Buzón",
-                        "Mensaje",
-                        "Ventana",
-                    ),
-                    "fr" => (
-                        "Paramètres…",
-                        "Nouveau message",
-                        "Relever tout le courrier",
-                        "Répondre",
-                        "Répondre à tous",
-                        "Transférer",
-                        "Fichier",
-                        "Édition",
-                        "Boîte aux lettres",
-                        "Message",
-                        "Fenêtre",
-                    ),
-                    "pt" => (
-                        "Configurações…",
-                        "Nova Mensagem",
-                        "Receber Todas as Mensagens",
-                        "Responder",
-                        "Responder a Todos",
-                        "Encaminhar",
-                        "Arquivo",
-                        "Edição",
-                        "Caixa de Correio",
-                        "Mensagem",
-                        "Janela",
-                    ),
-                    "ru" => (
-                        "Настройки…",
-                        "Новое письмо",
-                        "Получить всю новую почту",
-                        "Ответить",
-                        "Ответить всем",
-                        "Переслать",
-                        "Файл",
-                        "Правка",
-                        "Почтовый ящик",
-                        "Сообщение",
-                        "Окно",
-                    ),
-                    "zh" => (
-                        "设置…",
-                        "新邮件",
-                        "接收全部新邮件",
-                        "回复",
-                        "全部回复",
-                        "转发",
-                        "文件",
-                        "编辑",
-                        "邮箱",
-                        "邮件",
-                        "窗口",
-                    ),
-                    _ => (
-                        "Settings…",
-                        "New Message",
-                        "Get All New Mail",
-                        "Reply",
-                        "Reply All",
-                        "Forward",
-                        "File",
-                        "Edit",
-                        "Mailbox",
-                        "Message",
-                        "Window",
-                    ),
-                };
+                let labels = crate::menu_labels::for_lang(&lang);
 
                 let app_menu = SubmenuBuilder::new(app, "Prudii Mail")
                     .item(&PredefinedMenuItem::about(
@@ -847,7 +760,7 @@ pub fn run() {
                     )?)
                     .separator()
                     .item(
-                        &MenuItemBuilder::with_id("menu:settings", settings_label)
+                        &MenuItemBuilder::with_id("menu:settings", labels.settings)
                             .accelerator("Cmd+,")
                             .build(app)?,
                     )
@@ -858,9 +771,9 @@ pub fn run() {
                     .item(&PredefinedMenuItem::quit(app, None)?)
                     .build()?;
 
-                let file_menu = SubmenuBuilder::new(app, file_title)
+                let file_menu = SubmenuBuilder::new(app, labels.file)
                     .item(
-                        &MenuItemBuilder::with_id("menu:new_message", new_message_label)
+                        &MenuItemBuilder::with_id("menu:new_message", labels.new_message)
                             .accelerator("Cmd+N")
                             .build(app)?,
                     )
@@ -872,7 +785,7 @@ pub fn run() {
                 // shortcut from the webview before MailList.tsx's own Cmd+A handler (bulk
                 // select-all-mails) ever sees it. Leaving it out lets Cmd+A fall through to
                 // the webview, so both text-field selection and the in-app handler keep working.
-                let edit_menu = SubmenuBuilder::new(app, edit_title)
+                let edit_menu = SubmenuBuilder::new(app, labels.edit)
                     .item(&PredefinedMenuItem::undo(app, None)?)
                     .item(&PredefinedMenuItem::redo(app, None)?)
                     .separator()
@@ -881,33 +794,33 @@ pub fn run() {
                     .item(&PredefinedMenuItem::paste(app, None)?)
                     .build()?;
 
-                let mailbox_menu = SubmenuBuilder::new(app, mailbox_title)
+                let mailbox_menu = SubmenuBuilder::new(app, labels.mailbox)
                     .item(
-                        &MenuItemBuilder::with_id("menu:sync_all", sync_all_label)
+                        &MenuItemBuilder::with_id("menu:sync_all", labels.sync_all)
                             .accelerator("Cmd+Shift+N")
                             .build(app)?,
                     )
                     .build()?;
 
-                let message_menu = SubmenuBuilder::new(app, message_title)
+                let message_menu = SubmenuBuilder::new(app, labels.message)
                     .item(
-                        &MenuItemBuilder::with_id("menu:reply", reply_label)
+                        &MenuItemBuilder::with_id("menu:reply", labels.reply)
                             .accelerator("Cmd+R")
                             .build(app)?,
                     )
                     .item(
-                        &MenuItemBuilder::with_id("menu:reply_all", reply_all_label)
+                        &MenuItemBuilder::with_id("menu:reply_all", labels.reply_all)
                             .accelerator("Cmd+Shift+R")
                             .build(app)?,
                     )
                     .item(
-                        &MenuItemBuilder::with_id("menu:forward", forward_label)
+                        &MenuItemBuilder::with_id("menu:forward", labels.forward)
                             .accelerator("Cmd+Shift+F")
                             .build(app)?,
                     )
                     .build()?;
 
-                let window_menu = SubmenuBuilder::new(app, window_title)
+                let window_menu = SubmenuBuilder::new(app, labels.window)
                     .item(&PredefinedMenuItem::minimize(app, None)?)
                     .item(&PredefinedMenuItem::maximize(app, None)?)
                     .separator()
