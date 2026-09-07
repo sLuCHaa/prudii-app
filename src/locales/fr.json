@@ -366,7 +366,9 @@
       "transparentSidebar": "Barre latérale translucide",
       "transparentSidebarDesc": "Le bureau transparaît derrière la barre latérale",
       "ambientSidebar": "Barre latérale ambiante",
-      "ambientSidebarDesc": "Teinte subtilement la barre latérale selon l'heure de la journée"
+      "ambientSidebarDesc": "Teinte subtilement la barre latérale selon l'heure de la journée",
+      "systemFont": "Utiliser la police système",
+      "systemFontDesc": "Afficher l'interface avec la police de votre système"
     },
     "language": {
       "title": "Langue",

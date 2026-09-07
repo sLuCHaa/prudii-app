@@ -127,7 +127,8 @@ function AppInner() {
   useEffect(() => {
     document.documentElement.setAttribute("data-accent", appSettings.accent_color);
     document.documentElement.setAttribute("data-density", appSettings.density);
-  }, [appSettings.accent_color, appSettings.density]);
+    document.documentElement.toggleAttribute("data-system-font", appSettings.use_system_font);
+  }, [appSettings.accent_color, appSettings.density, appSettings.use_system_font]);
 
   const systemAccentHex = useAppStore((s) => s.systemAccentHex);
   const setSystemAccentHex = useAppStore((s) => s.setSystemAccentHex);

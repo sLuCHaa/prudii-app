@@ -120,6 +120,7 @@ export interface AppSettings {
   theme_mode: string;
   transparent_sidebar: boolean;
   strip_tracking_params: boolean;
+  use_system_font: boolean;
 }
 
 export interface OllamaStatus {

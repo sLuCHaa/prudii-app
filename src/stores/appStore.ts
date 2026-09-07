@@ -450,6 +450,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     theme_mode: "system",
     transparent_sidebar: true,
     strip_tracking_params: true,
+    use_system_font: false,
   },
   setAppSettings: (appSettings) => set({ appSettings }),
 

@@ -369,7 +369,9 @@
       "transparentSidebar": "Translucent sidebar",
       "transparentSidebarDesc": "The desktop shows through behind the sidebar",
       "ambientSidebar": "Ambient sidebar",
-      "ambientSidebarDesc": "Subtly tints the sidebar with the time of day"
+      "ambientSidebarDesc": "Subtly tints the sidebar with the time of day",
+      "systemFont": "Use system font",
+      "systemFontDesc": "Render the interface with your platform's UI font"
     },
     "language": {
       "title": "Language",

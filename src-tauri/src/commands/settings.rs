@@ -49,6 +49,7 @@ pub fn get_app_settings(db: State<'_, Database>) -> Result<AppSettings, String> 
             theme_mode: get_string("theme_mode", ""),
             transparent_sidebar: get_bool("transparent_sidebar", true),
             strip_tracking_params: get_bool("strip_tracking_params", true),
+            use_system_font: get_bool("use_system_font", false),
         })
     })
 }
@@ -82,6 +83,7 @@ pub fn update_app_settings(
         set_setting(&conn, "notification_sound", settings.notification_sound)?;
         set_setting(&conn, "transparent_sidebar", settings.transparent_sidebar)?;
         set_setting(&conn, "strip_tracking_params", settings.strip_tracking_params)?;
+        set_setting(&conn, "use_system_font", settings.use_system_font)?;
 
         conn.execute(
             "INSERT OR REPLACE INTO app_settings (key, value) VALUES (?1, ?2)",

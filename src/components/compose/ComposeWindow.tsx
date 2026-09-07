@@ -29,6 +29,7 @@ export function ComposeWindow() {
     document.documentElement.classList.toggle("dark", darkMode);
     document.documentElement.setAttribute("data-accent", appSettings.accent_color);
     document.documentElement.setAttribute("data-density", appSettings.density);
+    document.documentElement.toggleAttribute("data-system-font", appSettings.use_system_font);
     if (appSettings.accent_color === "system") {
       getSystemAccentColor()
         .then((hex) => document.documentElement.style.setProperty("--c-accent-system", isAccentHex(hex) ? hex : DEFAULT_ACCENT_HEX))

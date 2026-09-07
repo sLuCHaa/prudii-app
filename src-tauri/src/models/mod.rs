@@ -126,6 +126,7 @@ pub struct AppSettings {
     pub theme_mode: String,
     pub transparent_sidebar: bool,
     pub strip_tracking_params: bool,
+    pub use_system_font: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

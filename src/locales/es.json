@@ -366,7 +366,9 @@
       "transparentSidebar": "Barra lateral translúcida",
       "transparentSidebarDesc": "El escritorio se transparenta detrás de la barra lateral",
       "ambientSidebar": "Barra lateral ambiental",
-      "ambientSidebarDesc": "Tiñe sutilmente la barra lateral según la hora del día"
+      "ambientSidebarDesc": "Tiñe sutilmente la barra lateral según la hora del día",
+      "systemFont": "Usar la fuente del sistema",
+      "systemFontDesc": "Mostrar la interfaz con la fuente de tu sistema"
     },
     "language": {
       "title": "Idioma",

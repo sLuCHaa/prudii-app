@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "motion/react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
-import { X, Sun, Moon, Monitor, Trash2, ChevronRight, ArrowLeft, Save, RefreshCw, Server, Palette, Clock, FolderOpen, Power, AppWindow, Globe, Bell, Volume2, Image, Settings2, Users, Database, Filter, Info, Sparkles, Mail, Key, FileType, Lock, Send, Download, Eye, EyeOff, Plus, PanelLeft, Shield } from "lucide-react";
+import { X, Sun, Moon, Monitor, Trash2, ChevronRight, ArrowLeft, Save, RefreshCw, Server, Palette, Clock, FolderOpen, Power, AppWindow, Globe, Bell, Volume2, Image, Settings2, Users, Database, Filter, Info, Sparkles, Mail, Key, FileType, Lock, Send, Download, Eye, EyeOff, Plus, PanelLeft, Shield, Type } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "../../stores/appStore";
@@ -796,6 +796,19 @@ export function SettingsPanel() {
                         type="checkbox"
                         checked={localSettings.transparent_sidebar}
                         onChange={(e) => updateLocalSetting("transparent_sidebar", e.target.checked)}
+                        className="w-4 h-4 rounded border-border text-accent focus:ring-accent"
+                      />
+                    </label>
+                    <label className="mt-3 flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-hover transition-colors cursor-pointer">
+                      <Type className="w-4 h-4 text-text-tertiary shrink-0" />
+                      <div className="flex-1">
+                        <div className="text-sm text-text">{t("settings.appearance.systemFont")}</div>
+                        <div className="text-xs text-text-tertiary">{t("settings.appearance.systemFontDesc")}</div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={localSettings.use_system_font}
+                        onChange={(e) => updateLocalSetting("use_system_font", e.target.checked)}
                         className="w-4 h-4 rounded border-border text-accent focus:ring-accent"
                       />
                     </label>

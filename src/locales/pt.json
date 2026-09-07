@@ -369,7 +369,9 @@
       "transparentSidebar": "Barra lateral translúcida",
       "transparentSidebarDesc": "A área de trabalho aparece atrás da barra lateral",
       "ambientSidebar": "Barra lateral ambiente",
-      "ambientSidebarDesc": "Tinge sutilmente a barra lateral conforme a hora do dia"
+      "ambientSidebarDesc": "Tinge sutilmente a barra lateral conforme a hora do dia",
+      "systemFont": "Usar tipo de letra do sistema",
+      "systemFontDesc": "Mostrar a interface com o tipo de letra do sistema"
     },
     "language": {
       "title": "Idioma",
