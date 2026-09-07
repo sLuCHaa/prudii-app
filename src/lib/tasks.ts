@@ -1,0 +1,160 @@
+import type { Task, TaskStatus } from "../types";
+import { TASK_STATUSES } from "../types";
+
+export function isOverdue(task: Pick<Task, "due_at" | "status">, now: Date): boolean {
+  if (!task.due_at || task.status === "done") return false;
+  return new Date(task.due_at).getTime() < now.getTime();
+}
+
+export function isDueToday(task: Pick<Task, "due_at">, now: Date): boolean {
+  if (!task.due_at) return false;
+  const d = new Date(task.due_at);
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+}
+
+export function groupByStatus(tasks: Task[]): Record<TaskStatus, Task[]> {
+  const grouped = { open: [], in_progress: [], done: [] } as Record<TaskStatus, Task[]>;
+  for (const task of tasks) {
+    grouped[task.status].push(task);
+  }
+  for (const status of TASK_STATUSES) {
+    grouped[status].sort((a, b) => a.sort_order - b.sort_order);
+  }
+  return grouped;
+}
+
+// JS `\b` only treats [A-Za-z0-9_] as word characters, so it fails to bound a word
+// starting with an umlaut (e.g. "übermorgen" right after a space). Build boundaries
+// from an explicit charset that includes German letters instead.
+const WORD_CHARS = "A-Za-z0-9_äöüÄÖÜß";
+function wordRe(pattern: string, flags = "i"): RegExp {
+  return new RegExp(`(?<![${WORD_CHARS}])(?:${pattern})(?![${WORD_CHARS}])`, flags);
+}
+
+const WEEKDAYS_FULL: Record<string, number> = {
+  montag: 1, dienstag: 2, mittwoch: 3, donnerstag: 4, freitag: 5, samstag: 6, sonntag: 0,
+  monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6, sunday: 0,
+};
+
+const WEEKDAYS_SHORT: Record<string, number> = {
+  mo: 1, di: 2, mi: 3, do: 4, fr: 5, sa: 6, so: 0,
+  mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6, sun: 0,
+};
+
+// Group 1/2 = "H:MM" (optional am/pm); group 4/5 = "H" directly followed by am/pm/uhr.
+// Requiring a colon or a suffix keeps a bare number in a title (e.g. "Kunde 9") from
+// ever being read as a time.
+const TIME_PATTERN = "\\b(\\d{1,2}):(\\d{2})\\s*(am|pm)?\\b|\\b(\\d{1,2})\\s*(am|pm|uhr)\\b";
+const TIME_RE = new RegExp(TIME_PATTERN, "i");
+const TIME_START_RE = new RegExp(`^(?:${TIME_PATTERN})`, "i");
+
+function to12HourAdjusted(hour: number, meridiem: string | undefined): number {
+  if (meridiem === "pm" && hour < 12) return hour + 12;
+  if (meridiem === "am" && hour === 12) return 0;
+  return hour;
+}
+
+// Strictly-future next occurrence of `target` weekday (0=Sun..6=Sat) — "today" never counts.
+function nextWeekday(from: Date, target: number): Date {
+  let delta = (target - from.getDay() + 7) % 7;
+  if (delta === 0) delta = 7;
+  return new Date(from.getFullYear(), from.getMonth(), from.getDate() + delta);
+}
+
+/// Parses natural-language date/time hints out of a quick-add title (de + en) and
+/// returns the cleaned title plus an ISO-UTC due date, or null when nothing matched.
+export function parseQuickAdd(input: string, now: Date, _lang: string): { title: string; dueAt: string | null } {
+  let text = input;
+  let year = now.getFullYear();
+  let month = now.getMonth();
+  let day = now.getDate();
+  let hour: number | null = null;
+  let minute = 0;
+  let dateSet = false;
+
+  function consume(re: RegExp): RegExpMatchArray | null {
+    const m = re.exec(text);
+    if (m) text = text.slice(0, m.index) + text.slice(m.index! + m[0].length);
+    return m;
+  }
+
+  function setDate(d: Date, h: number) {
+    year = d.getFullYear();
+    month = d.getMonth();
+    day = d.getDate();
+    hour = h;
+    minute = 0;
+    dateSet = true;
+  }
+
+  let m = consume(wordRe("in\\s+(\\d+)\\s+(?:tagen|days)"));
+  if (m) setDate(new Date(year, month, day + parseInt(m[1], 10)), 9);
+
+  if (!dateSet) {
+    m = consume(wordRe("in\\s+(\\d+)\\s+(?:wochen|weeks)"));
+    if (m) setDate(new Date(year, month, day + parseInt(m[1], 10) * 7), 9);
+  }
+
+  if (!dateSet) {
+    m = consume(wordRe("übermorgen"));
+    if (m) setDate(new Date(year, month, day + 2), 9);
+  }
+
+  if (!dateSet) {
+    m = consume(wordRe("morgen|tomorrow"));
+    if (m) setDate(new Date(year, month, day + 1), 9);
+  }
+
+  if (!dateSet) {
+    m = consume(wordRe("heute|today"));
+    if (m) setDate(new Date(year, month, day), 18);
+  }
+
+  if (!dateSet) {
+    const fullRe = wordRe(`(${Object.keys(WEEKDAYS_FULL).join("|")})`);
+    m = consume(fullRe);
+    if (m) setDate(nextWeekday(now, WEEKDAYS_FULL[m[1].toLowerCase()]), 9);
+  }
+
+  // Short weekday tokens (mo/di/.../sun) double as ordinary words, so they only
+  // count as a date token when nothing but a time token follows them.
+  if (!dateSet) {
+    const shortRe = wordRe(`(${Object.keys(WEEKDAYS_SHORT).join("|")})`, "gi");
+    let candidate: RegExpExecArray | null;
+    while ((candidate = shortRe.exec(text)) !== null) {
+      const after = text.slice(candidate.index + candidate[0].length).trim();
+      if (after.length === 0 || TIME_START_RE.test(after)) {
+        text = text.slice(0, candidate.index) + text.slice(candidate.index + candidate[0].length);
+        setDate(nextWeekday(now, WEEKDAYS_SHORT[candidate[1].toLowerCase()]), 9);
+        break;
+      }
+    }
+  }
+
+  const timeMatch = consume(TIME_RE);
+  if (timeMatch) {
+    if (timeMatch[1] !== undefined) {
+      hour = to12HourAdjusted(parseInt(timeMatch[1], 10), timeMatch[3]?.toLowerCase());
+      minute = parseInt(timeMatch[2], 10);
+    } else {
+      const suffix = timeMatch[5].toLowerCase();
+      hour = suffix === "uhr" ? parseInt(timeMatch[4], 10) : to12HourAdjusted(parseInt(timeMatch[4], 10), suffix);
+      minute = 0;
+    }
+    if (!dateSet) {
+      // No date token: today, unless that time has already passed — then tomorrow.
+      const candidate = new Date(year, month, day, hour, minute);
+      if (candidate.getTime() <= now.getTime()) {
+        const d = new Date(year, month, day + 1);
+        year = d.getFullYear();
+        month = d.getMonth();
+        day = d.getDate();
+      }
+      dateSet = true;
+    }
+  }
+
+  const title = text.replace(/\s+/g, " ").trim();
+  if (hour === null) return { title, dueAt: null };
+  return { title, dueAt: new Date(year, month, day, hour, minute).toISOString() };
+}

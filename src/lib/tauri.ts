@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Account, AiResponse, Attachment, AttachmentWithContext, AppConfig, AppSettings, BackupOptions, BulkSaveResult, Contact, CreateAccountRequest, CreateRuleRequest, EmailTemplate, Folder, InboxSplit, LicenseInfo, Mail, MailRule, OAuthResult, OllamaStatus, RestorePreview, ScheduledMail, SearchResult, SendMailRequest, UnsubscribeResult } from "../types";
+import type { Account, AiResponse, Attachment, AttachmentWithContext, AppConfig, AppSettings, BackupOptions, BulkSaveResult, ChecklistItem, Contact, CreateAccountRequest, CreateRuleRequest, CreateTaskInput, EmailTemplate, Folder, InboxSplit, LicenseInfo, Mail, MailRule, OAuthResult, OllamaStatus, RestorePreview, ScheduledMail, SearchResult, SendMailRequest, Task, TaskAttachment, TaskDetail, TaskStatus, UnsubscribeResult, UpdateTaskPatch } from "../types";
 import { prefers24HourClock } from "./localeDefaults";
 
 export async function listAccounts(): Promise<Account[]> {
@@ -599,4 +599,91 @@ export interface BootstrapState {
 /// list_mails, used to warm the query caches before the normal hook chain runs.
 export async function bootstrapState(lastFolderId: string | null): Promise<BootstrapState> {
   return invoke("bootstrap_state", { lastFolderId });
+}
+
+// ---- Tasks ----
+
+export async function listTasks(status?: TaskStatus): Promise<Task[]> {
+  return invoke("list_tasks", { status: status ?? null });
+}
+
+export async function getTask(id: string): Promise<TaskDetail> {
+  return invoke("get_task", { id });
+}
+
+export async function createTask(input: CreateTaskInput): Promise<Task> {
+  return invoke("create_task", { input });
+}
+
+export async function updateTask(id: string, patch: UpdateTaskPatch): Promise<Task> {
+  return invoke("update_task", { id, patch });
+}
+
+export async function deleteTask(id: string): Promise<void> {
+  return invoke("delete_task", { id });
+}
+
+export async function moveTask(id: string, status: TaskStatus, index: number): Promise<Task[]> {
+  return invoke("move_task", { id, status, index });
+}
+
+export async function countOpenTasks(): Promise<number> {
+  return invoke("count_open_tasks");
+}
+
+export async function addChecklistItem(taskId: string, text: string): Promise<ChecklistItem> {
+  return invoke("add_checklist_item", { taskId, text });
+}
+
+export async function updateChecklistItem(id: string, text?: string, done?: boolean): Promise<ChecklistItem> {
+  return invoke("update_checklist_item", { id, text: text ?? null, done: done ?? null });
+}
+
+export async function deleteChecklistItem(id: string): Promise<void> {
+  return invoke("delete_checklist_item", { id });
+}
+
+export async function reorderChecklist(taskId: string, ids: string[]): Promise<void> {
+  return invoke("reorder_checklist", { taskId, ids });
+}
+
+export async function createTaskFromMail(mailId: string, accountId: string): Promise<Task> {
+  return invoke("create_task_from_mail", { mailId, accountId });
+}
+
+export async function linkTaskMail(taskId: string, mailId: string): Promise<void> {
+  return invoke("link_task_mail", { taskId, mailId });
+}
+
+export async function unlinkTaskMail(taskId: string, mailId: string): Promise<void> {
+  return invoke("unlink_task_mail", { taskId, mailId });
+}
+
+export async function tasksForMail(mailId: string): Promise<Task[]> {
+  return invoke("tasks_for_mail", { mailId });
+}
+
+export async function tasksForMails(mailIds: string[]): Promise<Record<string, number>> {
+  return invoke("tasks_for_mails", { mailIds });
+}
+
+/// Opens the native file picker; resolves to an empty array (not an error) when the user cancels.
+export async function addTaskAttachments(taskId: string): Promise<TaskAttachment[]> {
+  return invoke("add_task_attachments", { taskId });
+}
+
+export async function removeTaskAttachment(id: string): Promise<void> {
+  return invoke("remove_task_attachment", { id });
+}
+
+export async function openTaskAttachment(id: string): Promise<string> {
+  return invoke("open_task_attachment", { id });
+}
+
+export async function revealTaskAttachment(id: string): Promise<void> {
+  return invoke("reveal_task_attachment", { id });
+}
+
+export async function startTaskAttachmentDrag(id: string): Promise<void> {
+  return invoke("start_task_attachment_drag", { id });
 }

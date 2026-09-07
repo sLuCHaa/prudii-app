@@ -337,6 +337,7 @@ function AppInner() {
           activeCombinedFolder: null,
           activeFilter: null,
           activeSplitId: null,
+          showTasks: false,
           selectedFolderId: folder_id,
           selectedMailId: mail_id,
           selectedMailIndex: -1,
@@ -355,6 +356,17 @@ function AppInner() {
   useEffect(() => {
     const unlisten = listen<{ account_id: string }>("mails-changed", (event) => {
       refreshMailQueries(event.payload.account_id);
+    });
+    return () => { unlisten.then((fn) => fn()); };
+  }, []);
+
+  // Backend emits this after every task mutation (create/update/move/checklist/links/attachments).
+  useEffect(() => {
+    const unlisten = listen("tasks-changed", () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["task"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks-count"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks-for-mail"] });
     });
     return () => { unlisten.then((fn) => fn()); };
   }, []);

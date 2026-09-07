@@ -379,3 +379,80 @@ export interface AppConfig {
   oauthSignupGoogle: boolean;
   oauthSignupMicrosoft: boolean;
 }
+
+export type TaskStatus = "open" | "in_progress" | "done";
+export type TaskPriority = "low" | "normal" | "high";
+export const TASK_STATUSES: readonly TaskStatus[] = ["open", "in_progress", "done"];
+
+export interface Task {
+  id: string;
+  title: string;
+  description_html: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  due_at: string | null;
+  sort_order: number;
+  reminder_sent: boolean;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+  checklist_done: number;
+  checklist_total: number;
+  link_count: number;
+  attachment_count: number;
+}
+
+export interface ChecklistItem {
+  id: string;
+  task_id: string;
+  text: string;
+  done: boolean;
+  sort_order: number;
+}
+
+export interface TaskMailLink {
+  task_id: string;
+  mail_id: string;
+  account_id: string;
+  subject: string;
+  from_name: string;
+  from_email: string;
+  mail_date: string | null;
+  created_at: string;
+}
+
+export interface TaskAttachment {
+  id: string;
+  task_id: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  local_path: string;
+  created_at: string;
+}
+
+export interface TaskDetail {
+  task: Task;
+  checklist: ChecklistItem[];
+  links: TaskMailLink[];
+  attachments: TaskAttachment[];
+}
+
+// Mirrors the Rust struct field-by-field (snake_case): these travel as the `input`/`patch`
+// object payload, not top-level invoke args, so Tauri's camelCase arg-renaming never touches them.
+export interface CreateTaskInput {
+  title: string;
+  description_html?: string;
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  due_at?: string;
+}
+
+export interface UpdateTaskPatch {
+  title?: string;
+  description_html?: string;
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  due_at?: string;
+  clear_due_at?: boolean;
+}

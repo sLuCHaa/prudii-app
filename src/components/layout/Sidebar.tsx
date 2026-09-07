@@ -1290,7 +1290,7 @@ export function Sidebar() {
       // hijack the open mail via the per-folder selection restore.
       const s = useAppStore.getState();
       const viewActive = s.activeFilter || s.showAllInboxes || s.activeCombinedFolder
-        || s.activeSplitId || s.showSnoozed || s.showScheduled || s.showAttachmentBrowser;
+        || s.activeSplitId || s.showSnoozed || s.showScheduled || s.showAttachmentBrowser || s.showTasks;
       if (folders.length > 0 && !s.selectedFolderId && !viewActive) {
         setSelectedFolderId(folders[0].id);
       }
