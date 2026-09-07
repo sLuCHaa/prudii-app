@@ -23,10 +23,13 @@ pub mod task_registry;
 pub mod win_badge;
 #[cfg(windows)]
 pub mod win_caption;
+#[cfg(windows)]
+pub mod win_jumplist;
 pub mod window_geometry;
 
 use db::Database;
 use pool::ImapPool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use tauri::{
     image::Image,
@@ -39,6 +42,8 @@ use tauri::{
 
 static STARTUP_MAILTO: std::sync::LazyLock<Mutex<Option<String>>> =
     std::sync::LazyLock::new(|| Mutex::new(None));
+
+static STARTUP_COMPOSE: AtomicBool = AtomicBool::new(false);
 
 /// Detect whether Windows is using dark app theme via registry.
 #[cfg(windows)]
@@ -250,6 +255,11 @@ fn get_startup_mailto() -> Result<Option<String>, String> {
         .take())
 }
 
+#[tauri::command]
+fn get_startup_compose() -> bool {
+    STARTUP_COMPOSE.swap(false, Ordering::Relaxed)
+}
+
 /// Remove dead per-user "Prudii Mail" uninstall registry entries left over from
 /// old installs (e.g. an earlier MSI build or a per-user install at a path that no
 /// longer exists). Only touches HKCU and only deletes an entry when its recorded
@@ -388,6 +398,9 @@ pub fn run() {
             }
             if let Some(mailto_url) = args.iter().find(|a| a.starts_with("mailto:")) {
                 let _ = app.emit("mailto-open", mailto_url.clone());
+            }
+            if args.iter().any(|a| a == "--compose") {
+                let _ = app.emit("compose-open", ());
             }
         }))
         .plugin(tauri_plugin_shell::init())
@@ -672,6 +685,11 @@ pub fn run() {
             };
             let labels = crate::menu_labels::for_lang(&lang);
 
+            // Taskbar jump list "New message" task — convenience only, never
+            // a start-up blocker; failures are logged inside install().
+            #[cfg(windows)]
+            win_jumplist::install(labels.new_message);
+
             let new_message_item =
                 MenuItemBuilder::with_id("new_message", labels.new_message).build(app)?;
             let sync_item = MenuItemBuilder::with_id("sync_all", labels.sync_all).build(app)?;
@@ -877,6 +895,9 @@ pub fn run() {
             if let Some(mailto_url) = std::env::args().find(|a| a.starts_with("mailto:")) {
                 *STARTUP_MAILTO.lock().unwrap_or_else(|e| e.into_inner()) = Some(mailto_url);
             }
+            if std::env::args().any(|a| a == "--compose") {
+                STARTUP_COMPOSE.store(true, Ordering::Relaxed);
+            }
 
             Ok(())
         })
@@ -886,6 +907,7 @@ pub fn run() {
             hide_to_tray,
             quit_app,
             get_startup_mailto,
+            get_startup_compose,
             connectivity::check_connectivity,
             commands::connectivity::invalidate_connections,
             commands::mailto::register_mailto_handler,

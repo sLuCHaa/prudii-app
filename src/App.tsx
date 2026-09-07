@@ -26,7 +26,7 @@ import { useSyncAll, useSyncAutomatic } from "./hooks/useSync";
 import { useAutoSync } from "./hooks/useAutoSync";
 import { useFocusSync } from "./hooks/useFocusSync";
 import { useConnectivity } from "./hooks/useConnectivity";
-import { backfillBodies, bootstrapState, getAppSettings, checkLicenseStartup, getStartupMailto, checkSnoozedMails, classifyUnclassifiedMails, listComposeAutosaves, deleteComposeAutosave, getSystemAccentColor } from "./lib/tauri";
+import { backfillBodies, bootstrapState, getAppSettings, checkLicenseStartup, getStartupMailto, getStartupCompose, checkSnoozedMails, classifyUnclassifiedMails, listComposeAutosaves, deleteComposeAutosave, getSystemAccentColor } from "./lib/tauri";
 import { isAccentHex, effectiveAccentHex } from "./lib/accents";
 import { checkForUpdate } from "./lib/updater";
 import { installGlobalTooltips } from "./lib/globalTooltips";
@@ -284,6 +284,15 @@ function AppInner() {
     return () => { unlisten.then((fn) => fn()); };
   }, []);
 
+  // Listen for --compose (when app is already running and another instance was launched with it,
+  // e.g. from the Windows jump list)
+  useEffect(() => {
+    const unlisten = listen("compose-open", () => {
+      useAppStore.getState().openCompose("new");
+    });
+    return () => { unlisten.then((fn) => fn()); };
+  }, []);
+
   // Both the native menu bar and the keyboard land here; kept in a ref so the
   // one-time listeners below never see a stale syncAll/setter.
   const runGlobalActionRef = useRef<(action: GlobalAction) => void>(() => {});
@@ -367,6 +376,12 @@ function AppInner() {
   useEffect(() => {
     getStartupMailto().then((url) => {
       if (url) useAppStore.getState().openMailto(url);
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    getStartupCompose().then((yes) => {
+      if (yes) useAppStore.getState().openCompose("new");
     }).catch(() => {});
   }, []);
 

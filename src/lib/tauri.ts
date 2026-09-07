@@ -362,6 +362,10 @@ export async function getStartupMailto(): Promise<string | null> {
   return invoke("get_startup_mailto");
 }
 
+export async function getStartupCompose(): Promise<boolean> {
+  return invoke("get_startup_compose");
+}
+
 export async function checkOllamaStatus(): Promise<OllamaStatus> {
   return invoke("check_ollama_status");
 }
