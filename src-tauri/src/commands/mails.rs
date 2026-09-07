@@ -669,9 +669,8 @@ pub fn get_attachment_data(
     })
 }
 
-/// Resolves an attachment's `local_path` and checks it stays inside the app
-/// data directory (path traversal protection). Shared by every command that
-/// hands a stored attachment to the OS - do not re-implement this check.
+/// Path traversal protection, shared by every command that hands a stored
+/// attachment to the OS - do not re-implement this check.
 fn resolve_attachment_path(db: &Database, attachment_id: &str) -> Result<std::path::PathBuf, String> {
     let path: String = {
         let conn = db.lock_db();
@@ -721,9 +720,8 @@ pub fn open_attachment(
     Ok(canonical_path.to_string_lossy().into_owned())
 }
 
-// tauri-plugin-drag's own start_drag command takes an IPC Channel meant for
-// JS callers; the underlying `drag` crate it wraps is used directly here so
-// the callback stays in Rust and the webview never sees the file path.
+// Uses the `drag` crate directly (its Tauri plugin wrapper needs a
+// webview-side IPC Channel) so the resolved path never reaches JS.
 #[tauri::command]
 pub async fn start_attachment_drag(
     window: tauri::Window,

@@ -39,7 +39,6 @@
     "global-shortcut:allow-register",
     "global-shortcut:allow-unregister",
     "updater:default",
-    "process:default",
-    "drag:default"
+    "process:default"
   ]
 }
