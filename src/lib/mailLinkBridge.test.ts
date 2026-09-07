@@ -32,3 +32,31 @@ describe("relayBridgeKey", () => {
     expect(relayBridgeKey(null)).toBe(false);
   });
 });
+
+describe("MAIL_LINK_BRIDGE keydown", () => {
+  it("relays plain and modified keys to the parent and still blocks chrome keys", async () => {
+    new Function(MAIL_LINK_BRIDGE)();
+    const received: Array<{ key: string; ctrlKey: boolean }> = [];
+    const onMessage = (e: MessageEvent) => { const p = (e.data as { __prudiiKey?: { key: string; ctrlKey: boolean } })?.__prudiiKey; if (p) received.push(p); };
+    window.addEventListener("message", onMessage);
+
+    const j = new KeyboardEvent("keydown", { key: "j", bubbles: true, cancelable: true });
+    document.body.dispatchEvent(j);
+    const reply = new KeyboardEvent("keydown", { key: "r", ctrlKey: true, bubbles: true, cancelable: true });
+    document.body.dispatchEvent(reply);
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "k", bubbles: true, cancelable: true }));
+
+    await new Promise((r) => setTimeout(r, 0));
+    window.removeEventListener("message", onMessage);
+    input.remove();
+
+    expect(j.defaultPrevented).toBe(false);
+    expect(reply.defaultPrevented).toBe(true);
+    expect(received.map((p) => ({ key: p.key, ctrlKey: p.ctrlKey }))).toEqual([
+      { key: "j", ctrlKey: false },
+      { key: "r", ctrlKey: true },
+    ]);
+  });
+});
