@@ -108,6 +108,16 @@ describe("ContextMenu", () => {
     expect(document.activeElement?.textContent).toBe("1h");
   });
 
+  it("tints a danger item's icon wrapper with text-danger", () => {
+    const entries: MenuEntry[] = [
+      { kind: "item", id: "trash", label: "Trash", icon: createElement("span", null, "i"), danger: true },
+    ];
+    act(() => root.render(createElement(ContextMenu, { entries, x: 10, y: 10, onClose: () => {} })));
+    const button = Array.from(document.querySelectorAll("button")).find((b) => b.textContent?.includes("Trash"));
+    const iconWrapper = button?.firstElementChild;
+    expect(iconWrapper?.className).toContain("text-danger");
+  });
+
   it("uses listbox roles in listbox variant", () => {
     const entries: MenuEntry[] = [{ kind: "item", id: "a", label: "A", selected: true }];
     act(() => root.render(createElement(ContextMenu, { entries, x: 0, y: 0, onClose: () => {}, variant: "listbox" })));

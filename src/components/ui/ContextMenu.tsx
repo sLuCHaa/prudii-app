@@ -148,7 +148,7 @@ function MenuPanel({ entries, position, variant, minWidth, ariaLabel, onCloseAll
                 e.danger ? "text-danger" : "text-text"
               } ${e.disabled ? "opacity-50" : ""}`}
             >
-              <span className="text-text-tertiary w-4 flex justify-center">{e.icon}</span>
+              <span className={`${e.danger ? "text-danger" : "text-text-tertiary"} w-4 flex justify-center`}>{e.icon}</span>
               <span className="flex-1 text-left truncate">{e.label}</span>
               {e.selected && !e.submenu && <Check className="w-3.5 h-3.5 text-accent" />}
               {e.submenu && <ChevronRight className="w-3 h-3 text-text-tertiary" />}
