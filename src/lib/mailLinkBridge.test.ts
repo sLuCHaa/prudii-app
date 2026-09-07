@@ -17,14 +17,19 @@ describe("MAIL_LINK_BRIDGE CSP hash", () => {
 });
 
 describe("relayBridgeKey", () => {
-  it("re-dispatches a bridged key on the window and reports it", () => {
-    const seen: string[] = [];
-    const onKey = (e: KeyboardEvent) => seen.push(`${e.ctrlKey ? "ctrl+" : ""}${e.key}`);
-    window.addEventListener("keydown", onKey);
+  it("re-dispatches a bridged key on the document and window and reports it", () => {
+    const seenWindow: string[] = [];
+    const seenDocument: string[] = [];
+    const onWindowKey = (e: KeyboardEvent) => seenWindow.push(`${e.ctrlKey ? "ctrl+" : ""}${e.key}`);
+    const onDocumentKey = (e: KeyboardEvent) => seenDocument.push(`${e.ctrlKey ? "ctrl+" : ""}${e.key}`);
+    window.addEventListener("keydown", onWindowKey);
+    document.addEventListener("keydown", onDocumentKey);
     const handled = relayBridgeKey({ __prudiiKey: { key: "r", ctrlKey: true, metaKey: false, shiftKey: false, altKey: false } });
-    window.removeEventListener("keydown", onKey);
+    window.removeEventListener("keydown", onWindowKey);
+    document.removeEventListener("keydown", onDocumentKey);
     expect(handled).toBe(true);
-    expect(seen).toEqual(["ctrl+r"]);
+    expect(seenWindow).toEqual(["ctrl+r"]);
+    expect(seenDocument).toEqual(["ctrl+r"]);
   });
 
   it("ignores other bridge messages", () => {

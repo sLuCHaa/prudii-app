@@ -30,10 +30,11 @@ export const MAIL_LINK_BRIDGE_CSP_HASH = "sha256-RqALM+5HJSOMZwfeUa18GwAKhrs1lqd
 interface BridgedKey { key: string; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean }
 
 // The iframe is its own document; shortcuts typed there would otherwise die at
-// the frame boundary. Re-dispatching on window lets every existing handler run.
+// the frame boundary. Dispatching on the document (not window) makes the event
+// path document -> window, so both document- and window-level handlers run.
 export function relayBridgeKey(data: unknown, target: Window = window): boolean {
   const payload = (data as { __prudiiKey?: BridgedKey } | null)?.__prudiiKey;
   if (!payload || typeof payload.key !== "string") return false;
-  target.dispatchEvent(new KeyboardEvent("keydown", { ...payload, bubbles: true, cancelable: true }));
+  target.document.dispatchEvent(new KeyboardEvent("keydown", { ...payload, bubbles: true, cancelable: true }));
   return true;
 }
