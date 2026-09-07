@@ -421,6 +421,12 @@ function SearchResultsList({ results, isLoading, selectedMailId, setSelectedMail
   );
 }
 
+// Row padding varies by density (index.css data-density rules):
+// compact py-1.5 → ~60px, comfortable py-2.5 → ~68px, spacious py-4 → ~80px.
+function rowEstimateFor(density: string | null): number {
+  return density === "compact" ? 60 : density === "spacious" ? 80 : 68;
+}
+
 type VirtualItem =
   | { kind: "separator"; group: string; label: string }
   | { kind: "mail"; mail: Mail; mailIndex: number };
@@ -507,12 +513,10 @@ function VirtualMailList({
     return items;
   }, [filteredMails, dateGroupLabels]);
 
-  // Row padding varies by density (index.css data-density rules):
-  // compact py-1.5 → ~60px, comfortable py-2.5 → ~68px, spacious py-4 → ~80px.
   // Read once per render — estimateSize runs for every index, and a DOM
   // attribute read per item adds up on long folders.
   const density = document.documentElement.getAttribute("data-density");
-  const rowEstimate = density === "compact" ? 60 : density === "spacious" ? 80 : 68;
+  const rowEstimate = rowEstimateFor(density);
 
   const rowVirtualizer = useVirtualizer({
     count: virtualItems.length + (hasNextPage || isFetchingNextPage ? 1 : 0),
@@ -1160,10 +1164,8 @@ export function MailList() {
   const [dragItemWidth, setDragItemWidth] = useState(320);
   const mailItemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const listRef = useRef<HTMLDivElement>(null);
-  // Same density → row-height mapping VirtualMailList uses for estimateSize;
-  // duplicated here because PageUp/PageDown needs it outside that component.
   const density = document.documentElement.getAttribute("data-density");
-  const rowEstimate = density === "compact" ? 60 : density === "spacious" ? 80 : 68;
+  const rowEstimate = rowEstimateFor(density);
 
   // Handle drag event to track position (mousemove doesn't work during HTML5 drag)
   const handleDrag = useCallback((e: DragEvent<HTMLDivElement>) => {
