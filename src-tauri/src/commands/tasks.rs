@@ -226,6 +226,10 @@ fn delete_task_impl(db: &Database, id: &str) -> Result<(), String> {
     Ok(())
 }
 
+// The inner `collected` binding is not redundant: it forces the query_map
+// iterator (borrowing `stmt`) to be dropped before the block ends, which the
+// `?`-chained tail-expression form does not do (E0597, temporary outlives `stmt`).
+#[allow(clippy::let_and_return)]
 fn move_task_impl(db: &Database, id: &str, status: &str, index: i64) -> Result<Vec<Task>, String> {
     if !is_valid_status(status) {
         return Err("Invalid status".into());
@@ -245,11 +249,16 @@ fn move_task_impl(db: &Database, id: &str, status: &str, index: i64) -> Result<V
     ids.insert(idx, id.to_string());
 
     let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
-    tx.execute(
-        "UPDATE tasks SET status = ?1, updated_at = ?2, completed_at = CASE WHEN ?1 = 'done' THEN COALESCE(completed_at, ?2) ELSE NULL END WHERE id = ?3",
-        params![status, now, id],
-    )
-    .map_err(|e| e.to_string())?;
+    let affected = tx
+        .execute(
+            "UPDATE tasks SET status = ?1, updated_at = ?2, completed_at = CASE WHEN ?1 = 'done' THEN COALESCE(completed_at, ?2) ELSE NULL END WHERE id = ?3",
+            params![status, now, id],
+        )
+        .map_err(|e| e.to_string())?;
+    if affected == 0 {
+        // tx is dropped here without commit, rolling back — no renumbering is persisted.
+        return Err("Task not found".into());
+    }
     // Renumbering the whole column keeps sort_order dense; columns are small.
     for (i, tid) in ids.iter().enumerate() {
         tx.execute("UPDATE tasks SET sort_order = ?1 WHERE id = ?2", params![i as f64, tid])
@@ -345,6 +354,19 @@ mod tests {
         assert_eq!(done.len(), 1);
         assert!(done[0].completed_at.is_some());
         assert_eq!(count_open_impl(&db).unwrap(), 2);
+    }
+
+    #[test]
+    fn move_rejects_unknown_task_id_and_leaves_sort_orders_unchanged() {
+        let db = temp_db();
+        let a = create_task_impl(&db, CreateTaskInput { title: "a".into(), description_html: None, status: None, priority: None, due_at: None }).unwrap();
+        let b = create_task_impl(&db, CreateTaskInput { title: "b".into(), description_html: None, status: None, priority: None, due_at: None }).unwrap();
+        assert!(move_task_impl(&db, "nope", "open", 0).is_err());
+        let after = list_tasks_impl(&db, Some("open".into())).unwrap();
+        assert_eq!(
+            after.iter().map(|t| (t.id.clone(), t.sort_order)).collect::<Vec<_>>(),
+            vec![(a.id.clone(), a.sort_order), (b.id.clone(), b.sort_order)]
+        );
     }
 
     #[test]
