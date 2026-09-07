@@ -11,6 +11,7 @@ import { getRecentCommands, recordCommandRun } from "../../lib/recentCommands";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { GradientAvatar } from "../motion/GradientAvatar";
 import type { Folder, Account, AccentColor, DensityMode } from "../../types";
+import { ACCENT_OPTIONS } from "../../lib/accents";
 
 const META = typeof navigator !== "undefined" && navigator.platform.toLowerCase().includes("mac") ? "⌘" : "Ctrl";
 
@@ -147,16 +148,7 @@ export function CommandPalette() {
       action: () => setThemeMode(isDark ? "light" : "dark"),
     });
 
-    const accentColors: { value: AccentColor; label: string }[] = [
-      { value: "blue",   label: t("commandPalette.accentBlue") },
-      { value: "purple", label: t("commandPalette.accentPurple") },
-      { value: "green",  label: t("commandPalette.accentGreen") },
-      { value: "orange", label: t("commandPalette.accentOrange") },
-      { value: "pink",   label: t("commandPalette.accentPink") },
-      { value: "red",    label: t("commandPalette.accentRed") },
-      { value: "teal",   label: t("commandPalette.accentTeal") },
-      { value: "amber",  label: t("commandPalette.accentAmber") },
-    ];
+    const accentColors: { value: AccentColor; label: string }[] = ACCENT_OPTIONS.map((o) => ({ value: o.id, label: t(o.labelKey) }));
     for (const accent of accentColors) {
       items.push({
         id: `accent-${accent.value}`,

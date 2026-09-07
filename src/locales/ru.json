@@ -782,6 +782,7 @@
     "accentRed": "Красный",
     "accentAmber": "Янтарный",
     "accentTeal": "Сине-зелёный",
+    "accentSystem": "Системный акцент",
     "group": {
       "actions": "Действия",
       "recent": "Недавнее",

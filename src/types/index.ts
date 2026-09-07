@@ -101,7 +101,7 @@ export const MAIL_FLAG_COLORS: Record<MailFlag, { bg: string; text: string; name
 };
 
 export type DensityMode = "compact" | "comfortable" | "spacious";
-export type AccentColor = "blue" | "purple" | "green" | "orange" | "pink" | "red" | "teal" | "amber";
+export type AccentColor = "blue" | "purple" | "green" | "orange" | "pink" | "red" | "teal" | "amber" | "system";
 
 export interface AppSettings {
   launch_on_startup: boolean;

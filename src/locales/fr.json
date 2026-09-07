@@ -778,6 +778,7 @@
     "accentRed": "Rouge",
     "accentAmber": "Ambre",
     "accentTeal": "Sarcelle",
+    "accentSystem": "Accent du système",
     "group": {
       "actions": "Actions",
       "recent": "Récents",

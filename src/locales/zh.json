@@ -777,6 +777,7 @@
     "accentRed": "红色",
     "accentAmber": "琥珀色",
     "accentTeal": "蓝绿色",
+    "accentSystem": "系统强调色",
     "group": {
       "actions": "操作",
       "recent": "最近",

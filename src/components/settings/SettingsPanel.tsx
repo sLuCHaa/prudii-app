@@ -70,18 +70,8 @@ const LANGUAGE_OPTIONS: { value: AppLanguage; labelKey: string }[] = [
   { value: "ru", labelKey: "settings.language.ru" },
 ];
 
-import type { AccentColor, DensityMode } from "../../types";
-
-const ACCENT_COLORS: { id: AccentColor; color: string; label: string }[] = [
-  { id: "blue", color: "#3b82f6", label: "Blue" },
-  { id: "purple", color: "#8b5cf6", label: "Purple" },
-  { id: "green", color: "#10b981", label: "Green" },
-  { id: "teal", color: "#14b8a6", label: "Teal" },
-  { id: "orange", color: "#f97316", label: "Orange" },
-  { id: "pink", color: "#ec4899", label: "Pink" },
-  { id: "red", color: "#ef4444", label: "Red" },
-  { id: "amber", color: "#f59e0b", label: "Amber" },
-];
+import type { DensityMode } from "../../types";
+import { ACCENT_OPTIONS, DEFAULT_ACCENT_HEX } from "../../lib/accents";
 
 const DENSITY_OPTIONS: { id: DensityMode; labelKey: string }[] = [
   { id: "compact", labelKey: "settings.density.compact" },
@@ -997,19 +987,26 @@ export function SettingsPanel() {
                       {t("settings.accentColor.description")}
                     </p>
                     <div className="flex gap-2 flex-wrap">
-                      {ACCENT_COLORS.map(({ id, color, label }) => (
-                        <button
-                          key={id}
-                          onClick={() => updateLocalSetting("accent_color", id)}
-                          className="w-8 h-8 rounded-full transition-all hover:scale-110"
-                          style={{
-                            backgroundColor: color,
-                            outline: localSettings.accent_color === id ? `2px solid ${color}` : "none",
-                            outlineOffset: "3px",
-                          }}
-                          title={label}
-                        />
-                      ))}
+                      {ACCENT_OPTIONS.map(({ id, hex, labelKey }) => {
+                        const swatchColor = hex ?? DEFAULT_ACCENT_HEX;
+                        return (
+                          <button
+                            key={id}
+                            onClick={() => updateLocalSetting("accent_color", id)}
+                            className="relative w-8 h-8 rounded-full transition-all hover:scale-110"
+                            style={{
+                              backgroundColor: swatchColor,
+                              outline: localSettings.accent_color === id ? `2px solid ${swatchColor}` : "none",
+                              outlineOffset: "3px",
+                            }}
+                            title={t(labelKey)}
+                          >
+                            {id === "system" && (
+                              <Monitor className="w-3.5 h-3.5 text-white absolute inset-0 m-auto" strokeWidth={2.5} />
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 

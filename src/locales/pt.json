@@ -778,6 +778,7 @@
     "accentRed": "Vermelho",
     "accentAmber": "Âmbar",
     "accentTeal": "Azul-piscina",
+    "accentSystem": "Cor de destaque do sistema",
     "group": {
       "actions": "Ações",
       "recent": "Recentes",

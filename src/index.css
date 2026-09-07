@@ -735,12 +735,14 @@ html[data-vibrancy].dark .glass-sidebar {
   --c-accent-hover: #7c3aed;
   --c-accent-soft: rgba(139, 92, 246, 0.1);
   --c-accent-soft-bg: rgba(139, 92, 246, 0.05);
+  --c-accent-ring: rgba(139, 92, 246, 0.35);
   --c-selected: rgba(139, 92, 246, 0.1);
 }
 .dark [data-accent="purple"], [data-accent="purple"].dark {
   --c-accent-hover: #a78bfa;
   --c-accent-soft: rgba(139, 92, 246, 0.2);
   --c-accent-soft-bg: rgba(139, 92, 246, 0.08);
+  --c-accent-ring: rgba(139, 92, 246, 0.45);
   --c-selected: rgba(139, 92, 246, 0.2);
 }
 
@@ -749,12 +751,14 @@ html[data-vibrancy].dark .glass-sidebar {
   --c-accent-hover: #059669;
   --c-accent-soft: rgba(16, 185, 129, 0.1);
   --c-accent-soft-bg: rgba(16, 185, 129, 0.05);
+  --c-accent-ring: rgba(16, 185, 129, 0.35);
   --c-selected: rgba(16, 185, 129, 0.1);
 }
 .dark [data-accent="green"], [data-accent="green"].dark {
   --c-accent-hover: #34d399;
   --c-accent-soft: rgba(16, 185, 129, 0.2);
   --c-accent-soft-bg: rgba(16, 185, 129, 0.08);
+  --c-accent-ring: rgba(16, 185, 129, 0.45);
   --c-selected: rgba(16, 185, 129, 0.2);
 }
 
@@ -763,12 +767,14 @@ html[data-vibrancy].dark .glass-sidebar {
   --c-accent-hover: #ea580c;
   --c-accent-soft: rgba(249, 115, 22, 0.1);
   --c-accent-soft-bg: rgba(249, 115, 22, 0.05);
+  --c-accent-ring: rgba(249, 115, 22, 0.35);
   --c-selected: rgba(249, 115, 22, 0.1);
 }
 .dark [data-accent="orange"], [data-accent="orange"].dark {
   --c-accent-hover: #fb923c;
   --c-accent-soft: rgba(249, 115, 22, 0.2);
   --c-accent-soft-bg: rgba(249, 115, 22, 0.08);
+  --c-accent-ring: rgba(249, 115, 22, 0.45);
   --c-selected: rgba(249, 115, 22, 0.2);
 }
 
@@ -777,12 +783,14 @@ html[data-vibrancy].dark .glass-sidebar {
   --c-accent-hover: #db2777;
   --c-accent-soft: rgba(236, 72, 153, 0.1);
   --c-accent-soft-bg: rgba(236, 72, 153, 0.05);
+  --c-accent-ring: rgba(236, 72, 153, 0.35);
   --c-selected: rgba(236, 72, 153, 0.1);
 }
 .dark [data-accent="pink"], [data-accent="pink"].dark {
   --c-accent-hover: #f472b6;
   --c-accent-soft: rgba(236, 72, 153, 0.2);
   --c-accent-soft-bg: rgba(236, 72, 153, 0.08);
+  --c-accent-ring: rgba(236, 72, 153, 0.45);
   --c-selected: rgba(236, 72, 153, 0.2);
 }
 
@@ -791,12 +799,14 @@ html[data-vibrancy].dark .glass-sidebar {
   --c-accent-hover: #dc2626;
   --c-accent-soft: rgba(239, 68, 68, 0.1);
   --c-accent-soft-bg: rgba(239, 68, 68, 0.05);
+  --c-accent-ring: rgba(239, 68, 68, 0.35);
   --c-selected: rgba(239, 68, 68, 0.1);
 }
 .dark [data-accent="red"], [data-accent="red"].dark {
   --c-accent-hover: #f87171;
   --c-accent-soft: rgba(239, 68, 68, 0.2);
   --c-accent-soft-bg: rgba(239, 68, 68, 0.08);
+  --c-accent-ring: rgba(239, 68, 68, 0.45);
   --c-selected: rgba(239, 68, 68, 0.2);
 }
 
@@ -805,12 +815,14 @@ html[data-vibrancy].dark .glass-sidebar {
   --c-accent-hover: #0d9488;
   --c-accent-soft: rgba(20, 184, 166, 0.1);
   --c-accent-soft-bg: rgba(20, 184, 166, 0.05);
+  --c-accent-ring: rgba(20, 184, 166, 0.35);
   --c-selected: rgba(20, 184, 166, 0.1);
 }
 .dark [data-accent="teal"], [data-accent="teal"].dark {
   --c-accent-hover: #2dd4bf;
   --c-accent-soft: rgba(20, 184, 166, 0.2);
   --c-accent-soft-bg: rgba(20, 184, 166, 0.08);
+  --c-accent-ring: rgba(20, 184, 166, 0.45);
   --c-selected: rgba(20, 184, 166, 0.2);
 }
 
@@ -819,12 +831,14 @@ html[data-vibrancy].dark .glass-sidebar {
   --c-accent-hover: #d97706;
   --c-accent-soft: rgba(245, 158, 11, 0.1);
   --c-accent-soft-bg: rgba(245, 158, 11, 0.05);
+  --c-accent-ring: rgba(245, 158, 11, 0.35);
   --c-selected: rgba(245, 158, 11, 0.1);
 }
 .dark [data-accent="amber"], [data-accent="amber"].dark {
   --c-accent-hover: #fbbf24;
   --c-accent-soft: rgba(245, 158, 11, 0.2);
   --c-accent-soft-bg: rgba(245, 158, 11, 0.08);
+  --c-accent-ring: rgba(245, 158, 11, 0.45);
   --c-selected: rgba(245, 158, 11, 0.2);
 }
 
