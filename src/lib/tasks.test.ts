@@ -63,6 +63,10 @@ describe("parseQuickAdd", () => {
     expect(d.getHours()).toBe(9);
   });
 
+  it("trims trailing punctuation left behind after stripping a token", () => {
+    expect(parseQuickAdd("Sachen erledigen, do", now, "de").title).toBe("Sachen erledigen");
+  });
+
   it("does not mangle a title where a short weekday token appears mid-sentence", () => {
     // "so" is a German short token for Sunday, but is not the last word here
     // and is not followed by a time token, so it must stay part of the title.

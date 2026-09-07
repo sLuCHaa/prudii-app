@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
   listTasks,
   getTask,
@@ -20,6 +20,21 @@ import {
   startTaskAttachmentDrag,
 } from "../lib/tauri";
 import type { CreateTaskInput, Task, TaskStatus, UpdateTaskPatch } from "../types";
+
+// Every task mutation (backend and frontend) can move a card's counts, checklist,
+// links or attachments, so all four query families are invalidated together —
+// shared here so the App-level `tasks-changed` listener and every hook below stay in sync.
+export function invalidateTaskQueries(queryClient: QueryClient, taskId?: string | null) {
+  queryClient.invalidateQueries({ queryKey: ["tasks"] });
+  queryClient.invalidateQueries({ queryKey: taskId ? ["task", taskId] : ["task"] });
+  queryClient.invalidateQueries({ queryKey: ["tasks-count"] });
+  queryClient.invalidateQueries({ queryKey: ["tasks-for-mail"] });
+}
+
+function requireTaskId(taskId: string | null): string {
+  if (!taskId) throw new Error("taskId required");
+  return taskId;
+}
 
 export function useTasks(status?: TaskStatus) {
   return useQuery({
@@ -48,10 +63,7 @@ export function useCreateTask() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateTaskInput) => createTask(input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["tasks-count"] });
-    },
+    onSuccess: () => invalidateTaskQueries(queryClient),
   });
 }
 
@@ -59,11 +71,7 @@ export function useUpdateTask() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, patch }: { id: string; patch: UpdateTaskPatch }) => updateTask(id, patch),
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["task", variables.id] });
-      queryClient.invalidateQueries({ queryKey: ["tasks-count"] });
-    },
+    onSuccess: (_data, variables) => invalidateTaskQueries(queryClient, variables.id),
   });
 }
 
@@ -71,11 +79,7 @@ export function useDeleteTask() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteTask(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["tasks-count"] });
-      queryClient.invalidateQueries({ queryKey: ["tasks-for-mail"] });
-    },
+    onSuccess: () => invalidateTaskQueries(queryClient),
   });
 }
 
@@ -111,21 +115,15 @@ export function useMoveTask() {
     onError: (_err, _vars, context) => {
       if (context?.previous) queryClient.setQueryData(["tasks", "all"], context.previous);
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["tasks-count"] });
-    },
+    onSettled: () => invalidateTaskQueries(queryClient),
   });
 }
 
 export function useChecklist(taskId: string | null) {
   const queryClient = useQueryClient();
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["task", taskId] });
-    queryClient.invalidateQueries({ queryKey: ["tasks"] });
-  };
+  const invalidate = () => invalidateTaskQueries(queryClient, taskId);
   const addItem = useMutation({
-    mutationFn: (text: string) => addChecklistItem(taskId!, text),
+    mutationFn: (text: string) => addChecklistItem(requireTaskId(taskId), text),
     onSuccess: invalidate,
   });
   const updateItem = useMutation({
@@ -137,7 +135,7 @@ export function useChecklist(taskId: string | null) {
     onSuccess: invalidate,
   });
   const reorder = useMutation({
-    mutationFn: (ids: string[]) => reorderChecklist(taskId!, ids),
+    mutationFn: (ids: string[]) => reorderChecklist(requireTaskId(taskId), ids),
     onSuccess: invalidate,
   });
   return { addItem, updateItem, deleteItem, reorder };
@@ -145,17 +143,13 @@ export function useChecklist(taskId: string | null) {
 
 export function useTaskLinks(taskId: string | null) {
   const queryClient = useQueryClient();
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["task", taskId] });
-    queryClient.invalidateQueries({ queryKey: ["tasks"] });
-    queryClient.invalidateQueries({ queryKey: ["tasks-for-mail"] });
-  };
+  const invalidate = () => invalidateTaskQueries(queryClient, taskId);
   const link = useMutation({
-    mutationFn: (mailId: string) => linkTaskMail(taskId!, mailId),
+    mutationFn: (mailId: string) => linkTaskMail(requireTaskId(taskId), mailId),
     onSuccess: invalidate,
   });
   const unlink = useMutation({
-    mutationFn: (mailId: string) => unlinkTaskMail(taskId!, mailId),
+    mutationFn: (mailId: string) => unlinkTaskMail(requireTaskId(taskId), mailId),
     onSuccess: invalidate,
   });
   return { link, unlink };
@@ -163,12 +157,9 @@ export function useTaskLinks(taskId: string | null) {
 
 export function useTaskAttachments(taskId: string | null) {
   const queryClient = useQueryClient();
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["task", taskId] });
-    queryClient.invalidateQueries({ queryKey: ["tasks"] });
-  };
+  const invalidate = () => invalidateTaskQueries(queryClient, taskId);
   const add = useMutation({
-    mutationFn: () => addTaskAttachments(taskId!),
+    mutationFn: () => addTaskAttachments(requireTaskId(taskId)),
     onSuccess: invalidate,
   });
   const remove = useMutation({

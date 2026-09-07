@@ -154,7 +154,8 @@ export function parseQuickAdd(input: string, now: Date, _lang: string): { title:
     }
   }
 
-  const title = text.replace(/\s+/g, " ").trim();
+  // Stripping a trailing token often leaves dangling punctuation ("Sachen erledigen, do" → "Sachen erledigen,").
+  const title = text.replace(/\s+/g, " ").trim().replace(/[,;:-]+$/, "").trim();
   if (hour === null) return { title, dueAt: null };
   return { title, dueAt: new Date(year, month, day, hour, minute).toISOString() };
 }

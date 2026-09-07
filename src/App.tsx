@@ -22,6 +22,7 @@ const ComposeWindow = lazy(() =>
   import("./components/compose/ComposeWindow").then((m) => ({ default: m.ComposeWindow }))
 );
 import { useAppStore } from "./stores/appStore";
+import { invalidateTaskQueries } from "./hooks/useTasks";
 import { useSyncAll, useSyncAutomatic } from "./hooks/useSync";
 import { useAutoSync } from "./hooks/useAutoSync";
 import { useFocusSync } from "./hooks/useFocusSync";
@@ -363,10 +364,7 @@ function AppInner() {
   // Backend emits this after every task mutation (create/update/move/checklist/links/attachments).
   useEffect(() => {
     const unlisten = listen("tasks-changed", () => {
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["task"] });
-      queryClient.invalidateQueries({ queryKey: ["tasks-count"] });
-      queryClient.invalidateQueries({ queryKey: ["tasks-for-mail"] });
+      invalidateTaskQueries(queryClient);
     });
     return () => { unlisten.then((fn) => fn()); };
   }, []);
