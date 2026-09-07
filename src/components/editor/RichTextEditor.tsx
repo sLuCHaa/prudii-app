@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import type { AnyExtension } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
@@ -11,39 +11,30 @@ import { cleanPastedHtml } from "./pasteCleanup";
 
 const DEFAULT_EDITOR_CLASSNAME = "prose prose-sm max-w-none focus:outline-none min-h-[200px] text-text";
 
-export interface RichTextEditorProps {
+export interface UseRichTextEditorOptions {
   content: string; // initial HTML
-  onChange?: (html: string) => void; // on every update
-  onEditorReady?: (editor: Editor) => void;
   placeholder?: string;
   // Typed as AnyExtension (tiptap's actual union of Extension/Node/Mark) rather than
   // the plain Extension class — ComposeModal passes Node instances (image, signature).
   extraExtensions?: AnyExtension[];
   editorClassName?: string;
-  toolbar?: boolean;
   autofocus?: boolean;
-  onEscapeBlockedChange?: (blocked: boolean) => void; // true while the link dialog is open
+  onChange?: (html: string) => void; // on every update
 }
 
-/**
- * TipTap editor used by both Compose and (later) the task description field.
- * `toolbar: false` renders nothing here and only manages the editor instance —
- * ComposeModal needs the toolbar and the content area in two non-adjacent
- * spots of its layout (AI-reply suggestions sit between them), so it renders
- * `EditorToolbar`/`EditorContent` itself using the instance from `onEditorReady`.
- */
-export function RichTextEditor({
+/** Shared TipTap setup for Compose and (later) the task description field. */
+export function useRichTextEditor({
   content,
-  onChange,
-  onEditorReady,
   placeholder,
   extraExtensions = [],
   editorClassName = DEFAULT_EDITOR_CLASSNAME,
-  toolbar = true,
   autofocus,
-  onEscapeBlockedChange,
-}: RichTextEditorProps) {
-  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  onChange,
+}: UseRichTextEditorOptions): Editor | null {
+  // Read through a ref so the update listener below is registered once per
+  // editor instance and never closes over a stale onChange.
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
   // No deps array (tiptap default `[]`): the editor is created once and never
   // recreated when `content` or the other options change on re-render.
@@ -81,28 +72,58 @@ export function RichTextEditor({
   });
 
   useEffect(() => {
-    if (editor) onEditorReady?.(editor);
-    // onEditorReady is expected to be a stable setState setter; only re-run on a
-    // genuinely new editor instance, not on every render of the caller.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editor]);
-
-  useEffect(() => {
-    if (!editor || !onChange) return;
-    const handleUpdate = () => onChange(editor.getHTML());
+    if (!editor) return;
+    const handleUpdate = () => onChangeRef.current?.(editor.getHTML());
     editor.on("update", handleUpdate);
     return () => { editor.off("update", handleUpdate); };
-  }, [editor, onChange]);
+  }, [editor]);
+
+  return editor;
+}
+
+export interface RichTextEditorProps {
+  content: string; // initial HTML
+  onChange?: (html: string) => void; // on every update
+  onEditorReady?: (editor: Editor) => void;
+  placeholder?: string;
+  extraExtensions?: AnyExtension[]; // ComposeModal: [TiptapImage.configure(...), SignatureNode]
+  editorClassName?: string;
+  toolbar?: boolean;
+  autofocus?: boolean;
+  onEscapeBlockedChange?: (blocked: boolean) => void; // true while the link dialog is open
+}
+
+/** Ready-made toolbar + content, for callers that don't need custom layout (e.g. the task drawer). */
+export function RichTextEditor({
+  content,
+  onChange,
+  onEditorReady,
+  placeholder,
+  extraExtensions,
+  editorClassName = DEFAULT_EDITOR_CLASSNAME,
+  toolbar = true,
+  autofocus,
+  onEscapeBlockedChange,
+}: RichTextEditorProps) {
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  // Read through a ref: onEditorReady is expected to be a stable setState setter,
+  // so it must not force the effect below to re-run on every caller render.
+  const onEditorReadyRef = useRef(onEditorReady);
+  onEditorReadyRef.current = onEditorReady;
+
+  const editor = useRichTextEditor({ content, placeholder, extraExtensions, editorClassName, autofocus, onChange });
+
+  useEffect(() => {
+    if (editor) onEditorReadyRef.current?.(editor);
+  }, [editor]);
 
   useEffect(() => {
     onEscapeBlockedChange?.(linkDialogOpen);
   }, [linkDialogOpen, onEscapeBlockedChange]);
 
-  if (!toolbar) return null;
-
   return (
     <>
-      <EditorToolbar editor={editor} linkDialogOpen={linkDialogOpen} setLinkDialogOpen={setLinkDialogOpen} />
+      {toolbar !== false && <EditorToolbar editor={editor} linkDialogOpen={linkDialogOpen} setLinkDialogOpen={setLinkDialogOpen} />}
       <EditorContent editor={editor} className={editorClassName} />
     </>
   );

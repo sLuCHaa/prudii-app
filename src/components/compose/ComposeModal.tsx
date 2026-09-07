@@ -7,10 +7,10 @@ import { GradientAvatar } from "../motion/GradientAvatar";
 import { SPRING_SNAPPY } from "../motion/tokens";
 import { X, Paperclip, Trash2, Send, File, FileText, Image, Film, Music, FileCode, FileSpreadsheet, Archive, Sparkles, Loader2, FileType, CalendarClock, ChevronDown, Pencil, Check } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { EditorContent, type Editor } from "@tiptap/react";
+import { EditorContent } from "@tiptap/react";
 import TiptapImage from "@tiptap/extension-image";
 import { Node } from "@tiptap/core";
-import { RichTextEditor } from "../editor/RichTextEditor";
+import { useRichTextEditor } from "../editor/RichTextEditor";
 import { EditorToolbar } from "../editor/EditorToolbar";
 import { useTranslation } from "react-i18next";
 import i18n from "../../lib/i18n";
@@ -500,10 +500,13 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   const scheduleBtnRef = useRef<HTMLDivElement>(null);
   const dragCounter = useRef(0);
 
-  // Editor instance is created by the RichTextEditor rendered further down
-  // (toolbar and content sit in two non-adjacent spots of this layout) and
-  // handed back here via onEditorReady.
-  const [editor, setEditor] = useState<Editor | null>(null);
+  // Headless: EditorToolbar/EditorContent are rendered at their own spots below
+  // since AI-reply suggestions sit between them in this layout.
+  const editor = useRichTextEditor({
+    content: "",
+    placeholder: i18n.t("compose.writeMessage"),
+    extraExtensions: [TiptapImage.configure({ inline: true, allowBase64: true }), SignatureNode],
+  });
 
   // ── Autosave: crash/quit safety net ──────────────────────────────────────
   // Snapshots the whole draft into SQLite keyed by this window's label; a
@@ -1633,16 +1636,6 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
             />
           </div>
 
-          {/* Headless: only builds the editor instance (handed back via onEditorReady).
-              Toolbar and content are rendered separately below since the AI-reply
-              suggestions sit between them in this layout. */}
-          <RichTextEditor
-            content=""
-            onEditorReady={setEditor}
-            placeholder={i18n.t("compose.writeMessage")}
-            extraExtensions={[TiptapImage.configure({ inline: true, allowBase64: true }), SignatureNode]}
-            toolbar={false}
-          />
           <EditorToolbar editor={editor} linkDialogOpen={linkDialogOpen} setLinkDialogOpen={setLinkDialogOpen} />
 
           {aiReplies.length > 0 && (
