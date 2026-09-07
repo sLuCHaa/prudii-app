@@ -794,6 +794,7 @@ function VirtualMailList({
                 }}
                 role="button"
                 tabIndex={0}
+                data-mail-row=""
                 onClick={(e) => handleMailClick(e, mail, mailIndex)}
                 onKeyDown={(e) => {
                   if (e.key !== "Enter" && e.key !== " ") return;
@@ -1164,6 +1165,7 @@ export function MailList() {
   const [dragItemWidth, setDragItemWidth] = useState(320);
   const mailItemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const listRef = useRef<HTMLDivElement>(null);
+  // Read per render so a density change re-arms the keyboard handler's page size.
   const density = document.documentElement.getAttribute("data-density");
   const rowEstimate = rowEstimateFor(density);
 
@@ -1703,11 +1705,19 @@ export function MailList() {
       const cursorTarget = nextCursor(selectedMailIndex, filteredMails.length, navKey, rows);
       if (cursorTarget < 0) return;
 
-      if (e.shiftKey && (navKey === "ArrowDown" || navKey === "ArrowUp" || navKey === "Home" || navKey === "End" || navKey === "PageDown" || navKey === "PageUp")) {
+      // Keyboard navigation owns the cursor; a row focused by an earlier click
+      // must not capture Space/Enter for the wrong mail.
+      const active = document.activeElement as HTMLElement | null;
+      if (active && active !== document.body && active.closest("[data-mail-row]")) active.blur();
+
+      if (e.shiftKey) {
         // Shift extends from the anchor; the cursor moves, the anchor stays.
         const anchorId = useAppStore.getState().lastSelectedMailId;
         let anchorIdx = anchorId ? filteredMails.findIndex((m) => m.id === anchorId) : -1;
         if (anchorIdx < 0) anchorIdx = selectedMailIndex >= 0 ? selectedMailIndex : cursorTarget;
+        // The list can shrink between renders (archive, filter change); a stale
+        // anchor index would read past the end of filteredMails below.
+        if (anchorIdx < 0 || anchorIdx >= filteredMails.length) anchorIdx = cursorTarget;
         setSelectionSpan(spanIds(filteredMails, anchorIdx, cursorTarget), filteredMails[anchorIdx].id);
         setSelectedMailIndex(cursorTarget);
         return;
