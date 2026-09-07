@@ -12,7 +12,7 @@ import { useAppStore } from "../../stores/appStore";
 import { useAttachments, useToggleStar, useToggleMailFlag } from "../../hooks/useAccounts";
 import { useScroller } from "../../hooks/useScroller";
 import { openAttachment, saveAttachment, fetchMailBody, trashMail, archiveMail, getThreadMails, markAsRead, unsubscribeMail } from "../../lib/tauri";
-import { MAIL_LINK_BRIDGE, MAIL_LINK_BRIDGE_CSP_HASH } from "../../lib/mailLinkBridge";
+import { MAIL_LINK_BRIDGE, MAIL_LINK_BRIDGE_CSP_HASH, relayBridgeKey } from "../../lib/mailLinkBridge";
 import { detectCause, causeMessage } from "../../lib/errorToast";
 import { checkLink } from "../../lib/linkChecker";
 import { cleanMailUrl, openMailUrl } from "../../lib/trackingParams";
@@ -360,6 +360,7 @@ ${BASE_STYLES}
     function handleMessage(e: MessageEvent) {
       const iframe = iframeRef.current;
       if (!iframe || e.source !== iframe.contentWindow) return;
+      if (relayBridgeKey(e.data)) return;
       const data = e.data as { __prudiiLink?: string; __prudiiImage?: string } | null;
       if (!data) return;
 

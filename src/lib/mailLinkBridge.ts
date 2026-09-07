@@ -22,7 +22,18 @@
 // Regenerate the hash:
 //   node -e "const c=require('crypto');const m=require('fs').readFileSync('src/lib/mailLinkBridge.ts','utf8').match(/MAIL_LINK_BRIDGE = \`([\s\S]*?)\`;/)[1];console.log('sha256-'+c.createHash('sha256').update(m,'utf8').digest('base64'))"
 
-export const MAIL_LINK_BRIDGE = `(function(){document.addEventListener('click',function(e){var t=e.target;if(t&&t.tagName==='IMG'&&(!t.closest||!t.closest('a'))){var s=t.currentSrc||t.src;if(s){e.preventDefault();try{parent.postMessage({__prudiiImage:s},'*');}catch(_){}}return;}var a=t&&t.closest?t.closest('[data-href]'):null;if(!a)return;var h=a.getAttribute('data-href');if(!h||h.charAt(0)==='#')return;e.preventDefault();try{parent.postMessage({__prudiiLink:h},'*');}catch(_){}},true);document.addEventListener('keydown',function(e){var m=e.ctrlKey||e.metaKey,k=e.key.length===1?e.key.toLowerCase():e.key;if(k==='F3'||k==='F5'||k==='F7'||k==='F12'){e.preventDefault();return;}if(!m&&e.altKey&&(k==='ArrowLeft'||k==='ArrowRight')){e.preventDefault();return;}if(!m||e.altKey)return;if(e.shiftKey&&(k==='i'||k==='j'||k==='c')){e.preventDefault();return;}if('rpfguhj+-=0'.indexOf(k)!==-1)e.preventDefault();},true);})();`;
+export const MAIL_LINK_BRIDGE = `(function(){document.addEventListener('click',function(e){var t=e.target;if(t&&t.tagName==='IMG'&&(!t.closest||!t.closest('a'))){var s=t.currentSrc||t.src;if(s){e.preventDefault();try{parent.postMessage({__prudiiImage:s},'*');}catch(_){}}return;}var a=t&&t.closest?t.closest('[data-href]'):null;if(!a)return;var h=a.getAttribute('data-href');if(!h||h.charAt(0)==='#')return;e.preventDefault();try{parent.postMessage({__prudiiLink:h},'*');}catch(_){}},true);document.addEventListener('keydown',function(e){var m=e.ctrlKey||e.metaKey,k=e.key.length===1?e.key.toLowerCase():e.key;if(k==='F3'||k==='F5'||k==='F7'||k==='F12'){e.preventDefault();return;}if(!m&&e.altKey&&(k==='ArrowLeft'||k==='ArrowRight')){e.preventDefault();return;}if(!m||e.altKey)return;if(e.shiftKey&&(k==='i'||k==='j'||k==='c')){e.preventDefault();return;}if('rpfguhj+-=0'.indexOf(k)!==-1){e.preventDefault();return;}var t=e.target;if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable))return;try{parent.postMessage({__prudiiKey:{key:e.key,ctrlKey:e.ctrlKey,metaKey:e.metaKey,shiftKey:e.shiftKey,altKey:e.altKey}},'*');}catch(_){}},true);})();`;
 
 // SHA-256 of MAIL_LINK_BRIDGE (filled in by the regenerate command above).
-export const MAIL_LINK_BRIDGE_CSP_HASH = "sha256-GduOK/LU09CMlLbQn4CCHLWXGQ9J8mhq4fqnrR8LkNI=";
+export const MAIL_LINK_BRIDGE_CSP_HASH = "sha256-aqqEOmGQcZA+2VjWv6ABinvWdXojuQ5TDyLn83y7TNs=";
+
+interface BridgedKey { key: string; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean }
+
+// The iframe is its own document; shortcuts typed there would otherwise die at
+// the frame boundary. Re-dispatching on window lets every existing handler run.
+export function relayBridgeKey(data: unknown, target: Window = window): boolean {
+  const payload = (data as { __prudiiKey?: BridgedKey } | null)?.__prudiiKey;
+  if (!payload || typeof payload.key !== "string") return false;
+  target.dispatchEvent(new KeyboardEvent("keydown", { ...payload, bubbles: true, cancelable: true }));
+  return true;
+}
