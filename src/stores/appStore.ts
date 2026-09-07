@@ -84,6 +84,7 @@ interface AppState {
   lastSelectedMailId: string | null;
   toggleMailSelection: (mailId: string) => void;
   selectMailRange: (toMailId: string, visibleMails: Mail[]) => void;
+  setSelectionSpan: (ids: string[], anchorId: string) => void;
   selectAllMails: (mailIds: string[]) => void;
   clearSelection: () => void;
   setLastSelectedMailId: (id: string | null) => void;
@@ -276,6 +277,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       next.add(visibleMails[i].id);
     }
     return { selectedMailIds: next, multiSelectMode: true };
+  }),
+  // Keyboard ranges replace the selection (a range shrinks again when the
+  // cursor walks back), unlike shift-click which adds to it.
+  setSelectionSpan: (ids, anchorId) => set({
+    selectedMailIds: new Set(ids),
+    multiSelectMode: ids.length > 0,
+    lastSelectedMailId: anchorId,
   }),
   selectAllMails: (mailIds) => set({
     selectedMailIds: new Set(mailIds),

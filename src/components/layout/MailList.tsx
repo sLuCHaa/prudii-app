@@ -31,6 +31,7 @@ import { SWEEP_MAILS_EVENT, SWEEP_TWEEN, type SweepDetail } from "../motion/swee
 import { formatMailDate, getDateGroup } from "../../lib/dateUtils";
 import { runMailAction, toastError, causeMessage } from "../../lib/errorToast";
 import { accumulate, decide, isHorizontalIntent } from "../../lib/swipe";
+import { isListNavKey, nextCursor, pageSize, spanIds } from "../../lib/listKeys";
 import { MAIL_FLAG_COLORS } from "../../types";
 import type { Mail } from "../../types";
 import { useTranslation } from "react-i18next";
@@ -1092,6 +1093,7 @@ export function MailList() {
     multiSelectMode,
     toggleMailSelection,
     selectMailRange,
+    setSelectionSpan,
     selectAllMails,
     clearSelection,
   } = useAppStore(useShallow((s) => ({
@@ -1123,6 +1125,7 @@ export function MailList() {
     multiSelectMode: s.multiSelectMode,
     toggleMailSelection: s.toggleMailSelection,
     selectMailRange: s.selectMailRange,
+    setSelectionSpan: s.setSelectionSpan,
     selectAllMails: s.selectAllMails,
     clearSelection: s.clearSelection,
   })));
@@ -1157,6 +1160,10 @@ export function MailList() {
   const [dragItemWidth, setDragItemWidth] = useState(320);
   const mailItemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const listRef = useRef<HTMLDivElement>(null);
+  // Same density → row-height mapping VirtualMailList uses for estimateSize;
+  // duplicated here because PageUp/PageDown needs it outside that component.
+  const density = document.documentElement.getAttribute("data-density");
+  const rowEstimate = density === "compact" ? 60 : density === "spacious" ? 80 : 68;
 
   // Handle drag event to track position (mousemove doesn't work during HTML5 drag)
   const handleDrag = useCallback((e: DragEvent<HTMLDivElement>) => {
@@ -1667,21 +1674,48 @@ export function MailList() {
         return;
       }
 
-      if (e.key === "j" || e.key === "ArrowDown") {
-        e.preventDefault();
-        selectMail(Math.min(selectedMailIndex + 1, filteredMails.length - 1));
-      } else if (e.key === "k" || e.key === "ArrowUp") {
-        e.preventDefault();
-        selectMail(Math.max(selectedMailIndex - 1, 0));
-      } else if (e.key === "Enter" && selectedMailIndex >= 0) {
-        e.preventDefault();
-        setSelectedMailId(filteredMails[selectedMailIndex].id);
+      // Space toggles the cursor row, but only when no control has focus —
+      // focused rows/buttons handle Space themselves.
+      if (e.key === " " && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        if (contextMenu) return;
+        const active = document.activeElement;
+        if (active && active !== document.body) return;
+        if (selectedMailIndex >= 0 && filteredMails[selectedMailIndex]) {
+          e.preventDefault();
+          toggleMailSelection(filteredMails[selectedMailIndex].id);
+        }
+        return;
       }
+
+      const navKey = e.key === "j" ? "ArrowDown" : e.key === "k" ? "ArrowUp" : e.key;
+      if (!isListNavKey(navKey) || e.ctrlKey || e.metaKey || e.altKey) {
+        if (e.key === "Enter" && selectedMailIndex >= 0) {
+          e.preventDefault();
+          setSelectedMailId(filteredMails[selectedMailIndex].id);
+        }
+        return;
+      }
+      if (contextMenu) return;
+      e.preventDefault();
+      const rows = pageSize(listRef.current?.clientHeight ?? 0, rowEstimate);
+      const cursorTarget = nextCursor(selectedMailIndex, filteredMails.length, navKey, rows);
+      if (cursorTarget < 0) return;
+
+      if (e.shiftKey && (navKey === "ArrowDown" || navKey === "ArrowUp" || navKey === "Home" || navKey === "End" || navKey === "PageDown" || navKey === "PageUp")) {
+        // Shift extends from the anchor; the cursor moves, the anchor stays.
+        const anchorId = useAppStore.getState().lastSelectedMailId;
+        let anchorIdx = anchorId ? filteredMails.findIndex((m) => m.id === anchorId) : -1;
+        if (anchorIdx < 0) anchorIdx = selectedMailIndex >= 0 ? selectedMailIndex : cursorTarget;
+        setSelectionSpan(spanIds(filteredMails, anchorIdx, cursorTarget), filteredMails[anchorIdx].id);
+        setSelectedMailIndex(cursorTarget);
+        return;
+      }
+      selectMail(cursorTarget);
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [filteredMails, selectedMailIndex, selectMail, setSelectedMailId, multiSelectMode, selectedMailIds, clearSelection, selectAllMails, setMails, mails, isSearchActive, searchResultsData, selectedMailId, contextMenu, invalidateMailQueries, handleArchiveSuccess, setPendingRemoveId]);
+  }, [filteredMails, selectedMailIndex, selectMail, setSelectedMailId, multiSelectMode, selectedMailIds, clearSelection, selectAllMails, setMails, mails, isSearchActive, searchResultsData, selectedMailId, contextMenu, invalidateMailQueries, handleArchiveSuccess, setPendingRemoveId, toggleMailSelection, setSelectionSpan, setSelectedMailIndex, rowEstimate]);
 
   // Each view starts at the top — without this, the previous folder's scroll
   // offset carried over and landed the new folder mid-list.
