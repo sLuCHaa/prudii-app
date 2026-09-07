@@ -167,6 +167,10 @@ export async function quickLookAttachment(attachmentId: string): Promise<void> {
   return invoke("quick_look_attachment", { attachmentId });
 }
 
+export async function revealAttachment(attachmentId: string): Promise<void> {
+  return invoke("reveal_attachment", { attachmentId });
+}
+
 export async function saveAttachment(attachmentId: string): Promise<string | null> {
   return invoke("save_attachment", { attachmentId });
 }

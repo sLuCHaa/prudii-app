@@ -267,7 +267,7 @@ export function AttachmentPreview({
           {attachment.local_path && (
             <Tooltip label={t(revealLabelKey({ isMac: isMacOS, isWindows }))}>
               <button
-                onClick={(e) => { e.stopPropagation(); revealAttachment(attachment.local_path).catch(() => {}); }}
+                onClick={(e) => { e.stopPropagation(); revealAttachment(attachment.id).catch(() => {}); }}
                 className="flex items-center justify-center px-3 py-1.5 rounded-lg border border-border text-text hover:bg-hover transition-colors"
                 aria-label={t(revealLabelKey({ isMac: isMacOS, isWindows }))}
               >

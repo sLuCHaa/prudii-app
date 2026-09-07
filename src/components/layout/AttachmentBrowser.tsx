@@ -785,7 +785,7 @@ export function AttachmentBrowser() {
                         {att.local_path && (
                           <Tooltip label={t(revealLabelKey({ isMac: isMacOS, isWindows }))}>
                             <button
-                              onClick={(e) => { e.stopPropagation(); revealAttachment(att.local_path).catch(() => {}); }}
+                              onClick={(e) => { e.stopPropagation(); revealAttachment(att.id).catch(() => {}); }}
                               className="p-1 rounded hover:bg-hover transition-colors opacity-0 group-hover:opacity-100 text-text-tertiary hover:text-text"
                               aria-label={t(revealLabelKey({ isMac: isMacOS, isWindows }))}
                             >

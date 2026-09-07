@@ -774,6 +774,13 @@ pub fn quick_look_attachment(db: State<'_, Database>, attachment_id: String) -> 
     }
 }
 
+#[tauri::command(async)]
+pub fn reveal_attachment(app: tauri::AppHandle, db: State<'_, Database>, attachment_id: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let path = resolve_attachment_path(&db, &attachment_id)?;
+    app.opener().reveal_item_in_dir(&path).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub async fn save_attachment(
     db: State<'_, Database>,

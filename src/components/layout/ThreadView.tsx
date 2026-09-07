@@ -138,7 +138,7 @@ const AttachmentItem = memo(function AttachmentItem({
       {attachment.local_path && (
         <Tooltip label={t(revealLabelKey({ isMac: isMacOS, isWindows }))}>
           <button
-            onClick={(e) => { e.stopPropagation(); revealAttachment(attachment.local_path).catch(() => {}); }}
+            onClick={(e) => { e.stopPropagation(); revealAttachment(attachment.id).catch(() => {}); }}
             className="p-1 rounded hover:bg-hover transition-colors opacity-0 group-hover:opacity-100 text-text-tertiary hover:text-text"
             aria-label={t(revealLabelKey({ isMac: isMacOS, isWindows }))}
           >
@@ -945,7 +945,7 @@ const ThreadAttachmentItem = memo(function ThreadAttachmentItem({ attachment, se
       {attachment.local_path && (
         <Tooltip label={t(revealLabelKey({ isMac: isMacOS, isWindows }))}>
           <button
-            onClick={(e) => { e.stopPropagation(); revealAttachment(attachment.local_path).catch(() => {}); }}
+            onClick={(e) => { e.stopPropagation(); revealAttachment(attachment.id).catch(() => {}); }}
             className="p-1 rounded hover:bg-hover transition-colors opacity-0 group-hover:opacity-100 text-text-tertiary hover:text-text"
             aria-label={t(revealLabelKey({ isMac: isMacOS, isWindows }))}
           >
