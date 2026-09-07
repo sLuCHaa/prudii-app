@@ -22,7 +22,7 @@ const ComposeWindow = lazy(() =>
   import("./components/compose/ComposeWindow").then((m) => ({ default: m.ComposeWindow }))
 );
 import { useAppStore } from "./stores/appStore";
-import { useSyncAll } from "./hooks/useSync";
+import { useSyncAll, useSyncAutomatic } from "./hooks/useSync";
 import { useAutoSync } from "./hooks/useAutoSync";
 import { useFocusSync } from "./hooks/useFocusSync";
 import { useConnectivity } from "./hooks/useConnectivity";
@@ -77,12 +77,13 @@ function AppInner() {
   const setShowAccountWizard = useAppStore((s) => s.setShowAccountWizard);
   const accounts = useAppStore((s) => s.accounts);
   const syncAll = useSyncAll();
+  const syncAutomatic = useSyncAutomatic();
   const queryClient = useQueryClient();
   const hasSynced = useRef(false);
 
   useAutoSync();
 
-  useFocusSync(() => syncAll.mutate());
+  useFocusSync(() => syncAutomatic.mutate());
 
   useConnectivity();
 

@@ -950,6 +950,7 @@ pub fn run() {
             commands::settings::update_app_settings,
             commands::sync::sync_account,
             commands::sync::sync_all_accounts,
+            commands::sync::sync_automatic_accounts,
             commands::sync::force_resync_account,
             commands::sync::sync_folder,
             commands::sync::search_mails,

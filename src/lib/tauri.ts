@@ -125,6 +125,10 @@ export async function syncAllAccounts(): Promise<void> {
   return invoke("sync_all_accounts");
 }
 
+export async function syncAutomaticAccounts(): Promise<void> {
+  return invoke("sync_automatic_accounts");
+}
+
 export async function forceResyncAccount(accountId: string): Promise<void> {
   return invoke("force_resync_account", { accountId });
 }

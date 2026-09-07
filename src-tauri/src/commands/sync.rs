@@ -1482,10 +1482,17 @@ pub async fn sync_folder(
 }
 
 #[tauri::command]
-pub async fn sync_all_accounts(
-    app: AppHandle,
-    db: State<'_, Database>,
-) -> Result<(), String> {
+pub async fn sync_all_accounts(app: AppHandle, db: State<'_, Database>) -> Result<(), String> {
+    spawn_account_syncs(app, &db, false).await
+}
+
+// Focus/return-to-window sync: accounts set to "manual" must stay untouched.
+#[tauri::command]
+pub async fn sync_automatic_accounts(app: AppHandle, db: State<'_, Database>) -> Result<(), String> {
+    spawn_account_syncs(app, &db, true).await
+}
+
+async fn spawn_account_syncs(app: AppHandle, db: &Database, only_automatic: bool) -> Result<(), String> {
     let accounts: Vec<Account> = {
         let conn = db.lock_db();
         let mut stmt = conn
@@ -1524,6 +1531,9 @@ pub async fn sync_all_accounts(
     // Spawn each account sync as an independent task for parallel execution
     let app_clone = app.clone();
     for account in accounts {
+        if only_automatic && account.sync_interval_minutes == 0 {
+            continue;
+        }
         let app_handle = app_clone.clone();
         let account_id_for_registry = account.id.clone();
         crate::task_registry::spawn_for_account(&account_id_for_registry, async move {

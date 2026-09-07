@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { syncAccount, syncAllAccounts, searchMails } from "../lib/tauri";
+import { syncAccount, syncAllAccounts, syncAutomaticAccounts, searchMails } from "../lib/tauri";
 import { useState, useEffect } from "react";
 
 export function useSyncAccount() {
@@ -16,6 +16,12 @@ export function useSyncAccount() {
 export function useSyncAll() {
   return useMutation({
     mutationFn: () => syncAllAccounts(),
+  });
+}
+
+export function useSyncAutomatic() {
+  return useMutation({
+    mutationFn: () => syncAutomaticAccounts(),
   });
 }
 
