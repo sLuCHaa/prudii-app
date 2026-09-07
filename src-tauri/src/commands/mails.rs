@@ -693,42 +693,42 @@ fn resolve_attachment_path(db: &Database, attachment_id: &str) -> Result<std::pa
     Ok(canonical_path)
 }
 
+/// Hands a resolved path to the OS's default handler. Shared by mail and
+/// task attachments so both stay behind the same path-traversal check.
+pub(crate) fn open_path_with_os(path: &std::path::Path) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    std::process::Command::new("cmd")
+        .args(["/C", "start", "", &path.to_string_lossy()])
+        .spawn()
+        .map_err(|e| format!("Failed to open file: {}", e))?;
+
+    #[cfg(target_os = "macos")]
+    std::process::Command::new("open")
+        .arg(path)
+        .spawn()
+        .map_err(|e| format!("Failed to open file: {}", e))?;
+
+    #[cfg(target_os = "linux")]
+    std::process::Command::new("xdg-open")
+        .arg(path)
+        .spawn()
+        .map_err(|e| format!("Failed to open file: {}", e))?;
+    Ok(())
+}
+
 #[tauri::command(async)]
 pub fn open_attachment(
     db: State<'_, Database>,
     attachment_id: String,
 ) -> Result<String, String> {
     let canonical_path = resolve_attachment_path(&db, &attachment_id)?;
-
-    #[cfg(target_os = "windows")]
-    std::process::Command::new("cmd")
-        .args(["/C", "start", "", &canonical_path.to_string_lossy()])
-        .spawn()
-        .map_err(|e| format!("Failed to open file: {}", e))?;
-
-    #[cfg(target_os = "macos")]
-    std::process::Command::new("open")
-        .arg(&canonical_path)
-        .spawn()
-        .map_err(|e| format!("Failed to open file: {}", e))?;
-
-    #[cfg(target_os = "linux")]
-    std::process::Command::new("xdg-open")
-        .arg(&canonical_path)
-        .spawn()
-        .map_err(|e| format!("Failed to open file: {}", e))?;
+    open_path_with_os(&canonical_path)?;
     Ok(canonical_path.to_string_lossy().into_owned())
 }
 
 // Uses the `drag` crate directly (its Tauri plugin wrapper needs a
 // webview-side IPC Channel) so the resolved path never reaches JS.
-#[tauri::command]
-pub async fn start_attachment_drag(
-    window: tauri::Window,
-    db: State<'_, Database>,
-    attachment_id: String,
-) -> Result<(), String> {
-    let canonical_path = resolve_attachment_path(&db, &attachment_id)?;
+pub(crate) fn start_native_drag(window: &tauri::Window, path: std::path::PathBuf) -> Result<(), String> {
     let icon = drag::Image::Raw(include_bytes!("../../icons/128x128.png").to_vec());
 
     // DoDragDrop (Windows) / the Cocoa drag session need the UI thread;
@@ -739,7 +739,7 @@ pub async fn start_attachment_drag(
         .run_on_main_thread(move || {
             let result = drag::start_drag(
                 &drag_window,
-                drag::DragItem::Files(vec![canonical_path]),
+                drag::DragItem::Files(vec![path]),
                 icon,
                 |_result, _cursor_pos| {},
                 drag::Options::default(),
@@ -749,6 +749,16 @@ pub async fn start_attachment_drag(
         })
         .map_err(|e| e.to_string())?;
     rx.recv().map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn start_attachment_drag(
+    window: tauri::Window,
+    db: State<'_, Database>,
+    attachment_id: String,
+) -> Result<(), String> {
+    let canonical_path = resolve_attachment_path(&db, &attachment_id)?;
+    start_native_drag(&window, canonical_path)
 }
 
 #[tauri::command(async)]

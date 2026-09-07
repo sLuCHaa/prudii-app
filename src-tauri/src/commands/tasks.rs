@@ -1,6 +1,8 @@
 use crate::db::Database;
 use crate::models::{ChecklistItem, CreateTaskInput, Task, TaskAttachment, TaskDetail, TaskMailLink, UpdateTaskPatch};
 use rusqlite::params;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter, State};
 
 const TASK_SELECT: &str = "SELECT t.id, t.title, t.description_html, t.status, t.priority, t.due_at, t.sort_order, t.reminder_sent, t.created_at, t.updated_at, t.completed_at,
@@ -44,6 +46,144 @@ fn fetch_task(conn: &rusqlite::Connection, id: &str) -> Result<Task, String> {
     let sql = format!("{} WHERE t.id = ?1", TASK_SELECT);
     conn.query_row(&sql, params![id], row_to_task)
         .map_err(|e| e.to_string())
+}
+
+fn fetch_checklist_item(conn: &rusqlite::Connection, id: &str) -> Result<ChecklistItem, String> {
+    conn.query_row(
+        "SELECT id, task_id, text, done, sort_order FROM task_checklist WHERE id = ?1",
+        params![id],
+        |row| {
+            Ok(ChecklistItem {
+                id: row.get(0)?,
+                task_id: row.get(1)?,
+                text: row.get(2)?,
+                done: row.get::<_, i64>(3)? != 0,
+                sort_order: row.get(4)?,
+            })
+        },
+    )
+    .map_err(|e| e.to_string())
+}
+
+fn escape_html(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+}
+
+/// Fields copied from `mails` into a `task_mail_links` row at link time, so the
+/// link survives the source mail being deleted or re-synced.
+struct MailSnapshot {
+    subject: String,
+    from_name: String,
+    from_email: String,
+    date: String,
+    snippet: String,
+}
+
+fn mail_snapshot(conn: &rusqlite::Connection, mail_id: &str) -> Result<MailSnapshot, String> {
+    conn.query_row(
+        "SELECT subject, from_name, from_email, date, snippet FROM mails WHERE id = ?1",
+        params![mail_id],
+        |row| {
+            Ok(MailSnapshot {
+                subject: row.get(0)?,
+                from_name: row.get(1)?,
+                from_email: row.get(2)?,
+                date: row.get(3)?,
+                snippet: row.get(4)?,
+            })
+        },
+    )
+    .map_err(|e| format!("Mail not found: {}", e))
+}
+
+fn insert_mail_link(
+    conn: &rusqlite::Connection,
+    task_id: &str,
+    mail_id: &str,
+    account_id: &str,
+    snap: &MailSnapshot,
+    now: &str,
+) -> Result<(), String> {
+    // Primary key is (task_id, mail_id); OR IGNORE makes re-linking a no-op.
+    conn.execute(
+        "INSERT OR IGNORE INTO task_mail_links (task_id, mail_id, account_id, subject, from_name, from_email, mail_date, created_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",
+        params![task_id, mail_id, account_id, snap.subject, snap.from_name, snap.from_email, snap.date, now],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn guess_mime_type(filename: &str) -> &'static str {
+    let ext = Path::new(filename)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+    match ext.as_str() {
+        "pdf" => "application/pdf",
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        "txt" => "text/plain",
+        "csv" => "text/csv",
+        "html" | "htm" => "text/html",
+        "json" => "application/json",
+        "zip" => "application/zip",
+        "doc" => "application/msword",
+        "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "xls" => "application/vnd.ms-excel",
+        "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "ppt" => "application/vnd.ms-powerpoint",
+        "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "mp4" => "video/mp4",
+        "mp3" => "audio/mpeg",
+        _ => "application/octet-stream",
+    }
+}
+
+/// Appends a " (n)" suffix before the extension until the name is free, matching
+/// how Windows/macOS Finder resolve a copy into an already-populated folder.
+fn unique_dest_path(dir: &Path, filename: &str) -> PathBuf {
+    let candidate = dir.join(filename);
+    if !candidate.exists() {
+        return candidate;
+    }
+    let name_path = Path::new(filename);
+    let stem = name_path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| filename.to_string());
+    let ext = name_path.extension().map(|e| e.to_string_lossy().to_string());
+    let mut n = 2;
+    loop {
+        let candidate_name = match &ext {
+            Some(e) => format!("{} ({}).{}", stem, n, e),
+            None => format!("{} ({})", stem, n),
+        };
+        let candidate = dir.join(&candidate_name);
+        if !candidate.exists() {
+            return candidate;
+        }
+        n += 1;
+    }
+}
+
+fn resolve_task_file_path(db: &Database, attachment_id: &str) -> Result<PathBuf, String> {
+    let path: String = {
+        let conn = db.lock_db();
+        conn.query_row(
+            "SELECT local_path FROM task_attachments WHERE id = ?1",
+            params![attachment_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| format!("Attachment not found: {}", e))?
+    };
+
+    let canonical_path = Path::new(&path).canonicalize().map_err(|e| format!("Invalid attachment path: {}", e))?;
+    let data_dir = db.data_dir.canonicalize().map_err(|e| format!("Cannot resolve data dir: {}", e))?;
+    if !canonical_path.starts_with(&data_dir) {
+        return Err("Attachment path is outside app data directory".into());
+    }
+    Ok(canonical_path)
 }
 
 fn list_tasks_impl(db: &Database, status: Option<String>) -> Result<Vec<Task>, String> {
@@ -282,6 +422,156 @@ fn count_open_impl(db: &Database) -> Result<i64, String> {
         .map_err(|e| e.to_string())
 }
 
+fn add_checklist_item_impl(db: &Database, task_id: &str, text: &str) -> Result<ChecklistItem, String> {
+    let id = uuid::Uuid::new_v4().to_string();
+    let conn = db.lock_db();
+    let next: f64 = conn
+        .query_row(
+            "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM task_checklist WHERE task_id = ?1",
+            params![task_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO task_checklist (id, task_id, text, sort_order) VALUES (?1,?2,?3,?4)",
+        params![id, task_id, text.trim(), next],
+    )
+    .map_err(|e| e.to_string())?;
+    fetch_checklist_item(&conn, &id)
+}
+
+fn update_checklist_item_impl(db: &Database, id: &str, text: Option<String>, done: Option<bool>) -> Result<ChecklistItem, String> {
+    let conn = db.lock_db();
+    let text = text.map(|t| t.trim().to_string());
+    let done = done.map(|d| d as i64);
+    let affected = conn
+        .execute(
+            "UPDATE task_checklist SET text = COALESCE(?1, text), done = COALESCE(?2, done) WHERE id = ?3",
+            params![text, done, id],
+        )
+        .map_err(|e| e.to_string())?;
+    if affected == 0 {
+        return Err("Checklist item not found".into());
+    }
+    fetch_checklist_item(&conn, id)
+}
+
+fn delete_checklist_item_impl(db: &Database, id: &str) -> Result<(), String> {
+    let conn = db.lock_db();
+    let affected = conn.execute("DELETE FROM task_checklist WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
+    if affected == 0 {
+        return Err("Checklist item not found".into());
+    }
+    Ok(())
+}
+
+fn reorder_checklist_impl(db: &Database, task_id: &str, ids: Vec<String>) -> Result<(), String> {
+    let conn = db.lock_db();
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+    for (i, item_id) in ids.iter().enumerate() {
+        tx.execute(
+            "UPDATE task_checklist SET sort_order = ?1 WHERE id = ?2 AND task_id = ?3",
+            params![i as f64, item_id, task_id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    tx.commit().map_err(|e| e.to_string())
+}
+
+fn create_task_from_mail_impl(db: &Database, mail_id: &str, account_id: &str) -> Result<Task, String> {
+    let now = chrono::Utc::now().to_rfc3339();
+    let conn = db.lock_db();
+    let snap = mail_snapshot(&conn, mail_id)?;
+    let title = if snap.subject.trim().is_empty() { "(no subject)".to_string() } else { snap.subject.clone() };
+    let description_html = format!("<p>{}</p>", escape_html(&snap.snippet));
+
+    let id = uuid::Uuid::new_v4().to_string();
+    let next: f64 = conn
+        .query_row(
+            "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM tasks WHERE status = 'open'",
+            [],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO tasks (id, title, description_html, status, priority, sort_order, created_at, updated_at) VALUES (?1,?2,?3,'open','normal',?4,?5,?5)",
+        params![id, title, description_html, next, now],
+    )
+    .map_err(|e| e.to_string())?;
+
+    insert_mail_link(&conn, &id, mail_id, account_id, &snap, &now)?;
+
+    fetch_task(&conn, &id)
+}
+
+fn link_task_mail_impl(db: &Database, task_id: &str, mail_id: &str) -> Result<(), String> {
+    let now = chrono::Utc::now().to_rfc3339();
+    let conn = db.lock_db();
+    let account_id: String = conn
+        .query_row("SELECT account_id FROM mails WHERE id = ?1", params![mail_id], |r| r.get(0))
+        .map_err(|e| format!("Mail not found: {}", e))?;
+    let snap = mail_snapshot(&conn, mail_id)?;
+    insert_mail_link(&conn, task_id, mail_id, &account_id, &snap, &now)
+}
+
+fn unlink_task_mail_impl(db: &Database, task_id: &str, mail_id: &str) -> Result<(), String> {
+    let conn = db.lock_db();
+    conn.execute("DELETE FROM task_mail_links WHERE task_id = ?1 AND mail_id = ?2", params![task_id, mail_id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// See move_task_impl above for why `tasks` is bound before being returned:
+// it forces the query_map iterator (borrowing `stmt`) to drop first (E0597).
+#[allow(clippy::let_and_return)]
+fn tasks_for_mail_impl(db: &Database, mail_id: &str) -> Result<Vec<Task>, String> {
+    let conn = db.lock_db();
+    let sql = format!("{} JOIN task_mail_links l ON l.task_id = t.id WHERE l.mail_id = ?1 ORDER BY t.created_at", TASK_SELECT);
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let tasks = stmt
+        .query_map(params![mail_id], row_to_task)
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(tasks)
+}
+
+fn tasks_for_mails_impl(db: &Database, mail_ids: Vec<String>) -> Result<HashMap<String, i64>, String> {
+    let mut result = HashMap::new();
+    if mail_ids.is_empty() {
+        return Ok(result);
+    }
+
+    let conn = db.lock_db();
+    let placeholders = mail_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let sql = format!("SELECT mail_id, COUNT(*) FROM task_mail_links WHERE mail_id IN ({}) GROUP BY mail_id", placeholders);
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let bound: Vec<&dyn rusqlite::ToSql> = mail_ids.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
+    let rows = stmt
+        .query_map(bound.as_slice(), |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))
+        .map_err(|e| e.to_string())?;
+    for row in rows {
+        let (mail_id, count) = row.map_err(|e| e.to_string())?;
+        result.insert(mail_id, count);
+    }
+    Ok(result)
+}
+
+fn remove_task_attachment_impl(db: &Database, id: &str) -> Result<(), String> {
+    let path = resolve_task_file_path(db, id)?;
+    let affected = {
+        let conn = db.lock_db();
+        conn.execute("DELETE FROM task_attachments WHERE id = ?1", params![id]).map_err(|e| e.to_string())?
+    };
+    if affected == 0 {
+        return Err("Attachment not found".into());
+    }
+    if path.exists() {
+        let _ = std::fs::remove_file(&path);
+    }
+    Ok(())
+}
+
 #[tauri::command(async)]
 pub fn list_tasks(db: State<'_, Database>, status: Option<String>) -> Result<Vec<Task>, String> {
     super::catch_panic(|| list_tasks_impl(&db, status))
@@ -331,6 +621,160 @@ pub fn move_task(app: AppHandle, db: State<'_, Database>, id: String, status: St
 #[tauri::command(async)]
 pub fn count_open_tasks(db: State<'_, Database>) -> Result<i64, String> {
     super::catch_panic(|| count_open_impl(&db))
+}
+
+#[tauri::command(async)]
+pub fn add_checklist_item(app: AppHandle, db: State<'_, Database>, task_id: String, text: String) -> Result<ChecklistItem, String> {
+    super::catch_panic(|| {
+        let item = add_checklist_item_impl(&db, &task_id, &text)?;
+        let _ = app.emit("tasks-changed", ());
+        Ok(item)
+    })
+}
+
+#[tauri::command(async)]
+pub fn update_checklist_item(
+    app: AppHandle,
+    db: State<'_, Database>,
+    id: String,
+    text: Option<String>,
+    done: Option<bool>,
+) -> Result<ChecklistItem, String> {
+    super::catch_panic(|| {
+        let item = update_checklist_item_impl(&db, &id, text, done)?;
+        let _ = app.emit("tasks-changed", ());
+        Ok(item)
+    })
+}
+
+#[tauri::command(async)]
+pub fn delete_checklist_item(app: AppHandle, db: State<'_, Database>, id: String) -> Result<(), String> {
+    super::catch_panic(|| {
+        delete_checklist_item_impl(&db, &id)?;
+        let _ = app.emit("tasks-changed", ());
+        Ok(())
+    })
+}
+
+#[tauri::command(async)]
+pub fn reorder_checklist(app: AppHandle, db: State<'_, Database>, task_id: String, ids: Vec<String>) -> Result<(), String> {
+    super::catch_panic(|| {
+        reorder_checklist_impl(&db, &task_id, ids)?;
+        let _ = app.emit("tasks-changed", ());
+        Ok(())
+    })
+}
+
+#[tauri::command(async)]
+pub fn create_task_from_mail(app: AppHandle, db: State<'_, Database>, mail_id: String, account_id: String) -> Result<Task, String> {
+    super::catch_panic(|| {
+        let task = create_task_from_mail_impl(&db, &mail_id, &account_id)?;
+        let _ = app.emit("tasks-changed", ());
+        Ok(task)
+    })
+}
+
+#[tauri::command(async)]
+pub fn link_task_mail(app: AppHandle, db: State<'_, Database>, task_id: String, mail_id: String) -> Result<(), String> {
+    super::catch_panic(|| {
+        link_task_mail_impl(&db, &task_id, &mail_id)?;
+        let _ = app.emit("tasks-changed", ());
+        Ok(())
+    })
+}
+
+#[tauri::command(async)]
+pub fn unlink_task_mail(app: AppHandle, db: State<'_, Database>, task_id: String, mail_id: String) -> Result<(), String> {
+    super::catch_panic(|| {
+        unlink_task_mail_impl(&db, &task_id, &mail_id)?;
+        let _ = app.emit("tasks-changed", ());
+        Ok(())
+    })
+}
+
+#[tauri::command(async)]
+pub fn tasks_for_mail(db: State<'_, Database>, mail_id: String) -> Result<Vec<Task>, String> {
+    super::catch_panic(|| tasks_for_mail_impl(&db, &mail_id))
+}
+
+#[tauri::command(async)]
+pub fn tasks_for_mails(db: State<'_, Database>, mail_ids: Vec<String>) -> Result<HashMap<String, i64>, String> {
+    super::catch_panic(|| tasks_for_mails_impl(&db, mail_ids))
+}
+
+#[tauri::command]
+pub async fn add_task_attachments(app: AppHandle, db: State<'_, Database>, task_id: String) -> Result<Vec<TaskAttachment>, String> {
+    use std::sync::mpsc;
+    use tauri_plugin_dialog::DialogExt;
+
+    let (tx, rx) = mpsc::channel();
+    app.dialog().file().pick_files(move |paths| {
+        let _ = tx.send(paths);
+    });
+    let picked = rx.recv().map_err(|e| format!("Dialog error: {}", e))?;
+    let Some(paths) = picked else {
+        return Ok(Vec::new()); // user cancelled
+    };
+
+    let dest_dir = db.data_dir.join("task_files").join(&task_id);
+    std::fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
+
+    let mut result = Vec::new();
+    {
+        let conn = db.lock_db();
+        for file_path in paths {
+            let Some(src) = file_path.as_path() else { continue };
+            let filename = src.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_else(|| "file".to_string());
+            let dest = unique_dest_path(&dest_dir, &filename);
+            std::fs::copy(src, &dest).map_err(|e| format!("Failed to copy \"{}\": {}", filename, e))?;
+            let size_bytes = std::fs::metadata(&dest).map(|m| m.len() as i64).unwrap_or(0);
+            let dest_filename = dest.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or(filename);
+            let mime = guess_mime_type(&dest_filename).to_string();
+            let local_path = dest.to_string_lossy().to_string();
+            let id = uuid::Uuid::new_v4().to_string();
+            let now = chrono::Utc::now().to_rfc3339();
+
+            conn.execute(
+                "INSERT INTO task_attachments (id, task_id, filename, mime_type, size_bytes, local_path, created_at) VALUES (?1,?2,?3,?4,?5,?6,?7)",
+                params![id, task_id, dest_filename, mime, size_bytes, local_path, now],
+            )
+            .map_err(|e| e.to_string())?;
+
+            result.push(TaskAttachment { id, task_id: task_id.clone(), filename: dest_filename, mime_type: mime, size_bytes, local_path, created_at: now });
+        }
+    }
+
+    let _ = app.emit("tasks-changed", ());
+    Ok(result)
+}
+
+#[tauri::command(async)]
+pub fn remove_task_attachment(app: AppHandle, db: State<'_, Database>, id: String) -> Result<(), String> {
+    super::catch_panic(|| {
+        remove_task_attachment_impl(&db, &id)?;
+        let _ = app.emit("tasks-changed", ());
+        Ok(())
+    })
+}
+
+#[tauri::command(async)]
+pub fn open_task_attachment(db: State<'_, Database>, id: String) -> Result<String, String> {
+    let canonical_path = resolve_task_file_path(&db, &id)?;
+    super::mails::open_path_with_os(&canonical_path)?;
+    Ok(canonical_path.to_string_lossy().into_owned())
+}
+
+#[tauri::command(async)]
+pub fn reveal_task_attachment(app: AppHandle, db: State<'_, Database>, id: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let path = resolve_task_file_path(&db, &id)?;
+    app.opener().reveal_item_in_dir(&path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn start_task_attachment_drag(window: tauri::Window, db: State<'_, Database>, id: String) -> Result<(), String> {
+    let canonical_path = resolve_task_file_path(&db, &id)?;
+    super::mails::start_native_drag(&window, canonical_path)
 }
 
 #[cfg(test)]
@@ -399,5 +843,133 @@ mod tests {
         delete_task_impl(&db, &a.id).unwrap();
         assert!(!dir.exists());
         assert!(delete_task_impl(&db, &a.id).is_err());
+    }
+
+    fn insert_mail_row(db: &Database, mail_id: &str, subject: &str, snippet: &str) {
+        let conn = db.lock_db();
+        conn.execute(
+            "INSERT OR IGNORE INTO accounts (id, email, display_name, provider, imap_host, smtp_host) VALUES ('acc1','a@example.com','A','imap','imap.example.com','smtp.example.com')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT OR IGNORE INTO folders (id, account_id, name, path) VALUES ('fld1','acc1','Inbox','INBOX')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO mails (id, account_id, folder_id, subject, from_name, from_email, date, snippet) VALUES (?1,'acc1','fld1',?2,'Sender','sender@example.com','2026-01-01T00:00:00Z',?3)",
+            params![mail_id, subject, snippet],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn checklist_add_toggle_and_reorder() {
+        let db = temp_db();
+        let task = create_task_impl(&db, CreateTaskInput { title: "t".into(), description_html: None, status: None, priority: None, due_at: None }).unwrap();
+        let a = add_checklist_item_impl(&db, &task.id, "a").unwrap();
+        let b = add_checklist_item_impl(&db, &task.id, "b").unwrap();
+        assert_eq!((a.sort_order, b.sort_order), (0.0, 1.0));
+        assert!(!a.done);
+
+        let toggled = update_checklist_item_impl(&db, &a.id, None, Some(true)).unwrap();
+        assert!(toggled.done);
+        assert_eq!(toggled.text, "a");
+
+        reorder_checklist_impl(&db, &task.id, vec![b.id.clone(), a.id.clone()]).unwrap();
+        let detail = get_task_impl(&db, &task.id).unwrap();
+        assert_eq!(detail.checklist.iter().map(|c| c.id.clone()).collect::<Vec<_>>(), vec![b.id.clone(), a.id.clone()]);
+
+        delete_checklist_item_impl(&db, &a.id).unwrap();
+        let detail = get_task_impl(&db, &task.id).unwrap();
+        assert_eq!(detail.checklist.len(), 1);
+        assert!(delete_checklist_item_impl(&db, &a.id).is_err());
+    }
+
+    #[test]
+    fn create_task_from_mail_links_and_counts_correctly() {
+        let db = temp_db();
+        insert_mail_row(&db, "mail1", "Hello World", "A short preview");
+
+        let task = create_task_from_mail_impl(&db, "mail1", "acc1").unwrap();
+        assert_eq!(task.title, "Hello World");
+        assert_eq!(task.link_count, 1);
+        assert_eq!(task.description_html, "<p>A short preview</p>");
+
+        let counts = tasks_for_mails_impl(&db, vec!["mail1".into()]).unwrap();
+        assert_eq!(counts.get("mail1"), Some(&1));
+
+        let for_mail = tasks_for_mail_impl(&db, "mail1").unwrap();
+        assert_eq!(for_mail.len(), 1);
+        assert_eq!(for_mail[0].id, task.id);
+
+        unlink_task_mail_impl(&db, &task.id, "mail1").unwrap();
+        let counts_after = tasks_for_mails_impl(&db, vec!["mail1".into()]).unwrap();
+        assert_eq!(counts_after.get("mail1").copied().unwrap_or(0), 0);
+        assert_eq!(tasks_for_mail_impl(&db, "mail1").unwrap().len(), 0);
+    }
+
+    #[test]
+    fn create_task_from_mail_defaults_title_and_escapes_snippet() {
+        let db = temp_db();
+        insert_mail_row(&db, "mail2", "", "<b>Bold</b> & more");
+        let task = create_task_from_mail_impl(&db, "mail2", "acc1").unwrap();
+        assert_eq!(task.title, "(no subject)");
+        assert_eq!(task.description_html, "<p>&lt;b&gt;Bold&lt;/b&gt; &amp; more</p>");
+    }
+
+    #[test]
+    fn link_task_mail_ignores_duplicates() {
+        let db = temp_db();
+        insert_mail_row(&db, "mail3", "Subj", "preview");
+        let task = create_task_impl(&db, CreateTaskInput { title: "t".into(), description_html: None, status: None, priority: None, due_at: None }).unwrap();
+        link_task_mail_impl(&db, &task.id, "mail3").unwrap();
+        link_task_mail_impl(&db, &task.id, "mail3").unwrap();
+        let detail = get_task_impl(&db, &task.id).unwrap();
+        assert_eq!(detail.links.len(), 1);
+    }
+
+    #[test]
+    fn guess_mime_type_known_and_unknown_extensions() {
+        assert_eq!(guess_mime_type("report.pdf"), "application/pdf");
+        assert_eq!(guess_mime_type("archive.tar.gz"), "application/octet-stream");
+        assert_eq!(guess_mime_type("noext"), "application/octet-stream");
+    }
+
+    #[test]
+    fn unique_dest_path_appends_numbered_suffix_on_collision() {
+        let dir = std::env::temp_dir().join(format!("prudii-test-dest-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("file.txt"), b"a").unwrap();
+        let p = unique_dest_path(&dir, "file.txt");
+        assert_eq!(p.file_name().unwrap().to_string_lossy(), "file (2).txt");
+        std::fs::write(&p, b"b").unwrap();
+        let p2 = unique_dest_path(&dir, "file.txt");
+        assert_eq!(p2.file_name().unwrap().to_string_lossy(), "file (3).txt");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn remove_task_attachment_deletes_row_and_file() {
+        let db = temp_db();
+        let task = create_task_impl(&db, CreateTaskInput { title: "t".into(), description_html: None, status: None, priority: None, due_at: None }).unwrap();
+        let dir = db.data_dir.join("task_files").join(&task.id);
+        std::fs::create_dir_all(&dir).unwrap();
+        let file_path = dir.join("note.txt");
+        std::fs::write(&file_path, b"hi").unwrap();
+        let att_id = uuid::Uuid::new_v4().to_string();
+        {
+            let conn = db.lock_db();
+            conn.execute(
+                "INSERT INTO task_attachments (id, task_id, filename, mime_type, size_bytes, local_path) VALUES (?1,?2,'note.txt','text/plain',2,?3)",
+                params![att_id, task.id, file_path.to_string_lossy().to_string()],
+            )
+            .unwrap();
+        }
+        remove_task_attachment_impl(&db, &att_id).unwrap();
+        assert!(!file_path.exists());
+        assert!(resolve_task_file_path(&db, &att_id).is_err());
+        assert!(remove_task_attachment_impl(&db, &att_id).is_err());
     }
 }

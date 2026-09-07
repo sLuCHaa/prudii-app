@@ -21,7 +21,9 @@
         "enable": true,
         "scope": [
           "$APPDATA/attachments/**",
-          "$APPDATA/attachments/*"
+          "$APPDATA/attachments/*",
+          "$APPDATA/task_files/**",
+          "$APPDATA/task_files/*"
         ]
       }
     }
