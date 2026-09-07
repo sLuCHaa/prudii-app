@@ -69,6 +69,11 @@
     "sortByName": "名称",
     "sortBySize": "大小",
     "downloadSelected": "下载所选",
+    "reveal": {
+      "finder": "在 Finder 中显示",
+      "explorer": "在资源管理器中显示",
+      "fileManager": "在文件管理器中显示"
+    },
     "noResults": "未找到附件",
     "noResultsQuery": "请尝试其他搜索词",
     "noAttachments": "您邮件中的附件将显示在这里",

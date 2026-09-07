@@ -1,11 +1,14 @@
 import { useState, useEffect, useRef } from "react";
-import { X, Download, Mail, ChevronLeft, ChevronRight, FileText, Image, FileSpreadsheet, File, Loader2 } from "lucide-react";
+import { X, Download, Mail, ChevronLeft, ChevronRight, FileText, Image, FileSpreadsheet, File, Loader2, FolderOpen } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { getAttachmentPreview } from "../../lib/tauri";
 import type { AttachmentWithContext } from "../../types";
 import { formatMailDate } from "../../lib/dateUtils";
 import { useAppStore } from "../../stores/appStore";
+import { Tooltip } from "../ui/Tooltip";
+import { revealLabelKey, revealAttachment } from "../../lib/attachmentActions";
+import { isMacOS, isWindows } from "../../lib/platform";
 
 function formatFileSize(bytes: number | null): string {
   if (bytes == null) return "";
@@ -261,6 +264,17 @@ export function AttachmentPreview({
             <Download className="w-3.5 h-3.5" />
             {t("attachments.downloadSelected").replace(/ .*/, "")}
           </button>
+          {attachment.local_path && (
+            <Tooltip label={t(revealLabelKey({ isMac: isMacOS, isWindows }))}>
+              <button
+                onClick={(e) => { e.stopPropagation(); revealAttachment(attachment.local_path).catch(() => {}); }}
+                className="flex items-center justify-center px-3 py-1.5 rounded-lg border border-border text-text hover:bg-hover transition-colors"
+                aria-label={t(revealLabelKey({ isMac: isMacOS, isWindows }))}
+              >
+                <FolderOpen className="w-3.5 h-3.5" />
+              </button>
+            </Tooltip>
+          )}
           <button
             onClick={() => onOpenMail(attachment)}
             className="flex-1 flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90 transition-colors"

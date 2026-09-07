@@ -69,6 +69,11 @@
     "sortByName": "Имя",
     "sortBySize": "Размер",
     "downloadSelected": "Скачать выбранное",
+    "reveal": {
+      "finder": "Показать в Finder",
+      "explorer": "Показать в Проводнике",
+      "fileManager": "Показать в файловом менеджере"
+    },
     "noResults": "Вложения не найдены",
     "noResultsQuery": "Попробуйте другой поисковый запрос",
     "noAttachments": "Вложения из ваших писем появятся здесь",

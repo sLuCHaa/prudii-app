@@ -69,6 +69,11 @@
     "sortByName": "Nome",
     "sortBySize": "Tamanho",
     "downloadSelected": "Baixar seleção",
+    "reveal": {
+      "finder": "Mostrar no Finder",
+      "explorer": "Mostrar no Explorador",
+      "fileManager": "Mostrar no gestor de ficheiros"
+    },
     "noResults": "Nenhum anexo encontrado",
     "noResultsQuery": "Tente outro termo de busca",
     "noAttachments": "Os anexos dos seus e-mails aparecerão aqui",

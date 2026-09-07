@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback, memo, useMemo } from "react";
 import { Tooltip } from "../ui/Tooltip";
 import { parseISO } from "date-fns";
-import { Reply, ReplyAll, Forward, Archive, Paperclip, FileText, Image, Film, Music, File, Loader2, Download, ChevronDown, ChevronRight, MessageSquare, Copy, Check, Code, Eye, FileType, Printer, MailMinus, ImageOff } from "lucide-react";
+import { Reply, ReplyAll, Forward, Archive, Paperclip, FileText, Image, Film, Music, File, Loader2, Download, ChevronDown, ChevronRight, MessageSquare, Copy, Check, Code, Eye, FileType, Printer, MailMinus, ImageOff, FolderOpen } from "lucide-react";
 import { SkeletonText } from "../ui/Skeleton";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -12,6 +12,8 @@ import { useAppStore } from "../../stores/appStore";
 import { useAttachments, useToggleStar, useToggleMailFlag } from "../../hooks/useAccounts";
 import { useScroller } from "../../hooks/useScroller";
 import { openAttachment, saveAttachment, fetchMailBody, trashMail, archiveMail, getThreadMails, markAsRead, unsubscribeMail } from "../../lib/tauri";
+import { revealLabelKey, revealAttachment } from "../../lib/attachmentActions";
+import { isMacOS, isWindows } from "../../lib/platform";
 import { MAIL_LINK_BRIDGE, MAIL_LINK_BRIDGE_CSP_HASH, relayBridgeKey } from "../../lib/mailLinkBridge";
 import { detectCause, causeMessage } from "../../lib/errorToast";
 import { checkLink } from "../../lib/linkChecker";
@@ -114,6 +116,17 @@ const AttachmentItem = memo(function AttachmentItem({
       >
         {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
       </button>
+      {attachment.local_path && (
+        <Tooltip label={t(revealLabelKey({ isMac: isMacOS, isWindows }))}>
+          <button
+            onClick={(e) => { e.stopPropagation(); revealAttachment(attachment.local_path).catch(() => {}); }}
+            className="p-1 rounded hover:bg-hover transition-colors opacity-0 group-hover:opacity-100 text-text-tertiary hover:text-text"
+            aria-label={t(revealLabelKey({ isMac: isMacOS, isWindows }))}
+          >
+            <FolderOpen className="w-3.5 h-3.5" />
+          </button>
+        </Tooltip>
+      )}
     </div>
   );
 });
@@ -861,6 +874,17 @@ const ThreadAttachmentItem = memo(function ThreadAttachmentItem({ attachment, se
       >
         {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
       </button>
+      {attachment.local_path && (
+        <Tooltip label={t(revealLabelKey({ isMac: isMacOS, isWindows }))}>
+          <button
+            onClick={(e) => { e.stopPropagation(); revealAttachment(attachment.local_path).catch(() => {}); }}
+            className="p-1 rounded hover:bg-hover transition-colors opacity-0 group-hover:opacity-100 text-text-tertiary hover:text-text"
+            aria-label={t(revealLabelKey({ isMac: isMacOS, isWindows }))}
+          >
+            <FolderOpen className="w-3.5 h-3.5" />
+          </button>
+        </Tooltip>
+      )}
     </div>
   );
 });

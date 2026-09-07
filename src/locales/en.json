@@ -69,6 +69,11 @@
     "sortByName": "Name",
     "sortBySize": "Size",
     "downloadSelected": "Download Selected",
+    "reveal": {
+      "finder": "Show in Finder",
+      "explorer": "Show in Explorer",
+      "fileManager": "Show in file manager"
+    },
     "noResults": "No attachments found",
     "noResultsQuery": "Try a different search term",
     "noAttachments": "Attachments from your emails will appear here",

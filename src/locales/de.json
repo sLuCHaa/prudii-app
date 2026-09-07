@@ -69,6 +69,11 @@
     "sortByName": "Name",
     "sortBySize": "Größe",
     "downloadSelected": "Auswahl herunterladen",
+    "reveal": {
+      "finder": "Im Finder anzeigen",
+      "explorer": "Im Explorer anzeigen",
+      "fileManager": "Im Dateimanager anzeigen"
+    },
     "noResults": "Keine Anhänge gefunden",
     "noResultsQuery": "Versuche einen anderen Suchbegriff",
     "noAttachments": "Anhänge deiner E-Mails erscheinen hier",

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { Search, Download, Check, ArrowUpDown, ArrowUp, ArrowDown, FileText, Image, FileSpreadsheet, File, Loader2, Paperclip, Mail, ChevronDown, Sparkles, X } from "lucide-react";
+import { Search, Download, Check, ArrowUpDown, ArrowUp, ArrowDown, FileText, Image, FileSpreadsheet, File, Loader2, Paperclip, Mail, ChevronDown, Sparkles, X, FolderOpen } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";
 import { searchAttachments, countAttachments, bulkSaveAttachments, saveAttachment, aiSearchAttachments } from "../../lib/tauri";
@@ -7,11 +7,14 @@ import { listen } from "@tauri-apps/api/event";
 import { formatMailDate } from "../../lib/dateUtils";
 import { EmptyState } from "../ui/EmptyState";
 import { Skeleton } from "../ui/Skeleton";
+import { Tooltip } from "../ui/Tooltip";
 import { useScroller } from "../../hooks/useScroller";
 import { AttachmentPreview } from "./AttachmentPreview";
 import { ResizeHandle } from "./ResizeHandle";
 import { ImageLightbox, type ImageLightboxItem } from "./ImageLightbox";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { revealLabelKey, revealAttachment } from "../../lib/attachmentActions";
+import { isMacOS, isWindows } from "../../lib/platform";
 import type { AttachmentWithContext, AiSearchResultEvent } from "../../types";
 
 function formatFileSize(bytes: number | null): string {
@@ -651,9 +654,10 @@ export function AttachmentBrowser() {
                   <td className="py-3 px-3 w-32">
                     <Skeleton width="60px" height="0.75rem" rounded="sm" />
                   </td>
-                  <td className="py-3 px-3 w-32 pr-6">
+                  <td className="py-3 px-3 w-32">
                     <Skeleton width="70px" height="0.75rem" rounded="sm" />
                   </td>
+                  <td className="w-8 pr-6 py-3" />
                 </tr>
               ))}
             </tbody>
@@ -701,12 +705,13 @@ export function AttachmentBrowser() {
                   <th className="py-2 px-3">{t("attachments.colFrom")}</th>
                   <th className="py-2 px-3">{t("attachments.colSubject")}</th>
                   <th className="py-2 px-3 w-32">{t("attachments.colFolder")}</th>
-                  <th className="py-2 px-3 w-32 pr-6">
+                  <th className="py-2 px-3 w-32">
                     <button onClick={() => handleSort("date")} className="group/th flex items-center gap-1.5 hover:text-text transition-colors">
                       {t("attachments.colDate")}
                       <SortIcon column="date" activeSort={sortBy} activeOrder={sortOrder} />
                     </button>
                   </th>
+                  <th className="w-8 pr-6 py-2" />
                 </tr>
               </thead>
               <tbody>
@@ -716,7 +721,7 @@ export function AttachmentBrowser() {
                   return (
                     <tr
                       key={att.id}
-                      className={`border-b border-border-light transition-colors hover:bg-hover cursor-pointer ${
+                      className={`group border-b border-border-light transition-colors hover:bg-hover cursor-pointer ${
                         isPreviewing ? "bg-accent/10" : isSelected ? "bg-accent/5" : ""
                       }`}
                       onClick={() => setPreviewAttachment(att)}
@@ -765,8 +770,21 @@ export function AttachmentBrowser() {
                           </span>
                         )}
                       </td>
-                      <td className="py-2 px-3 pr-6 text-text-tertiary whitespace-nowrap">
+                      <td className="py-2 px-3 text-text-tertiary whitespace-nowrap">
                         {formatMailDate(att.mail_date, appSettings.use_24h_clock)}
+                      </td>
+                      <td className="pr-6 py-2">
+                        {att.local_path && (
+                          <Tooltip label={t(revealLabelKey({ isMac: isMacOS, isWindows }))}>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); revealAttachment(att.local_path).catch(() => {}); }}
+                              className="p-1 rounded hover:bg-hover transition-colors opacity-0 group-hover:opacity-100 text-text-tertiary hover:text-text"
+                              aria-label={t(revealLabelKey({ isMac: isMacOS, isWindows }))}
+                            >
+                              <FolderOpen className="w-3.5 h-3.5" />
+                            </button>
+                          </Tooltip>
+                        )}
                       </td>
                     </tr>
                   );

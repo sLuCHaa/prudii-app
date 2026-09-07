@@ -69,6 +69,11 @@
     "sortByName": "Nom",
     "sortBySize": "Taille",
     "downloadSelected": "Télécharger la sélection",
+    "reveal": {
+      "finder": "Afficher dans le Finder",
+      "explorer": "Afficher dans l'Explorateur",
+      "fileManager": "Afficher dans le gestionnaire de fichiers"
+    },
     "noResults": "Aucune pièce jointe trouvée",
     "noResultsQuery": "Essayez un autre terme de recherche",
     "noAttachments": "Les pièces jointes de vos e-mails apparaîtront ici",
