@@ -133,7 +133,10 @@ function AppInner() {
   const systemAccentHex = useAppStore((s) => s.systemAccentHex);
   const setSystemAccentHex = useAppStore((s) => s.setSystemAccentHex);
   useEffect(() => {
-    if (appSettings.accent_color !== "system") return;
+    // Fetched regardless of the current accent so the Settings swatch has the
+    // real OS colour from the start, not a blue placeholder until System is
+    // picked; re-runs on every accent change so re-selecting System after an
+    // OS colour change picks up the new value.
     getSystemAccentColor().then((hex) => setSystemAccentHex(isAccentHex(hex) ? hex : null)).catch(() => setSystemAccentHex(null));
   }, [appSettings.accent_color, setSystemAccentHex]);
   useEffect(() => {

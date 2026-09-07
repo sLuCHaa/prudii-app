@@ -45,7 +45,10 @@ pub fn show_system_menu(window: tauri::WebviewWindow, x: f64, y: f64) -> Result<
 /// `#`, wrong length, short forms like `#fff`) is rejected rather than guessed at.
 fn parse_hex_rgb(s: &str) -> Option<[u8; 3]> {
     let hex = s.strip_prefix('#')?;
-    if hex.len() != 6 {
+    // Byte-length check alone isn't enough: a non-ASCII string can be 6 bytes
+    // long while its char boundaries don't line up with the 2-byte slices
+    // below, which panics instead of returning None.
+    if hex.len() != 6 || !hex.is_ascii() {
         return None;
     }
     let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
@@ -106,5 +109,11 @@ mod tests {
         assert_eq!(parse_hex_rgb("#3B82F6"), Some([0x3b, 0x82, 0xf6]));
         assert_eq!(parse_hex_rgb("3b82f6"), None);
         assert_eq!(parse_hex_rgb("#fff"), None);
+        // "#3b\u{20ac}f" is 7 bytes (# + 3 + b + 3-byte € + f) so it passes the
+        // 6-byte length check, but byte offset 4 falls inside the € encoding —
+        // used to panic on a non-char-boundary slice instead of returning None.
+        let non_ascii = "#3b\u{20ac}f";
+        assert_eq!(non_ascii.len(), 7);
+        assert_eq!(parse_hex_rgb(non_ascii), None);
     }
 }
