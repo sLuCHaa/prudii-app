@@ -8,14 +8,8 @@ pub fn system_accent_hex() -> Option<String> {
     Some(format!("#{:02x}{:02x}{:02x}", c.R, c.G, c.B))
 }
 
-// Verified against ~/.cargo/registry/src/*/objc2-app-kit-0.3.2/src/generated/{NSColor,NSColorSpace}.rs:
-// controlAccentColor (line 630-632), sRGBColorSpace (NSColorSpace.rs line 122-124),
-// colorUsingColorSpace (line 310-312) and the three component getters (line 717-729) are
-// all plain `pub fn` — only the ObjC selector itself carries `#[unsafe(method(..))]`, the
-// generated Rust signatures are safe — so no `unsafe { }` blocks are needed here.
-// colorUsingColorSpace returns Option<Retained<NSColor>> as the brief assumed; CGFloat
-// resolves to f64 on 64-bit macOS (objc2_core_foundation::geometry::CGFloat), matching
-// the `f64` closure parameter below.
+// controlAccentColor may report a non-sRGB colour space, so it is converted to
+// sRGB explicitly before the RGB components are read out.
 #[cfg(target_os = "macos")]
 pub fn system_accent_hex() -> Option<String> {
     use objc2_app_kit::{NSColor, NSColorSpace};
