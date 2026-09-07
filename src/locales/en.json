@@ -789,7 +789,15 @@
       "commandPalette": "Command palette",
       "toggleSidebar": "Toggle sidebar",
       "addAccount": "Add account",
-      "thisHelp": "This help"
+      "thisHelp": "This help",
+      "settings": "Settings",
+      "reply": "Reply",
+      "replyAll": "Reply All",
+      "forward": "Forward",
+      "syncAll": "Sync all accounts",
+      "fullscreen": "Toggle fullscreen",
+      "send": "Send message",
+      "closeCompose": "Close draft"
     }
   },
   "tracking": {

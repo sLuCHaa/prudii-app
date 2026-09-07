@@ -789,7 +789,15 @@
       "commandPalette": "Befehlspalette",
       "toggleSidebar": "Seitenleiste umschalten",
       "addAccount": "Konto hinzufügen",
-      "thisHelp": "Diese Hilfe"
+      "thisHelp": "Diese Hilfe",
+      "settings": "Einstellungen",
+      "reply": "Antworten",
+      "replyAll": "Allen antworten",
+      "forward": "Weiterleiten",
+      "syncAll": "Alle Konten abrufen",
+      "fullscreen": "Vollbild umschalten",
+      "send": "Nachricht senden",
+      "closeCompose": "Entwurf schließen"
     }
   },
   "tracking": {

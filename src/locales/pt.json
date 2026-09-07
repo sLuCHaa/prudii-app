@@ -789,7 +789,15 @@
       "commandPalette": "Paleta de comandos",
       "toggleSidebar": "Alternar barra lateral",
       "addAccount": "Adicionar conta",
-      "thisHelp": "Esta ajuda"
+      "thisHelp": "Esta ajuda",
+      "settings": "Configurações",
+      "reply": "Responder",
+      "replyAll": "Responder a Todos",
+      "forward": "Encaminhar",
+      "syncAll": "Sincronizar todas as contas",
+      "fullscreen": "Ecrã inteiro",
+      "send": "Enviar mensagem",
+      "closeCompose": "Fechar rascunho"
     }
   },
   "tracking": {

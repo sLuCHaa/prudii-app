@@ -18,6 +18,7 @@ import { useTranslation } from "react-i18next";
 import i18n from "../../lib/i18n";
 import { useAppStore } from "../../stores/appStore";
 import type { ComposeSnapshot } from "../../stores/appStore";
+import { isMacOS } from "../../lib/platform";
 import { useAccounts } from "../../hooks/useAccounts";
 import { useScroller } from "../../hooks/useScroller";
 import { useDialog } from "../ui/DialogProvider";
@@ -1483,6 +1484,14 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       if (e.key === "Escape") {
         if (escBlockedRef.current) return;
         e.preventDefault();
+        handleDiscardRef.current();
+        return;
+      }
+      // Cmd+W on macOS is the native File > Close item; the webview only
+      // covers the platforms without a menu bar.
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "w" && !isMacOS) {
+        e.preventDefault();
+        if (escBlockedRef.current) return;
         handleDiscardRef.current();
         return;
       }

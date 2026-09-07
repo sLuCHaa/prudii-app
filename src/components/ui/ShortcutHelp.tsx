@@ -2,27 +2,33 @@ import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
+import { isMacOS } from "../../lib/platform";
+import { formatShortcut } from "../../lib/shortcuts";
 
 interface ShortcutHelpProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-const SHORTCUTS: { groupKey: string; items: { keys: string; descKey: string }[] }[] = [
+const SHORTCUTS: { groupKey: string; items: { keys: string; descKey: string; hideOnMac?: boolean }[] }[] = [
   {
     groupKey: "navigation",
     items: [
       { keys: "j / k", descKey: "nextPrev" },
       { keys: "Enter", descKey: "openMail" },
       { keys: "/", descKey: "search" },
+      { keys: "Mod+F", descKey: "search" },
     ],
   },
   {
     groupKey: "mail",
     items: [
+      { keys: "Mod+R", descKey: "reply" },
+      { keys: "Mod+Shift+R", descKey: "replyAll" },
+      { keys: "Mod+Shift+F", descKey: "forward" },
       { keys: "a / e", descKey: "archive" },
       { keys: "Del", descKey: "trashSelected" },
-      { keys: "Ctrl+A", descKey: "selectAll" },
+      { keys: "Mod+A", descKey: "selectAll" },
       { keys: "Esc", descKey: "clearSelection" },
     ],
   },
@@ -30,14 +36,20 @@ const SHORTCUTS: { groupKey: string; items: { keys: string; descKey: string }[] 
     groupKey: "compose",
     items: [
       { keys: "c", descKey: "newMessage" },
+      { keys: "Mod+N", descKey: "newMessage" },
+      { keys: "Mod+Enter", descKey: "send" },
+      { keys: "Mod+W", descKey: "closeCompose" },
     ],
   },
   {
     groupKey: "app",
     items: [
-      { keys: "Ctrl+K", descKey: "commandPalette" },
-      { keys: "Ctrl+B", descKey: "toggleSidebar" },
-      { keys: "Ctrl+Shift+A", descKey: "addAccount" },
+      { keys: "Mod+K", descKey: "commandPalette" },
+      { keys: "Mod+B", descKey: "toggleSidebar" },
+      { keys: "Mod+,", descKey: "settings" },
+      { keys: "Mod+Shift+N", descKey: "syncAll" },
+      { keys: "Mod+Shift+A", descKey: "addAccount" },
+      { keys: "F11", descKey: "fullscreen", hideOnMac: true },
       { keys: "?", descKey: "thisHelp" },
     ],
   },
@@ -96,16 +108,18 @@ export function ShortcutHelp({ isOpen, onClose }: ShortcutHelpProps) {
                 {t(`shortcuts.${group.groupKey}`)}
               </h3>
               <div className="space-y-1.5">
-                {group.items.map((item) => (
-                  <div key={item.keys} className="flex items-center justify-between gap-4">
-                    <span className="text-sm text-text-secondary">
-                      {t(`shortcuts.desc.${item.descKey}`)}
-                    </span>
-                    <kbd className="shrink-0 text-xs text-text-secondary bg-bg-secondary border border-border rounded px-2 py-0.5 font-mono">
-                      {item.keys}
-                    </kbd>
-                  </div>
-                ))}
+                {group.items
+                  .filter((item) => !(item.hideOnMac && isMacOS))
+                  .map((item) => (
+                    <div key={item.keys} className="flex items-center justify-between gap-4">
+                      <span className="text-sm text-text-secondary">
+                        {t(`shortcuts.desc.${item.descKey}`)}
+                      </span>
+                      <kbd className="shrink-0 text-xs text-text-secondary bg-bg-secondary border border-border rounded px-2 py-0.5 font-mono">
+                        {formatShortcut(item.keys, isMacOS)}
+                      </kbd>
+                    </div>
+                  ))}
               </div>
             </section>
           ))}

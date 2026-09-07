@@ -788,7 +788,15 @@
       "commandPalette": "命令面板",
       "toggleSidebar": "切换侧边栏",
       "addAccount": "添加账户",
-      "thisHelp": "此帮助"
+      "thisHelp": "此帮助",
+      "settings": "设置",
+      "reply": "回复",
+      "replyAll": "全部回复",
+      "forward": "转发",
+      "syncAll": "同步所有账户",
+      "fullscreen": "切换全屏",
+      "send": "发送邮件",
+      "closeCompose": "关闭草稿"
     }
   },
   "tracking": {

@@ -5,6 +5,7 @@ const MotionLab = import.meta.env.DEV
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 // Separate chunks: the compose window must not parse the main layout, and
 // the main window must not parse the editor.
 const AppLayout = lazy(() =>
@@ -33,6 +34,9 @@ import { useDialog } from "./components/ui/DialogProvider";
 import { useTranslation } from "react-i18next";
 import i18next from "i18next";
 import type { BackfillProgress, BackupProgress, Folder, SyncProgress } from "./types";
+import { isMacOS } from "./lib/platform";
+import { MENU_ACTIONS, resolveGlobalShortcut } from "./lib/shortcuts";
+import type { GlobalAction } from "./lib/shortcuts";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -261,22 +265,37 @@ function AppInner() {
     return () => { unlisten.then((fn) => fn()); };
   }, []);
 
+  // Both the native menu bar and the keyboard land here; kept in a ref so the
+  // one-time listeners below never see a stale syncAll/setter.
+  const runGlobalActionRef = useRef<(action: GlobalAction) => void>(() => {});
+  runGlobalActionRef.current = (action) => {
+    const s = useAppStore.getState();
+    const selected = s.mails.find((m) => m.id === s.selectedMailId) ?? null;
+    switch (action) {
+      case "newMessage": s.openCompose("new"); break;
+      case "search": s.setSearchOpen(true); break;
+      case "settings": s.setShowSettings(true); break;
+      case "syncAll": syncAll.mutate(); break;
+      case "reply": if (selected) s.openCompose("reply", selected); break;
+      case "replyAll": if (selected) s.openCompose("replyAll", selected); break;
+      case "forward": if (selected) s.openCompose("forward", selected); break;
+      case "addAccount": if (s.canAddAccount()) setShowAccountWizard(true); break;
+      case "help": setShowHelp(true); break;
+      case "toggleFullscreen": {
+        const win = getCurrentWindow();
+        win.isFullscreen().then((full) => win.setFullscreen(!full)).catch(() => {});
+        break;
+      }
+    }
+  };
+
   // Dispatch native macOS menu bar actions (see src-tauri/src/lib.rs)
   useEffect(() => {
     const unlisten = listen<string>("menu", (event) => {
-      const s = useAppStore.getState();
-      const selected = s.mails.find((m) => m.id === s.selectedMailId) ?? null;
-      switch (event.payload) {
-        case "menu:new_message": s.openCompose("new"); break;
-        case "menu:settings": s.setShowSettings(true); break;
-        case "menu:sync_all": syncAll.mutate(); break;
-        case "menu:reply": if (selected) s.openCompose("reply", selected); break;
-        case "menu:reply_all": if (selected) s.openCompose("replyAll", selected); break;
-        case "menu:forward": if (selected) s.openCompose("forward", selected); break;
-      }
+      const action = MENU_ACTIONS[event.payload];
+      if (action) runGlobalActionRef.current(action);
     });
     return () => { unlisten.then((fn) => fn()); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -475,34 +494,16 @@ function AppInner() {
       const target = e.target as HTMLElement;
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
 
-      if (e.key === "c" && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        e.preventDefault();
-        useAppStore.getState().openCompose("new");
-      }
-
-      if (e.key === "/") {
-        e.preventDefault();
-        useAppStore.getState().setSearchOpen(true);
-      }
-
-      // Bare 'a' belongs to archive (MailList) — the wizard is a rare,
-      // once-per-install action and must not fire mid-triage.
-      if (e.key === "A" && (e.ctrlKey || e.metaKey) && e.shiftKey) {
-        e.preventDefault();
-        if (useAppStore.getState().canAddAccount()) {
-          setShowAccountWizard(true);
-        }
-      }
-
       if (import.meta.env.DEV && e.key === "M" && e.ctrlKey && e.shiftKey) {
         e.preventDefault();
         setShowMotionLab((v) => !v);
+        return;
       }
 
-      if (e.key === "?") {
-        e.preventDefault();
-        setShowHelp(true);
-      }
+      const action = resolveGlobalShortcut(e, isMacOS);
+      if (!action) return;
+      e.preventDefault();
+      runGlobalActionRef.current(action);
     }
 
     function handleOpenHelp() {
@@ -515,7 +516,7 @@ function AppInner() {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("prudii:open-help", handleOpenHelp);
     };
-  }, [setShowAccountWizard, setShowHelp]);
+  }, [setShowHelp]);
 
   // Warm the caches the accounts -> folders -> mails hook chain reads from,
   // in one Rust round trip, instead of first paint waiting on three of them
