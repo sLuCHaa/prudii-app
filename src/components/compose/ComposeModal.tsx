@@ -5,15 +5,13 @@ import { dateLocale } from "../../lib/dateUtils";
 import { PulseDot } from "../motion/PulseDot";
 import { GradientAvatar } from "../motion/GradientAvatar";
 import { SPRING_SNAPPY } from "../motion/tokens";
-import { X, Paperclip, Trash2, Send, File, FileText, Image, Film, Music, FileCode, FileSpreadsheet, Archive, Bold, Italic, Strikethrough, List, ListOrdered, Quote, Code, Link2, Undo, Redo, ExternalLink, Unlink, Sparkles, Loader2, FileType, CalendarClock, ChevronDown, Pencil, Check } from "lucide-react";
+import { X, Paperclip, Trash2, Send, File, FileText, Image, Film, Music, FileCode, FileSpreadsheet, Archive, Sparkles, Loader2, FileType, CalendarClock, ChevronDown, Pencil, Check } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { useEditor, EditorContent, Editor } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import Link from "@tiptap/extension-link";
-import Underline from "@tiptap/extension-underline";
+import { EditorContent, type Editor } from "@tiptap/react";
 import TiptapImage from "@tiptap/extension-image";
-import Placeholder from "@tiptap/extension-placeholder";
 import { Node } from "@tiptap/core";
+import { RichTextEditor } from "../editor/RichTextEditor";
+import { EditorToolbar } from "../editor/EditorToolbar";
 import { useTranslation } from "react-i18next";
 import i18n from "../../lib/i18n";
 import { useAppStore } from "../../stores/appStore";
@@ -86,214 +84,6 @@ function getFileColor(mimeType: string, filename: string) {
   if (mimeType.includes("javascript") || mimeType.includes("json") || mimeType.includes("html") || mimeType.includes("css") || mimeType.includes("xml") || ["js", "ts", "jsx", "tsx", "html", "css", "json", "xml", "py", "java", "c", "cpp", "h", "rs", "go"].includes(ext)) return "text-text-tertiary";
 
   return "text-text-tertiary";
-}
-
-function LinkDialog({
-  isOpen,
-  onClose,
-  onSubmit,
-  onRemove,
-  initialUrl,
-  hasExistingLink,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  onSubmit: (url: string) => void;
-  onRemove: () => void;
-  initialUrl: string;
-  hasExistingLink: boolean;
-}) {
-  const [url, setUrl] = useState(initialUrl);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (isOpen) {
-      setUrl(initialUrl);
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
-  }, [isOpen, initialUrl]);
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (url.trim()) {
-      let finalUrl = url.trim();
-      if (!/^https?:\/\//i.test(finalUrl)) {
-        finalUrl = "https://" + finalUrl;
-      }
-      onSubmit(finalUrl);
-    }
-    onClose();
-  }
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center modal-backdrop">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-surface rounded-xl shadow-lg w-full max-w-md overflow-hidden"
-      >
-        <form onSubmit={handleSubmit}>
-          <div className="px-4 py-3 border-b border-border bg-bg-secondary flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Link2 className="w-4 h-4 text-accent" />
-              <h3 className="text-sm font-semibold text-text">
-                {hasExistingLink ? i18n.t("compose.linkEdit") : i18n.t("compose.linkInsert")}
-              </h3>
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1 rounded hover:bg-hover transition-colors text-text-tertiary"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="p-4">
-            <label className="block text-xs font-medium text-text-secondary mb-2">
-              URL
-            </label>
-            <div className="relative">
-              <ExternalLink className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-tertiary" />
-              <input
-                ref={inputRef}
-                type="text"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://example.com"
-                spellCheck={false}
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="off"
-                className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-border bg-bg-secondary text-sm text-text placeholder:text-text-secondary focus:border-accent focus:ring-1 focus:ring-accent"
-              />
-            </div>
-          </div>
-
-          <div className="px-4 py-3 border-t border-border bg-bg-secondary flex items-center justify-between">
-            {hasExistingLink ? (
-              <button
-                type="button"
-                onClick={() => {
-                  onRemove();
-                  onClose();
-                }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-danger hover:bg-danger/10 transition-colors"
-              >
-                <Unlink className="w-4 h-4" />
-                {i18n.t("compose.linkRemove")}
-              </button>
-            ) : (
-              <div />
-            )}
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-1.5 rounded-lg text-sm text-text-secondary hover:bg-hover transition-colors"
-              >
-                {i18n.t("common.cancel")}
-              </button>
-              <button
-                type="submit"
-                disabled={!url.trim()}
-                className="px-4 py-1.5 rounded-lg text-sm font-medium bg-accent text-white hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {hasExistingLink ? i18n.t("compose.linkUpdate") : i18n.t("compose.linkInsertBtn")}
-              </button>
-            </div>
-          </div>
-        </form>
-      </motion.div>
-    </div>
-  );
-}
-
-function EditorToolbar({ editor, linkDialogOpen, setLinkDialogOpen }: { editor: Editor | null; linkDialogOpen: boolean; setLinkDialogOpen: (open: boolean) => void }) {
-  const [linkDialogUrl, setLinkDialogUrl] = useState("");
-
-  if (!editor) return null;
-
-  const openLinkDialog = () => {
-    const previousUrl = editor.getAttributes("link").href || "";
-    setLinkDialogUrl(previousUrl);
-    setLinkDialogOpen(true);
-  };
-
-  const handleLinkSubmit = (url: string) => {
-    editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
-  };
-
-  const handleLinkRemove = () => {
-    editor.chain().focus().extendMarkRange("link").unsetLink().run();
-  };
-
-  const hasExistingLink = editor.isActive("link");
-
-  const buttons = [
-    { icon: Bold, action: () => editor.chain().focus().toggleBold().run(), active: editor.isActive("bold"), title: "Bold (Ctrl+B)" },
-    { icon: Italic, action: () => editor.chain().focus().toggleItalic().run(), active: editor.isActive("italic"), title: "Italic (Ctrl+I)" },
-    { icon: () => <span className="font-serif underline text-xs">U</span>, action: () => editor.chain().focus().toggleUnderline().run(), active: editor.isActive("underline"), title: "Underline (Ctrl+U)" },
-    { icon: Strikethrough, action: () => editor.chain().focus().toggleStrike().run(), active: editor.isActive("strike"), title: "Strikethrough" },
-    { type: "divider" as const },
-    { icon: List, action: () => editor.chain().focus().toggleBulletList().run(), active: editor.isActive("bulletList"), title: "Bullet List" },
-    { icon: ListOrdered, action: () => editor.chain().focus().toggleOrderedList().run(), active: editor.isActive("orderedList"), title: "Numbered List" },
-    { type: "divider" as const },
-    { icon: Quote, action: () => editor.chain().focus().toggleBlockquote().run(), active: editor.isActive("blockquote"), title: "Quote" },
-    { icon: Code, action: () => editor.chain().focus().toggleCodeBlock().run(), active: editor.isActive("codeBlock"), title: "Code Block" },
-    { icon: Link2, action: openLinkDialog, active: editor.isActive("link"), title: i18n.t("compose.linkInsert") },
-    { type: "divider" as const },
-    { icon: Undo, action: () => editor.chain().focus().undo().run(), active: false, disabled: !editor.can().undo(), title: "Undo (Ctrl+Z)" },
-    { icon: Redo, action: () => editor.chain().focus().redo().run(), active: false, disabled: !editor.can().redo(), title: "Redo (Ctrl+Y)" },
-  ];
-
-  return (
-    <>
-      <div className="flex items-center gap-0.5 px-4 py-2 border-b border-border-light bg-bg-secondary">
-        {buttons.map((btn, i) => {
-          if ("type" in btn && btn.type === "divider") {
-            return <div key={i} className="w-px h-5 bg-border mx-1" />;
-          }
-          const Icon = btn.icon;
-          return (
-            <button
-              key={i}
-              tabIndex={-1}
-              onClick={btn.action}
-              disabled={"disabled" in btn ? btn.disabled : false}
-              className={`p-1.5 rounded transition-colors ${
-                btn.active
-                  ? "bg-accent/20 text-accent"
-                  : "disabled" in btn && btn.disabled
-                  ? "text-text-tertiary/50 cursor-not-allowed"
-                  : "text-text-secondary hover:bg-hover hover:text-text"
-              }`}
-              title={btn.title}
-              aria-label={btn.title}
-            >
-              {typeof Icon === "function" && Icon.length === 0 ? (
-                <Icon />
-              ) : (
-                <Icon className="w-4 h-4" />
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      <LinkDialog
-        isOpen={linkDialogOpen}
-        onClose={() => setLinkDialogOpen(false)}
-        onSubmit={handleLinkSubmit}
-        onRemove={handleLinkRemove}
-        initialUrl={linkDialogUrl}
-        hasExistingLink={hasExistingLink}
-      />
-    </>
-  );
 }
 
 // Custom TipTap node to preserve signature wrapper for find/replace on account change
@@ -710,55 +500,10 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   const scheduleBtnRef = useRef<HTMLDivElement>(null);
   const dragCounter = useRef(0);
 
-  const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        heading: false,
-        link: false,
-        underline: false,
-      }),
-      Link.configure({
-        openOnClick: false,
-        HTMLAttributes: {
-          class: "text-accent underline",
-        },
-      }),
-      Underline,
-      TiptapImage.configure({
-        inline: true,
-        allowBase64: true,
-      }),
-      Placeholder.configure({
-        placeholder: i18n.t("compose.writeMessage"),
-      }),
-      SignatureNode,
-    ],
-    editorProps: {
-      attributes: {
-        class: "prose prose-sm max-w-none focus:outline-none min-h-[200px] text-text",
-        spellcheck: "true",
-        lang: i18n.language,
-      },
-      // Pasted content adopts the compose style (like Apple Mail): semantic
-      // tags survive, styling is discarded. Clipboard HTML from IDEs/chats
-      // carries tens of thousands of styled spans whose style recalc can
-      // freeze the webview; oversized pastes fall back to plain text.
-      transformPastedHTML(html) {
-        if (html.length > 400_000) {
-          const text = new DOMParser().parseFromString(html, "text/html").body.textContent ?? "";
-          return `<p>${escapeHtml(text).replace(/\n/g, "<br>")}</p>`;
-        }
-        const doc = new DOMParser().parseFromString(html, "text/html");
-        doc.querySelectorAll("style, script, link, meta, title").forEach((el) => el.remove());
-        doc.body.querySelectorAll("*").forEach((el) => {
-          el.removeAttribute("style");
-          el.removeAttribute("class");
-        });
-        return doc.body.innerHTML;
-      },
-    },
-    content: "",
-  });
+  // Editor instance is created by the RichTextEditor rendered further down
+  // (toolbar and content sit in two non-adjacent spots of this layout) and
+  // handed back here via onEditorReady.
+  const [editor, setEditor] = useState<Editor | null>(null);
 
   // ── Autosave: crash/quit safety net ──────────────────────────────────────
   // Snapshots the whole draft into SQLite keyed by this window's label; a
@@ -1888,6 +1633,16 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
             />
           </div>
 
+          {/* Headless: only builds the editor instance (handed back via onEditorReady).
+              Toolbar and content are rendered separately below since the AI-reply
+              suggestions sit between them in this layout. */}
+          <RichTextEditor
+            content=""
+            onEditorReady={setEditor}
+            placeholder={i18n.t("compose.writeMessage")}
+            extraExtensions={[TiptapImage.configure({ inline: true, allowBase64: true }), SignatureNode]}
+            toolbar={false}
+          />
           <EditorToolbar editor={editor} linkDialogOpen={linkDialogOpen} setLinkDialogOpen={setLinkDialogOpen} />
 
           {aiReplies.length > 0 && (
