@@ -197,10 +197,6 @@ html, body {
   border-radius: 10px;
   overflow: hidden;
   background: var(--c-bg);
-  /* Desktop chrome is never selectable; readable text opts back in below. */
-  user-select: none;
-  -webkit-user-select: none;
-  cursor: default;
 }
 
 textarea,
@@ -223,6 +219,11 @@ body {
   color: var(--c-text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Desktop chrome is never selectable; readable text opts back in below.
+     On body (not #root) so it also reaches popovers portaled to document.body. */
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
 }
 
 h1, h2, h3, h4, h5, h6 {

@@ -1370,7 +1370,7 @@ export function Sidebar() {
 
   if (renderCollapsed) {
     return (
-      <div className="flex flex-col h-full w-[52px] glass-sidebar relative isolate border-r border-border no-select">
+      <div className="flex flex-col h-full w-[52px] glass-sidebar relative isolate border-r border-border">
         <SidebarAmbient />
         <div className="p-2 flex flex-col items-center gap-2">
           <AnimatedSyncButton
@@ -1418,7 +1418,7 @@ export function Sidebar() {
   }
 
   return (
-    <div className={`flex flex-col h-full glass-sidebar relative isolate border-r border-border no-select transition-opacity duration-150 ${collapseTransition ? "opacity-0" : "opacity-100"}`}>
+    <div className={`flex flex-col h-full glass-sidebar relative isolate border-r border-border transition-opacity duration-150 ${collapseTransition ? "opacity-0" : "opacity-100"}`}>
       <SidebarAmbient />
       <div className="p-3">
         <div className="flex items-center justify-between mb-3">
