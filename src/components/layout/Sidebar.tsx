@@ -27,6 +27,7 @@ import {
   PanelLeftOpen,
   Loader2,
   AlertCircle,
+  Palette,
 } from "lucide-react";
 import gsap from "gsap";
 import { prefersReducedMotion } from "../motion/tokens";
@@ -41,6 +42,8 @@ import { Scroller } from "../ui/Scroller";
 import { Button, IconButton } from "../ui/Button";
 import { CardButton } from "../ui/TabButton";
 import { useDialog } from "../ui/DialogProvider";
+import { ContextMenu } from "../ui/ContextMenu";
+import type { MenuEntry } from "../../lib/menuModel";
 import { SidebarAmbient } from "./SidebarAmbient";
 import { Collapse } from "../motion/Collapse";
 import { requestMailSweep, SWEEP_DURATION_MS } from "../motion/sweepMails";
@@ -192,112 +195,31 @@ function FolderContextMenu({
   onEmpty: () => void;
 }) {
   const { t } = useTranslation();
-  const menuRef = useRef<HTMLDivElement>(null);
-  const [adjustedPos, setAdjustedPos] = useState(position);
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [onClose]);
-
-  // Adjust position after render so menu stays within viewport
-  useEffect(() => {
-    const el = menuRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    let { x, y } = position;
-    if (y + rect.height > window.innerHeight) {
-      y = Math.max(4, position.y - rect.height);
-    }
-    if (x + rect.width > window.innerWidth) {
-      x = Math.max(4, position.x - rect.width);
-    }
-    if (x !== position.x || y !== position.y) {
-      setAdjustedPos({ x, y });
-    }
-  }, [position]);
 
   const canModify = folder.folder_type === "custom";
   const canEmpty = folder.folder_type === "trash" || folder.folder_type === "spam";
 
-  return createPortal(
-    <div
-      ref={menuRef}
-      className="fixed bg-surface border border-border rounded-lg shadow-lg py-1 z-9999 min-w-[180px]"
-      style={{ left: adjustedPos.x, top: adjustedPos.y }}
-    >
-      <div className="px-3 py-1.5 text-xs text-text-tertiary border-b border-border flex items-center gap-2">
-        {folder.is_local ? (
-          <>
-            <HardDrive className="w-3 h-3" />
-            {t("folder.localFolder")}
-          </>
-        ) : (
-          <>
-            <Cloud className="w-3 h-3" />
-            {t("folder.serverFolder")}
-          </>
-        )}
-      </div>
+  const colorEntries: MenuEntry[] = FOLDER_COLORS.map((c) => ({
+    kind: "item",
+    id: `color-${c.id || "none"}`,
+    label: t(c.nameKey),
+    icon: <span className={`w-3 h-3 rounded-full inline-block ${c.id === "" ? "border border-border-light" : ""}`} style={{ backgroundColor: c.bg }} />,
+    selected: (folder.color ?? "") === c.id,
+    onSelect: () => onColorChange(c.id),
+  }));
 
-      {canEmpty && (
-        <button
-          onClick={onEmpty}
-          className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-danger hover:bg-hover transition-colors border-b border-border"
-        >
-          <Trash2 className="w-4 h-4" />
-          {folder.folder_type === "trash" ? t("folder.emptyTrash") : t("folder.emptySpam")}
-        </button>
-      )}
-
-      <div className="px-3 py-2 border-b border-border">
-        <div className="text-xs text-text-tertiary mb-2">{t("folder.folderColor")}</div>
-        <div className="flex flex-wrap gap-1.5">
-          {FOLDER_COLORS.map((color) => (
-            <button
-              key={color.id}
-              onClick={() => onColorChange(color.id)}
-              className={`w-5 h-5 rounded-full transition-all hover:scale-110 ${
-                folder.color === color.id ? "ring-2 ring-accent ring-offset-1 ring-offset-surface" : ""
-              } ${color.id === "" ? "border border-border-light" : ""}`}
-              style={{ backgroundColor: color.bg }}
-              title={t(color.nameKey)}
-            />
-          ))}
-        </div>
-      </div>
-
-      {canModify && (
-        <>
-          <button
-            onClick={onRename}
-            className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-text hover:bg-hover transition-colors"
-          >
-            <Pencil className="w-4 h-4" />
-            {t("common.rename")}
-          </button>
-          <button
-            onClick={onDelete}
-            className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-danger hover:bg-hover transition-colors"
-          >
-            <Trash2 className="w-4 h-4" />
-            {t("common.delete")}
-          </button>
-        </>
-      )}
-      {!canModify && !canEmpty && (
-        <div className="px-3 py-1.5 text-xs text-text-tertiary">
-          {t("folder.systemFolderHint")}
-        </div>
-      )}
-    </div>,
-    document.body
-  );
+  const entries: MenuEntry[] = [
+    { kind: "header", label: folder.is_local ? t("folder.localFolder") : t("folder.serverFolder"), icon: folder.is_local ? <HardDrive className="w-3 h-3" /> : <Cloud className="w-3 h-3" /> },
+    { kind: "separator" },
+    ...(canEmpty ? [{ kind: "item" as const, id: "empty", label: folder.folder_type === "trash" ? t("folder.emptyTrash") : t("folder.emptySpam"), icon: <Trash2 className="w-4 h-4" />, danger: true, onSelect: onEmpty }, { kind: "separator" as const }] : []),
+    { kind: "item", id: "color", label: t("folder.folderColor"), icon: <Palette className="w-4 h-4" />, submenu: colorEntries },
+    ...(canModify
+      ? [{ kind: "separator" as const },
+         { kind: "item" as const, id: "rename", label: t("common.rename"), icon: <Pencil className="w-4 h-4" />, onSelect: onRename },
+         { kind: "item" as const, id: "delete", label: t("common.delete"), icon: <Trash2 className="w-4 h-4" />, danger: true, onSelect: onDelete }]
+      : [{ kind: "separator" as const }, { kind: "header" as const, label: t("folder.systemFolderHint") }]),
+  ];
+  return <ContextMenu entries={entries} x={position.x} y={position.y} onClose={onClose} />;
 }
 
 function CreateFolderDialog({
@@ -975,20 +897,8 @@ function CombinedFoldersSection({ collapsed }: { collapsed: boolean }) {
   const accounts = useAppStore((s) => s.accounts);
   const [expanded, setExpanded] = useState(true);
   const [contextMenu, setContextMenu] = useState<{ type: string; x: number; y: number } | null>(null);
-  const contextMenuRef = useRef<HTMLDivElement>(null);
   const dialog = useDialog();
   const queryClient = useQueryClient();
-
-  useEffect(() => {
-    if (!contextMenu) return;
-    function handleClick(e: MouseEvent) {
-      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
-        setContextMenu(null);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [contextMenu]);
 
   if (accounts.length < 2) return null;
 
@@ -1088,21 +998,13 @@ function CombinedFoldersSection({ collapsed }: { collapsed: boolean }) {
           </button>
         ))}
 
-        {contextMenu && createPortal(
-          <div
-            ref={contextMenuRef}
-            className="fixed z-9999 min-w-[180px] bg-surface rounded-lg shadow-lg border border-border py-1"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
-          >
-            <button
-              onClick={handleEmpty}
-              className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-danger hover:bg-hover transition-colors"
-            >
-              <Trash2 className="w-4 h-4" />
-              {contextMenu.type === "trash" ? t("folder.emptyTrash") : t("folder.emptySpam")}
-            </button>
-          </div>,
-          document.body
+        {contextMenu && (
+          <ContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            onClose={() => setContextMenu(null)}
+            entries={[{ kind: "item", id: "empty", danger: true, icon: <Trash2 className="w-4 h-4" />, label: contextMenu.type === "trash" ? t("folder.emptyTrash") : t("folder.emptySpam"), onSelect: handleEmpty }]}
+          />
         )}
       </div>
     );
@@ -1142,21 +1044,13 @@ function CombinedFoldersSection({ collapsed }: { collapsed: boolean }) {
         </div>
       </Collapse>
 
-      {contextMenu && createPortal(
-        <div
-          ref={contextMenuRef}
-          className="fixed z-9999 min-w-[180px] bg-surface rounded-lg shadow-lg border border-border py-1"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-        >
-          <button
-            onClick={handleEmpty}
-            className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-danger hover:bg-hover transition-colors"
-          >
-            <Trash2 className="w-4 h-4" />
-            {contextMenu.type === "trash" ? t("folder.emptyTrash") : t("folder.emptySpam")}
-          </button>
-        </div>,
-        document.body
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+          entries={[{ kind: "item", id: "empty", danger: true, icon: <Trash2 className="w-4 h-4" />, label: contextMenu.type === "trash" ? t("folder.emptyTrash") : t("folder.emptySpam"), onSelect: handleEmpty }]}
+        />
       )}
     </div>
   );
