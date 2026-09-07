@@ -354,3 +354,81 @@ pub struct BulkSaveResult {
     pub failed: u32,
     pub dest_path: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Task {
+    pub id: String,
+    pub title: String,
+    pub description_html: String,
+    pub status: String,
+    pub priority: String,
+    pub due_at: Option<String>,
+    pub sort_order: f64,
+    pub reminder_sent: bool,
+    pub created_at: String,
+    pub updated_at: String,
+    pub completed_at: Option<String>,
+    pub checklist_done: i64,
+    pub checklist_total: i64,
+    pub link_count: i64,
+    pub attachment_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChecklistItem {
+    pub id: String,
+    pub task_id: String,
+    pub text: String,
+    pub done: bool,
+    pub sort_order: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskMailLink {
+    pub task_id: String,
+    pub mail_id: String,
+    pub account_id: String,
+    pub subject: String,
+    pub from_name: String,
+    pub from_email: String,
+    pub mail_date: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskAttachment {
+    pub id: String,
+    pub task_id: String,
+    pub filename: String,
+    pub mime_type: String,
+    pub size_bytes: i64,
+    pub local_path: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskDetail {
+    pub task: Task,
+    pub checklist: Vec<ChecklistItem>,
+    pub links: Vec<TaskMailLink>,
+    pub attachments: Vec<TaskAttachment>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateTaskInput {
+    pub title: String,
+    pub description_html: Option<String>,
+    pub status: Option<String>,
+    pub priority: Option<String>,
+    pub due_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateTaskPatch {
+    pub title: Option<String>,
+    pub description_html: Option<String>,
+    pub status: Option<String>,
+    pub priority: Option<String>,
+    pub due_at: Option<String>,
+    pub clear_due_at: Option<bool>,
+}

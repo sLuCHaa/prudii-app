@@ -3,7 +3,7 @@ use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
-const SCHEMA_VERSION: u32 = 39;
+const SCHEMA_VERSION: u32 = 40;
 
 pub struct Database {
     pub conn: Mutex<Connection>,
@@ -525,6 +525,42 @@ impl Database {
                 log::info!("DB cleanup: fixed {} non-image attachments incorrectly marked as inline", fixed_inline);
             }
         }
+
+        let _ = conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS tasks (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                description_html TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','in_progress','done')),
+                priority TEXT NOT NULL DEFAULT 'normal' CHECK (priority IN ('low','normal','high')),
+                due_at TEXT,
+                sort_order REAL NOT NULL DEFAULT 0,
+                reminder_sent INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                completed_at TEXT
+            );
+            CREATE TABLE IF NOT EXISTS task_checklist (
+                id TEXT PRIMARY KEY, task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+                text TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0, sort_order REAL NOT NULL DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS task_mail_links (
+                task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+                mail_id TEXT NOT NULL,
+                account_id TEXT NOT NULL,
+                subject TEXT NOT NULL DEFAULT '', from_name TEXT NOT NULL DEFAULT '', from_email TEXT NOT NULL DEFAULT '',
+                mail_date TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (task_id, mail_id)
+            );
+            CREATE TABLE IF NOT EXISTS task_attachments (
+                id TEXT PRIMARY KEY, task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+                filename TEXT NOT NULL, mime_type TEXT NOT NULL DEFAULT 'application/octet-stream',
+                size_bytes INTEGER NOT NULL DEFAULT 0, local_path TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_tasks_status_order ON tasks(status, sort_order);
+            CREATE INDEX IF NOT EXISTS idx_task_links_mail ON task_mail_links(mail_id);"
+        );
 
         // Only bump version AFTER all migrations have run
         conn.pragma_update(None, "user_version", &SCHEMA_VERSION)?;
