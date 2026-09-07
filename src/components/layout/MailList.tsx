@@ -27,7 +27,7 @@ import { Skeleton } from "../ui/Skeleton";
 import { LoadingCrossfade } from "../motion/LoadingCrossfade";
 import { InboxZeroFlight } from "../motion/InboxZeroFlight";
 import { ENTRANCE, prefersReducedMotion } from "../motion/tokens";
-import { SWEEP_MAILS_EVENT, type SweepDetail } from "../motion/sweepMails";
+import { SWEEP_MAILS_EVENT, SWEEP_TWEEN, type SweepDetail } from "../motion/sweepMails";
 import { formatMailDate, getDateGroup } from "../../lib/dateUtils";
 import { runMailAction, toastError, causeMessage } from "../../lib/errorToast";
 import { accumulate, decide, isHorizontalIntent } from "../../lib/swipe";
@@ -1246,14 +1246,7 @@ export function MailList() {
       detail.handled = true;
       // stagger.amount caps the cascade window regardless of row count so the
       // total stays inside SWEEP_DURATION_MS.
-      gsap.to(rows, {
-        x: -90,
-        opacity: 0,
-        rotate: -1.5,
-        duration: 0.28,
-        ease: "power2.in",
-        stagger: { amount: 0.15 },
-      });
+      gsap.to(rows, { ...SWEEP_TWEEN, stagger: { amount: 0.15 } });
     };
     window.addEventListener(SWEEP_MAILS_EVENT, onSweep);
     return () => window.removeEventListener(SWEEP_MAILS_EVENT, onSweep);
@@ -1723,8 +1716,7 @@ export function MailList() {
     if (el && !prefersReducedMotion()) {
       // Fade/slide only — height animation fights the virtualizer's absolute layout.
       gsap.to(el, {
-        opacity: 0, x: -40,
-        duration: 0.15, ease: "power2.in",
+        ...SWEEP_TWEEN,
         onComplete: () => {
           const { mails: currentMails, selectedMailIndex: idx } = useAppStore.getState();
           const remaining = currentMails.filter((m) => m.id !== removeId);
