@@ -12,15 +12,12 @@ pub fn install(new_message_label: &str) {
 }
 
 fn install_inner(label: &str) -> windows::core::Result<()> {
-    use windows::core::{Interface, GUID, HSTRING, PWSTR};
+    use windows::core::{Interface, GUID, HSTRING};
     use windows::Win32::Foundation::{E_FAIL, PROPERTYKEY, RPC_E_CHANGED_MODE};
-    use windows::Win32::System::Com::StructuredStorage::{
-        PROPVARIANT, PROPVARIANT_0, PROPVARIANT_0_0, PROPVARIANT_0_0_0,
-    };
+    use windows::Win32::System::Com::StructuredStorage::PROPVARIANT;
     use windows::Win32::System::Com::{
         CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED,
     };
-    use windows::Win32::System::Variant::VT_LPWSTR;
     use windows::Win32::UI::Shell::Common::{IObjectArray, IObjectCollection};
     use windows::Win32::UI::Shell::PropertiesSystem::IPropertyStore;
     use windows::Win32::UI::Shell::{
@@ -52,27 +49,10 @@ fn install_inner(label: &str) -> windows::core::Result<()> {
         link.SetArguments(&HSTRING::from("--compose"))?;
         link.SetIconLocation(&exe_h, 0)?;
 
-        // No ergonomic VT_LPWSTR constructor exists for PROPVARIANT under this
-        // crate's enabled features, so it is built by hand. IPropertyStore::SetValue
-        // copies the string internally, so the buffer only needs to outlive the call.
-        let mut title_wide: Vec<u16> = label.encode_utf16().chain(std::iter::once(0)).collect();
-        let title_var = PROPVARIANT {
-            Anonymous: PROPVARIANT_0 {
-                Anonymous: std::mem::ManuallyDrop::new(PROPVARIANT_0_0 {
-                    vt: VT_LPWSTR,
-                    wReserved1: 0,
-                    wReserved2: 0,
-                    wReserved3: 0,
-                    Anonymous: PROPVARIANT_0_0_0 {
-                        pwszVal: PWSTR(title_wide.as_mut_ptr()),
-                    },
-                }),
-            },
-        };
+        let title_var = PROPVARIANT::from(label);
         let store: IPropertyStore = link.cast()?;
         store.SetValue(&PKEY_TITLE, &title_var)?;
         store.Commit()?;
-        drop(title_wide);
 
         let list: ICustomDestinationList =
             CoCreateInstance(&DestinationList, None, CLSCTX_INPROC_SERVER)?;
