@@ -8,6 +8,9 @@ import "./index.css";
 import synonym400 from "./assets/fonts/synonym/synonym-400.woff2?url";
 import synonym500 from "./assets/fonts/synonym/synonym-500.woff2?url";
 import amulya700 from "./assets/fonts/amulya/amulya-700.woff2?url";
+import { installBrowserKeyGuard } from "./lib/browserKeyGuard";
+
+installBrowserKeyGuard();
 
 // Pause ALL GSAP animations when the window is hidden/minimized to save CPU/GPU.
 document.addEventListener("visibilitychange", () => {
