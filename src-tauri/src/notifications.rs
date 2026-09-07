@@ -96,7 +96,12 @@ pub fn send_new_mail_notification(app: &AppHandle, account_id: &str, new_mails: 
     // brings the app forward, but the mail cannot be selected from the banner.
     let mut builder = app.notification().builder().title(&t.title).body(body);
     if t.sound {
-        builder = builder.sound("default");
+        // freedesktop sound theme id; macOS understands "default"
+        #[cfg(target_os = "linux")]
+        let name = "message-new-email";
+        #[cfg(not(target_os = "linux"))]
+        let name = "default";
+        builder = builder.sound(name);
     }
     if let Err(e) = builder.show() {
         log::warn!("Failed to show notification: {:?}", e);
