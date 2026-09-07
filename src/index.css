@@ -842,6 +842,23 @@ html[data-vibrancy].dark .glass-sidebar {
   --c-selected: rgba(245, 158, 11, 0.2);
 }
 
+/* OS accent: JS sets --c-accent-system, everything else derives from it. */
+[data-accent="system"] {
+  --c-accent: var(--c-accent-system, #3b82f6);
+  --c-accent-hover: color-mix(in srgb, var(--c-accent) 85%, black);
+  --c-accent-soft: color-mix(in srgb, var(--c-accent) 10%, transparent);
+  --c-accent-soft-bg: color-mix(in srgb, var(--c-accent) 5%, transparent);
+  --c-accent-ring: color-mix(in srgb, var(--c-accent) 35%, transparent);
+  --c-selected: color-mix(in srgb, var(--c-accent) 10%, transparent);
+}
+.dark [data-accent="system"], [data-accent="system"].dark {
+  --c-accent-hover: color-mix(in srgb, var(--c-accent) 80%, white);
+  --c-accent-soft: color-mix(in srgb, var(--c-accent) 20%, transparent);
+  --c-accent-soft-bg: color-mix(in srgb, var(--c-accent) 8%, transparent);
+  --c-accent-ring: color-mix(in srgb, var(--c-accent) 45%, transparent);
+  --c-selected: color-mix(in srgb, var(--c-accent) 20%, transparent);
+}
+
 /* ─── Density Modes ─── */
 [data-density="compact"] .mail-item-draggable {
   padding-top: 0.375rem;

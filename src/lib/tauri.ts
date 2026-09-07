@@ -568,8 +568,12 @@ export async function invalidateConnections(): Promise<void> {
   return invoke("invalidate_connections");
 }
 
-export async function setDockBadge(count: number | null): Promise<void> {
-  return invoke("set_dock_badge", { count });
+export async function setDockBadge(count: number | null, accentHex: string): Promise<void> {
+  return invoke("set_dock_badge", { count, accent: accentHex });
+}
+
+export async function getSystemAccentColor(): Promise<string | null> {
+  return invoke("get_system_accent_color");
 }
 
 export interface BootstrapState {

@@ -39,8 +39,6 @@ pub fn badge_label(count: i64) -> Option<String> {
 
 const SIZE: i32 = 16;
 const PIXELS: usize = (SIZE * SIZE) as usize;
-/// Accent #3b82f6, in the BGR order the DIB stores.
-const ACCENT: [u8; 3] = [0xf6, 0x82, 0x3b];
 
 thread_local! {
     static TASKBAR: RefCell<Option<ITaskbarList3>> = const { RefCell::new(None) };
@@ -51,8 +49,10 @@ thread_local! {
 /// Draw the unread count onto the taskbar icon; `None` clears the badge.
 /// MUST run on the window's thread — the shell's taskbar object is
 /// apartment-threaded, and the sync command calling this runs there.
-pub fn set_taskbar_badge(hwnd: isize, count: Option<i64>) {
-    let icon = count.and_then(badge_label).and_then(|label| draw(&label));
+pub fn set_taskbar_badge(hwnd: isize, count: Option<i64>, rgb: [u8; 3]) {
+    // DIB pixels store BGR, so the RGB triple is reversed once here.
+    let accent = [rgb[2], rgb[1], rgb[0]];
+    let icon = count.and_then(badge_label).and_then(|label| draw(&label, accent));
 
     if !apply(hwnd, icon) {
         // Nothing reached the shell: drop the icon just drawn rather than leak
@@ -127,7 +127,8 @@ fn taskbar_list() -> Option<ITaskbarList3> {
 }
 
 /// Render the label into a 16×16 icon: accent circle, centered white digits.
-fn draw(label: &str) -> Option<HICON> {
+/// `accent` is already in BGR order (see `set_taskbar_badge`).
+fn draw(label: &str, accent: [u8; 3]) -> Option<HICON> {
     let mut info = BITMAPINFO::default();
     info.bmiHeader.biSize = std::mem::size_of::<BITMAPINFOHEADER>() as u32;
     info.bmiHeader.biWidth = SIZE;
@@ -159,9 +160,9 @@ fn draw(label: &str) -> Option<HICON> {
                 let a = (coverage * 255.0).round() as u8;
                 let i = (y * SIZE + x) as usize;
                 alpha[i] = a;
-                pixels[i * 4] = premultiply(ACCENT[0], a);
-                pixels[i * 4 + 1] = premultiply(ACCENT[1], a);
-                pixels[i * 4 + 2] = premultiply(ACCENT[2], a);
+                pixels[i * 4] = premultiply(accent[0], a);
+                pixels[i * 4 + 1] = premultiply(accent[1], a);
+                pixels[i * 4 + 2] = premultiply(accent[2], a);
                 pixels[i * 4 + 3] = a;
             }
         }

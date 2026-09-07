@@ -3574,6 +3574,7 @@ dependencies = [
  "lettre",
  "log",
  "mail-parser",
+ "objc2-app-kit",
  "open",
  "rand 0.10.2",
  "reqwest",

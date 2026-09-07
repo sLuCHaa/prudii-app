@@ -26,7 +26,8 @@ import { useSyncAll } from "./hooks/useSync";
 import { useAutoSync } from "./hooks/useAutoSync";
 import { useFocusSync } from "./hooks/useFocusSync";
 import { useConnectivity } from "./hooks/useConnectivity";
-import { backfillBodies, bootstrapState, getAppSettings, checkLicenseStartup, getStartupMailto, checkSnoozedMails, classifyUnclassifiedMails, listComposeAutosaves, deleteComposeAutosave } from "./lib/tauri";
+import { backfillBodies, bootstrapState, getAppSettings, checkLicenseStartup, getStartupMailto, checkSnoozedMails, classifyUnclassifiedMails, listComposeAutosaves, deleteComposeAutosave, getSystemAccentColor } from "./lib/tauri";
+import { isAccentHex, effectiveAccentHex } from "./lib/accents";
 import { checkForUpdate } from "./lib/updater";
 import { installGlobalTooltips } from "./lib/globalTooltips";
 import { checkFirstHundredOnce } from "./lib/achievements";
@@ -127,6 +128,16 @@ function AppInner() {
     document.documentElement.setAttribute("data-accent", appSettings.accent_color);
     document.documentElement.setAttribute("data-density", appSettings.density);
   }, [appSettings.accent_color, appSettings.density]);
+
+  const systemAccentHex = useAppStore((s) => s.systemAccentHex);
+  const setSystemAccentHex = useAppStore((s) => s.setSystemAccentHex);
+  useEffect(() => {
+    if (appSettings.accent_color !== "system") return;
+    getSystemAccentColor().then((hex) => setSystemAccentHex(isAccentHex(hex) ? hex : null)).catch(() => setSystemAccentHex(null));
+  }, [appSettings.accent_color, setSystemAccentHex]);
+  useEffect(() => {
+    document.documentElement.style.setProperty("--c-accent-system", effectiveAccentHex(appSettings.accent_color, systemAccentHex));
+  }, [appSettings.accent_color, systemAccentHex]);
 
   // Apply the native translucent-sidebar window effect (macOS vibrancy only;
   // Windows/Linux render the in-app SidebarAmbient tint instead).

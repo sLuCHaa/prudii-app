@@ -4,6 +4,7 @@ import { useAccounts } from "./useAccounts";
 import { useQueries } from "@tanstack/react-query";
 import { useAppStore } from "../stores/appStore";
 import { setDockBadge, listFolders } from "../lib/tauri";
+import { effectiveAccentHex } from "../lib/accents";
 import { useTranslation } from "react-i18next";
 
 /** Mirrors app state into the OS shell: dock badge + window title. */
@@ -12,6 +13,8 @@ export function useNativeShell(): void {
   const { data: accounts } = useAccounts();
   const selectedFolderId = useAppStore((s) => s.selectedFolderId);
   const showAllInboxes = useAppStore((s) => s.showAllInboxes);
+  const accentColor = useAppStore((s) => s.appSettings.accent_color);
+  const systemAccentHex = useAppStore((s) => s.systemAccentHex);
 
   const folderQueries = useQueries({
     queries: (accounts ?? []).map((account) => ({
@@ -32,8 +35,8 @@ export function useNativeShell(): void {
   }, [allFolders]);
 
   useEffect(() => {
-    setDockBadge(inboxUnread > 0 ? inboxUnread : null).catch(() => {});
-  }, [inboxUnread]);
+    setDockBadge(inboxUnread > 0 ? inboxUnread : null, effectiveAccentHex(accentColor, systemAccentHex)).catch(() => {});
+  }, [inboxUnread, accentColor, systemAccentHex]);
 
   // Keyed on the derived string, not the per-render query array identity —
   // otherwise the setTitle IPC fires on every AppLayout render.

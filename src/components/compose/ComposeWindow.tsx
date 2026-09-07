@@ -6,10 +6,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { DialogProvider } from "../ui/DialogProvider";
 import { ToastContainer } from "../ui/Toast";
-import { deleteComposeAutosave } from "../../lib/tauri";
+import { deleteComposeAutosave, getSystemAccentColor } from "../../lib/tauri";
 import { ComposeForm } from "./ComposeModal";
 import type { ComposeInitData, ComposeMode, ComposeFormHandle } from "./ComposeModal";
 import { isMacOS } from "../../lib/platform";
+import { isAccentHex, DEFAULT_ACCENT_HEX } from "../../lib/accents";
 import { useWindowsCaptionMaxButton, showSystemMenu } from "../../hooks/useWindowsCaption";
 
 // Standalone QueryClient for the compose window (needed because ComposeForm
@@ -28,6 +29,11 @@ export function ComposeWindow() {
     document.documentElement.classList.toggle("dark", darkMode);
     document.documentElement.setAttribute("data-accent", appSettings.accent_color);
     document.documentElement.setAttribute("data-density", appSettings.density);
+    if (appSettings.accent_color === "system") {
+      getSystemAccentColor()
+        .then((hex) => document.documentElement.style.setProperty("--c-accent-system", isAccentHex(hex) ? hex : DEFAULT_ACCENT_HEX))
+        .catch(() => document.documentElement.style.setProperty("--c-accent-system", DEFAULT_ACCENT_HEX));
+    }
     // Window was created hidden — show it now that content + theme are ready.
     // The window's native background color (set at creation in composeWindow.ts)
     // prevents a white flash before the web content paints. The content itself

@@ -559,7 +559,7 @@ export function SettingsPanel() {
   const trapRef = useFocusTrap<HTMLDivElement>(true);
   // useShallow-scoped: an unselected useAppStore() re-renders the whole
   // settings panel on every store write (sync ticks, toasts, selection).
-  const { setShowSettings, setShowAccountWizard, themeMode, setThemeMode, settingsAccountId, appSettings, setAppSettings, hasFeature } = useAppStore(
+  const { setShowSettings, setShowAccountWizard, themeMode, setThemeMode, settingsAccountId, appSettings, setAppSettings, hasFeature, systemAccentHex } = useAppStore(
     useShallow((s) => ({
       setShowSettings: s.setShowSettings,
       setShowAccountWizard: s.setShowAccountWizard,
@@ -569,6 +569,7 @@ export function SettingsPanel() {
       appSettings: s.appSettings,
       setAppSettings: s.setAppSettings,
       hasFeature: s.hasFeature,
+      systemAccentHex: s.systemAccentHex,
     }))
   );
   const addToast = useAppStore((s) => s.addToast);
@@ -988,7 +989,7 @@ export function SettingsPanel() {
                     </p>
                     <div className="flex gap-2 flex-wrap">
                       {ACCENT_OPTIONS.map(({ id, hex, labelKey }) => {
-                        const swatchColor = hex ?? DEFAULT_ACCENT_HEX;
+                        const swatchColor = id === "system" ? systemAccentHex ?? DEFAULT_ACCENT_HEX : hex ?? DEFAULT_ACCENT_HEX;
                         return (
                           <button
                             key={id}

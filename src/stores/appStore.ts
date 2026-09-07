@@ -157,6 +157,9 @@ interface AppState {
   appSettings: AppSettings;
   setAppSettings: (settings: AppSettings) => void;
 
+  systemAccentHex: string | null;
+  setSystemAccentHex: (hex: string | null) => void;
+
   networkStatus: NetworkStatus;
   setNetworkStatus: (status: NetworkStatus) => void;
 
@@ -449,6 +452,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     strip_tracking_params: true,
   },
   setAppSettings: (appSettings) => set({ appSettings }),
+
+  systemAccentHex: null,
+  setSystemAccentHex: (hex) => set({ systemAccentHex: hex }),
 
   networkStatus: navigator.onLine ? "online" : "offline",
   setNetworkStatus: (status) => set({ networkStatus: status }),

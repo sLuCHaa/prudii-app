@@ -17,6 +17,7 @@ pub mod outlook;
 pub mod pool;
 pub mod rules;
 pub mod smtp;
+pub mod system_accent;
 pub mod task_registry;
 #[cfg(windows)]
 pub mod win_badge;
@@ -1002,6 +1003,7 @@ pub fn run() {
             commands::mails::bulk_save_attachments,
             commands::app_config::get_app_config,
             commands::native::set_dock_badge,
+            system_accent::get_system_accent_color,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

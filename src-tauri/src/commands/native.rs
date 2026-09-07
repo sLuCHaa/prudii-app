@@ -41,20 +41,40 @@ pub fn show_system_menu(window: tauri::WebviewWindow, x: f64, y: f64) -> Result<
     Ok(())
 }
 
+/// Parse a `#rrggbb` hex colour into its RGB bytes; anything else (missing
+/// `#`, wrong length, short forms like `#fff`) is rejected rather than guessed at.
+fn parse_hex_rgb(s: &str) -> Option<[u8; 3]> {
+    let hex = s.strip_prefix('#')?;
+    if hex.len() != 6 {
+        return None;
+    }
+    let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
+    let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
+    let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
+    Some([r, g, b])
+}
+
 /// Dock/taskbar badge with the unread count. None clears the badge.
 /// Tauri's own badge is macOS only — on other platforms it returns Unsupported,
 /// which we swallow; Windows gets a drawn taskbar overlay icon instead. SYNC on
 /// purpose: the Windows overlay path needs the window's thread, which is where
 /// sync commands run.
 #[tauri::command]
-pub fn set_dock_badge(app: tauri::AppHandle, count: Option<i64>) -> Result<(), String> {
+pub fn set_dock_badge(app: tauri::AppHandle, count: Option<i64>, accent: Option<String>) -> Result<(), String> {
     use tauri::Manager;
 
     #[cfg(windows)]
-    if let Some(window) = app.get_webview_window("main") {
-        if let Ok(hwnd) = window.hwnd() {
-            crate::win_badge::set_taskbar_badge(hwnd.0 as isize, count.filter(|n| *n > 0));
+    {
+        let rgb = accent.as_deref().and_then(parse_hex_rgb).unwrap_or([0x3b, 0x82, 0xf6]);
+        if let Some(window) = app.get_webview_window("main") {
+            if let Ok(hwnd) = window.hwnd() {
+                crate::win_badge::set_taskbar_badge(hwnd.0 as isize, count.filter(|n| *n > 0), rgb);
+            }
         }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = &accent;
     }
 
     if let Some(tray) = app.tray_by_id("main") {
@@ -75,4 +95,16 @@ pub fn set_dock_badge(app: tauri::AppHandle, count: Option<i64>) -> Result<(), S
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_hex_rgb;
+    #[test]
+    fn parses_rrggbb() {
+        assert_eq!(parse_hex_rgb("#3b82f6"), Some([0x3b, 0x82, 0xf6]));
+        assert_eq!(parse_hex_rgb("#3B82F6"), Some([0x3b, 0x82, 0xf6]));
+        assert_eq!(parse_hex_rgb("3b82f6"), None);
+        assert_eq!(parse_hex_rgb("#fff"), None);
+    }
 }
