@@ -10,7 +10,9 @@ export type GlobalAction =
   | "replyAll"
   | "forward"
   | "syncAll"
-  | "toggleFullscreen";
+  | "toggleFullscreen"
+  | "openTasks"
+  | "newTask";
 
 // Ids emitted by the native macOS menu bar (src-tauri/src/lib.rs).
 export const MENU_ACTIONS: Record<string, GlobalAction> = {
@@ -32,6 +34,7 @@ export function resolveGlobalShortcut(e: KeyLike, isMac: boolean): GlobalAction 
 
   if (!mod) {
     if (e.key === "c") return "newMessage";
+    if (e.key === "t") return "newTask";
     if (e.key === "/") return "search";
     if (e.key === "?") return "help";
     if (e.key === "F11") return isMac ? null : "toggleFullscreen";
@@ -45,6 +48,7 @@ export function resolveGlobalShortcut(e: KeyLike, isMac: boolean): GlobalAction 
     else if (key === "r") action = "replyAll";
     else if (key === "f") action = "forward";
     else if (key === "n") action = "syncAll";
+    else if (key === "t") action = "openTasks";
   } else {
     if (key === "n") action = "newMessage";
     else if (key === ",") action = "settings";

@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { Copy, Minus, Square, X } from "lucide-react";
+import { ClipboardList, Copy, Minus, Square, X } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";
+import { useOpenTaskCount } from "../../hooks/useTasks";
 import { GearIcon } from "../icons";
 import { hideToTray, quitApp } from "../../lib/tauri";
 import { isMacOS } from "../../lib/platform";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { PrivacyBadge } from "../ui/PrivacyBadge";
+import { NumberTween } from "../motion/NumberTween";
 import { useWindowsCaptionMaxButton, showSystemMenu } from "../../hooks/useWindowsCaption";
 import AppLogo from "../../assets/logo.webp";
 
@@ -15,7 +17,9 @@ export function TitleBar() {
   const { t } = useTranslation();
   const appWindow = useMemo(() => getCurrentWindow(), []);
   const setShowSettings = useAppStore((s) => s.setShowSettings);
+  const setShowTasks = useAppStore((s) => s.setShowTasks);
   const appSettings = useAppStore((s) => s.appSettings);
+  const { data: openTaskCount = 0 } = useOpenTaskCount();
 
   // Snap Layouts: the maximize button is reported to the native side and its
   // hover comes back as an event (the button lives in non-client space there).
@@ -73,6 +77,19 @@ export function TitleBar() {
 
       <div className="flex h-full">
         <PrivacyBadge />
+        <button
+          onClick={() => setShowTasks(true)}
+          className="relative inline-flex items-center justify-center w-11 h-full hover:bg-hover transition-colors text-text-secondary"
+          title={t("tasks.title")}
+          aria-label={t("tasks.title")}
+        >
+          <ClipboardList size={14} strokeWidth={1.5} />
+          {openTaskCount > 0 && (
+            <span className="absolute top-1.5 right-1.5 min-w-[14px] h-[14px] px-1 rounded-full bg-accent text-white text-[9px] leading-[14px] font-semibold">
+              <NumberTween from={0} to={openTaskCount} duration={400} />
+            </span>
+          )}
+        </button>
         <button
           onClick={() => setShowSettings(true)}
           className="inline-flex items-center justify-center w-11 h-full hover:bg-hover transition-colors text-text-secondary"

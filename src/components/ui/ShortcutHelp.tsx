@@ -53,8 +53,15 @@ const SHORTCUTS: { groupKey: string; items: { keys: string; descKey: string; hid
       { keys: "Mod+,", descKey: "settings" },
       { keys: "Mod+Shift+N", descKey: "syncAll" },
       { keys: "Mod+Shift+A", descKey: "addAccount" },
+      { keys: "Mod+Shift+T", descKey: "openTasks" },
       { keys: "F11", descKey: "fullscreen", hideOnMac: true },
       { keys: "?", descKey: "thisHelp" },
+    ],
+  },
+  {
+    groupKey: "tasks",
+    items: [
+      { keys: "t", descKey: "newTask" },
     ],
   },
 ];

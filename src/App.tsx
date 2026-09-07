@@ -310,6 +310,8 @@ function AppInner() {
       case "forward": if (selected) s.openCompose("forward", selected); break;
       case "addAccount": if (s.canAddAccount()) setShowAccountWizard(true); break;
       case "help": setShowHelp(true); break;
+      case "openTasks": s.setShowTasks(true); break;
+      case "newTask": s.setShowTasks(true); s.setOpenTaskId("new"); break;
       case "toggleFullscreen": {
         const win = getCurrentWindow();
         win.isFullscreen().then((full) => win.setFullscreen(!full)).catch(() => {});

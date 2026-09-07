@@ -27,6 +27,13 @@ describe("resolveGlobalShortcut", () => {
     expect(resolveGlobalShortcut(key("F11"), false)).toBe("toggleFullscreen");
   });
 
+  it("opens tasks with Mod+Shift+T and quick-adds one with bare t, on every platform", () => {
+    expect(resolveGlobalShortcut(key("T", { ctrl: true, shift: true }), false)).toBe("openTasks");
+    expect(resolveGlobalShortcut(key("T", { meta: true, shift: true }), true)).toBe("openTasks");
+    expect(resolveGlobalShortcut(key("t"), false)).toBe("newTask");
+    expect(resolveGlobalShortcut(key("t"), true)).toBe("newTask");
+  });
+
   it("leaves menu-bar accelerators to the native menu on macOS", () => {
     expect(resolveGlobalShortcut(key("n", { meta: true }), true)).toBeNull();
     expect(resolveGlobalShortcut(key(",", { meta: true }), true)).toBeNull();

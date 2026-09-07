@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { Search, Inbox, Send, FileText, Archive, Star, Settings, Trash2, Pencil, FolderOpen, Sun, Moon, Palette, LayoutGrid, Languages, HelpCircle } from "lucide-react";
+import { Search, Inbox, Send, FileText, Archive, Star, Settings, Trash2, Pencil, FolderOpen, Sun, Moon, Palette, LayoutGrid, Languages, HelpCircle, ClipboardList } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { SPRING_BOUNCY } from "../motion/tokens";
 import { useAppStore } from "../../stores/appStore";
@@ -7,6 +7,8 @@ import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
 import { changeLanguage } from "../../lib/i18n";
 import { updateAppSettings } from "../../lib/tauri";
+import { formatShortcut } from "../../lib/shortcuts";
+import { isMacOS } from "../../lib/platform";
 import { getRecentCommands, recordCommandRun } from "../../lib/recentCommands";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { GradientAvatar } from "../motion/GradientAvatar";
@@ -55,6 +57,8 @@ export function CommandPalette() {
     appSettings,
     setAppSettings,
     toggleSidebar,
+    setShowTasks,
+    setOpenTaskId,
   } = useAppStore(
     useShallow((s) => ({
       accounts: s.accounts,
@@ -72,6 +76,8 @@ export function CommandPalette() {
       appSettings: s.appSettings,
       setAppSettings: s.setAppSettings,
       toggleSidebar: s.toggleSidebar,
+      setShowTasks: s.setShowTasks,
+      setOpenTaskId: s.setOpenTaskId,
     }))
   );
 
@@ -119,6 +125,23 @@ export function CommandPalette() {
       icon: <Star className="w-4 h-4" />,
       section: groupActions,
       action: () => setActiveFilter("starred"),
+    });
+
+    items.push({
+      id: "tasks-open",
+      label: t("tasks.openTasks"),
+      icon: <ClipboardList className="w-4 h-4" />,
+      section: groupActions,
+      action: () => setShowTasks(true),
+      shortcut: formatShortcut("Mod+Shift+T", isMacOS),
+    });
+    items.push({
+      id: "tasks-new",
+      label: t("tasks.new"),
+      icon: <ClipboardList className="w-4 h-4" />,
+      section: groupActions,
+      action: () => { setShowTasks(true); setOpenTaskId("new"); },
+      shortcut: "t",
     });
 
     items.push({

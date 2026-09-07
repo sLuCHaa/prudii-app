@@ -31,6 +31,7 @@ import {
   RefreshCw,
   RotateCcw,
   Settings,
+  ClipboardList,
 } from "lucide-react";
 import gsap from "gsap";
 import { prefersReducedMotion } from "../motion/tokens";
@@ -38,6 +39,7 @@ import { useAppStore, type MailFilter } from "../../stores/appStore";
 import { useAccounts, useFolders } from "../../hooks/useAccounts";
 import { useSyncAccount, useSyncAll } from "../../hooks/useSync";
 import { useRemoveAccount } from "../../hooks/useRemoveAccount";
+import { useOpenTaskCount } from "../../hooks/useTasks";
 import { ComposeButton } from "../compose/ComposeButton";
 import { ThemeToggle } from "../ui/ThemeToggle";
 import { TrashIcon, StarIcon } from "../icons";
@@ -1115,8 +1117,11 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
   const setShowScheduled = useAppStore((s) => s.setShowScheduled);
   const showAttachmentBrowser = useAppStore((s) => s.showAttachmentBrowser);
   const setShowAttachmentBrowser = useAppStore((s) => s.setShowAttachmentBrowser);
+  const showTasks = useAppStore((s) => s.showTasks);
+  const setShowTasks = useAppStore((s) => s.setShowTasks);
   const hasFeature = useAppStore((s) => s.hasFeature);
   const accounts = useAppStore((s) => s.accounts);
+  const { data: openTaskCount = 0 } = useOpenTaskCount();
 
   const [snoozedCount, setSnoozedCount] = useState(0);
   const [scheduledCount, setScheduledCount] = useState(0);
@@ -1176,6 +1181,15 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
       isActive: showScheduled,
       count: scheduledCount,
       show: hasFeature("send_later") || scheduledCount > 0,
+    },
+    {
+      id: "tasks",
+      label: t("sidebar.tasks"),
+      icon: <ClipboardList className="w-4 h-4" />,
+      onClick: () => setShowTasks(!showTasks),
+      isActive: showTasks,
+      count: openTaskCount,
+      show: true,
     },
     {
       id: "attachments",
