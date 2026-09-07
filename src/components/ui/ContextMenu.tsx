@@ -69,7 +69,7 @@ function MenuPanel({ entries, position, variant, minWidth, ariaLabel, onCloseAll
   }
 
   function onKeyDown(ev: React.KeyboardEvent) {
-    if (openSub !== null) return; // the open submenu owns the keyboard
+    if (openSub !== null) return; // ignore parent-panel keys while a submenu is open (it's a sibling panel and holds its own DOM focus)
     const k = ev.key;
     if (k === "ArrowDown" || k === "ArrowUp" || k === "Home" || k === "End") {
       ev.preventDefault();
@@ -97,6 +97,18 @@ function MenuPanel({ entries, position, variant, minWidth, ariaLabel, onCloseAll
 
   const isListbox = variant === "listbox";
   const sub = openSub !== null ? entries[openSub] : null;
+
+  const subMeasure = useCallback(
+    (el: HTMLElement) =>
+      submenuPosition(
+        { left: subAnchor.left, right: subAnchor.right, top: subAnchor.top },
+        el.offsetWidth,
+        el.offsetHeight,
+        window.innerWidth,
+        window.innerHeight,
+      ),
+    [subAnchor],
+  );
 
   return (
     <>
@@ -146,20 +158,15 @@ function MenuPanel({ entries, position, variant, minWidth, ariaLabel, onCloseAll
       </div>
       {sub && isFocusable(sub) && sub.submenu && (
         <MenuPanel
+          // Remount on item change: hovering directly from one submenu item to a
+          // sibling must reset the child's own focus state, not reconcile in place.
+          key={openSub}
           entries={sub.submenu}
           position={{ left: subAnchor.right, top: subAnchor.top }}
           variant={variant}
           onCloseAll={onCloseAll}
           onCloseSelf={() => { setOpenSub(null); }}
-          measure={(el) =>
-            submenuPosition(
-              { left: subAnchor.left, right: subAnchor.right, top: subAnchor.top },
-              el.offsetWidth,
-              el.offsetHeight,
-              window.innerWidth,
-              window.innerHeight,
-            )
-          }
+          measure={subMeasure}
         />
       )}
     </>

@@ -81,6 +81,33 @@ describe("ContextMenu", () => {
     button.remove();
   });
 
+  it("remounts the flyout when hover switches directly between sibling submenu items", () => {
+    const entries: MenuEntry[] = [
+      { kind: "item", id: "move", label: "Move", submenu: [
+        { kind: "item", id: "inbox", label: "Inbox" },
+        { kind: "item", id: "archive-dest", label: "Archive" },
+      ] },
+      { kind: "item", id: "snooze", label: "Snooze", submenu: [
+        { kind: "item", id: "1h", label: "1h" },
+        { kind: "item", id: "3h", label: "3h" },
+      ] },
+    ];
+    act(() => root.render(createElement(ContextMenu, { entries, x: 10, y: 10, onClose: () => {} })));
+    key("ArrowRight");
+    expect(document.activeElement?.textContent).toContain("Inbox");
+
+    const menu = document.querySelector('[role="menu"]') as HTMLElement;
+    const snoozeButton = Array.from(menu.querySelectorAll<HTMLElement>('[data-index]')).find((b) => b.textContent?.includes("Snooze"));
+    act(() => {
+      snoozeButton?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    });
+    // tagName check matters: without the fix focus is dropped to <body> when the
+    // old submenu buttons unmount, and body.textContent still contains "1h" as a
+    // substring of the concatenated menu text, so a plain toContain would pass anyway.
+    expect(document.activeElement?.tagName).toBe("BUTTON");
+    expect(document.activeElement?.textContent).toBe("1h");
+  });
+
   it("uses listbox roles in listbox variant", () => {
     const entries: MenuEntry[] = [{ kind: "item", id: "a", label: "A", selected: true }];
     act(() => root.render(createElement(ContextMenu, { entries, x: 0, y: 0, onClose: () => {}, variant: "listbox" })));
