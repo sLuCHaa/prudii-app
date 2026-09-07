@@ -219,6 +219,7 @@ export function ComposeWindow() {
             data-tauri-drag-region
             onContextMenu={showSystemMenu}
             onDoubleClick={(e) => {
+              // Window buttons live inside the bar; a fast double-click on Close must not maximize.
               if ((e.target as HTMLElement).closest("button")) return;
               handleToggleMaximize();
             }}
