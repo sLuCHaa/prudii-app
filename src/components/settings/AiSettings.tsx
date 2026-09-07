@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { checkOllamaStatus } from "../../lib/tauri";
 import { Button } from "../ui/Button";
+import { Select } from "../ui/Select";
 import type { AppSettings } from "../../types";
 
 interface AiSettingsProps {
@@ -142,20 +143,14 @@ export function AiSettings({ localSettings, updateLocalSetting }: AiSettingsProp
                 {t("settings.ai.model")}
               </label>
               {models.length > 0 ? (
-                <select
+                <Select
                   value={localSettings.ai_model}
-                  onChange={(e) => updateLocalSetting("ai_model", e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-border bg-bg-secondary text-text text-sm focus:border-accent cursor-pointer"
-                >
-                  <option value="" className="bg-surface text-text">
-                    {t("settings.ai.selectModel")}
-                  </option>
-                  {models.map((m) => (
-                    <option key={m} value={m} className="bg-surface text-text">
-                      {m}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(v) => updateLocalSetting("ai_model", v)}
+                  options={[
+                    { value: "", label: t("settings.ai.selectModel") },
+                    ...models.map((m) => ({ value: m, label: m })),
+                  ]}
+                />
               ) : (
                 <div className="px-3 py-2 rounded-lg border border-border bg-bg-secondary text-xs text-text-tertiary">
                   {connectionStatus === "connected"

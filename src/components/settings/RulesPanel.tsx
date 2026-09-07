@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";
 import { useAccounts, useRules, useCreateRule, useUpdateRule, useDeleteRule, useFolders, useApplyRulesNow } from "../../hooks/useAccounts";
 import { Button } from "../ui/Button";
+import { Select } from "../ui/Select";
 import type { MailRule, CreateRuleRequest } from "../../types";
 
 function emptyRule(accountId: string): CreateRuleRequest {
@@ -169,18 +170,15 @@ function RuleForm({
           </label>
           <div>
             <label className="text-xs text-text-tertiary mb-1 block">{t("rules.moveToFolder")}</label>
-            <select
+            <Select
               value={form.action_move_to_folder ?? ""}
-              onChange={(e) => setForm({ ...form, action_move_to_folder: e.target.value || null })}
-              className="w-full px-3 py-2 rounded-lg border border-border bg-surface text-text text-sm focus:border-accent"
-            >
-              <option value="">{t("rules.selectFolder")}</option>
-              {folders?.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setForm({ ...form, action_move_to_folder: v || null })}
+              options={[
+                { value: "", label: t("rules.selectFolder") },
+                ...(folders ?? []).map((f) => ({ value: f.id, label: f.name })),
+              ]}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-surface text-text text-sm text-left focus:border-accent"
+            />
           </div>
         </div>
       </div>
@@ -268,23 +266,17 @@ export function RulesPanel() {
       {accounts && accounts.length > 1 && (
         <div className="mb-4">
           <label className="text-xs text-text-tertiary mb-1 block">{t("rules.selectAccount")}</label>
-          <select
+          <Select
             value={accountId ?? ""}
-            onChange={(e) => {
-              setSelectedAccountId(e.target.value);
+            onChange={(v) => {
+              setSelectedAccountId(v);
               setShowForm(false);
               setEditingRule(null);
               setConfirmApply(false);
               setApplyResult(null);
             }}
-            className="w-full px-3 py-2 rounded-lg border border-border bg-bg-secondary text-text text-sm focus:border-accent"
-          >
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.display_name} ({a.email})
-              </option>
-            ))}
-          </select>
+            options={accounts.map((a) => ({ value: a.id, label: `${a.display_name} (${a.email})` }))}
+          />
         </div>
       )}
 

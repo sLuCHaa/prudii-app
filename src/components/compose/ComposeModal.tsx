@@ -23,6 +23,7 @@ import { useAccounts } from "../../hooks/useAccounts";
 import { useScroller } from "../../hooks/useScroller";
 import { useDialog } from "../ui/DialogProvider";
 import { IconButton } from "../ui/Button";
+import { Select } from "../ui/Select";
 import { listen, emit } from "@tauri-apps/api/event";
 import { saveDraft, syncAccount, fetchMailBody, suggestReplies, sendMail, scheduleSend, listTemplates, listAttachments, getAttachmentData, trashMail, saveComposeAutosave } from "../../lib/tauri";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -1802,18 +1803,15 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
               <div className="flex items-center gap-3 px-5 py-2.5 border-b border-border-light">
                 <GradientAvatar name={selected?.display_name} email={selected?.email ?? ""} size={28} />
                 <div className="relative flex-1 min-w-0">
-                  <select
+                  <Select
                     value={fromAccountId}
-                    onChange={(e) => handleFromChange(e.target.value)}
-                    className="w-full appearance-none bg-transparent text-sm font-medium text-text cursor-pointer pr-6 truncate focus:outline-none"
-                  >
-                    {accounts.map((account) => (
-                      <option key={account.id} value={account.id} className="bg-surface text-text">
-                        {account.display_name} &lt;{account.email}&gt;
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="w-4 h-4 text-text-tertiary absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    onChange={handleFromChange}
+                    options={accounts.map((account) => ({
+                      value: account.id,
+                      label: `${account.display_name} <${account.email}>`,
+                    }))}
+                    className="w-full flex items-center gap-2 bg-transparent text-sm font-medium text-text pr-1 text-left focus:outline-none"
+                  />
                 </div>
               </div>
             );
