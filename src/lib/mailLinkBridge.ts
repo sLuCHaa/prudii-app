@@ -45,7 +45,10 @@ export function parseBridgeContextMenu(data: unknown): BridgeContextMenu | null 
   const p = (data as { __prudiiContextMenu?: Partial<BridgeContextMenu> } | null)?.__prudiiContextMenu;
   if (!p || typeof p.x !== "number" || typeof p.y !== "number") return null;
   const out: BridgeContextMenu = { x: p.x, y: p.y };
-  if (typeof p.href === "string") out.href = p.href;
+  if (typeof p.href === "string") {
+    const href = p.href.trim();
+    if (href) out.href = href;
+  }
   if (typeof p.src === "string") out.src = p.src;
   if (typeof p.selection === "string" && p.selection) out.selection = p.selection;
   return out;

@@ -336,7 +336,7 @@ const HtmlMailFrame = memo(function HtmlMailFrame({ html, allowExternalImages = 
   const darkMode = useAppStore((s) => s.darkMode);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(300);
-  const [bodyMenu, setBodyMenu] = useState<{ target: BridgeContextMenu; x: number; y: number } | null>(null);
+  const [bodyMenu, setBodyMenu] = useState<{ target: BridgeContextMenu; x: number; y: number; seq: number } | null>(null);
   const { t } = useTranslation();
 
   const themeStyles = darkMode ? DARK_STYLES : LIGHT_STYLES;
@@ -422,7 +422,9 @@ ${BASE_STYLES}
       const ctx = parseBridgeContextMenu(e.data);
       if (ctx) {
         const r = iframe.getBoundingClientRect();
-        setBodyMenu({ target: ctx, x: r.left + ctx.x, y: r.top + ctx.y });
+        // seq forces a remount: a second right-click while the menu is already
+        // open must reset MenuPanel's stale focused/previous state, not reconcile.
+        setBodyMenu((prev) => ({ target: ctx, x: r.left + ctx.x, y: r.top + ctx.y, seq: (prev?.seq ?? 0) + 1 }));
         return;
       }
 
@@ -459,6 +461,7 @@ ${BASE_STYLES}
       />
       {bodyMenu && (
         <MailBodyContextMenu
+          key={bodyMenu.seq}
           target={bodyMenu.target}
           x={bodyMenu.x}
           y={bodyMenu.y}
