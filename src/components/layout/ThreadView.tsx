@@ -100,7 +100,7 @@ const AttachmentItem = memo(function AttachmentItem({
       tabIndex={0}
       role="button"
       onKeyDown={(e) => {
-        if (e.key !== " ") return;
+        if (e.target !== e.currentTarget || e.key !== " ") return;
         e.preventDefault();
         if (isMacOS) quickLookAttachment(attachment.id).catch(() => handleOpen());
         else handleOpen();
@@ -873,7 +873,7 @@ const ThreadAttachmentItem = memo(function ThreadAttachmentItem({ attachment, se
       tabIndex={0}
       role="button"
       onKeyDown={(e) => {
-        if (e.key !== " ") return;
+        if (e.target !== e.currentTarget || e.key !== " ") return;
         e.preventDefault();
         if (isMacOS) quickLookAttachment(attachment.id).catch(() => handleOpen());
         else handleOpen();
