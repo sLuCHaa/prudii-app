@@ -1,9 +1,9 @@
-import { useState, useEffect, useLayoutEffect, useRef } from "react";
-import { createPortal } from "react-dom";
-import { Reply, ReplyAll, Forward, Star, StarOff, Mail as MailIcon, MailOpen, Archive, Trash2, Pin, PinOff, Clock, ChevronRight, FolderInput } from "lucide-react";
+import { Reply, ReplyAll, Forward, Star, StarOff, Mail as MailIcon, MailOpen, Archive, Trash2, Pin, PinOff, Clock, FolderInput } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Mail, Folder } from "../../types";
 import { useAppStore } from "../../stores/appStore";
+import { ContextMenu } from "./ContextMenu";
+import type { MenuEntry } from "../../lib/menuModel";
 
 export type BulkMailAction = "mark_read" | "mark_unread" | "star" | "unstar" | "archive" | "trash";
 
@@ -93,188 +93,41 @@ export function MailContextMenu({
   moveFolders,
 }: MailContextMenuProps) {
   const { t } = useTranslation();
-  const menuRef = useRef<HTMLDivElement>(null);
-  const [activeSubmenu, setActiveSubmenu] = useState<"snooze" | "move" | null>(null);
   const hasFeature = useAppStore((s) => s.hasFeature);
 
   const bulkMode = !!onBulkAction && (selectedCount ?? 0) >= 2;
 
-  // Measured after render: the menu's height varies (bulk mode, submenus),
-  // and the previous hardcoded estimate let taller variants clip off-screen.
-  const [pos, setPos] = useState({ left: x, top: y });
-  useLayoutEffect(() => {
-    const el = menuRef.current;
-    if (!el) return;
-    const { offsetWidth: w, offsetHeight: h } = el;
-    setPos({
-      left: Math.min(x, window.innerWidth - w - 8),
-      top: Math.min(y, window.innerHeight - h - 8),
-    });
-  }, [x, y, activeSubmenu, bulkMode]);
+  const snooze = (apply: (until: string) => void): MenuEntry[] =>
+    getSnoozePresets(t).map((p, i) => ({ kind: "item", id: `snooze-${i}`, label: p.label, icon: <Clock className="w-4 h-4" />, onSelect: () => apply(p.getDate()) }));
 
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    }
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("mousedown", handleClick);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", handleClick);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [onClose]);
-
-  const singleItems: ({ icon: React.ReactNode; label: string; action: () => void; danger?: boolean; submenu?: boolean } | { separator: true })[] = [
-    { icon: <Reply className="w-4 h-4" />, label: t("mailDetail.reply"), action: () => onReply(mail) },
-    { icon: <ReplyAll className="w-4 h-4" />, label: t("compose.replyAll"), action: () => onReplyAll(mail) },
-    { icon: <Forward className="w-4 h-4" />, label: t("mailDetail.forward"), action: () => onForward(mail) },
-    { separator: true },
-    {
-      icon: mail.is_starred ? <StarOff className="w-4 h-4" /> : <Star className="w-4 h-4" />,
-      label: mail.is_starred ? t("mailDetail.unstar") : t("mailDetail.star"),
-      action: () => onToggleStar(mail),
-    },
-    ...(onTogglePin ? [{
-      icon: mail.is_pinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />,
-      label: mail.is_pinned ? t("mailDetail.unpin") : t("mailDetail.pin"),
-      action: () => onTogglePin(mail),
-    }] : []),
-    {
-      icon: mail.is_read ? <MailIcon className="w-4 h-4" /> : <MailOpen className="w-4 h-4" />,
-      label: mail.is_read ? t("mailDetail.markUnread") : t("mailDetail.markRead"),
-      action: () => onToggleRead(mail),
-    },
-    ...(onSnooze && hasFeature("snooze") ? [{
-      icon: <Clock className="w-4 h-4" />,
-      label: t("snooze.snooze"),
-      action: () => setActiveSubmenu("snooze"),
-      submenu: true,
-    }] : []),
-    { separator: true },
-    { icon: <Archive className="w-4 h-4" />, label: t("mailDetail.archive"), action: () => onArchive(mail) },
-    { icon: <Trash2 className="w-4 h-4 text-danger" />, label: t("mailDetail.trash"), action: () => onTrash(mail), danger: true },
+  const single: MenuEntry[] = [
+    { kind: "item", id: "reply", label: t("mailDetail.reply"), icon: <Reply className="w-4 h-4" />, onSelect: () => onReply(mail) },
+    { kind: "item", id: "replyAll", label: t("compose.replyAll"), icon: <ReplyAll className="w-4 h-4" />, onSelect: () => onReplyAll(mail) },
+    { kind: "item", id: "forward", label: t("mailDetail.forward"), icon: <Forward className="w-4 h-4" />, onSelect: () => onForward(mail) },
+    { kind: "separator" },
+    { kind: "item", id: "star", label: mail.is_starred ? t("mailDetail.unstar") : t("mailDetail.star"), icon: mail.is_starred ? <StarOff className="w-4 h-4" /> : <Star className="w-4 h-4" />, onSelect: () => onToggleStar(mail) },
+    ...(onTogglePin ? [{ kind: "item" as const, id: "pin", label: mail.is_pinned ? t("mailDetail.unpin") : t("mailDetail.pin"), icon: mail.is_pinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />, onSelect: () => onTogglePin(mail) }] : []),
+    { kind: "item", id: "read", label: mail.is_read ? t("mailDetail.markUnread") : t("mailDetail.markRead"), icon: mail.is_read ? <MailIcon className="w-4 h-4" /> : <MailOpen className="w-4 h-4" />, onSelect: () => onToggleRead(mail) },
+    ...(onSnooze && hasFeature("snooze") ? [{ kind: "item" as const, id: "snooze", label: t("snooze.snooze"), icon: <Clock className="w-4 h-4" />, submenu: snooze((until) => onSnooze(mail, until)) }] : []),
+    { kind: "separator" },
+    { kind: "item", id: "archive", label: t("mailDetail.archive"), icon: <Archive className="w-4 h-4" />, onSelect: () => onArchive(mail) },
+    { kind: "item", id: "trash", label: t("mailDetail.trash"), icon: <Trash2 className="w-4 h-4" />, danger: true, onSelect: () => onTrash(mail) },
   ];
 
-  const bulkItems: typeof singleItems = [
-    { icon: <MailOpen className="w-4 h-4" />, label: t("mailDetail.markRead"), action: () => onBulkAction!("mark_read") },
-    { icon: <MailIcon className="w-4 h-4" />, label: t("mailDetail.markUnread"), action: () => onBulkAction!("mark_unread") },
-    { separator: true },
-    { icon: <Star className="w-4 h-4" />, label: t("mailDetail.star"), action: () => onBulkAction!("star") },
-    { icon: <StarOff className="w-4 h-4" />, label: t("mailDetail.unstar"), action: () => onBulkAction!("unstar") },
-    ...(onBulkSnooze && hasFeature("snooze") ? [{
-      icon: <Clock className="w-4 h-4" />,
-      label: t("snooze.snooze"),
-      action: () => setActiveSubmenu("snooze"),
-      submenu: true,
-    }] : []),
-    ...(onBulkMove && moveFolders && moveFolders.length > 0 ? [{
-      icon: <FolderInput className="w-4 h-4" />,
-      label: t("rules.moveToFolder"),
-      action: () => setActiveSubmenu("move"),
-      submenu: true,
-    }] : []),
-    { separator: true },
-    { icon: <Archive className="w-4 h-4" />, label: t("mailDetail.archive"), action: () => onBulkAction!("archive") },
-    { icon: <Trash2 className="w-4 h-4 text-danger" />, label: t("mailDetail.trash"), action: () => onBulkAction!("trash"), danger: true },
+  const bulk: MenuEntry[] = [
+    { kind: "header", label: `${selectedCount} ${t("mailList.selectedSuffix")}` },
+    { kind: "separator" },
+    { kind: "item", id: "markRead", label: t("mailDetail.markRead"), icon: <MailOpen className="w-4 h-4" />, onSelect: () => onBulkAction!("mark_read") },
+    { kind: "item", id: "markUnread", label: t("mailDetail.markUnread"), icon: <MailIcon className="w-4 h-4" />, onSelect: () => onBulkAction!("mark_unread") },
+    { kind: "separator" },
+    { kind: "item", id: "star", label: t("mailDetail.star"), icon: <Star className="w-4 h-4" />, onSelect: () => onBulkAction!("star") },
+    { kind: "item", id: "unstar", label: t("mailDetail.unstar"), icon: <StarOff className="w-4 h-4" />, onSelect: () => onBulkAction!("unstar") },
+    ...(onBulkSnooze && hasFeature("snooze") ? [{ kind: "item" as const, id: "snooze", label: t("snooze.snooze"), icon: <Clock className="w-4 h-4" />, submenu: snooze(onBulkSnooze) }] : []),
+    ...(onBulkMove && moveFolders && moveFolders.length > 0 ? [{ kind: "item" as const, id: "move", label: t("rules.moveToFolder"), icon: <FolderInput className="w-4 h-4" />, submenu: moveFolders.map((f) => ({ kind: "item" as const, id: `move-${f.id}`, label: f.name, icon: <FolderInput className="w-4 h-4" />, onSelect: () => onBulkMove(f.id) })) }] : []),
+    { kind: "separator" },
+    { kind: "item", id: "archive", label: t("mailDetail.archive"), icon: <Archive className="w-4 h-4" />, onSelect: () => onBulkAction!("archive") },
+    { kind: "item", id: "trash", label: t("mailDetail.trash"), icon: <Trash2 className="w-4 h-4" />, danger: true, onSelect: () => onBulkAction!("trash") },
   ];
 
-  const items = bulkMode ? bulkItems : singleItems;
-
-  const snoozePresets = getSnoozePresets(t);
-
-  return createPortal(
-    <div
-      ref={menuRef}
-      className="fixed z-9999 min-w-[180px] max-h-[min(60vh,400px)] overflow-y-auto bg-surface rounded-lg shadow-lg border border-border py-1 menu-enter"
-      style={{ left: pos.left, top: pos.top }}
-    >
-      {activeSubmenu === "snooze" ? (
-        <>
-          <button
-            onClick={() => setActiveSubmenu(null)}
-            className="w-full flex items-center gap-3 px-3 py-1.5 text-sm text-text hover:bg-hover transition-colors"
-          >
-            <span className="text-text-tertiary"><ChevronRight className="w-4 h-4 rotate-180" /></span>
-            <span className="font-medium">{t("snooze.snooze")}</span>
-          </button>
-          <div className="my-1 border-t border-border" />
-          {snoozePresets.map((preset, i) => (
-            <button
-              key={i}
-              onClick={() => {
-                if (bulkMode) onBulkSnooze?.(preset.getDate());
-                else onSnooze?.(mail, preset.getDate());
-                onClose();
-              }}
-              className="w-full flex items-center gap-3 px-3 py-1.5 text-sm text-text hover:bg-hover transition-colors"
-            >
-              <span className="text-text-tertiary"><Clock className="w-4 h-4" /></span>
-              <span>{preset.label}</span>
-            </button>
-          ))}
-        </>
-      ) : activeSubmenu === "move" ? (
-        <>
-          <button
-            onClick={() => setActiveSubmenu(null)}
-            className="w-full flex items-center gap-3 px-3 py-1.5 text-sm text-text hover:bg-hover transition-colors"
-          >
-            <span className="text-text-tertiary"><ChevronRight className="w-4 h-4 rotate-180" /></span>
-            <span className="font-medium">{t("rules.moveToFolder")}</span>
-          </button>
-          <div className="my-1 border-t border-border" />
-          {(moveFolders ?? []).map((f) => (
-            <button
-              key={f.id}
-              onClick={() => {
-                onBulkMove?.(f.id);
-                onClose();
-              }}
-              className="w-full flex items-center gap-3 px-3 py-1.5 text-sm text-text hover:bg-hover transition-colors"
-            >
-              <span className="text-text-tertiary"><FolderInput className="w-4 h-4" /></span>
-              <span className="flex-1 text-left truncate">{f.name}</span>
-            </button>
-          ))}
-        </>
-      ) : (
-        <>
-          {bulkMode && (
-            <>
-              <div className="px-3 py-1.5 text-xs font-semibold text-text-tertiary tabular-nums">
-                {selectedCount} {t("mailList.selectedSuffix")}
-              </div>
-              <div className="my-1 border-t border-border" />
-            </>
-          )}
-          {items.map((item, i) =>
-            "separator" in item ? (
-              <div key={i} className="my-1 border-t border-border" />
-            ) : (
-              <button
-                key={i}
-                onClick={() => {
-                  item.action();
-                  if (!item.submenu) onClose();
-                }}
-                className={`w-full flex items-center gap-3 px-3 py-1.5 text-sm transition-colors hover:bg-hover ${
-                  item.danger ? "text-danger" : "text-text"
-                }`}
-              >
-                <span className="text-text-tertiary">{item.icon}</span>
-                <span className="flex-1 text-left">{item.label}</span>
-                {item.submenu && <ChevronRight className="w-3 h-3 text-text-tertiary" />}
-              </button>
-            )
-          )}
-        </>
-      )}
-    </div>,
-    document.body
-  );
+  return <ContextMenu entries={bulkMode ? bulk : single} x={x} y={y} onClose={onClose} />;
 }
