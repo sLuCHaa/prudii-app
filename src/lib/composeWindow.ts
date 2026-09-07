@@ -1,10 +1,11 @@
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { getCurrentWindow, currentMonitor } from "@tauri-apps/api/window";
+import { getCurrentWindow, currentMonitor, availableMonitors } from "@tauri-apps/api/window";
 import { LogicalPosition } from "@tauri-apps/api/dpi";
 import { emitTo, listen } from "@tauri-apps/api/event";
 import { isMacOS } from "./platform";
 import i18n from "./i18n";
 import { useAppStore } from "../stores/appStore";
+import { pickComposePosition } from "./composePosition";
 import type { ComposeInitData } from "../components/compose/ComposeModal";
 
 let composeCounter = 0;
@@ -65,18 +66,43 @@ export async function openComposeWindow(data: ComposeInitData): Promise<void> {
     const cascadeOffset = ((composeCounter - 1) % 8) * 25;
     let x: number | undefined;
     let y: number | undefined;
+
+    // A remembered window position beats centring, unless the user moved
+    // their monitor setup since — then it falls through to centring below.
     try {
-      const main = getCurrentWindow();
-      const pos = await main.outerPosition();
-      const size = await main.outerSize();
-      const mainX = pos.x / scale;
-      const mainY = pos.y / scale;
-      const mainW = size.width / scale;
-      const mainH = size.height / scale;
-      x = Math.round(mainX + (mainW - composeW) / 2 + cascadeOffset);
-      y = Math.round(mainY + (mainH - composeH) / 2 + cascadeOffset);
+      const saved = JSON.parse(localStorage.getItem("compose-window-pos") ?? "null");
+      if (saved && typeof saved.x === "number" && typeof saved.y === "number") {
+        const monitors = await availableMonitors();
+        const rects = monitors.map((m) => ({
+          x: m.position.x / m.scaleFactor,
+          y: m.position.y / m.scaleFactor,
+          width: m.size.width / m.scaleFactor,
+          height: m.size.height / m.scaleFactor,
+        }));
+        const picked = pickComposePosition(saved, rects, cascadeOffset, { w: composeW, h: composeH });
+        if (picked) {
+          x = picked.x;
+          y = picked.y;
+        }
+      }
     } catch {
-      // Fallback: let Tauri center it
+      // Corrupt entry or API failure — fall through to centring
+    }
+
+    if (x === undefined) {
+      try {
+        const main = getCurrentWindow();
+        const pos = await main.outerPosition();
+        const size = await main.outerSize();
+        const mainX = pos.x / scale;
+        const mainY = pos.y / scale;
+        const mainW = size.width / scale;
+        const mainH = size.height / scale;
+        x = Math.round(mainX + (mainW - composeW) / 2 + cascadeOffset);
+        y = Math.round(mainY + (mainH - composeH) / 2 + cascadeOffset);
+      } catch {
+        // Fallback: let Tauri center it
+      }
     }
 
     // Listen for the compose window's "ready" signal before sending data

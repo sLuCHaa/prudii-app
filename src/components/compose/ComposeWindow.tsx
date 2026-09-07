@@ -121,6 +121,7 @@ export function ComposeWindow() {
 
   const [maximized, setMaximized] = useState(false);
   const sizeSaveTimer = useRef<number | null>(null);
+  const posSaveTimer = useRef<number | null>(null);
   // Snap Layouts flyout + native hover for the maximize button (Windows).
   const { ref: maxButtonRef, hovered: maxHovered } = useWindowsCaptionMaxButton();
 
@@ -153,6 +154,34 @@ export function ComposeWindow() {
     return () => {
       unlisten.then((fn) => fn());
       if (sizeSaveTimer.current !== null) clearTimeout(sizeSaveTimer.current);
+    };
+  }, []);
+
+  // Track native moves and persist the free-form position (mirrors onResized above).
+  useEffect(() => {
+    const win = getCurrentWindow();
+    const unlisten = win.onMoved(async () => {
+      try {
+        if (await win.isMaximized()) return;
+        if (posSaveTimer.current !== null) clearTimeout(posSaveTimer.current);
+        posSaveTimer.current = window.setTimeout(async () => {
+          try {
+            const scale = (await currentMonitor())?.scaleFactor ?? 1;
+            const pos = await win.outerPosition();
+            localStorage.setItem(
+              "compose-window-pos",
+              JSON.stringify({
+                x: Math.round(pos.x / scale),
+                y: Math.round(pos.y / scale),
+              })
+            );
+          } catch { /* ignore */ }
+        }, 400);
+      } catch { /* ignore */ }
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+      if (posSaveTimer.current !== null) clearTimeout(posSaveTimer.current);
     };
   }, []);
 

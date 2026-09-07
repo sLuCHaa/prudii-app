@@ -21,6 +21,7 @@
     "core:window:allow-set-position",
     "core:window:allow-is-fullscreen",
     "core:window:allow-set-fullscreen",
+    "core:window:allow-set-always-on-top",
     "core:webview:allow-create-webview-window",
     {
       "identifier": "shell:allow-open",
