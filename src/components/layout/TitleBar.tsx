@@ -58,10 +58,6 @@ export function TitleBar() {
     <div
       data-tauri-drag-region
       onContextMenu={showSystemMenu}
-      onDoubleClick={(e) => {
-        if ((e.target as HTMLElement).closest("button")) return;
-        appWindow.toggleMaximize().catch(() => {});
-      }}
       className="flex items-center justify-between h-8 bg-sidebar border-b border-border shrink-0"
     >
       {/* macOS: left padding clears the native traffic lights (overlay title bar) */}

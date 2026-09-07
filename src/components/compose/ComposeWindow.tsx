@@ -218,10 +218,6 @@ export function ComposeWindow() {
           <div
             data-tauri-drag-region
             onContextMenu={showSystemMenu}
-            onDoubleClick={(e) => {
-              if ((e.target as HTMLElement).closest("button")) return;
-              handleToggleMaximize();
-            }}
             className={`flex items-center justify-between h-9 border-b border-border bg-bg-secondary select-none shrink-0 ${isMacOS ? "pl-[88px] pr-4" : "pl-4"}`}
           >
             <h2 data-tauri-drag-region className="flex items-center gap-2 text-sm font-semibold text-text">
