@@ -11,9 +11,8 @@ interface GuardOptions {
   allowDevtools?: boolean;
 }
 
-// Keys the embedded browser treats as its own chrome (reload, print, find bar,
-// caret browsing, view-source, history, zoom, devtools). Tauri disables zoom
-// hotkeys natively but not WebView2's accelerator keys, so they are caught here.
+// Keys the embedded browser treats as its own chrome (reload, print, find bar, zoom, devtools).
+// Tauri disables zoom hotkeys natively but not WebView2's accelerator keys.
 export function isBrowserChromeKey(e: KeyLike, opts: GuardOptions = {}): boolean {
   const mod = e.ctrlKey || e.metaKey;
   const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
