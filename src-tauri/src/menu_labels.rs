@@ -14,6 +14,8 @@ pub struct MenuLabels {
     pub window: &'static str,
     pub show: &'static str,
     pub quit: &'static str,
+    pub archive: &'static str,
+    pub mark_read: &'static str,
 }
 
 pub fn for_lang(lang: &str) -> MenuLabels {
@@ -32,6 +34,8 @@ pub fn for_lang(lang: &str) -> MenuLabels {
             window: "Fenster",
             show: "Prudii Mail anzeigen",
             quit: "Beenden",
+            archive: "Archivieren",
+            mark_read: "Als gelesen markieren",
         },
         "es" => MenuLabels {
             settings: "Configuración…",
@@ -47,6 +51,8 @@ pub fn for_lang(lang: &str) -> MenuLabels {
             window: "Ventana",
             show: "Mostrar Prudii Mail",
             quit: "Salir",
+            archive: "Archivar",
+            mark_read: "Marcar como leído",
         },
         "fr" => MenuLabels {
             settings: "Paramètres…",
@@ -62,6 +68,8 @@ pub fn for_lang(lang: &str) -> MenuLabels {
             window: "Fenêtre",
             show: "Afficher Prudii Mail",
             quit: "Quitter",
+            archive: "Archiver",
+            mark_read: "Marquer comme lu",
         },
         "pt" => MenuLabels {
             settings: "Configurações…",
@@ -77,6 +85,8 @@ pub fn for_lang(lang: &str) -> MenuLabels {
             window: "Janela",
             show: "Mostrar Prudii Mail",
             quit: "Sair",
+            archive: "Arquivar",
+            mark_read: "Marcar como lido",
         },
         "ru" => MenuLabels {
             settings: "Настройки…",
@@ -92,6 +102,8 @@ pub fn for_lang(lang: &str) -> MenuLabels {
             window: "Окно",
             show: "Показать Prudii Mail",
             quit: "Выход",
+            archive: "В архив",
+            mark_read: "Пометить прочитанным",
         },
         "zh" => MenuLabels {
             settings: "设置…",
@@ -107,6 +119,8 @@ pub fn for_lang(lang: &str) -> MenuLabels {
             window: "窗口",
             show: "显示 Prudii Mail",
             quit: "退出",
+            archive: "归档",
+            mark_read: "标为已读",
         },
         _ => MenuLabels {
             settings: "Settings…",
@@ -122,6 +136,8 @@ pub fn for_lang(lang: &str) -> MenuLabels {
             window: "Window",
             show: "Show Prudii Mail",
             quit: "Quit",
+            archive: "Archive",
+            mark_read: "Mark as read",
         },
     }
 }

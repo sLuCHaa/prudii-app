@@ -49,29 +49,64 @@ pub fn send_new_mail_notification(app: &AppHandle, account_id: &str, new_mails: 
 
     let Some(t) = build_new_mail_toast(account_id, db) else { return };
 
+    // Read language setting from DB, same as the tray menu.
+    let lang = {
+        let conn = db.lock_db();
+        conn.query_row(
+            "SELECT value FROM app_settings WHERE key = 'language'",
+            [],
+            |row| row.get::<_, String>(0),
+        )
+        .unwrap_or_else(|_| "en".to_string())
+    };
+    let labels = crate::menu_labels::for_lang(&lang);
+
     let mut toast = Toast::new("com.prudii.mail").title(&t.title).text1(&t.subject);
     if new_mails > 1 {
         toast = toast.text2(&format!("+ {} more", new_mails - 1));
     }
     toast = if t.sound { toast.sound(Some(Sound::Default)) } else { toast.sound(None) };
+    toast = toast
+        .add_button(labels.archive, &format!("archive:{}", t.mail_id))
+        .add_button(labels.mark_read, &format!("read:{}", t.mail_id));
 
     let app_clone = app.clone();
     let aid = account_id.to_string();
     let NewMailToast { mail_id, folder_id, .. } = t;
-    toast = toast.on_activated(move |_| {
-        if let Some(window) = app_clone.get_webview_window("main") {
-            let _ = window.show();
-            let _ = window.unminimize();
-            let _ = window.set_focus();
+    toast = toast.on_activated(move |action| {
+        match action.as_deref() {
+            Some(a) if a.starts_with("archive:") || a.starts_with("read:") => {
+                let (kind, id) = a.split_once(':').unwrap_or(("", ""));
+                let (kind, id) = (kind.to_string(), id.to_string());
+                let app = app_clone.clone();
+                let aid = aid.clone();
+                tauri::async_runtime::spawn(async move {
+                    let result = if kind == "archive" {
+                        crate::commands::mails::archive_mail(app.clone(), app.state(), id).await
+                    } else {
+                        crate::commands::mails::mark_as_read(app.state(), app.state(), id).await
+                    };
+                    if let Err(e) = result { log::warn!("toast action {kind} failed: {e}"); }
+                    // Rust-side changes bypass the frontend's optimistic updates.
+                    let _ = app.emit("mails-changed", serde_json::json!({ "account_id": aid }));
+                });
+            }
+            _ => {
+                if let Some(window) = app_clone.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.unminimize();
+                    let _ = window.set_focus();
+                }
+                let _ = app_clone.emit(
+                    "notification-clicked",
+                    serde_json::json!({
+                        "account_id": aid,
+                        "mail_id": mail_id,
+                        "folder_id": folder_id,
+                    }),
+                );
+            }
         }
-        let _ = app_clone.emit(
-            "notification-clicked",
-            serde_json::json!({
-                "account_id": aid,
-                "mail_id": mail_id,
-                "folder_id": folder_id,
-            }),
-        );
         Ok(())
     });
 
