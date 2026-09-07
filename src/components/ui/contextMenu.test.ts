@@ -81,6 +81,39 @@ describe("ContextMenu", () => {
     button.remove();
   });
 
+  it("does not steal focus on close when a consumer already claimed it", () => {
+    const button = document.createElement("button");
+    document.body.appendChild(button);
+    button.focus();
+    const entries: MenuEntry[] = [{ kind: "item", id: "rename", label: "Rename" }];
+    act(() => root.render(createElement(ContextMenu, { entries, x: 10, y: 10, onClose: () => {} })));
+
+    // Simulate onSelect mounting an <input autoFocus> (folder rename) before unmount.
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    act(() => { input.focus(); });
+
+    act(() => root.unmount());
+    expect(document.activeElement).toBe(input);
+    input.remove();
+    button.remove();
+  });
+
+  it("stops menu keys from reaching window-level shortcut listeners", () => {
+    const seen: string[] = [];
+    const onWindowKey = (e: KeyboardEvent) => seen.push(e.key);
+    window.addEventListener("keydown", onWindowKey);
+    const entries: MenuEntry[] = [
+      { kind: "item", id: "a", label: "Alpha" },
+      { kind: "item", id: "b", label: "Beta" },
+    ];
+    act(() => root.render(createElement(ContextMenu, { entries, x: 10, y: 10, onClose: () => {} })));
+    key("ArrowDown");
+    window.removeEventListener("keydown", onWindowKey);
+    expect(seen).toEqual([]);
+    expect(document.activeElement?.textContent).toContain("Beta");
+  });
+
   it("remounts the flyout when hover switches directly between sibling submenu items", () => {
     const entries: MenuEntry[] = [
       { kind: "item", id: "move", label: "Move", submenu: [
@@ -116,6 +149,24 @@ describe("ContextMenu", () => {
     const button = Array.from(document.querySelectorAll("button")).find((b) => b.textContent?.includes("Trash"));
     const iconWrapper = button?.firstElementChild;
     expect(iconWrapper?.className).toContain("text-danger");
+  });
+
+  it("closes on Tab without blocking focus from moving on", () => {
+    let closed = 0;
+    const entries: MenuEntry[] = [{ kind: "item", id: "a", label: "Alpha" }];
+    act(() => root.render(createElement(ContextMenu, { entries, x: 10, y: 10, onClose: () => closed++ })));
+    key("Tab");
+    expect(closed).toBe(1);
+  });
+
+  it("opens with the selected entry focused instead of the first item", () => {
+    const entries: MenuEntry[] = [
+      { kind: "item", id: "a", label: "Alpha" },
+      { kind: "item", id: "b", label: "Beta", selected: true },
+      { kind: "item", id: "c", label: "Gamma" },
+    ];
+    act(() => root.render(createElement(ContextMenu, { entries, x: 10, y: 10, onClose: () => {} })));
+    expect(document.activeElement?.textContent).toContain("Beta");
   });
 
   it("uses listbox roles in listbox variant", () => {

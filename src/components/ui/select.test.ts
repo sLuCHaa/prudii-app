@@ -47,4 +47,41 @@ describe("Select", () => {
     expect(onChange).toHaveBeenCalledWith("b");
     expect(document.querySelector('[role="listbox"]')).toBeNull();
   });
+
+  it("opens with the current value's option focused, like a native select", () => {
+    const onChange = vi.fn();
+    const options = [
+      { value: "a", label: "Alpha" },
+      { value: "b", label: "Beta" },
+    ];
+    act(() => root.render(createElement(Select, { value: "b", options, onChange })));
+
+    const trigger = document.querySelector('[role="combobox"]') as HTMLButtonElement;
+    act(() => trigger.click());
+
+    const opts = Array.from(document.querySelectorAll('[role="option"]'));
+    const betaOption = opts.find((o) => o.textContent?.includes("Beta"));
+    expect(document.activeElement).toBe(betaOption);
+  });
+
+  it("toggles the listbox closed when the open trigger is clicked again", () => {
+    const onChange = vi.fn();
+    const options = [
+      { value: "a", label: "Alpha" },
+      { value: "b", label: "Beta" },
+    ];
+    act(() => root.render(createElement(Select, { value: "a", options, onChange })));
+
+    const trigger = document.querySelector('[role="combobox"]') as HTMLButtonElement;
+    act(() => trigger.click());
+    expect(document.querySelector('[role="listbox"]')).not.toBeNull();
+
+    // A real second click fires mousedown (ContextMenu's outside-close listener)
+    // then click (the trigger's own toggle) in the same gesture.
+    act(() => {
+      trigger.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+      trigger.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    expect(document.querySelector('[role="listbox"]')).toBeNull();
+  });
 });

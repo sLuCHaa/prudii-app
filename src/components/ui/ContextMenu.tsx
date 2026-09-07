@@ -35,7 +35,16 @@ interface PanelProps {
 function MenuPanel({ entries, position, variant, minWidth, ariaLabel, onCloseAll, onCloseSelf, measure }: PanelProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState(position);
-  const [focused, setFocused] = useState(() => moveFocus(entries, -1, "ArrowDown"));
+  const [focused, setFocused] = useState(() => {
+    // Open on the current value (native select/flyout behaviour), falling back
+    // to the first focusable entry when nothing is marked selected.
+    const idx = entries.map((e, i) => (isFocusable(e) ? i : -1)).filter((i) => i >= 0);
+    for (const i of idx) {
+      const e = entries[i];
+      if (isFocusable(e) && e.selected) return i;
+    }
+    return idx.length ? idx[0] : -1;
+  });
   const [openSub, setOpenSub] = useState<number | null>(null);
   const [subAnchor, setSubAnchor] = useState<SubAnchor>({ left: 0, top: 0, right: 0 });
   const buffer = useRef({ text: "", at: 0 });
@@ -69,6 +78,8 @@ function MenuPanel({ entries, position, variant, minWidth, ariaLabel, onCloseAll
   }
 
   function onKeyDown(ev: React.KeyboardEvent) {
+    if (ev.key === "Tab") { onCloseAll(); return; } // let focus move naturally; no preventDefault/stopPropagation
+    ev.stopPropagation(); // native menus swallow all keys; global shortcuts (MailList, Compose type-ahead) must not see them
     if (openSub !== null) return; // ignore parent-panel keys while a submenu is open (it's a sibling panel and holds its own DOM focus)
     const k = ev.key;
     if (k === "ArrowDown" || k === "ArrowUp" || k === "Home" || k === "End") {
@@ -85,7 +96,6 @@ function MenuPanel({ entries, position, variant, minWidth, ariaLabel, onCloseAll
       onCloseSelf();
     } else if (k === "Escape") {
       ev.preventDefault();
-      ev.stopPropagation();
       (onCloseSelf ?? onCloseAll)();
     } else if (k.length === 1 && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
       const now = Date.now();
@@ -181,7 +191,12 @@ export function ContextMenu({ entries, x, y, onClose, variant = "menu", minWidth
 
   useEffect(() => {
     const el = previous.current;
-    return () => { el?.focus?.(); };
+    return () => {
+      // A consumer's onSelect may already have moved focus (e.g. a rename
+      // input mounted with autoFocus) — only reclaim it if nobody did.
+      const active = document.activeElement;
+      if (active === null || active === document.body) el?.focus?.();
+    };
   }, []);
 
   useEffect(() => {

@@ -26,6 +26,9 @@ export function Select({ value, options, onChange, placeholder, className = DEFA
   const current = options.find((o) => o.value === value);
 
   function openList() {
+    // Focus the trigger first so it (not the last hovered option) reliably
+    // gets focus back after a mouse pick on WebKit.
+    ref.current?.focus();
     const r = ref.current?.getBoundingClientRect();
     if (r) setOpen({ x: r.left, y: r.bottom + 4, w: r.width });
   }
@@ -48,7 +51,8 @@ export function Select({ value, options, onChange, placeholder, className = DEFA
         aria-haspopup="listbox"
         aria-expanded={!!open}
         aria-label={ariaLabel}
-        onClick={openList}
+        onMouseDown={(e) => { if (open) e.preventDefault(); }}
+        onClick={() => { if (open) setOpen(null); else openList(); }}
         onKeyDown={(e) => {
           if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === " " || e.key === "Enter") {
             e.preventDefault();
