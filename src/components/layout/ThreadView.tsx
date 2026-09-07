@@ -606,7 +606,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, sing
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-text text-sm truncate">
+            <span className="font-medium text-text text-sm truncate select-text">
               {mail.from.name || mail.from.email}
             </span>
             {isDraft && (
@@ -626,7 +626,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, sing
               <span className="w-2 h-2 rounded-full bg-accent shrink-0" />
             )}
           </div>
-          <div className="text-xs text-text-tertiary truncate">
+          <div className="text-xs text-text-tertiary truncate select-text">
             {formattedDate}
             {!expanded && mail.snippet && (
               <span className="ml-2 text-text-secondary">— {mail.snippet}</span>
@@ -660,13 +660,13 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, sing
         <div className="px-4 pb-4 border-t border-border-light">
           <div className="py-2 text-xs text-text-tertiary">
             <div className="flex items-center gap-1.5 mb-0.5">
-              <span className="text-text-secondary font-medium">{mail.from.name || mail.from.email}</span>
-              <span>&lt;{mail.from.email}&gt;</span>
+              <span className="text-text-secondary font-medium select-text">{mail.from.name || mail.from.email}</span>
+              <span className="select-text">&lt;{mail.from.email}&gt;</span>
               <CopyEmailButton email={mail.from.email} />
             </div>
-            <span>{t("mailDetail.toLabel")}: {recipients}</span>
+            <span className="select-text">{t("mailDetail.toLabel")}: {recipients}</span>
             {ccRecipients && (
-              <span className="ml-2">{t("mailDetail.ccLabel")}: {ccRecipients}</span>
+              <span className="ml-2 select-text">{t("mailDetail.ccLabel")}: {ccRecipients}</span>
             )}
           </div>
 
@@ -747,7 +747,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, sing
               {displayMail.body_html && !viewPlainText ? (
                 <HtmlMailFrame html={displayMail.body_html} allowExternalImages={allowExternalImages} onIframeRef={(el) => { messageIframeRef.current = el; onIframeRef?.(el); }} onTrackersDetected={handleTrackersDetected} onLinkClick={onLinkClick} onImageClick={handleInlineImageClick} />
               ) : (
-                <pre className="text-sm text-text-secondary whitespace-pre-wrap font-sans leading-relaxed">
+                <pre className="text-sm text-text-secondary whitespace-pre-wrap font-sans leading-relaxed select-text">
                   {displayMail.body_text}
                 </pre>
               )}
@@ -1271,7 +1271,7 @@ export function ThreadView({ mail }: ThreadViewProps) {
   return (
     <div className="flex flex-col h-full bg-bg-secondary">
       <div className="px-6 py-4 bg-surface border-b border-border">
-        <h2 className="text-lg font-semibold text-text truncate">{mail.subject}</h2>
+        <h2 className="text-lg font-semibold text-text truncate select-text">{mail.subject}</h2>
         {!isSingleMail && (
           <div className="flex items-center gap-2 mt-1">
             <MessageSquare className="w-4 h-4 text-text-tertiary" />

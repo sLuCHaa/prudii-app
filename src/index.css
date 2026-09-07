@@ -197,6 +197,23 @@ html, body {
   border-radius: 10px;
   overflow: hidden;
   background: var(--c-bg);
+  /* Desktop chrome is never selectable; readable text opts back in below. */
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+textarea,
+[contenteditable="true"],
+.select-text,
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="button"]):not([type="submit"]) {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
+::selection {
+  background: var(--c-accent-ring);
 }
 
 body {
@@ -455,12 +472,6 @@ button:focus-visible,
 .os-theme-prudii .os-scrollbar-handle:hover,
 .os-theme-prudii .os-scrollbar:active .os-scrollbar-handle {
   background: var(--c-scrollbar-hover);
-}
-
-/* ─── Utility ─── */
-.no-select {
-  user-select: none;
-  -webkit-user-select: none;
 }
 
 /* ─── Design System Documentation ─── */

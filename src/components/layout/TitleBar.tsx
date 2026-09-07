@@ -58,7 +58,7 @@ export function TitleBar() {
     <div
       data-tauri-drag-region
       onContextMenu={showSystemMenu}
-      className="flex items-center justify-between h-8 bg-sidebar border-b border-border no-select shrink-0"
+      className="flex items-center justify-between h-8 bg-sidebar border-b border-border shrink-0"
     >
       {/* macOS: left padding clears the native traffic lights (overlay title bar) */}
       <div data-tauri-drag-region className={`flex items-center gap-2 ${isMacOS ? "pl-[88px] pr-3" : "px-3"}`}>

@@ -150,7 +150,7 @@ export function AttachmentPreview({
       return (
         <div className="flex flex-col items-center gap-3 text-text-tertiary px-6">
           {getLargeFileIcon(attachment)}
-          <span className="text-sm font-medium text-text">{attachment.filename}</span>
+          <span className="text-sm font-medium text-text select-text">{attachment.filename}</span>
           <span className="text-xs">{t("attachments.noPreview")}</span>
         </div>
       );
@@ -199,7 +199,7 @@ export function AttachmentPreview({
   return (
     <div style={{ width }} className="shrink-0 bg-surface flex flex-col h-full">
       <div className="flex items-center gap-2 px-4 py-3 border-b border-border min-w-0">
-        <span className="truncate flex-1 text-sm font-medium text-text">{attachment.filename}</span>
+        <span className="truncate flex-1 text-sm font-medium text-text select-text">{attachment.filename}</span>
         <button
           onClick={onClose}
           className="p-1 rounded-md hover:bg-hover text-text-tertiary hover:text-text transition-colors shrink-0"

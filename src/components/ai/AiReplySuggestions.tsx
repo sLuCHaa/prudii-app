@@ -157,7 +157,7 @@ export function AiReplySuggestionsPanel({ mailId, threadMode }: AiReplySuggestio
                   {t("ai.useReply")}
                 </button>
               </div>
-              <p className="text-xs text-text-secondary leading-relaxed line-clamp-4">
+              <p className="text-xs text-text-secondary leading-relaxed line-clamp-4 select-text">
                 {reply.text}
               </p>
             </div>

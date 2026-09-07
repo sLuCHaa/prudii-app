@@ -135,7 +135,7 @@ export function AiSummaryPanel({ mailId, threadMode }: AiSummaryProps) {
       )}
 
       {text && (
-        <p className="text-sm text-text-secondary leading-relaxed whitespace-pre-wrap">
+        <p className="text-sm text-text-secondary leading-relaxed whitespace-pre-wrap select-text">
           {text}
           {loading && <span className="inline-block w-1.5 h-4 bg-accent/60 ml-0.5 animate-pulse align-middle" />}
         </p>
