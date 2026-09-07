@@ -736,7 +736,9 @@ export function AttachmentBrowser() {
                       onDragStart={(e) => {
                         // HTML5 drag cannot hand a file to the OS; the native session takes over.
                         e.preventDefault();
-                        startAttachmentDrag(att.id).catch(() => {});
+                        startAttachmentDrag(att.id).catch((err) => {
+                          addToast("error", t("errors.attachmentOpen"), err instanceof Error ? err.message : String(err));
+                        });
                       }}
                     >
                       <td className="pl-6 pr-1 py-2">

@@ -756,11 +756,15 @@ pub fn quick_look_attachment(db: State<'_, Database>, attachment_id: String) -> 
     #[cfg(target_os = "macos")]
     {
         let canonical_path = resolve_attachment_path(&db, &attachment_id)?;
-        std::process::Command::new("qlmanage")
+        let mut child = std::process::Command::new("qlmanage")
             .arg("-p")
             .arg(&canonical_path)
             .spawn()
             .map_err(|e| e.to_string())?;
+        // qlmanage outlives the command; reap it off-thread so no zombie remains.
+        std::thread::spawn(move || {
+            let _ = child.wait();
+        });
         Ok(())
     }
     #[cfg(not(target_os = "macos"))]

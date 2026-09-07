@@ -95,12 +95,14 @@ const AttachmentItem = memo(function AttachmentItem({
       onDragStart={(e) => {
         // HTML5 drag cannot hand a file to the OS; the native session takes over.
         e.preventDefault();
-        startAttachmentDrag(attachment.id).catch(() => {});
+        startAttachmentDrag(attachment.id).catch((err) => {
+          addToast("error", t("errors.attachmentOpen"), err instanceof Error ? err.message : String(err));
+        });
       }}
       tabIndex={0}
       role="button"
       onKeyDown={(e) => {
-        if (e.target !== e.currentTarget || e.key !== " ") return;
+        if (e.target !== e.currentTarget || (e.key !== " " && e.key !== "Enter")) return;
         e.preventDefault();
         if (isMacOS) quickLookAttachment(attachment.id).catch(() => handleOpen());
         else handleOpen();
@@ -868,12 +870,14 @@ const ThreadAttachmentItem = memo(function ThreadAttachmentItem({ attachment, se
       onDragStart={(e) => {
         // HTML5 drag cannot hand a file to the OS; the native session takes over.
         e.preventDefault();
-        startAttachmentDrag(attachment.id).catch(() => {});
+        startAttachmentDrag(attachment.id).catch((err) => {
+          addToast("error", t("errors.attachmentOpen"), err instanceof Error ? err.message : String(err));
+        });
       }}
       tabIndex={0}
       role="button"
       onKeyDown={(e) => {
-        if (e.target !== e.currentTarget || e.key !== " ") return;
+        if (e.target !== e.currentTarget || (e.key !== " " && e.key !== "Enter")) return;
         e.preventDefault();
         if (isMacOS) quickLookAttachment(attachment.id).catch(() => handleOpen());
         else handleOpen();
