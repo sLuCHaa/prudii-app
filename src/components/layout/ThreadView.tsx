@@ -11,7 +11,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "../../stores/appStore";
 import { useAttachments, useToggleStar, useToggleMailFlag } from "../../hooks/useAccounts";
 import { useScroller } from "../../hooks/useScroller";
-import { openAttachment, startAttachmentDrag, saveAttachment, fetchMailBody, trashMail, archiveMail, getThreadMails, markAsRead, unsubscribeMail } from "../../lib/tauri";
+import { openAttachment, startAttachmentDrag, quickLookAttachment, saveAttachment, fetchMailBody, trashMail, archiveMail, getThreadMails, markAsRead, unsubscribeMail } from "../../lib/tauri";
 import { revealLabelKey, revealAttachment } from "../../lib/attachmentActions";
 import { isMacOS, isWindows } from "../../lib/platform";
 import { MAIL_LINK_BRIDGE, MAIL_LINK_BRIDGE_CSP_HASH, relayBridgeKey } from "../../lib/mailLinkBridge";
@@ -96,6 +96,14 @@ const AttachmentItem = memo(function AttachmentItem({
         // HTML5 drag cannot hand a file to the OS; the native session takes over.
         e.preventDefault();
         startAttachmentDrag(attachment.id).catch(() => {});
+      }}
+      tabIndex={0}
+      role="button"
+      onKeyDown={(e) => {
+        if (e.key !== " ") return;
+        e.preventDefault();
+        if (isMacOS) quickLookAttachment(attachment.id).catch(() => handleOpen());
+        else handleOpen();
       }}
     >
       <button
@@ -861,6 +869,14 @@ const ThreadAttachmentItem = memo(function ThreadAttachmentItem({ attachment, se
         // HTML5 drag cannot hand a file to the OS; the native session takes over.
         e.preventDefault();
         startAttachmentDrag(attachment.id).catch(() => {});
+      }}
+      tabIndex={0}
+      role="button"
+      onKeyDown={(e) => {
+        if (e.key !== " ") return;
+        e.preventDefault();
+        if (isMacOS) quickLookAttachment(attachment.id).catch(() => handleOpen());
+        else handleOpen();
       }}
     >
       <div className="min-w-0 flex-1">

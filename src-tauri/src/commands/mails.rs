@@ -751,6 +751,25 @@ pub async fn start_attachment_drag(
     rx.recv().map_err(|e| e.to_string())?
 }
 
+#[tauri::command(async)]
+pub fn quick_look_attachment(db: State<'_, Database>, attachment_id: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let canonical_path = resolve_attachment_path(&db, &attachment_id)?;
+        std::process::Command::new("qlmanage")
+            .arg("-p")
+            .arg(&canonical_path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (db, attachment_id);
+        Err("Quick Look is only available on macOS".into())
+    }
+}
+
 #[tauri::command]
 pub async fn save_attachment(
     db: State<'_, Database>,
