@@ -485,21 +485,25 @@ fn create_task_from_mail_impl(db: &Database, mail_id: &str, account_id: &str) ->
     let title = if snap.subject.trim().is_empty() { "(no subject)".to_string() } else { snap.subject.clone() };
     let description_html = format!("<p>{}</p>", escape_html(&snap.snippet));
 
+    // Task creation and the link snapshot commit together, so a failed link
+    // (e.g. the mail vanished mid-call) never leaves an orphaned task behind.
     let id = uuid::Uuid::new_v4().to_string();
-    let next: f64 = conn
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+    let next: f64 = tx
         .query_row(
             "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM tasks WHERE status = 'open'",
             [],
             |r| r.get(0),
         )
         .map_err(|e| e.to_string())?;
-    conn.execute(
+    tx.execute(
         "INSERT INTO tasks (id, title, description_html, status, priority, sort_order, created_at, updated_at) VALUES (?1,?2,?3,'open','normal',?4,?5,?5)",
         params![id, title, description_html, next, now],
     )
     .map_err(|e| e.to_string())?;
 
-    insert_mail_link(&conn, &id, mail_id, account_id, &snap, &now)?;
+    insert_mail_link(&tx, &id, mail_id, account_id, &snap, &now)?;
+    tx.commit().map_err(|e| e.to_string())?;
 
     fetch_task(&conn, &id)
 }
@@ -570,6 +574,63 @@ fn remove_task_attachment_impl(db: &Database, id: &str) -> Result<(), String> {
         let _ = std::fs::remove_file(&path);
     }
     Ok(())
+}
+
+/// Result of copying picked files into a task's folder: files that made it in,
+/// plus the filenames of any that didn't (copy or DB-insert failure). Kept
+/// separate from a plain `Result` so the caller can emit `tasks-changed` for
+/// the partial success case and still surface which files need retrying.
+#[derive(Debug)]
+struct CopyOutcome {
+    added: Vec<TaskAttachment>,
+    failed: Vec<String>,
+}
+
+/// Copies picked files into `data_dir/task_files/{task_id}/`, recording one
+/// `task_attachments` row per successful copy. A per-file failure is recorded
+/// in `failed` and does not stop the remaining files from being processed;
+/// only an unknown task id (checked up front, before any directory is
+/// created) fails the whole call.
+fn copy_files_into_task(db: &Database, task_id: &str, paths: Vec<PathBuf>) -> Result<CopyOutcome, String> {
+    let conn = db.lock_db();
+    fetch_task(&conn, task_id).map_err(|_| "Task not found".to_string())?;
+
+    let dest_dir = db.data_dir.join("task_files").join(task_id);
+    std::fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
+
+    let mut added = Vec::new();
+    let mut failed = Vec::new();
+    for src in paths {
+        let filename = src.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_else(|| "file".to_string());
+        let dest = unique_dest_path(&dest_dir, &filename);
+        if let Err(e) = std::fs::copy(&src, &dest) {
+            log::warn!("Failed to copy \"{}\" into task {}: {}", filename, task_id, e);
+            let _ = std::fs::remove_file(&dest); // a partially-written copy must not linger
+            failed.push(filename);
+            continue;
+        }
+
+        let size_bytes = std::fs::metadata(&dest).map(|m| m.len() as i64).unwrap_or(0);
+        let dest_filename = dest.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_else(|| filename.clone());
+        let mime = guess_mime_type(&dest_filename).to_string();
+        let local_path = dest.to_string_lossy().to_string();
+        let id = uuid::Uuid::new_v4().to_string();
+        let now = chrono::Utc::now().to_rfc3339();
+
+        if let Err(e) = conn.execute(
+            "INSERT INTO task_attachments (id, task_id, filename, mime_type, size_bytes, local_path, created_at) VALUES (?1,?2,?3,?4,?5,?6,?7)",
+            params![id, task_id, dest_filename, mime, size_bytes, local_path, now],
+        ) {
+            log::warn!("Failed to record attachment \"{}\" for task {}: {}", dest_filename, task_id, e);
+            let _ = std::fs::remove_file(&dest); // don't leave a file on disk with no DB record
+            failed.push(dest_filename);
+            continue;
+        }
+
+        added.push(TaskAttachment { id, task_id: task_id.to_string(), filename: dest_filename, mime_type: mime, size_bytes, local_path, created_at: now });
+    }
+
+    Ok(CopyOutcome { added, failed })
 }
 
 #[tauri::command(async)]
@@ -715,37 +776,17 @@ pub async fn add_task_attachments(app: AppHandle, db: State<'_, Database>, task_
     let Some(paths) = picked else {
         return Ok(Vec::new()); // user cancelled
     };
+    let paths: Vec<PathBuf> = paths.into_iter().filter_map(|p| p.as_path().map(|p| p.to_path_buf())).collect();
 
-    let dest_dir = db.data_dir.join("task_files").join(&task_id);
-    std::fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
+    let outcome = copy_files_into_task(&db, &task_id, paths)?;
 
-    let mut result = Vec::new();
-    {
-        let conn = db.lock_db();
-        for file_path in paths {
-            let Some(src) = file_path.as_path() else { continue };
-            let filename = src.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_else(|| "file".to_string());
-            let dest = unique_dest_path(&dest_dir, &filename);
-            std::fs::copy(src, &dest).map_err(|e| format!("Failed to copy \"{}\": {}", filename, e))?;
-            let size_bytes = std::fs::metadata(&dest).map(|m| m.len() as i64).unwrap_or(0);
-            let dest_filename = dest.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or(filename);
-            let mime = guess_mime_type(&dest_filename).to_string();
-            let local_path = dest.to_string_lossy().to_string();
-            let id = uuid::Uuid::new_v4().to_string();
-            let now = chrono::Utc::now().to_rfc3339();
-
-            conn.execute(
-                "INSERT INTO task_attachments (id, task_id, filename, mime_type, size_bytes, local_path, created_at) VALUES (?1,?2,?3,?4,?5,?6,?7)",
-                params![id, task_id, dest_filename, mime, size_bytes, local_path, now],
-            )
-            .map_err(|e| e.to_string())?;
-
-            result.push(TaskAttachment { id, task_id: task_id.clone(), filename: dest_filename, mime_type: mime, size_bytes, local_path, created_at: now });
-        }
+    if !outcome.added.is_empty() {
+        let _ = app.emit("tasks-changed", ());
     }
-
-    let _ = app.emit("tasks-changed", ());
-    Ok(result)
+    if !outcome.failed.is_empty() {
+        return Err(format!("Could not add: {}", outcome.failed.join(", ")));
+    }
+    Ok(outcome.added)
 }
 
 #[tauri::command(async)]
@@ -948,6 +989,44 @@ mod tests {
         let p2 = unique_dest_path(&dir, "file.txt");
         assert_eq!(p2.file_name().unwrap().to_string_lossy(), "file (3).txt");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn copy_files_into_task_succeeds_and_records_attachment() {
+        let db = temp_db();
+        let task = create_task_impl(&db, CreateTaskInput { title: "t".into(), description_html: None, status: None, priority: None, due_at: None }).unwrap();
+
+        let src_dir = std::env::temp_dir().join(format!("prudii-test-src-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&src_dir).unwrap();
+        let src_file = src_dir.join("report.pdf");
+        std::fs::write(&src_file, b"content").unwrap();
+
+        let outcome = copy_files_into_task(&db, &task.id, vec![src_file.clone()]).unwrap();
+        assert_eq!(outcome.added.len(), 1);
+        assert!(outcome.failed.is_empty());
+        assert_eq!(outcome.added[0].filename, "report.pdf");
+        assert_eq!(outcome.added[0].mime_type, "application/pdf");
+
+        let detail = get_task_impl(&db, &task.id).unwrap();
+        assert_eq!(detail.attachments.len(), 1);
+        assert!(std::path::Path::new(&detail.attachments[0].local_path).exists());
+
+        let _ = std::fs::remove_dir_all(&src_dir);
+    }
+
+    #[test]
+    fn copy_files_into_task_rejects_unknown_task_id() {
+        let db = temp_db();
+        let src_dir = std::env::temp_dir().join(format!("prudii-test-src-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&src_dir).unwrap();
+        let src_file = src_dir.join("note.txt");
+        std::fs::write(&src_file, b"content").unwrap();
+
+        let err = copy_files_into_task(&db, "does-not-exist", vec![src_file]).unwrap_err();
+        assert_eq!(err, "Task not found");
+        assert!(!db.data_dir.join("task_files").join("does-not-exist").exists());
+
+        let _ = std::fs::remove_dir_all(&src_dir);
     }
 
     #[test]
