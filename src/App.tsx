@@ -24,6 +24,7 @@ const ComposeWindow = lazy(() =>
 import { useAppStore } from "./stores/appStore";
 import { useSyncAll } from "./hooks/useSync";
 import { useAutoSync } from "./hooks/useAutoSync";
+import { useFocusSync } from "./hooks/useFocusSync";
 import { useConnectivity } from "./hooks/useConnectivity";
 import { backfillBodies, bootstrapState, getAppSettings, checkLicenseStartup, getStartupMailto, checkSnoozedMails, classifyUnclassifiedMails, listComposeAutosaves, deleteComposeAutosave } from "./lib/tauri";
 import { checkForUpdate } from "./lib/updater";
@@ -79,6 +80,8 @@ function AppInner() {
   const hasSynced = useRef(false);
 
   useAutoSync();
+
+  useFocusSync(() => syncAll.mutate());
 
   useConnectivity();
 
