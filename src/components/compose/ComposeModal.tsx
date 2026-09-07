@@ -163,6 +163,10 @@ function LinkDialog({
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 placeholder="https://example.com"
+                spellCheck={false}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
                 className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-border bg-bg-secondary text-sm text-text placeholder:text-text-secondary focus:border-accent focus:ring-1 focus:ring-accent"
               />
             </div>
@@ -731,6 +735,8 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     editorProps: {
       attributes: {
         class: "prose prose-sm max-w-none focus:outline-none min-h-[200px] text-text",
+        spellcheck: "true",
+        lang: i18n.language,
       },
       // Pasted content adopts the compose style (like Apple Mail): semantic
       // tags survive, styling is discarded. Clipboard HTML from IDEs/chats

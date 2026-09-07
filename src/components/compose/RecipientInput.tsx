@@ -326,6 +326,10 @@ export const RecipientInput = forwardRef<RecipientInputHandle, RecipientInputPro
             }
           }}
           placeholder={recipients.length === 0 ? placeholder : ""}
+          spellCheck={false}
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
           className="compose-writing flex-1 min-w-[120px] bg-transparent text-sm text-text placeholder:text-text-secondary"
         />
       </div>

@@ -63,6 +63,8 @@ export function SearchBar() {
           onKeyDown={handleKeyDown}
           placeholder={t("search.placeholder")}
           tabIndex={searchOpen ? 0 : -1}
+          autoComplete="off"
+          spellCheck={false}
           className="flex-1 bg-transparent text-sm text-text placeholder-text-secondary"
         />
         {isDebouncing ? (
