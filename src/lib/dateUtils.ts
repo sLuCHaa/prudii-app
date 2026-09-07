@@ -8,6 +8,9 @@ import { weekStartsOn, type WeekDay } from "./localeDefaults";
 // language, not ship as English regardless of locale.
 const DATE_LOCALES: Record<string, Locale> = { de, en: enUS, es, fr, pt, ru, zh: zhCN };
 
+// Locale-derived, not user-facing-language-derived — safe to read once at module load.
+const osWeekStart = weekStartsOn();
+
 export function dateLocale(): Locale {
   const lang = (i18n.language || "en").split("-")[0];
   return DATE_LOCALES[lang] ?? enUS;
@@ -41,7 +44,7 @@ export function formatMailDate(dateStr: string, use24h: boolean): string {
   }
 }
 
-export function getDateGroup(dateStr: string, weekStart: WeekDay = weekStartsOn()): string {
+export function getDateGroup(dateStr: string, weekStart: WeekDay = osWeekStart): string {
   try {
     const date = parseISO(dateStr);
     if (isToday(date)) return "today";

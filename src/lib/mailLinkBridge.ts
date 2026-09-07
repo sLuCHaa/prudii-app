@@ -6,8 +6,13 @@
 // parent then opens the link with the opener plugin. Works on both WKWebView
 // and WebView2.
 //
+// The srcdoc iframe is a separate document, so the parent-window guard in
+// `browserKeyGuard.ts` never sees keys typed while the mail body has focus —
+// this script also blocks the same browser-chrome keys locally (no forwarding
+// to the parent needed, preventDefault here is enough).
+//
 // IMPORTANT — CSP: a `srcdoc` iframe inherits the parent document's CSP. The
-// production CSP in `apps/desktop/src-tauri/tauri.conf.json` pins `script-src`,
+// production CSP in `src-tauri/tauri.conf.json` pins `script-src`,
 // so this exact script is allow-listed there by its SHA-256 hash
 // (MAIL_LINK_BRIDGE_CSP_HASH). If you change MAIL_LINK_BRIDGE, regenerate the
 // hash and update BOTH this constant AND the `script-src` entry in
@@ -15,9 +20,9 @@
 // (dev does not enforce the CSP, so it would still appear to work there).
 //
 // Regenerate the hash:
-//   node -e "const c=require('crypto');const m=require('fs').readFileSync('apps/desktop/src/lib/mailLinkBridge.ts','utf8').match(/MAIL_LINK_BRIDGE = \`([\s\S]*?)\`;/)[1];console.log('sha256-'+c.createHash('sha256').update(m,'utf8').digest('base64'))"
+//   node -e "const c=require('crypto');const m=require('fs').readFileSync('src/lib/mailLinkBridge.ts','utf8').match(/MAIL_LINK_BRIDGE = \`([\s\S]*?)\`;/)[1];console.log('sha256-'+c.createHash('sha256').update(m,'utf8').digest('base64'))"
 
-export const MAIL_LINK_BRIDGE = `(function(){document.addEventListener('click',function(e){var t=e.target;if(t&&t.tagName==='IMG'&&(!t.closest||!t.closest('a'))){var s=t.currentSrc||t.src;if(s){e.preventDefault();try{parent.postMessage({__prudiiImage:s},'*');}catch(_){}}return;}var a=t&&t.closest?t.closest('[data-href]'):null;if(!a)return;var h=a.getAttribute('data-href');if(!h||h.charAt(0)==='#')return;e.preventDefault();try{parent.postMessage({__prudiiLink:h},'*');}catch(_){}},true);})();`;
+export const MAIL_LINK_BRIDGE = `(function(){document.addEventListener('click',function(e){var t=e.target;if(t&&t.tagName==='IMG'&&(!t.closest||!t.closest('a'))){var s=t.currentSrc||t.src;if(s){e.preventDefault();try{parent.postMessage({__prudiiImage:s},'*');}catch(_){}}return;}var a=t&&t.closest?t.closest('[data-href]'):null;if(!a)return;var h=a.getAttribute('data-href');if(!h||h.charAt(0)==='#')return;e.preventDefault();try{parent.postMessage({__prudiiLink:h},'*');}catch(_){}},true);document.addEventListener('keydown',function(e){var m=e.ctrlKey||e.metaKey,k=e.key.length===1?e.key.toLowerCase():e.key;if(k==='F3'||k==='F5'||k==='F7'||k==='F12'){e.preventDefault();return;}if(!m&&e.altKey&&(k==='ArrowLeft'||k==='ArrowRight')){e.preventDefault();return;}if(!m||e.altKey)return;if(e.shiftKey&&(k==='i'||k==='j'||k==='c')){e.preventDefault();return;}if('rpfguhj+-=0'.indexOf(k)!==-1)e.preventDefault();},true);})();`;
 
 // SHA-256 of MAIL_LINK_BRIDGE (filled in by the regenerate command above).
-export const MAIL_LINK_BRIDGE_CSP_HASH = "sha256-lo44IaNMj8n102MDbFbLK+h3Td+693IksT6jAzsGPFI=";
+export const MAIL_LINK_BRIDGE_CSP_HASH = "sha256-GduOK/LU09CMlLbQn4CCHLWXGQ9J8mhq4fqnrR8LkNI=";

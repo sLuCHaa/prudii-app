@@ -23,6 +23,8 @@ export function isBrowserChromeKey(e: KeyLike, opts: GuardOptions = {}): boolean
   }
   if (!mod && e.altKey && (key === "ArrowLeft" || key === "ArrowRight")) return !opts.inEditable;
   if (!mod) return false;
+  // AltGr surfaces as Ctrl+Alt on Windows — those are printable-character combos, not browser chrome.
+  if (mod && e.altKey) return false;
 
   if (["r", "p", "f", "g", "+", "-", "=", "0"].includes(key)) return true;
   if (opts.inEditable) return false;

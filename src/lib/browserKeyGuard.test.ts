@@ -46,6 +46,7 @@ describe("isBrowserChromeKey", () => {
     expect(isBrowserChromeKey(key("a", { ctrl: true }))).toBe(false);
     expect(isBrowserChromeKey(key("Enter", { ctrl: true }))).toBe(false);
     expect(isBrowserChromeKey(key("ArrowLeft"))).toBe(false);
+    expect(isBrowserChromeKey(key("r", { ctrl: true, alt: true }))).toBe(false);
   });
 });
 
