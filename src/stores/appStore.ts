@@ -5,6 +5,7 @@ import type { ComposeMode } from "../components/compose/ComposeModal";
 import { parseMailtoUrl, type MailtoParams } from "../lib/mailtoParser";
 import type { Update } from "../lib/updater";
 import type { ToastData, ToastType } from "../components/ui/Toast";
+import { prefers24HourClock } from "../lib/localeDefaults";
 
 export interface ComposeSnapshot {
   to: string[];
@@ -420,7 +421,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   appSettings: {
     launch_on_startup: false,
     show_in_tray: true,
-    use_24h_clock: true,
+    use_24h_clock: prefers24HourClock(),
     show_all_unread_counts: false,
     notifications_enabled: true,
     notification_sound: true,

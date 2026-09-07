@@ -33,7 +33,8 @@ pub fn get_app_settings(db: State<'_, Database>) -> Result<AppSettings, String> 
         Ok(AppSettings {
             launch_on_startup: get_bool("launch_on_startup", false),
             show_in_tray: get_bool("show_in_tray", true),
-            use_24h_clock: get_bool("use_24h_clock", true),
+            // None = never chosen; the frontend falls back to the OS clock convention
+            use_24h_clock: values.get("use_24h_clock").map(|v| v == "true" || v == "1"),
             show_all_unread_counts: get_bool("show_all_unread_counts", false),
             notifications_enabled: get_bool("notifications_enabled", true),
             notification_sound: get_bool("notification_sound", true),
@@ -73,7 +74,9 @@ pub fn update_app_settings(
 
         set_setting(&conn, "launch_on_startup", settings.launch_on_startup)?;
         set_setting(&conn, "show_in_tray", settings.show_in_tray)?;
-        set_setting(&conn, "use_24h_clock", settings.use_24h_clock)?;
+        if let Some(use_24h) = settings.use_24h_clock {
+            set_setting(&conn, "use_24h_clock", use_24h)?;
+        }
         set_setting(&conn, "show_all_unread_counts", settings.show_all_unread_counts)?;
         set_setting(&conn, "notifications_enabled", settings.notifications_enabled)?;
         set_setting(&conn, "notification_sound", settings.notification_sound)?;

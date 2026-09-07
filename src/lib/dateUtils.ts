@@ -2,6 +2,7 @@ import { format, parseISO, isToday, isYesterday, isThisWeek, isThisMonth } from 
 import { de, enUS, es, fr, pt, ru, zhCN } from "date-fns/locale";
 import type { Locale } from "date-fns";
 import i18n from "./i18n";
+import { weekStartsOn, type WeekDay } from "./localeDefaults";
 
 // The date column is the most-repeated text in the app — it must follow the UI
 // language, not ship as English regardless of locale.
@@ -40,12 +41,12 @@ export function formatMailDate(dateStr: string, use24h: boolean): string {
   }
 }
 
-export function getDateGroup(dateStr: string): string {
+export function getDateGroup(dateStr: string, weekStart: WeekDay = weekStartsOn()): string {
   try {
     const date = parseISO(dateStr);
     if (isToday(date)) return "today";
     if (isYesterday(date)) return "yesterday";
-    if (isThisWeek(date, { weekStartsOn: 1 })) return "thisWeek";
+    if (isThisWeek(date, { weekStartsOn: weekStart })) return "thisWeek";
     if (isThisMonth(date)) return "thisMonth";
     return "older";
   } catch {

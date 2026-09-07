@@ -112,7 +112,7 @@ pub struct Mail {
 pub struct AppSettings {
     pub launch_on_startup: bool,
     pub show_in_tray: bool,
-    pub use_24h_clock: bool,
+    pub use_24h_clock: Option<bool>,
     pub show_all_unread_counts: bool,
     pub notifications_enabled: bool,
     pub notification_sound: bool,

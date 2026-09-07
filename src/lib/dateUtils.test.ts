@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import i18n from "./i18n";
 import de from "../locales/de.json";
-import { formatMailDate, formatDateTime, formatTime } from "./dateUtils";
+import { formatMailDate, formatDateTime, formatTime, getDateGroup } from "./dateUtils";
 
 // Fixed "now" so today/yesterday buckets are deterministic. Assertions avoid
 // exact clock times — the runner's timezone shifts rendered hours.
@@ -66,5 +66,19 @@ describe("formatTime", () => {
     const date = new Date("2026-03-15T18:30:00Z");
     expect(formatTime(date, true)).toMatch(/^\d{1,2}:\d{2}$/);
     expect(formatTime(date, false).toLowerCase()).toMatch(/am|pm/);
+  });
+});
+
+describe("getDateGroup", () => {
+  // NOW (2026-03-15) is a Sunday: with a Monday week start Wednesday the 11th
+  // is still this week, with a Sunday week start the week only began today.
+  it("honours the week start", () => {
+    expect(getDateGroup("2026-03-11T12:00:00Z", 1)).toBe("thisWeek");
+    expect(getDateGroup("2026-03-11T12:00:00Z", 0)).toBe("thisMonth");
+  });
+
+  it("buckets today and yesterday before the week", () => {
+    expect(getDateGroup("2026-03-15T10:00:00Z", 1)).toBe("today");
+    expect(getDateGroup("2026-03-14T10:00:00Z", 1)).toBe("yesterday");
   });
 });

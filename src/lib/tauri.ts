@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Account, AiResponse, Attachment, AttachmentWithContext, AppConfig, AppSettings, BackupOptions, BulkSaveResult, Contact, CreateAccountRequest, CreateRuleRequest, EmailTemplate, Folder, InboxSplit, LicenseInfo, Mail, MailRule, OAuthResult, OllamaStatus, RestorePreview, ScheduledMail, SearchResult, SendMailRequest, UnsubscribeResult } from "../types";
+import { prefers24HourClock } from "./localeDefaults";
 
 export async function listAccounts(): Promise<Account[]> {
   return invoke("list_accounts");
@@ -205,8 +206,11 @@ export async function toggleMailFlag(mailId: string, flag: string): Promise<stri
   return invoke("toggle_mail_flag", { mailId, flag });
 }
 
+type RawAppSettings = Omit<AppSettings, "use_24h_clock"> & { use_24h_clock: boolean | null };
+
 export async function getAppSettings(): Promise<AppSettings> {
-  return invoke("get_app_settings");
+  const s = await invoke<RawAppSettings>("get_app_settings");
+  return { ...s, use_24h_clock: s.use_24h_clock ?? prefers24HourClock() };
 }
 
 export async function updateAppSettings(settings: AppSettings): Promise<void> {
