@@ -159,6 +159,10 @@ export async function openAttachment(attachmentId: string): Promise<string> {
   return invoke("open_attachment", { attachmentId });
 }
 
+export async function startAttachmentDrag(attachmentId: string): Promise<void> {
+  return invoke("start_attachment_drag", { attachmentId });
+}
+
 export async function saveAttachment(attachmentId: string): Promise<string | null> {
   return invoke("save_attachment", { attachmentId });
 }

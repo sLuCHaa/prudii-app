@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Search, Download, Check, ArrowUpDown, ArrowUp, ArrowDown, FileText, Image, FileSpreadsheet, File, Loader2, Paperclip, Mail, ChevronDown, Sparkles, X, FolderOpen } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";
-import { searchAttachments, countAttachments, bulkSaveAttachments, saveAttachment, aiSearchAttachments } from "../../lib/tauri";
+import { searchAttachments, countAttachments, bulkSaveAttachments, saveAttachment, startAttachmentDrag, aiSearchAttachments } from "../../lib/tauri";
 import { listen } from "@tauri-apps/api/event";
 import { formatMailDate } from "../../lib/dateUtils";
 import { EmptyState } from "../ui/EmptyState";
@@ -731,6 +731,12 @@ export function AttachmentBrowser() {
                         } else {
                           openMail(att);
                         }
+                      }}
+                      draggable={!!att.local_path}
+                      onDragStart={(e) => {
+                        // HTML5 drag cannot hand a file to the OS; the native session takes over.
+                        e.preventDefault();
+                        startAttachmentDrag(att.id).catch(() => {});
                       }}
                     >
                       <td className="pl-6 pr-1 py-2">

@@ -669,21 +669,20 @@ pub fn get_attachment_data(
     })
 }
 
-#[tauri::command(async)]
-pub fn open_attachment(
-    db: State<'_, Database>,
-    attachment_id: String,
-) -> Result<String, String> {
-    let conn = db.lock_db();
-    let path: String = conn
-        .query_row(
+/// Resolves an attachment's `local_path` and checks it stays inside the app
+/// data directory (path traversal protection). Shared by every command that
+/// hands a stored attachment to the OS - do not re-implement this check.
+fn resolve_attachment_path(db: &Database, attachment_id: &str) -> Result<std::path::PathBuf, String> {
+    let path: String = {
+        let conn = db.lock_db();
+        conn.query_row(
             "SELECT local_path FROM attachments WHERE id = ?1",
             rusqlite::params![attachment_id],
             |row| row.get(0),
         )
-        .map_err(|e| format!("Attachment not found: {}", e))?;
+        .map_err(|e| format!("Attachment not found: {}", e))?
+    };
 
-    // Path traversal protection: ensure path is within app data directory
     let canonical_path = std::path::Path::new(&path)
         .canonicalize()
         .map_err(|e| format!("Invalid attachment path: {}", e))?;
@@ -692,6 +691,15 @@ pub fn open_attachment(
     if !canonical_path.starts_with(&data_dir) {
         return Err("Attachment path is outside app data directory".into());
     }
+    Ok(canonical_path)
+}
+
+#[tauri::command(async)]
+pub fn open_attachment(
+    db: State<'_, Database>,
+    attachment_id: String,
+) -> Result<String, String> {
+    let canonical_path = resolve_attachment_path(&db, &attachment_id)?;
 
     #[cfg(target_os = "windows")]
     std::process::Command::new("cmd")
@@ -710,7 +718,39 @@ pub fn open_attachment(
         .arg(&canonical_path)
         .spawn()
         .map_err(|e| format!("Failed to open file: {}", e))?;
-    Ok(path)
+    Ok(canonical_path.to_string_lossy().into_owned())
+}
+
+// tauri-plugin-drag's own start_drag command takes an IPC Channel meant for
+// JS callers; the underlying `drag` crate it wraps is used directly here so
+// the callback stays in Rust and the webview never sees the file path.
+#[tauri::command]
+pub async fn start_attachment_drag(
+    window: tauri::Window,
+    db: State<'_, Database>,
+    attachment_id: String,
+) -> Result<(), String> {
+    let canonical_path = resolve_attachment_path(&db, &attachment_id)?;
+    let icon = drag::Image::Raw(include_bytes!("../../icons/128x128.png").to_vec());
+
+    // DoDragDrop (Windows) / the Cocoa drag session need the UI thread;
+    // async commands run off it, so hop over like the plugin's own command does.
+    let (tx, rx) = std::sync::mpsc::channel();
+    let drag_window = window.clone();
+    window
+        .run_on_main_thread(move || {
+            let result = drag::start_drag(
+                &drag_window,
+                drag::DragItem::Files(vec![canonical_path]),
+                icon,
+                |_result, _cursor_pos| {},
+                drag::Options::default(),
+            )
+            .map_err(|e| e.to_string());
+            let _ = tx.send(result);
+        })
+        .map_err(|e| e.to_string())?;
+    rx.recv().map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

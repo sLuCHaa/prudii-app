@@ -11,7 +11,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "../../stores/appStore";
 import { useAttachments, useToggleStar, useToggleMailFlag } from "../../hooks/useAccounts";
 import { useScroller } from "../../hooks/useScroller";
-import { openAttachment, saveAttachment, fetchMailBody, trashMail, archiveMail, getThreadMails, markAsRead, unsubscribeMail } from "../../lib/tauri";
+import { openAttachment, startAttachmentDrag, saveAttachment, fetchMailBody, trashMail, archiveMail, getThreadMails, markAsRead, unsubscribeMail } from "../../lib/tauri";
 import { revealLabelKey, revealAttachment } from "../../lib/attachmentActions";
 import { isMacOS, isWindows } from "../../lib/platform";
 import { MAIL_LINK_BRIDGE, MAIL_LINK_BRIDGE_CSP_HASH, relayBridgeKey } from "../../lib/mailLinkBridge";
@@ -89,7 +89,15 @@ const AttachmentItem = memo(function AttachmentItem({
   }, [attachment.id, addToast, t]);
 
   return (
-    <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border hover:bg-hover transition-colors group text-xs">
+    <div
+      className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border hover:bg-hover transition-colors group text-xs"
+      draggable={!!attachment.local_path}
+      onDragStart={(e) => {
+        // HTML5 drag cannot hand a file to the OS; the native session takes over.
+        e.preventDefault();
+        startAttachmentDrag(attachment.id).catch(() => {});
+      }}
+    >
       <button
         onClick={handleOpen}
         className="flex items-center gap-1.5 text-left min-w-0 flex-1"
@@ -846,7 +854,15 @@ const ThreadAttachmentItem = memo(function ThreadAttachmentItem({ attachment, se
   }, [attachment.id, addToast, t]);
 
   return (
-    <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border hover:bg-hover transition-colors group text-xs">
+    <div
+      className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border hover:bg-hover transition-colors group text-xs"
+      draggable={!!attachment.local_path}
+      onDragStart={(e) => {
+        // HTML5 drag cannot hand a file to the OS; the native session takes over.
+        e.preventDefault();
+        startAttachmentDrag(attachment.id).catch(() => {});
+      }}
+    >
       <div className="min-w-0 flex-1">
         <button
           onClick={handleOpen}
