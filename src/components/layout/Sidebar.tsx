@@ -28,12 +28,16 @@ import {
   Loader2,
   AlertCircle,
   Palette,
+  RefreshCw,
+  RotateCcw,
+  Settings,
 } from "lucide-react";
 import gsap from "gsap";
 import { prefersReducedMotion } from "../motion/tokens";
 import { useAppStore, type MailFilter } from "../../stores/appStore";
 import { useAccounts, useFolders } from "../../hooks/useAccounts";
 import { useSyncAccount, useSyncAll } from "../../hooks/useSync";
+import { useRemoveAccount } from "../../hooks/useRemoveAccount";
 import { ComposeButton } from "../compose/ComposeButton";
 import { ThemeToggle } from "../ui/ThemeToggle";
 import { TrashIcon, StarIcon } from "../icons";
@@ -370,6 +374,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
   const [renameValue, setRenameValue] = useState("");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
+  const [accountMenu, setAccountMenu] = useState<{ x: number; y: number } | null>(null);
   const folderRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const dotRef = useRef<HTMLSpanElement>(null);
   const selectedFolderId = useAppStore((s) => s.selectedFolderId);
@@ -379,8 +384,10 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
   const appSettings = useAppStore((s) => s.appSettings);
   const syncProgress = useAppStore((s) => s.syncProgress[account.id]);
   const backfillProgress = useAppStore((s) => s.backfillProgress[account.id]);
+  const openAccountSettings = useAppStore((s) => s.openAccountSettings);
   const { data: folders } = useFolders(account.id);
   const syncMutation = useSyncAccount();
+  const removeAccount = useRemoveAccount();
   const queryClient = useQueryClient();
   const dialog = useDialog();
 
@@ -699,6 +706,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
             toggleAccountExpanded(account.id);
             setSelectedAccountId(account.id);
           }}
+          onContextMenu={(e) => { e.preventDefault(); setAccountMenu({ x: e.clientX, y: e.clientY }); }}
           className="flex items-center justify-center w-full py-1.5 rounded-md hover:bg-hover transition-colors"
           title={account.display_name}
         >
@@ -751,13 +759,34 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
             onEmpty={handleEmptyFolder}
           />
         )}
+
+        {accountMenu && (
+          <ContextMenu
+            x={accountMenu.x}
+            y={accountMenu.y}
+            onClose={() => setAccountMenu(null)}
+            entries={[
+              { kind: "header", label: account.email },
+              { kind: "separator" },
+              { kind: "item", id: "sync", label: t("sidebar.accountMenu.sync"), icon: <RefreshCw className="w-4 h-4" />, onSelect: () => syncMutation.mutate(account.id) },
+              { kind: "item", id: "resync", label: t("sidebar.forceResyncTitle"), icon: <RotateCcw className="w-4 h-4" />, onSelect: () => { void handleForceResync(); } },
+              { kind: "item", id: "newFolder", label: t("sidebar.newFolder"), icon: <FolderPlus className="w-4 h-4" />, onSelect: () => setShowCreateDialog(true) },
+              { kind: "separator" },
+              { kind: "item", id: "settings", label: t("sidebar.accountMenu.settings"), icon: <Settings className="w-4 h-4" />, onSelect: () => openAccountSettings(account.id) },
+              { kind: "item", id: "remove", label: t("settings.accounts.removeAccount"), icon: <Trash2 className="w-4 h-4" />, danger: true, onSelect: () => { void removeAccount(account.id); } },
+            ]}
+          />
+        )}
       </div>
     );
   }
 
   return (
     <div className="mb-3">
-      <div className="flex items-center gap-2 group px-2 py-1">
+      <div
+        className="flex items-center gap-2 group px-2 py-1"
+        onContextMenu={(e) => { e.preventDefault(); setAccountMenu({ x: e.clientX, y: e.clientY }); }}
+      >
         <span
           ref={dotRef}
           className="w-2 h-2 rounded-full shrink-0"
@@ -882,6 +911,24 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
         <CreateFolderDialog
           accountId={account.id}
           onClose={() => setShowCreateDialog(false)}
+        />
+      )}
+
+      {accountMenu && (
+        <ContextMenu
+          x={accountMenu.x}
+          y={accountMenu.y}
+          onClose={() => setAccountMenu(null)}
+          entries={[
+            { kind: "header", label: account.email },
+            { kind: "separator" },
+            { kind: "item", id: "sync", label: t("sidebar.accountMenu.sync"), icon: <RefreshCw className="w-4 h-4" />, onSelect: () => syncMutation.mutate(account.id) },
+            { kind: "item", id: "resync", label: t("sidebar.forceResyncTitle"), icon: <RotateCcw className="w-4 h-4" />, onSelect: () => { void handleForceResync(); } },
+            { kind: "item", id: "newFolder", label: t("sidebar.newFolder"), icon: <FolderPlus className="w-4 h-4" />, onSelect: () => setShowCreateDialog(true) },
+            { kind: "separator" },
+            { kind: "item", id: "settings", label: t("sidebar.accountMenu.settings"), icon: <Settings className="w-4 h-4" />, onSelect: () => openAccountSettings(account.id) },
+            { kind: "item", id: "remove", label: t("settings.accounts.removeAccount"), icon: <Trash2 className="w-4 h-4" />, danger: true, onSelect: () => { void removeAccount(account.id); } },
+          ]}
         />
       )}
     </div>

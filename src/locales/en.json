@@ -61,6 +61,10 @@
       "idle": "Idle",
       "syncing": "Syncing…",
       "error": "Sync error"
+    },
+    "accountMenu": {
+      "sync": "Sync now",
+      "settings": "Account settings…"
     }
   },
   "attachments": {

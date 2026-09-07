@@ -61,6 +61,10 @@
       "idle": "Inactivo",
       "syncing": "Sincronizando…",
       "error": "Error de sincronización"
+    },
+    "accountMenu": {
+      "sync": "Sincronizar ahora",
+      "settings": "Ajustes de la cuenta…"
     }
   },
   "attachments": {

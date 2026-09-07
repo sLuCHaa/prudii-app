@@ -6,7 +6,8 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "../../stores/appStore";
 import { useShallow } from "zustand/react/shallow";
-import { useAccounts, useDeleteAccount } from "../../hooks/useAccounts";
+import { useAccounts } from "../../hooks/useAccounts";
+import { useRemoveAccount } from "../../hooks/useRemoveAccount";
 import { useScroller } from "../../hooks/useScroller";
 import { updateAccountSignature, updateAccountSyncInterval, updateAccountSettings, storeAccountPassword, getAppSettings, updateAppSettings, registerMailtoHandler, unregisterMailtoHandler, isMailtoHandler } from "../../lib/tauri";
 import { changeLanguage, getLanguagePreference, type AppLanguage } from "../../lib/i18n";
@@ -568,15 +569,13 @@ export function SettingsPanel() {
   const trapRef = useFocusTrap<HTMLDivElement>(true);
   // useShallow-scoped: an unselected useAppStore() re-renders the whole
   // settings panel on every store write (sync ticks, toasts, selection).
-  const { setShowSettings, setShowAccountWizard, themeMode, setThemeMode, setSelectedAccountId, setSelectedFolderId, setSelectedMailId, appSettings, setAppSettings, hasFeature } = useAppStore(
+  const { setShowSettings, setShowAccountWizard, themeMode, setThemeMode, settingsAccountId, appSettings, setAppSettings, hasFeature } = useAppStore(
     useShallow((s) => ({
       setShowSettings: s.setShowSettings,
       setShowAccountWizard: s.setShowAccountWizard,
       themeMode: s.themeMode,
       setThemeMode: s.setThemeMode,
-      setSelectedAccountId: s.setSelectedAccountId,
-      setSelectedFolderId: s.setSelectedFolderId,
-      setSelectedMailId: s.setSelectedMailId,
+      settingsAccountId: s.settingsAccountId,
       appSettings: s.appSettings,
       setAppSettings: s.setAppSettings,
       hasFeature: s.hasFeature,
@@ -584,7 +583,7 @@ export function SettingsPanel() {
   );
   const addToast = useAppStore((s) => s.addToast);
   const { data: accounts, refetch: refetchAccounts } = useAccounts();
-  const deleteAccount = useDeleteAccount();
+  const removeAccount = useRemoveAccount();
   const dialog = useDialog();
   const [view, setView] = useState<SettingsView>("main");
   const [activeTab, setActiveTabState] = useState<SettingsTab>(() => {
@@ -610,6 +609,18 @@ export function SettingsPanel() {
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
   }, [activeTab, view]);
+
+  // Entry point for openAccountSettings (e.g. sidebar account menu): jump
+  // straight into that account's view once accounts have loaded.
+  useEffect(() => {
+    if (!settingsAccountId || !accounts) return;
+    const account = accounts.find((a) => a.id === settingsAccountId);
+    if (account) {
+      setSelectedAccount(account);
+      setView("account");
+    }
+    useAppStore.setState({ settingsAccountId: null });
+  }, [settingsAccountId, accounts]);
 
   async function requestClose() {
     const dirty = !settingsSaved || accountDirtyRef.current;
@@ -686,28 +697,6 @@ export function SettingsPanel() {
       .then(() => setAppSettings(persisted))
       .catch(() => { /* localStorage still holds the value; next save catches up */ });
     setLocalSettings((prev) => ({ ...prev, theme_mode: mode }));
-  }
-
-  async function handleDelete(accountId: string) {
-    const confirmed = await dialog.danger({
-      title: t("settings.deleteAccountConfirm.title"),
-      message: t("settings.deleteAccountConfirm.body"),
-      confirmLabel: t("settings.deleteAccountConfirm.confirm"),
-      cancelLabel: t("settings.deleteAccountConfirm.cancel"),
-    });
-    if (!confirmed) return;
-    deleteAccount.mutate(accountId, {
-      onSuccess: () => {
-        // Immediately remove account from Zustand store so Sidebar updates
-        const store = useAppStore.getState();
-        store.setAccounts(store.accounts.filter((a) => a.id !== accountId));
-        if (store.selectedAccountId === accountId) {
-          setSelectedAccountId(null);
-          setSelectedFolderId(null);
-          setSelectedMailId(null);
-        }
-      },
-    });
   }
 
   function handleAccountClick(account: Account) {
@@ -1106,7 +1095,7 @@ export function SettingsPanel() {
                               className="hover:text-danger"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleDelete(account.id);
+                                void removeAccount(account.id);
                               }}
                             />
                             <ChevronRight className="w-4 h-4 text-text-tertiary" />

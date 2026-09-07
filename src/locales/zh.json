@@ -61,6 +61,10 @@
       "idle": "空闲",
       "syncing": "正在同步…",
       "error": "同步错误"
+    },
+    "accountMenu": {
+      "sync": "立即同步",
+      "settings": "账户设置…"
     }
   },
   "attachments": {

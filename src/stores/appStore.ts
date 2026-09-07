@@ -116,6 +116,8 @@ interface AppState {
   setShowAccountWizard: (show: boolean) => void;
   showSettings: boolean;
   setShowSettings: (show: boolean) => void;
+  settingsAccountId: string | null;
+  openAccountSettings: (accountId: string) => void;
   settingsLastTab: string;
   setSettingsLastTab: (tab: string) => void;
 
@@ -342,6 +344,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   setShowAccountWizard: (showAccountWizard) => set({ showAccountWizard }),
   showSettings: false,
   setShowSettings: (showSettings) => set({ showSettings }),
+  settingsAccountId: null,
+  openAccountSettings: (settingsAccountId) => set({ showSettings: true, settingsAccountId }),
   settingsLastTab: "general",
   setSettingsLastTab: (settingsLastTab) => set({ settingsLastTab }),
 
