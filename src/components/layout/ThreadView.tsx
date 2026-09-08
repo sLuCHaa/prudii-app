@@ -1237,17 +1237,6 @@ export function ThreadView({ mail }: ThreadViewProps) {
     return () => { unlisten.then((fn) => fn()); };
   }, [mail.id]);
 
-  const selectNextMail = useCallback(() => {
-    const remaining = mails.filter((m) => m.id !== mail.id);
-    if (remaining.length === 0) {
-      setSelectedMailId(null);
-    } else {
-      const nextIndex = Math.min(selectedMailIndex, remaining.length - 1);
-      setSelectedMailId(remaining[nextIndex].id);
-    }
-    setMails(remaining);
-  }, [mails, mail.id, setSelectedMailId, selectedMailIndex, setMails]);
-
   const handleTrash = useCallback(async () => {
     // Only confirm when permanently deleting from trash
     if (isInTrash) {
