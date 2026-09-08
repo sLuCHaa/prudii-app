@@ -39,7 +39,7 @@ import { useAppStore, type MailFilter } from "../../stores/appStore";
 import { useAccounts, useFolders } from "../../hooks/useAccounts";
 import { useSyncAccount, useSyncAll } from "../../hooks/useSync";
 import { useRemoveAccount } from "../../hooks/useRemoveAccount";
-import { useOpenTaskCount } from "../../hooks/useTasks";
+import { useOpenTaskCount, useCreateTaskFromMail } from "../../hooks/useTasks";
 import { ComposeButton } from "../compose/ComposeButton";
 import { ThemeToggle } from "../ui/ThemeToggle";
 import { TrashIcon, StarIcon } from "../icons";
@@ -60,6 +60,7 @@ import { MAIL_FLAG_COLORS } from "../../types";
 import { useTranslation } from "react-i18next";
 import { toastError, causeMessage } from "../../lib/errorToast";
 import { parseSyncSubProgress } from "../../lib/syncProgress";
+import { isMailDrag, readMailDrag } from "../../lib/mailDrag";
 
 // Throttles on-demand syncs of Gmail's "All Mail" archive folder (excluded from
 // routine sync) so opening it repeatedly doesn't re-trigger a full folder sync.
@@ -404,10 +405,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
   function handleDragOver(e: React.DragEvent, folder: FolderT) {
     e.preventDefault();
     e.stopPropagation();
-    // Only allow drop on folders that belong to the same account
-    const mailAccountId = e.dataTransfer.types.includes("application/x-mail-account-id")
-      ? "check" : null;
-    if (mailAccountId && dragOverFolderId !== folder.id) {
+    if (isMailDrag(e.dataTransfer) && dragOverFolderId !== folder.id) {
       e.dataTransfer.dropEffect = "move";
       setDragOverFolderId(folder.id);
 
@@ -470,10 +468,9 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
 
     setDragOverFolderId(null);
 
-    const mailId = e.dataTransfer.getData("application/x-mail-id");
-    const mailAccountId = e.dataTransfer.getData("application/x-mail-account-id");
-
-    if (!mailId) return;
+    const dragged = readMailDrag(e.dataTransfer);
+    if (!dragged) return;
+    const { mailId, accountId: mailAccountId } = dragged;
 
     if (mailAccountId !== account.id) {
       await dialog.alert({
@@ -1122,9 +1119,30 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
   const hasFeature = useAppStore((s) => s.hasFeature);
   const accounts = useAppStore((s) => s.accounts);
   const { data: openTaskCount = 0 } = useOpenTaskCount();
+  const createTaskFromMail = useCreateTaskFromMail();
 
   const [snoozedCount, setSnoozedCount] = useState(0);
   const [scheduledCount, setScheduledCount] = useState(0);
+  const [tasksDropActive, setTasksDropActive] = useState(false);
+
+  function handleTasksDragOver(e: React.DragEvent) {
+    if (!isMailDrag(e.dataTransfer)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    setTasksDropActive(true);
+  }
+
+  function handleTasksDragLeave() {
+    setTasksDropActive(false);
+  }
+
+  function handleTasksDrop(e: React.DragEvent) {
+    if (!isMailDrag(e.dataTransfer)) return;
+    e.preventDefault();
+    setTasksDropActive(false);
+    const dragged = readMailDrag(e.dataTransfer);
+    if (dragged) createTaskFromMail.mutate(dragged.mailId);
+  }
 
   useEffect(() => {
     countSnoozedMails().then(setSnoozedCount).catch((e) => console.error("[countSnoozedMails]", e));
@@ -1147,6 +1165,10 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
     isActive: boolean;
     count?: number;
     show?: boolean;
+    onDragOver?: (e: React.DragEvent) => void;
+    onDragLeave?: (e: React.DragEvent) => void;
+    onDrop?: (e: React.DragEvent) => void;
+    dropActive?: boolean;
   }[] = [
     {
       id: "all-inboxes",
@@ -1190,6 +1212,10 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
       isActive: showTasks,
       count: openTaskCount,
       show: true,
+      onDragOver: handleTasksDragOver,
+      onDragLeave: handleTasksDragLeave,
+      onDrop: handleTasksDrop,
+      dropActive: tasksDropActive,
     },
     {
       id: "attachments",
@@ -1216,10 +1242,15 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
           <button
             key={view.id}
             onClick={view.onClick}
+            onDragOver={view.onDragOver}
+            onDragLeave={view.onDragLeave}
+            onDrop={view.onDrop}
             className={`relative flex items-center justify-center w-full py-1 rounded-md transition-colors ${
-              view.isActive ? "folder-active" : "text-text-secondary hover:bg-hover"
+              view.dropActive
+                ? "bg-accent/10 ring-1 ring-accent/40"
+                : view.isActive ? "folder-active" : "text-text-secondary hover:bg-hover"
             }`}
-            title={view.label}
+            title={view.dropActive ? t("tasks.dropToCreate") : view.label}
           >
             {view.icon}
             {view.count !== undefined && view.count > 0 && (
@@ -1246,8 +1277,14 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
           <button
             key={view.id}
             onClick={view.onClick}
+            onDragOver={view.onDragOver}
+            onDragLeave={view.onDragLeave}
+            onDrop={view.onDrop}
+            title={view.dropActive ? t("tasks.dropToCreate") : undefined}
             className={`flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm transition-colors ${
-              view.isActive
+              view.dropActive
+                ? "bg-accent/10 ring-1 ring-accent/40"
+                : view.isActive
                 ? "folder-active"
                 : "text-text-secondary hover:bg-hover hover:text-text"
             }`}

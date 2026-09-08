@@ -10,9 +10,12 @@ import { formatMailDate } from "../../lib/dateUtils";
 interface LinkedMailsProps {
   taskId: string;
   links: TaskMailLink[];
+  /** True while a mail is being dragged over the drawer — keeps this section
+   *  visible (even with no links yet) and shows the drop hint. */
+  dropActive?: boolean;
 }
 
-export function LinkedMails({ taskId, links }: LinkedMailsProps) {
+export function LinkedMails({ taskId, links, dropActive = false }: LinkedMailsProps) {
   const { t } = useTranslation();
   const { unlink } = useTaskLinks(taskId);
   const openMailById = useAppStore((s) => s.openMailById);
@@ -20,7 +23,7 @@ export function LinkedMails({ taskId, links }: LinkedMailsProps) {
   const use24h = useAppStore((s) => s.appSettings.use_24h_clock);
   const [navigatingId, setNavigatingId] = useState<string | null>(null);
 
-  if (links.length === 0) return null;
+  if (links.length === 0 && !dropActive) return null;
 
   async function goToMail(link: TaskMailLink) {
     setNavigatingId(link.mail_id);
@@ -41,40 +44,43 @@ export function LinkedMails({ taskId, links }: LinkedMailsProps) {
   }
 
   return (
-    <div>
+    <div className={dropActive ? "rounded-lg ring-2 ring-accent/50 p-1 -m-1" : ""}>
       <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary mb-2">{t("tasks.linkedMails")}</h3>
-      <div className="space-y-1">
-        {links.map((link) => (
-          <div
-            key={link.mail_id}
-            className="flex items-center gap-2 px-2 py-1.5 rounded-lg border border-border hover:bg-hover transition-colors group text-xs"
-          >
-            <MailIcon className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
-            <button
-              type="button"
-              onClick={() => goToMail(link)}
-              disabled={navigatingId === link.mail_id}
-              title={t("tasks.openMail")}
-              className="flex-1 min-w-0 text-left disabled:opacity-50"
+      {dropActive && <p className="text-xs text-accent mb-2">{t("tasks.dropToLink")}</p>}
+      {links.length > 0 && (
+        <div className="space-y-1">
+          {links.map((link) => (
+            <div
+              key={link.mail_id}
+              className="flex items-center gap-2 px-2 py-1.5 rounded-lg border border-border hover:bg-hover transition-colors group text-xs"
             >
-              <div className="truncate text-text">{link.subject || t("compose.noSubject")}</div>
-              <div className="truncate text-text-tertiary">
-                {link.from_name || link.from_email}
-                {link.mail_date && ` · ${formatMailDate(link.mail_date, use24h)}`}
-              </div>
-            </button>
-            <button
-              type="button"
-              onClick={() => unlink.mutate(link.mail_id)}
-              aria-label={t("tasks.unlink")}
-              title={t("tasks.unlink")}
-              className="shrink-0 p-1 rounded hover:bg-hover transition-colors opacity-0 group-hover:opacity-100 text-text-tertiary hover:text-danger"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        ))}
-      </div>
+              <MailIcon className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
+              <button
+                type="button"
+                onClick={() => goToMail(link)}
+                disabled={navigatingId === link.mail_id}
+                title={t("tasks.openMail")}
+                className="flex-1 min-w-0 text-left disabled:opacity-50"
+              >
+                <div className="truncate text-text">{link.subject || t("compose.noSubject")}</div>
+                <div className="truncate text-text-tertiary">
+                  {link.from_name || link.from_email}
+                  {link.mail_date && ` · ${formatMailDate(link.mail_date, use24h)}`}
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => unlink.mutate(link.mail_id)}
+                aria-label={t("tasks.unlink")}
+                title={t("tasks.unlink")}
+                className="shrink-0 p-1 rounded hover:bg-hover transition-colors opacity-0 group-hover:opacity-100 text-text-tertiary hover:text-danger"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

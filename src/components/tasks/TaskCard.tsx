@@ -1,10 +1,12 @@
-import type { CSSProperties, KeyboardEvent } from "react";
+import { useState, type CSSProperties, type DragEvent, type KeyboardEvent } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { Link2, Paperclip } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { Task, TaskStatus } from "../../types";
 import { useAppStore } from "../../stores/appStore";
+import { useLinkMailToTask } from "../../hooks/useTasks";
+import { isMailDrag, readMailDrag } from "../../lib/mailDrag";
 import { SpringCard } from "../motion/SpringCard";
 import { GlowRing } from "../motion/GlowRing";
 import { DueChip } from "./DueChip";
@@ -79,6 +81,8 @@ interface TaskCardProps {
 export function TaskCard({ task, status, showCheckmark, boardDragging }: TaskCardProps) {
   const reduce = useReducedMotion();
   const setOpenTaskId = useAppStore((s) => s.setOpenTaskId);
+  const linkMailToTask = useLinkMailToTask();
+  const [mailDropActive, setMailDropActive] = useState(false);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
     data: { type: "card", status },
@@ -101,10 +105,46 @@ export function TaskCard({ task, status, showCheckmark, boardDragging }: TaskCar
     listeners?.onKeyDown?.(e);
   }
 
+  // Guarded by isMailDrag so dnd-kit's own pointer-sensor drags (no native
+  // dragstart/dragover events) never reach this branch.
+  function handleDragOver(e: DragEvent<HTMLDivElement>) {
+    if (!isMailDrag(e.dataTransfer)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    setMailDropActive(true);
+  }
+
+  function handleDragLeave(e: DragEvent<HTMLDivElement>) {
+    if (!isMailDrag(e.dataTransfer)) return;
+    setMailDropActive(false);
+  }
+
+  function handleDrop(e: DragEvent<HTMLDivElement>) {
+    if (!isMailDrag(e.dataTransfer)) return;
+    e.preventDefault();
+    setMailDropActive(false);
+    const dragged = readMailDrag(e.dataTransfer);
+    if (dragged) linkMailToTask.mutate({ taskId: task.id, mailId: dragged.mailId });
+  }
+
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners} onKeyDown={handleKeyDown}>
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      onKeyDown={handleKeyDown}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <motion.div layout={!reduce && !boardDragging} transition={SPRING_SNAPPY} className="mb-2">
-        <SpringCard lift={4} glow={false} onClick={() => setOpenTaskId(task.id)} className="relative overflow-hidden">
+        <SpringCard
+          lift={4}
+          glow={false}
+          onClick={() => setOpenTaskId(task.id)}
+          className={`relative overflow-hidden ${mailDropActive ? "ring-2 ring-accent/50" : ""}`}
+        >
           <TaskCardBody task={task} />
           {showCheckmark && <CheckmarkOverlay reduce={!!reduce} />}
         </SpringCard>
