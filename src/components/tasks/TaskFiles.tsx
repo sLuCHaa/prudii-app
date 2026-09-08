@@ -1,17 +1,29 @@
 import { useTranslation } from "react-i18next";
-import { FileText, Image as ImageIcon, Film, Music, File as FileIcon, Loader2, FolderOpen, X, Plus } from "lucide-react";
+import { Loader2, FolderOpen, X, Plus } from "lucide-react";
 import type { TaskAttachment } from "../../types";
 import type { useTaskAttachments } from "../../hooks/useTasks";
 import { useAppStore } from "../../stores/appStore";
 import { revealLabelKey } from "../../lib/attachmentActions";
 import { isMacOS, isWindows } from "../../lib/platform";
+import { SECTION_ACTION, TaskSectionHead } from "./TaskSectionHead";
 
-function getFileIcon(mimeType: string) {
-  if (mimeType.startsWith("image/")) return ImageIcon;
-  if (mimeType.startsWith("video/")) return Film;
-  if (mimeType.startsWith("audio/")) return Music;
-  if (mimeType.includes("pdf") || mimeType.includes("document") || mimeType.includes("text")) return FileText;
-  return FileIcon;
+const TYPE_FAMILIES: { extensions: RegExp; className: string }[] = [
+  { extensions: /^pdf$/, className: "bg-danger" },
+  { extensions: /^(jpg|jpeg|png|gif|webp|heic|heif|bmp|svg|tif|tiff|avif)$/, className: "bg-accent" },
+  { extensions: /^(xls|xlsx|xlsm|csv|ods|numbers)$/, className: "bg-success" },
+  { extensions: /^(zip|rar|7z|tar|gz|bz2|xz)$/, className: "bg-warning" },
+  { extensions: /^(doc|docx|odt|rtf|txt|md|pages|ppt|pptx|key|odp)$/, className: "bg-text-secondary" },
+];
+
+/** Extension badge: short uppercase label plus a colour per file family. */
+export function fileBadge(filename: string): { label: string; className: string } {
+  const dot = filename.lastIndexOf(".");
+  const ext = dot > 0 ? filename.slice(dot + 1).toLowerCase() : "";
+  const family = TYPE_FAMILIES.find((f) => f.extensions.test(ext));
+  return {
+    label: (ext || "file").slice(0, 4).toUpperCase(),
+    className: family?.className ?? "bg-text-tertiary",
+  };
 }
 
 function formatFileSize(bytes: number): string {
@@ -24,11 +36,13 @@ function formatFileSize(bytes: number): string {
 interface TaskFilesProps {
   attachments: TaskAttachment[];
   api: ReturnType<typeof useTaskAttachments>;
+  /** True while an OS file drag hovers the drawer — highlights the drop row. */
+  dropActive?: boolean;
 }
 
-/** Tile row + add button. The OS-file drop zone lives on TaskDrawer's root (covers
- *  the whole panel) and shares this same `api` instance so pending state stays in sync. */
-export function TaskFiles({ attachments, api }: TaskFilesProps) {
+/** Single-column file list. The OS-file drop handler lives on TaskDrawer's root
+ *  (covers the whole panel) and shares this same `api` instance so pending state stays in sync. */
+export function TaskFiles({ attachments, api, dropActive = false }: TaskFilesProps) {
   const { t } = useTranslation();
   const addToast = useAppStore((s) => s.addToast);
   const revealLabel = t(revealLabelKey({ isMac: isMacOS, isWindows }));
@@ -41,30 +55,46 @@ export function TaskFiles({ attachments, api }: TaskFilesProps) {
 
   return (
     <div>
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary mb-2">{t("tasks.attachments")}</h3>
-      {attachments.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-2">
-          {attachments.map((att) => {
-            const Icon = getFileIcon(att.mime_type);
-            return (
-              <div
-                key={att.id}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border hover:bg-hover transition-colors group text-xs max-w-full min-w-0"
-                draggable
-                onDragStart={(e) => {
-                  // HTML5 drag cannot hand a file to the OS; the native session takes over.
-                  e.preventDefault();
-                  api.startDrag.mutate(att.id);
-                }}
+      <TaskSectionHead
+        title={t("tasks.attachments")}
+        count={attachments.length}
+        action={
+          <button onClick={() => api.add.mutate()} disabled={api.add.isPending} className={SECTION_ACTION}>
+            {api.add.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+            {t("tasks.addFiles")}
+          </button>
+        }
+      />
+      <div className="grid grid-cols-1 gap-1.5">
+        {attachments.map((att) => {
+          const badge = fileBadge(att.filename);
+          return (
+            <div
+              key={att.id}
+              className="grid grid-cols-[34px_1fr_auto] items-center gap-2.5 px-2.5 py-2 rounded-xl border border-border-light bg-surface hover:border-border transition-colors group min-w-0"
+              draggable
+              onDragStart={(e) => {
+                // HTML5 drag cannot hand a file to the OS; the native session takes over.
+                e.preventDefault();
+                api.startDrag.mutate(att.id);
+              }}
+            >
+              <span
+                aria-hidden
+                className={`w-[34px] h-10 rounded-[7px] grid place-items-center text-[9.5px] font-bold tracking-wide text-white ${badge.className}`}
               >
-                <button onClick={() => handleOpen(att.id)} aria-label={t("tasks.openFile")} className="flex items-center gap-1.5 text-left min-w-0 flex-1">
-                  <Icon className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
-                  <span className="text-text truncate" title={att.filename}>{att.filename}</span>
-                  {att.size_bytes > 0 && <span className="text-text-tertiary shrink-0">{formatFileSize(att.size_bytes)}</span>}
-                </button>
+                {badge.label}
+              </span>
+              <button onClick={() => handleOpen(att.id)} aria-label={t("tasks.openFile")} className="min-w-0 text-left">
+                <div className="truncate text-[13px] font-medium text-text" title={att.filename}>{att.filename}</div>
+                {att.size_bytes > 0 && (
+                  <div className="text-[11.5px] text-text-tertiary tabular-nums">{formatFileSize(att.size_bytes)}</div>
+                )}
+              </button>
+              <div className="flex items-center gap-0.5">
                 <button
                   onClick={(e) => { e.stopPropagation(); api.reveal.mutate(att.id); }}
-                  className="p-1 rounded hover:bg-hover transition-colors opacity-0 group-hover:opacity-100 text-text-tertiary hover:text-text"
+                  className="p-1 rounded-md opacity-0 group-hover:opacity-100 text-text-tertiary hover:bg-hover hover:text-text transition-colors"
                   aria-label={revealLabel}
                   title={revealLabel}
                 >
@@ -72,25 +102,24 @@ export function TaskFiles({ attachments, api }: TaskFilesProps) {
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); api.remove.mutate(att.id); }}
-                  className="p-1 rounded hover:bg-hover transition-colors opacity-0 group-hover:opacity-100 text-text-tertiary hover:text-danger"
+                  className="p-1 rounded-md opacity-0 group-hover:opacity-100 text-text-tertiary hover:bg-hover hover:text-danger transition-colors"
                   aria-label={t("tasks.removeFile")}
                   title={t("tasks.removeFile")}
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
               </div>
-            );
-          })}
+            </div>
+          );
+        })}
+        <div
+          className={`rounded-xl border-[1.5px] border-dashed px-2.5 py-2.5 text-center text-xs transition-colors ${
+            dropActive ? "border-accent bg-accent/10 text-accent" : "border-border text-text-tertiary"
+          }`}
+        >
+          {t("tasks.addFilesHint")}
         </div>
-      )}
-      <button
-        onClick={() => api.add.mutate()}
-        disabled={api.add.isPending}
-        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-accent hover:bg-accent/10 transition-colors disabled:opacity-50"
-      >
-        {api.add.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-        {t("tasks.addFiles")}
-      </button>
+      </div>
     </div>
   );
 }

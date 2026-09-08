@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Mail as MailIcon, X } from "lucide-react";
+import { X } from "lucide-react";
 import type { TaskMailLink } from "../../types";
 import { useTaskLinks } from "../../hooks/useTasks";
 import { useAppStore } from "../../stores/appStore";
 import { getMail } from "../../lib/tauri";
 import { formatMailDate } from "../../lib/dateUtils";
+import { GradientAvatar } from "../motion/GradientAvatar";
+import { TaskSectionHead } from "./TaskSectionHead";
 
 interface LinkedMailsProps {
   taskId: string;
@@ -42,36 +44,38 @@ export function LinkedMails({ taskId, links }: LinkedMailsProps) {
 
   return (
     <div>
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary mb-2">{t("tasks.linkedMails")}</h3>
-      <div className="space-y-1">
+      <TaskSectionHead title={t("tasks.linkedMails")} count={links.length} />
+      <div className="grid gap-1.5">
         {links.map((link) => (
           <div
             key={link.mail_id}
-            className="flex items-center gap-2 px-2 py-1.5 rounded-lg border border-border hover:bg-hover transition-colors group text-xs"
+            className="grid grid-cols-[32px_1fr_auto] items-center gap-2.5 px-2.5 py-2 rounded-xl border border-border-light bg-surface hover:border-border hover:bg-bg-secondary transition-colors group"
           >
-            <MailIcon className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
+            <GradientAvatar email={link.from_email} name={link.from_name} size={32} />
             <button
               type="button"
               onClick={() => goToMail(link)}
               disabled={navigatingId === link.mail_id}
               title={t("tasks.openMail")}
-              className="flex-1 min-w-0 text-left disabled:opacity-50"
+              className="min-w-0 text-left disabled:opacity-50"
             >
-              <div className="truncate text-text">{link.subject || t("compose.noSubject")}</div>
-              <div className="truncate text-text-tertiary">
-                {link.from_name || link.from_email}
-                {link.mail_date && ` · ${formatMailDate(link.mail_date, use24h)}`}
-              </div>
+              <div className="truncate text-xs text-text-secondary">{link.from_name || link.from_email}</div>
+              <div className="truncate text-[13.5px] font-medium text-text">{link.subject || t("compose.noSubject")}</div>
             </button>
-            <button
-              type="button"
-              onClick={() => unlink.mutate(link.mail_id)}
-              aria-label={t("tasks.unlink")}
-              title={t("tasks.unlink")}
-              className="shrink-0 p-1 rounded hover:bg-hover transition-colors opacity-0 group-hover:opacity-100 text-text-tertiary hover:text-danger"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
+            <div className="flex items-center gap-1.5">
+              {link.mail_date && (
+                <span className="text-[11.5px] text-text-tertiary tabular-nums">{formatMailDate(link.mail_date, use24h)}</span>
+              )}
+              <button
+                type="button"
+                onClick={() => unlink.mutate(link.mail_id)}
+                aria-label={t("tasks.unlink")}
+                title={t("tasks.unlink")}
+                className="w-6 h-6 grid place-items-center rounded-md opacity-0 group-hover:opacity-100 text-text-tertiary hover:bg-hover hover:text-danger transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         ))}
       </div>

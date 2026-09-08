@@ -15,11 +15,12 @@ import { CSS } from "@dnd-kit/utilities";
 import type { DragEndEvent } from "@dnd-kit/core";
 import type { ChecklistItem } from "../../types";
 import { useChecklist } from "../../hooks/useTasks";
-import { SPRING_SNAPPY } from "../motion/tokens";
+import { GlowRing } from "../motion/GlowRing";
+import { TaskSectionHead } from "./TaskSectionHead";
 
 function Checkmark({ reduce }: { reduce: boolean }) {
   return (
-    <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 text-white" fill="none">
+    <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 text-text-inverse" fill="none">
       <motion.path
         d="M4 12.5L9.5 18L20 6"
         stroke="currentColor"
@@ -70,22 +71,14 @@ function ChecklistRow({ item, onToggle, onCommit, onEnter, onBackspaceEmpty, onD
   }
 
   return (
-    <div ref={setNodeRef} style={style} className="flex items-center gap-2 group py-0.5">
-      <button
-        type="button"
-        {...attributes}
-        {...listeners}
-        className="shrink-0 text-text-tertiary opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing"
-        tabIndex={-1}
-      >
-        <GripVertical className="w-3.5 h-3.5" />
-      </button>
+    <div ref={setNodeRef} style={style} className="flex items-center gap-2.5 group px-2 py-1.5 rounded-[10px] hover:bg-hover transition-colors">
       <button
         type="button"
         onClick={onToggle}
         aria-pressed={item.done}
-        className={`shrink-0 w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
-          item.done ? "bg-accent border-accent" : "border-border hover:border-accent"
+        aria-label={item.text || t("tasks.checklist")}
+        className={`shrink-0 w-[18px] h-[18px] rounded-md border-[1.5px] flex items-center justify-center transition-colors ${
+          item.done ? "bg-accent border-accent" : "border-text-tertiary hover:border-accent"
         }`}
       >
         {item.done && <Checkmark reduce={!!reduce} />}
@@ -96,7 +89,7 @@ function ChecklistRow({ item, onToggle, onCommit, onEnter, onBackspaceEmpty, onD
         onChange={(e) => setText(e.target.value)}
         onBlur={() => { if (text.trim()) onCommit(text); else onDelete(); }}
         onKeyDown={handleKeyDown}
-        className={`flex-1 min-w-0 bg-transparent text-sm focus:outline-none ${item.done ? "line-through text-text-tertiary" : "text-text"}`}
+        className={`flex-1 min-w-0 bg-transparent text-[13.5px] focus:outline-none transition-colors ${item.done ? "line-through text-text-tertiary" : "text-text"}`}
       />
       <button
         type="button"
@@ -105,6 +98,15 @@ function ChecklistRow({ item, onToggle, onCommit, onEnter, onBackspaceEmpty, onD
         aria-label={t("common.delete")}
       >
         ×
+      </button>
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        className="shrink-0 text-text-tertiary opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing"
+        tabIndex={-1}
+      >
+        <GripVertical className="w-3.5 h-3.5" />
       </button>
     </div>
   );
@@ -119,6 +121,7 @@ export function ChecklistEditor({ taskId, items }: ChecklistEditorProps) {
   const { t } = useTranslation();
   const { addItem, updateItem, deleteItem, reorder } = useChecklist(taskId);
   const [newText, setNewText] = useState("");
+  const addInputRef = useRef<HTMLInputElement>(null);
   const inputsRef = useRef<Map<string, HTMLInputElement>>(new Map());
   const pendingFocusRef = useRef<string | null>(null);
 
@@ -137,7 +140,6 @@ export function ChecklistEditor({ taskId, items }: ChecklistEditorProps) {
 
   const total = items.length;
   const done = items.filter((i) => i.done).length;
-  const pct = total > 0 ? (done / total) * 100 : 0;
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
@@ -178,15 +180,9 @@ export function ChecklistEditor({ taskId, items }: ChecklistEditorProps) {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">{t("tasks.checklist")}</h3>
-        {total > 0 && <span className="text-xs text-text-tertiary tabular-nums">{done}/{total}</span>}
-      </div>
-      {total > 0 && (
-        <div className="h-1 bg-bg-secondary rounded-full overflow-hidden mb-2">
-          <motion.div className="h-full bg-accent" animate={{ width: `${pct}%` }} transition={SPRING_SNAPPY} />
-        </div>
-      )}
+      <TaskSectionHead title={t("tasks.checklist")} count={total > 0 ? `${done}/${total}` : undefined}>
+        {total > 0 && <GlowRing progress={done / total} size={22} strokeWidth={3} />}
+      </TaskSectionHead>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
           {items.map((item) => (
@@ -203,15 +199,25 @@ export function ChecklistEditor({ taskId, items }: ChecklistEditorProps) {
           ))}
         </SortableContext>
       </DndContext>
-      <div className="flex items-center gap-2 mt-1 pl-6">
-        <Plus className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
+      <div className="flex items-center gap-2.5 px-2 py-1.5 rounded-[10px] hover:bg-hover transition-colors">
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-hidden
+          onClick={() => addInputRef.current?.focus()}
+          className="shrink-0 w-[18px] h-[18px] rounded-md border-[1.5px] border-dashed border-border grid place-items-center text-text-tertiary"
+        >
+          <Plus className="w-2.5 h-2.5" />
+        </button>
         <input
+          ref={addInputRef}
           value={newText}
           onChange={(e) => setNewText(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddSubmit(); } }}
           onBlur={handleAddSubmit}
+          aria-label={t("tasks.addChecklistItem")}
           placeholder={t("tasks.addChecklistItem")}
-          className="flex-1 min-w-0 bg-transparent text-sm text-text placeholder:text-text-tertiary focus:outline-none"
+          className="flex-1 min-w-0 bg-transparent text-[13.5px] text-text placeholder:text-text-tertiary focus:outline-none"
         />
       </div>
     </div>
