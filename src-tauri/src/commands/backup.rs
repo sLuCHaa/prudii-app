@@ -17,29 +17,43 @@ fn emit_restore_progress(app: &AppHandle, progress: &BackupProgress) {
     let _ = app.emit("restore-progress", progress);
 }
 
-/// Resolves a ZIP entry's relative path under `base`, rejecting directory traversal.
-/// Checked twice: the raw name before any I/O (`..`/absolute components), then a
-/// canonicalized path (defends against a symlinked ancestor directory).
-fn safe_extract_path(base: &Path, rel_path: &str) -> Option<PathBuf> {
+/// Outcome of validating one ZIP entry's relative path against `base`.
+enum ExtractCheck {
+    Ok(PathBuf),
+    /// The path escapes `base` — a genuine ZIP-slip attempt.
+    Rejected,
+    /// Couldn't create the destination directory or resolve a canonical path.
+    IoError(String),
+}
+
+/// Resolves a ZIP entry's relative path under `base`, rejecting directory traversal
+/// (`..`/absolute) and a symlinked ancestor directory.
+fn safe_extract_path(base: &Path, rel_path: &str) -> ExtractCheck {
     if rel_path.contains("..") || rel_path.starts_with('/') || rel_path.starts_with('\\') {
-        return None;
+        return ExtractCheck::Rejected;
     }
 
     let dest = base.join(rel_path);
-    let parent = dest.parent()?;
-    std::fs::create_dir_all(parent).ok()?;
-
-    let canonical_base = base.canonicalize().ok()?;
-    // `dest` itself usually doesn't exist yet on a fresh restore, so canonicalize()
-    // fails on it — fall back to its (now-created) parent, which still catches a
-    // symlinked ancestor. Comparing a canonical path to a non-canonical fallback would
-    // mismatch on Windows, where canonicalize() adds a `\\?\` prefix — canonicalize both.
-    let canonical_check = dest.canonicalize().or_else(|_| parent.canonicalize()).ok()?;
-    if !canonical_check.starts_with(&canonical_base) {
-        return None;
+    let Some(parent) = dest.parent() else { return ExtractCheck::Rejected };
+    if let Err(e) = std::fs::create_dir_all(parent) {
+        return ExtractCheck::IoError(e.to_string());
     }
 
-    Some(dest)
+    let canonical_base = match base.canonicalize() {
+        Ok(p) => p,
+        Err(e) => return ExtractCheck::IoError(e.to_string()),
+    };
+    // `dest` often doesn't exist yet, so fall back to canonicalizing its parent.
+    // Windows prefixes canonical paths with `\\?\`, so compare canonical to canonical.
+    let canonical_check = match dest.canonicalize().or_else(|_| parent.canonicalize()) {
+        Ok(p) => p,
+        Err(e) => return ExtractCheck::IoError(e.to_string()),
+    };
+    if !canonical_check.starts_with(&canonical_base) {
+        return ExtractCheck::Rejected;
+    }
+
+    ExtractCheck::Ok(dest)
 }
 
 /// Reads one archive entry to a string, or `None` if the archive predates that file
@@ -671,9 +685,8 @@ fn do_create_backup_inner(
     Ok(())
 }
 
-/// Writes the four task tables plus `task_files/{task_id}/{filename}` and returns
-/// the task count. A missing attachment file is logged, not fatal — the row is
-/// exported regardless so the DB side of the backup stays complete.
+/// Writes the four task tables plus `task_files/{task_id}/{filename}`; a missing
+/// attachment file is logged, not fatal — the row is still exported.
 pub(crate) fn export_tasks<W: Write + Seek>(
     conn: &rusqlite::Connection,
     zip: &mut zip::ZipWriter<W>,
@@ -811,20 +824,33 @@ pub(crate) fn export_tasks<W: Write + Seek>(
     Ok(task_count)
 }
 
-/// Imports the four task tables in FK order (tasks -> checklist -> links ->
-/// attachments) and extracts `task_files/*` with the same ZIP-slip guard as
-/// attachments. `local_path` is rewritten to this machine's `data_dir` since the
-/// backup may have been created on a different install. Returns the task count.
-pub(crate) fn import_tasks<R: Read + Seek>(
+/// A task attachment row inserted by `import_task_rows`, kept so `extract_task_files`
+/// can look up its `task_files/{task_id}/{filename}` archive entry by exact name.
+pub(crate) struct TaskFileEntry {
+    task_id: String,
+    filename: String,
+}
+
+/// Inserts the four task tables in FK order, in one transaction. Returns the task
+/// count and the attachment rows, for `extract_task_files` to copy once `conn` is dropped.
+pub(crate) fn import_task_rows<R: Read + Seek>(
     conn: &rusqlite::Connection,
     archive: &mut zip::ZipArchive<R>,
     data_dir: &Path,
     is_replace: bool,
-) -> Result<i64, String> {
+) -> Result<(i64, Vec<TaskFileEntry>), String> {
     let insert_or = if is_replace { "INSERT OR REPLACE" } else { "INSERT OR IGNORE" };
     let mut task_count = 0i64;
+    let mut files = Vec::new();
 
-    if let Some(s) = read_zip_json(archive, "tasks.json")? {
+    let tasks_json = read_zip_json(archive, "tasks.json")?;
+    let checklist_json = read_zip_json(archive, "task_checklist.json")?;
+    let links_json = read_zip_json(archive, "task_mail_links.json")?;
+    let attachments_json = read_zip_json(archive, "task_attachments.json")?;
+
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+
+    if let Some(s) = tasks_json {
         let tasks: Vec<serde_json::Value> = serde_json::from_str(&s).map_err(|e| e.to_string())?;
         task_count = tasks.len() as i64;
         let sql = format!(
@@ -833,7 +859,7 @@ pub(crate) fn import_tasks<R: Read + Seek>(
             insert_or
         );
         for t in &tasks {
-            conn.execute(&sql, rusqlite::params![
+            tx.execute(&sql, rusqlite::params![
                 t.get("id").and_then(|v| v.as_str()).unwrap_or(""),
                 t.get("title").and_then(|v| v.as_str()).unwrap_or(""),
                 t.get("description_html").and_then(|v| v.as_str()).unwrap_or(""),
@@ -849,14 +875,14 @@ pub(crate) fn import_tasks<R: Read + Seek>(
         }
     }
 
-    if let Some(s) = read_zip_json(archive, "task_checklist.json")? {
+    if let Some(s) = checklist_json {
         let items: Vec<serde_json::Value> = serde_json::from_str(&s).map_err(|e| e.to_string())?;
         let sql = format!(
             "{} INTO task_checklist (id, task_id, text, done, sort_order) VALUES (?1,?2,?3,?4,?5)",
             insert_or
         );
         for c in &items {
-            conn.execute(&sql, rusqlite::params![
+            tx.execute(&sql, rusqlite::params![
                 c.get("id").and_then(|v| v.as_str()).unwrap_or(""),
                 c.get("task_id").and_then(|v| v.as_str()).unwrap_or(""),
                 c.get("text").and_then(|v| v.as_str()).unwrap_or(""),
@@ -866,7 +892,7 @@ pub(crate) fn import_tasks<R: Read + Seek>(
         }
     }
 
-    if let Some(s) = read_zip_json(archive, "task_mail_links.json")? {
+    if let Some(s) = links_json {
         let links: Vec<serde_json::Value> = serde_json::from_str(&s).map_err(|e| e.to_string())?;
         let sql = format!(
             "{} INTO task_mail_links (task_id, mail_id, account_id, subject, from_name, from_email, mail_date, created_at)
@@ -874,7 +900,7 @@ pub(crate) fn import_tasks<R: Read + Seek>(
             insert_or
         );
         for l in &links {
-            conn.execute(&sql, rusqlite::params![
+            tx.execute(&sql, rusqlite::params![
                 l.get("task_id").and_then(|v| v.as_str()).unwrap_or(""),
                 l.get("mail_id").and_then(|v| v.as_str()).unwrap_or(""),
                 l.get("account_id").and_then(|v| v.as_str()).unwrap_or(""),
@@ -887,7 +913,7 @@ pub(crate) fn import_tasks<R: Read + Seek>(
         }
     }
 
-    if let Some(s) = read_zip_json(archive, "task_attachments.json")? {
+    if let Some(s) = attachments_json {
         let attachments: Vec<serde_json::Value> = serde_json::from_str(&s).map_err(|e| e.to_string())?;
         let sql = format!(
             "{} INTO task_attachments (id, task_id, filename, mime_type, size_bytes, local_path, created_at)
@@ -895,11 +921,11 @@ pub(crate) fn import_tasks<R: Read + Seek>(
             insert_or
         );
         for a in &attachments {
-            let task_id = a.get("task_id").and_then(|v| v.as_str()).unwrap_or("");
-            let filename = a.get("filename").and_then(|v| v.as_str()).unwrap_or("");
-            let new_local_path = data_dir.join("task_files").join(task_id).join(filename);
+            let task_id = a.get("task_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let filename = a.get("filename").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let new_local_path = data_dir.join("task_files").join(&task_id).join(&filename);
 
-            conn.execute(&sql, rusqlite::params![
+            tx.execute(&sql, rusqlite::params![
                 a.get("id").and_then(|v| v.as_str()).unwrap_or(""),
                 task_id,
                 filename,
@@ -908,26 +934,41 @@ pub(crate) fn import_tasks<R: Read + Seek>(
                 new_local_path.to_string_lossy().to_string(),
                 a.get("created_at").and_then(|v| v.as_str()).unwrap_or(""),
             ]).map_err(|e| e.to_string())?;
-        }
 
-        let task_files_base = data_dir.join("task_files");
-        for i in 0..archive.len() {
-            let mut entry = archive.by_index(i).map_err(|e| e.to_string())?;
-            let name = entry.name().to_string();
-            if name.starts_with("task_files/") && !entry.is_dir() {
-                let rel_path = &name["task_files/".len()..];
-                match safe_extract_path(&task_files_base, rel_path) {
-                    Some(dest) => {
-                        let mut out_file = std::fs::File::create(&dest).map_err(|e| e.to_string())?;
-                        std::io::copy(&mut entry, &mut out_file).map_err(|e| e.to_string())?;
-                    }
-                    None => log::warn!("ZIP Slip attempt blocked: {}", name),
-                }
-            }
+            files.push(TaskFileEntry { task_id, filename });
         }
     }
 
-    Ok(task_count)
+    tx.commit().map_err(|e| e.to_string())?;
+
+    Ok((task_count, files))
+}
+
+/// Extracts each planned `task_files/{task_id}/{filename}` entry, with the same
+/// ZIP-slip guard as attachments. Call after `import_task_rows`'s `conn` is dropped.
+pub(crate) fn extract_task_files<R: Read + Seek>(
+    archive: &mut zip::ZipArchive<R>,
+    data_dir: &Path,
+    files: &[TaskFileEntry],
+) -> Result<(), String> {
+    let task_files_base = data_dir.join("task_files");
+    for entry in files {
+        let zip_path = format!("task_files/{}/{}", entry.task_id, entry.filename);
+        let mut zf = match archive.by_name(&zip_path) {
+            Ok(f) => f,
+            Err(_) => continue,
+        };
+        let rel_path = format!("{}/{}", entry.task_id, entry.filename);
+        match safe_extract_path(&task_files_base, &rel_path) {
+            ExtractCheck::Ok(dest) => {
+                let mut out_file = std::fs::File::create(&dest).map_err(|e| e.to_string())?;
+                std::io::copy(&mut zf, &mut out_file).map_err(|e| e.to_string())?;
+            }
+            ExtractCheck::Rejected => log::warn!("ZIP Slip attempt blocked: {}", zip_path),
+            ExtractCheck::IoError(e) => log::warn!("Skipping {}: {}", zip_path, e),
+        }
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -1546,11 +1587,12 @@ fn do_restore_backup_inner(
                     // attachment_files/{mail_id}/{filename}
                     let rel_path = &name["attachment_files/".len()..];
                     match safe_extract_path(&attachments_base, rel_path) {
-                        Some(dest) => {
+                        ExtractCheck::Ok(dest) => {
                             let mut out_file = std::fs::File::create(&dest).map_err(|e| e.to_string())?;
                             std::io::copy(&mut entry, &mut out_file).map_err(|e| e.to_string())?;
                         }
-                        None => log::warn!("ZIP Slip attempt blocked: {}", name),
+                        ExtractCheck::Rejected => log::warn!("ZIP Slip attempt blocked: {}", name),
+                        ExtractCheck::IoError(e) => log::warn!("Skipping {}: {}", name, e),
                     }
                 }
             }
@@ -1566,8 +1608,12 @@ fn do_restore_backup_inner(
             total_steps,
         });
 
-        let conn = db.lock_db();
-        tasks_imported = import_tasks(&conn, &mut archive, &data_dir, is_replace)?;
+        let (count, files) = {
+            let conn = db.lock_db();
+            import_task_rows(&conn, &mut archive, &data_dir, is_replace)?
+        };
+        tasks_imported = count;
+        extract_task_files(&mut archive, &data_dir, &files)?;
     }
 
     if !accounts_needing_passwords.is_empty() {
@@ -1640,11 +1686,12 @@ mod tasks_roundtrip {
 
         let db_b = temp_db();
         let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
-        let imported_count = {
+        let (imported_count, files) = {
             let conn = db_b.lock_db();
-            import_tasks(&conn, &mut archive, &db_b.data_dir, false).unwrap()
+            import_task_rows(&conn, &mut archive, &db_b.data_dir, false).unwrap()
         };
         assert_eq!(imported_count, 2);
+        extract_task_files(&mut archive, &db_b.data_dir, &files).unwrap();
 
         let tasks = list_tasks_impl(&db_b, None).unwrap();
         assert_eq!(tasks.len(), 2);
@@ -1699,11 +1746,12 @@ mod tasks_roundtrip {
         let bytes = zip.finish().unwrap().into_inner();
         let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
 
-        let imported_count = {
+        let (imported_count, files) = {
             let conn = db_b.lock_db();
-            import_tasks(&conn, &mut archive, &db_b.data_dir, false).unwrap()
+            import_task_rows(&conn, &mut archive, &db_b.data_dir, false).unwrap()
         };
         assert_eq!(imported_count, 1);
+        extract_task_files(&mut archive, &db_b.data_dir, &files).unwrap();
 
         // Neither the escape target nor anything at the base dir root was written.
         assert!(!db_b.data_dir.join("evil.txt").exists());
