@@ -210,7 +210,7 @@ pub struct SearchResult {
     pub rank: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct BackupOptions {
     pub include_settings: bool,
     pub include_accounts: bool,
@@ -220,6 +220,26 @@ pub struct BackupOptions {
     // Missing from older frontend calls deserializes to false, preserving prior backup behavior.
     #[serde(default)]
     pub include_tasks: bool,
+    #[serde(default)]
+    pub include_credentials: bool,
+    #[serde(default)]
+    pub passphrase: Option<String>,
+}
+
+// Hand-written so a future `{:?}` on the options can never print the passphrase.
+impl std::fmt::Debug for BackupOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BackupOptions")
+            .field("include_settings", &self.include_settings)
+            .field("include_accounts", &self.include_accounts)
+            .field("include_folders", &self.include_folders)
+            .field("include_mails", &self.include_mails)
+            .field("include_attachments", &self.include_attachments)
+            .field("include_tasks", &self.include_tasks)
+            .field("include_credentials", &self.include_credentials)
+            .field("passphrase", &self.passphrase.as_ref().map(|_| "<redacted>"))
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -248,6 +268,8 @@ pub struct BackupIncludes {
     pub attachments: bool,
     #[serde(default)]
     pub tasks: bool,
+    #[serde(default)]
+    pub credentials: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -265,6 +287,7 @@ pub struct RestorePreview {
     pub file_path: String,
     pub manifest: BackupManifest,
     pub existing_account_emails: Vec<String>,
+    pub has_credentials: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

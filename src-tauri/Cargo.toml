@@ -37,6 +37,7 @@ mail-parser = "0.11"
 lettre = { version = "0.11", default-features = false, features = ["tokio1-native-tls", "smtp-transport", "builder"] }
 keyring = "3"
 base64 = "0.22"
+ring = "0.17"
 thiserror = "2"
 anyhow = "1"
 zip = { version = "7", default-features = false, features = ["deflate"] }

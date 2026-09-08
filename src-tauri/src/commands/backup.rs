@@ -1,3 +1,4 @@
+use crate::credentials::SecretStore;
 use crate::db::Database;
 use crate::models::{BackupIncludes, BackupManifest, BackupOptions, BackupProgress, BackupStats, RestorePreview};
 use crate::pool::ImapPool;
@@ -84,6 +85,10 @@ pub async fn create_backup(
         && !options.include_attachments
     {
         return Err("Please select at least one category to backup.".into());
+    }
+
+    if options.include_credentials && !options.include_accounts {
+        return Err("Credentials require accounts".into());
     }
 
     let now = chrono::Local::now();
@@ -332,6 +337,12 @@ fn do_create_backup_inner(
         let json = serde_json::to_string_pretty(&accounts).map_err(|e| e.to_string())?;
         zip.start_file("accounts.json", zip_options).map_err(|e| e.to_string())?;
         zip.write_all(json.as_bytes()).map_err(|e| e.to_string())?;
+
+        if options.include_credentials {
+            let store = crate::credentials::KeyringStore;
+            let passphrase = options.passphrase.as_deref().unwrap_or("");
+            export_credentials(&store, &accounts, &mut zip, passphrase, &zip_options)?;
+        }
 
         // Mail Rules (bundled with accounts)
         let rules: Vec<serde_json::Value> = {
@@ -665,6 +676,7 @@ fn do_create_backup_inner(
             mails: options.include_mails,
             attachments: options.include_attachments,
             tasks: options.include_tasks,
+            credentials: options.include_credentials,
         },
         stats,
     };
@@ -971,6 +983,90 @@ pub(crate) fn extract_task_files<R: Read + Seek>(
     Ok(())
 }
 
+/// Emitted instead of a raw error message so the UI can translate the one failure
+/// the user can actually act on.
+const WRONG_PASSPHRASE_KEY: &str = "backup.wrongPassphrase";
+
+/// One account's stored secret inside the encrypted `credentials.enc` payload.
+#[derive(serde::Serialize, serde::Deserialize)]
+pub(crate) struct CredentialEntry {
+    pub account_id: String,
+    pub email: String,
+    pub secret: String,
+}
+
+/// Encrypts the secrets of the exported accounts into `credentials.enc`.
+/// An account without a readable secret is skipped so the rest of the backup still succeeds.
+pub(crate) fn export_credentials<W: Write + Seek>(
+    store: &dyn SecretStore,
+    accounts: &[serde_json::Value],
+    zip: &mut zip::ZipWriter<W>,
+    passphrase: &str,
+    opts: &zip::write::SimpleFileOptions,
+) -> Result<usize, String> {
+    let mut entries: Vec<CredentialEntry> = Vec::new();
+    for acc in accounts {
+        let account_id = acc.get("id").and_then(|v| v.as_str()).unwrap_or("");
+        let email = acc.get("email").and_then(|v| v.as_str()).unwrap_or("");
+        if account_id.is_empty() {
+            continue;
+        }
+        match store.get(account_id) {
+            Ok(secret) => entries.push(CredentialEntry {
+                account_id: account_id.to_string(),
+                email: email.to_string(),
+                secret,
+            }),
+            Err(e) => log::warn!("[backup] Skipping credentials for account {}: {}", account_id, e),
+        }
+    }
+
+    let plaintext = serde_json::to_vec(&entries).map_err(|e| e.to_string())?;
+    let envelope = crate::crypto::encrypt_with_passphrase(&plaintext, passphrase)?;
+    zip.start_file("credentials.enc", *opts).map_err(|e| e.to_string())?;
+    zip.write_all(envelope.as_bytes()).map_err(|e| e.to_string())?;
+
+    Ok(entries.len())
+}
+
+/// Reads and decrypts `credentials.enc`, or `Ok(None)` for an archive without it.
+pub(crate) fn read_credentials<R: Read + Seek>(
+    archive: &mut zip::ZipArchive<R>,
+    passphrase: &str,
+) -> Result<Option<Vec<CredentialEntry>>, String> {
+    let Some(envelope) = read_zip_json(archive, "credentials.enc")? else {
+        return Ok(None);
+    };
+
+    let plaintext = crate::crypto::decrypt_with_passphrase(&envelope, passphrase).map_err(|e| {
+        if e == crate::crypto::WRONG_PASSPHRASE { WRONG_PASSPHRASE_KEY.to_string() } else { e }
+    })?;
+    let entries: Vec<CredentialEntry> =
+        serde_json::from_slice(&plaintext).map_err(|_| "Invalid credentials payload".to_string())?;
+
+    Ok(Some(entries))
+}
+
+/// Stores the decrypted secrets of the accounts that were actually imported and returns
+/// their emails — those accounts no longer need a manual re-login.
+pub(crate) fn restore_credentials(
+    store: &dyn SecretStore,
+    entries: &[CredentialEntry],
+    imported_emails: &[String],
+) -> Vec<String> {
+    let mut restored = Vec::new();
+    for entry in entries {
+        if !imported_emails.iter().any(|e| e == &entry.email) {
+            continue;
+        }
+        match store.set(&entry.account_id, &entry.secret) {
+            Ok(()) => restored.push(entry.email.clone()),
+            Err(e) => log::warn!("[backup] Storing the secret for account {} failed: {}", entry.account_id, e),
+        }
+    }
+    restored
+}
+
 #[tauri::command]
 pub async fn preview_restore(
     app: AppHandle,
@@ -1038,6 +1134,7 @@ pub async fn preview_restore(
 
     Ok(Some(RestorePreview {
         file_path: file_path.to_string_lossy().to_string(),
+        has_credentials: manifest.includes.credentials,
         manifest,
         existing_account_emails,
     }))
@@ -1048,10 +1145,11 @@ pub async fn restore_backup(
     app: AppHandle,
     file_path: String,
     strategy: String,
+    passphrase: Option<String>,
 ) -> Result<(), String> {
     let app_clone = app.clone();
     tauri::async_runtime::spawn(async move {
-        do_restore_backup(app_clone, file_path, strategy).await;
+        do_restore_backup(app_clone, file_path, strategy, passphrase).await;
     });
     Ok(())
 }
@@ -1060,6 +1158,7 @@ async fn do_restore_backup(
     app: AppHandle,
     file_path: String,
     strategy: String,
+    passphrase: Option<String>,
 ) {
     {
         let mut in_progress = BACKUP_IN_PROGRESS.lock().unwrap_or_else(|e| e.into_inner());
@@ -1075,7 +1174,7 @@ async fn do_restore_backup(
         *in_progress = true;
     }
 
-    let result = do_restore_backup_inner(&app, &file_path, &strategy);
+    let result = do_restore_backup_inner(&app, &file_path, &strategy, passphrase.as_deref());
 
     // Clear all IMAP pool connections — restored data may have changed account IDs/folders
     if result.is_ok() {
@@ -1089,9 +1188,11 @@ async fn do_restore_backup(
     }
 
     if let Err(e) = result {
+        // Errors that are already i18n keys reach the UI verbatim so it can translate them.
+        let message = if e.starts_with("backup.") { e } else { format!("Restore failed: {}", e) };
         emit_restore_progress(&app, &BackupProgress {
             status: "error".into(),
-            message: format!("Restore failed: {}", e),
+            message,
             current_step: 0,
             total_steps: 0,
         });
@@ -1102,6 +1203,7 @@ fn do_restore_backup_inner(
     app: &AppHandle,
     file_path: &str,
     strategy: &str,
+    passphrase: Option<&str>,
 ) -> Result<(), String> {
     let db = app.state::<Database>();
     let data_dir = db.data_dir.clone();
@@ -1131,6 +1233,12 @@ fn do_restore_backup_inner(
 
     let mut accounts_needing_passwords: Vec<String> = Vec::new();
     let mut tasks_imported: i64 = 0;
+
+    // Decrypted up front: a wrong passphrase must abort before the first table is written.
+    let credentials = match passphrase {
+        Some(p) if !p.is_empty() => read_credentials(&mut archive, p)?,
+        _ => None,
+    };
 
     if manifest.includes.app_settings {
         if let Ok(mut f) = archive.by_name("app_settings.json") {
@@ -1276,6 +1384,12 @@ fn do_restore_backup_inner(
                 accounts_needing_passwords.push(email.to_string());
             }
         }
+    }
+
+    if let Some(entries) = &credentials {
+        let store = crate::credentials::KeyringStore;
+        let restored = restore_credentials(&store, entries, &accounts_needing_passwords);
+        accounts_needing_passwords.retain(|email| !restored.contains(email));
     }
 
     // Mail Rules (bundled with accounts)
@@ -1763,5 +1877,118 @@ mod tasks_roundtrip {
             Vec::new()
         };
         assert!(written.is_empty(), "no file should have been written for the malicious entry");
+    }
+}
+
+#[cfg(test)]
+mod credentials_roundtrip {
+    use super::*;
+    use std::collections::HashMap;
+    use std::io::Cursor;
+
+    #[derive(Default)]
+    struct MemoryStore {
+        secrets: Mutex<HashMap<String, String>>,
+    }
+
+    impl MemoryStore {
+        fn seeded(pairs: &[(&str, &str)]) -> Self {
+            let store = MemoryStore::default();
+            for (id, secret) in pairs {
+                store.set(id, secret).unwrap();
+            }
+            store
+        }
+
+        fn stored(&self, account_id: &str) -> Option<String> {
+            self.secrets.lock().unwrap().get(account_id).cloned()
+        }
+    }
+
+    impl SecretStore for MemoryStore {
+        fn get(&self, account_id: &str) -> Result<String, String> {
+            self.secrets
+                .lock()
+                .unwrap()
+                .get(account_id)
+                .cloned()
+                .ok_or_else(|| "no secret stored".to_string())
+        }
+
+        fn set(&self, account_id: &str, secret: &str) -> Result<(), String> {
+            self.secrets.lock().unwrap().insert(account_id.to_string(), secret.to_string());
+            Ok(())
+        }
+    }
+
+    const PASSPHRASE: &str = "a good long passphrase";
+
+    fn accounts_json() -> Vec<serde_json::Value> {
+        vec![
+            serde_json::json!({ "id": "acc-1", "email": "one@example.com" }),
+            serde_json::json!({ "id": "acc-2", "email": "two@example.com" }),
+            serde_json::json!({ "id": "acc-3", "email": "three@example.com" }),
+        ]
+    }
+
+    fn export_to_bytes(store: &MemoryStore, passphrase: &str) -> (usize, Vec<u8>) {
+        let zip_options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        let exported =
+            export_credentials(store, &accounts_json(), &mut zip, passphrase, &zip_options).unwrap();
+        (exported, zip.finish().unwrap().into_inner())
+    }
+
+    #[test]
+    fn exported_secrets_are_restored_for_the_imported_accounts_only() {
+        // acc-3 has no secret at all — it must not block the other two.
+        let source = MemoryStore::seeded(&[("acc-1", "secret-one"), ("acc-2", "secret-two")]);
+        let (exported, bytes) = export_to_bytes(&source, PASSPHRASE);
+        assert_eq!(exported, 2);
+
+        let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+        let entries = read_credentials(&mut archive, PASSPHRASE).unwrap().unwrap();
+        assert_eq!(entries.len(), 2);
+
+        // Only one@example.com was imported; two@example.com already existed and was skipped.
+        let target = MemoryStore::default();
+        let imported = vec!["one@example.com".to_string()];
+        let restored = restore_credentials(&target, &entries, &imported);
+
+        assert_eq!(restored, vec!["one@example.com".to_string()]);
+        assert_eq!(target.stored("acc-1").as_deref(), Some("secret-one"));
+        assert_eq!(target.stored("acc-2"), None);
+    }
+
+    #[test]
+    fn the_ciphertext_never_contains_the_plaintext_secret() {
+        let source = MemoryStore::seeded(&[("acc-1", "secret-one")]);
+        let (_, bytes) = export_to_bytes(&source, PASSPHRASE);
+
+        let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+        let envelope = read_zip_json(&mut archive, "credentials.enc").unwrap().unwrap();
+        assert!(!envelope.contains("secret-one"));
+        assert!(!envelope.contains("one@example.com"));
+    }
+
+    #[test]
+    fn a_wrong_passphrase_reports_the_translatable_key() {
+        let source = MemoryStore::seeded(&[("acc-1", "secret-one")]);
+        let (_, bytes) = export_to_bytes(&source, PASSPHRASE);
+
+        let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+        // `.err()` rather than `unwrap_err()`: CredentialEntry deliberately has no Debug impl.
+        let err = read_credentials(&mut archive, "another passphrase").err().unwrap();
+        assert_eq!(err, "backup.wrongPassphrase");
+    }
+
+    #[test]
+    fn an_archive_without_credentials_restores_without_a_passphrase() {
+        let zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        let bytes = zip.finish().unwrap().into_inner();
+
+        let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+        assert!(read_credentials(&mut archive, PASSPHRASE).unwrap().is_none());
     }
 }

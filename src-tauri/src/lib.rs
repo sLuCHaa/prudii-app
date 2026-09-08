@@ -5,6 +5,7 @@ pub mod commands;
 pub mod connectivity;
 pub mod contacts;
 pub mod credentials;
+pub mod crypto;
 pub mod db;
 pub mod gmail;
 pub mod idle;

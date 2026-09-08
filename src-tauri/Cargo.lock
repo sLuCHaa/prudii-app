@@ -3578,6 +3578,7 @@ dependencies = [
  "open",
  "rand 0.10.2",
  "reqwest",
+ "ring",
  "rusqlite",
  "rustls",
  "semver",

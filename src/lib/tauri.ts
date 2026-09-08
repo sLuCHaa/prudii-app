@@ -314,8 +314,8 @@ export async function previewRestore(): Promise<RestorePreview | null> {
   return invoke("preview_restore");
 }
 
-export async function restoreBackup(filePath: string, strategy: string): Promise<void> {
-  return invoke("restore_backup", { filePath, strategy });
+export async function restoreBackup(filePath: string, strategy: string, passphrase?: string): Promise<void> {
+  return invoke("restore_backup", { filePath, strategy, passphrase: passphrase ?? null });
 }
 
 export async function searchContacts(query: string, accountId?: string): Promise<Contact[]> {

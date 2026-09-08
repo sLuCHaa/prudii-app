@@ -49,7 +49,10 @@ export function BackupRestore() {
     };
   }, []);
 
-  function toggleOption(key: keyof BackupOptions) {
+  // Only the boolean flags drive a checkbox; `passphrase` is a value, not a toggle.
+  type BackupToggleKey = Exclude<keyof BackupOptions, "passphrase">;
+
+  function toggleOption(key: BackupToggleKey) {
     setOptions((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
@@ -83,7 +86,7 @@ export function BackupRestore() {
 
   const anySelected = Object.values(options).some((v) => v);
 
-  const BACKUP_ITEMS: { key: keyof BackupOptions; icon: typeof Settings2; labelKey: string; hintKey?: string }[] = [
+  const BACKUP_ITEMS: { key: BackupToggleKey; icon: typeof Settings2; labelKey: string; hintKey?: string }[] = [
     { key: "include_settings", icon: Settings2, labelKey: "backup.appSettings" },
     { key: "include_accounts", icon: HardDrive, labelKey: "backup.accounts", hintKey: "backup.accountsHint" },
     { key: "include_folders", icon: Folder, labelKey: "backup.folders" },

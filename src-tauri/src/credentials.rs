@@ -330,3 +330,22 @@ pub fn delete_password(account_id: &str) -> Result<()> {
 
     Ok(())
 }
+
+/// Indirection over the secret storage so backup code can be tested without an OS keyring.
+pub trait SecretStore {
+    fn get(&self, account_id: &str) -> Result<String, String>;
+    fn set(&self, account_id: &str, secret: &str) -> Result<(), String>;
+}
+
+/// Production implementation — the same keyring/cache/DB chain the app uses everywhere else.
+pub struct KeyringStore;
+
+impl SecretStore for KeyringStore {
+    fn get(&self, account_id: &str) -> Result<String, String> {
+        get_password(account_id).map_err(|e| e.to_string())
+    }
+
+    fn set(&self, account_id: &str, secret: &str) -> Result<(), String> {
+        store_password(account_id, secret).map_err(|e| e.to_string())
+    }
+}
