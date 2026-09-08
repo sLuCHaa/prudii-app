@@ -722,14 +722,19 @@ pub(crate) fn start_native_drag(window: &tauri::Window, path: std::path::PathBuf
     let drag_window = window.clone();
     window
         .run_on_main_thread(move || {
-            let result = drag::start_drag(
-                &drag_window,
-                drag::DragItem::Files(vec![path]),
-                icon,
-                |_result, _cursor_pos| {},
-                drag::Options::default(),
-            )
-            .map_err(|e| e.to_string());
+            let item = drag::DragItem::Files(vec![path]);
+            // The GTK backend wants the gtk::ApplicationWindow, not the Tauri window.
+            #[cfg(target_os = "linux")]
+            let result = drag_window
+                .gtk_window()
+                .map_err(|e| e.to_string())
+                .and_then(|gtk_window| {
+                    drag::start_drag(&gtk_window, item, icon, |_result, _cursor_pos| {}, drag::Options::default())
+                        .map_err(|e| e.to_string())
+                });
+            #[cfg(not(target_os = "linux"))]
+            let result = drag::start_drag(&drag_window, item, icon, |_result, _cursor_pos| {}, drag::Options::default())
+                .map_err(|e| e.to_string());
             let _ = tx.send(result);
         })
         .map_err(|e| e.to_string())?;
