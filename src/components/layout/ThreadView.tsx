@@ -1257,13 +1257,15 @@ export function ThreadView({ mail }: ThreadViewProps) {
       });
       if (!confirmed) return;
     }
-    selectNextMail();
+    // Same exit path as archive: the list plays the row sweep and picks the next mail.
+    setPendingRemoveId(mail.id);
     trashMail(mail.id)
       .then(() => queryClient.invalidateQueries({ queryKey: ["folders"] }))
       .catch((e) => {
+        setPendingRemoveId(null);
         dialog.alert({ type: "danger", title: t("common.error"), message: causeMessage(e) });
       });
-  }, [mail.id, mail.subject, isInTrash, selectNextMail, dialog, t, queryClient]);
+  }, [mail.id, mail.subject, isInTrash, setPendingRemoveId, dialog, t, queryClient]);
 
   const handleArchive = useCallback(async () => {
     setPendingRemoveId(mail.id);

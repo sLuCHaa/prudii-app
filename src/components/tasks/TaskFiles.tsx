@@ -49,7 +49,7 @@ export function TaskFiles({ attachments, api }: TaskFilesProps) {
             return (
               <div
                 key={att.id}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border hover:bg-hover transition-colors group text-xs"
+                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border hover:bg-hover transition-colors group text-xs max-w-full min-w-0"
                 draggable
                 onDragStart={(e) => {
                   // HTML5 drag cannot hand a file to the OS; the native session takes over.
@@ -59,7 +59,7 @@ export function TaskFiles({ attachments, api }: TaskFilesProps) {
               >
                 <button onClick={() => handleOpen(att.id)} aria-label={t("tasks.openFile")} className="flex items-center gap-1.5 text-left min-w-0 flex-1">
                   <Icon className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
-                  <span className="text-text truncate">{att.filename}</span>
+                  <span className="text-text truncate" title={att.filename}>{att.filename}</span>
                   {att.size_bytes > 0 && <span className="text-text-tertiary shrink-0">{formatFileSize(att.size_bytes)}</span>}
                 </button>
                 <button
