@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import { Download, Upload, Settings2, HardDrive, Folder, Mail, Paperclip, AlertTriangle, CheckCircle, Loader2 } from "lucide-react";
+import { Download, Upload, Settings2, HardDrive, Folder, Mail, Paperclip, ListChecks, KeyRound, AlertTriangle, CheckCircle, Loader2 } from "lucide-react";
 import { listen } from "@tauri-apps/api/event";
 import { Button } from "../ui/Button";
 import { createBackup, previewRestore, restoreBackup } from "../../lib/tauri";
+import { validateBackupOptions, backupErrorText } from "../../lib/backupOptions";
 import type { BackupOptions, BackupProgress, RestorePreview } from "../../types";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";
@@ -16,11 +17,16 @@ export function BackupRestore() {
     include_folders: true,
     include_mails: true,
     include_attachments: false,
+    include_tasks: true,
+    include_credentials: false,
   });
+  const [passphrase, setPassphrase] = useState("");
+  const [passphraseRepeat, setPassphraseRepeat] = useState("");
   const [backupProgress, setBackupProgress] = useState<BackupProgress | null>(null);
   const backupBusy = backupProgress !== null && backupProgress.status !== "done" && backupProgress.status !== "error";
 
   const [preview, setPreview] = useState<RestorePreview | null>(null);
+  const [restorePassphrase, setRestorePassphrase] = useState("");
   const [restoreProgress, setRestoreProgress] = useState<BackupProgress | null>(null);
   const restoreBusy = restoreProgress !== null && restoreProgress.status !== "done" && restoreProgress.status !== "error";
   const [passwordHintEmails, setPasswordHintEmails] = useState<string[]>([]);
@@ -53,14 +59,31 @@ export function BackupRestore() {
   type BackupToggleKey = Exclude<keyof BackupOptions, "passphrase">;
 
   function toggleOption(key: BackupToggleKey) {
-    setOptions((prev) => ({ ...prev, [key]: !prev[key] }));
+    setOptions((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      // Credentials can only be encrypted alongside the account records they belong to.
+      if (key === "include_accounts" && !next.include_accounts) next.include_credentials = false;
+      return next;
+    });
+    if (key === "include_accounts" || key === "include_credentials") {
+      setPassphrase("");
+      setPassphraseRepeat("");
+    }
   }
+
+  const validation = validateBackupOptions(options, passphrase, passphraseRepeat);
 
   async function handleCreateBackup() {
     try {
-      await createBackup(options);
+      await createBackup({
+        ...options,
+        passphrase: options.include_credentials ? passphrase : undefined,
+      });
+      setPassphrase("");
+      setPassphraseRepeat("");
     } catch (err) {
-      addToast("error", t("errors.backupCreate"), err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      addToast("error", t("errors.backupCreate"), backupErrorText(message, t));
     }
   }
 
@@ -68,6 +91,7 @@ export function BackupRestore() {
     try {
       const result = await previewRestore();
       setPreview(result);
+      setRestorePassphrase("");
       setPasswordHintEmails([]);
     } catch (err) {
       addToast("error", t("errors.backupPreview"), err instanceof Error ? err.message : String(err));
@@ -77,14 +101,16 @@ export function BackupRestore() {
   async function handleRestore(strategy: "merge" | "replace") {
     if (!preview) return;
     try {
-      await restoreBackup(preview.file_path, strategy);
+      await restoreBackup(preview.file_path, strategy, preview.has_credentials ? restorePassphrase || undefined : undefined);
       setPreview(null);
+      setRestorePassphrase("");
     } catch (err) {
-      addToast("error", t("errors.backupRestore"), err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      addToast("error", t("errors.backupRestore"), backupErrorText(message, t));
     }
   }
 
-  const anySelected = Object.values(options).some((v) => v);
+  const anySelected = Object.values(options).some((v) => v === true);
 
   const BACKUP_ITEMS: { key: BackupToggleKey; icon: typeof Settings2; labelKey: string; hintKey?: string }[] = [
     { key: "include_settings", icon: Settings2, labelKey: "backup.appSettings" },
@@ -92,6 +118,8 @@ export function BackupRestore() {
     { key: "include_folders", icon: Folder, labelKey: "backup.folders" },
     { key: "include_mails", icon: Mail, labelKey: "backup.emails" },
     { key: "include_attachments", icon: Paperclip, labelKey: "backup.attachments", hintKey: "backup.attachmentsHint" },
+    { key: "include_tasks", icon: ListChecks, labelKey: "backup.includeTasks" },
+    { key: "include_credentials", icon: KeyRound, labelKey: "backup.includeCredentials", hintKey: "backup.credentialsHint" },
   ];
 
   return (
@@ -108,23 +136,53 @@ export function BackupRestore() {
         </div>
 
         <div className="space-y-1.5">
-          {BACKUP_ITEMS.map(({ key, icon: Icon, labelKey, hintKey }) => (
-            <label
-              key={key}
-              className="flex items-center gap-3 p-2 rounded-lg hover:bg-hover transition-colors cursor-pointer"
-            >
-              <input
-                type="checkbox"
-                checked={options[key]}
-                onChange={() => toggleOption(key)}
-                disabled={backupBusy || restoreBusy}
-                className="w-4 h-4 rounded border-border text-accent focus:ring-accent focus:ring-offset-0 bg-bg-secondary"
-              />
-              <Icon className="w-4 h-4 text-text-tertiary" />
-              <span className="text-sm text-text">{t(labelKey)}</span>
-              {hintKey && <span className="text-xs text-text-tertiary">{t(hintKey)}</span>}
-            </label>
-          ))}
+          {BACKUP_ITEMS.map(({ key, icon: Icon, labelKey, hintKey }) => {
+            const credentialsLocked = key === "include_credentials" && !options.include_accounts;
+            return (
+              <div key={key}>
+                <label className="flex items-center gap-3 p-2 rounded-lg hover:bg-hover transition-colors cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={options[key] === true}
+                    onChange={() => toggleOption(key)}
+                    disabled={backupBusy || restoreBusy || credentialsLocked}
+                    className="w-4 h-4 rounded border-border text-accent focus:ring-accent focus:ring-offset-0 bg-bg-secondary"
+                  />
+                  <Icon className="w-4 h-4 text-text-tertiary" />
+                  <span className="text-sm text-text">{t(labelKey)}</span>
+                  {hintKey && <span className="text-xs text-text-tertiary">{t(hintKey)}</span>}
+                </label>
+                {key === "include_credentials" && options.include_credentials && (
+                  <div className="ml-9 mr-2 mb-1 space-y-1.5">
+                    <input
+                      type="password"
+                      autoComplete="new-password"
+                      value={passphrase}
+                      onChange={(e) => setPassphrase(e.target.value)}
+                      placeholder={t("backup.passphrase")}
+                      disabled={backupBusy || restoreBusy}
+                      className="w-full text-sm px-2 py-1.5 rounded-lg border border-border bg-bg-secondary text-text"
+                    />
+                    <input
+                      type="password"
+                      autoComplete="new-password"
+                      value={passphraseRepeat}
+                      onChange={(e) => setPassphraseRepeat(e.target.value)}
+                      placeholder={t("backup.passphraseRepeat")}
+                      disabled={backupBusy || restoreBusy}
+                      className="w-full text-sm px-2 py-1.5 rounded-lg border border-border bg-bg-secondary text-text"
+                    />
+                    {validation.reason === "tooShort" && (
+                      <div className="text-xs text-danger">{t("backup.passphraseTooShort")}</div>
+                    )}
+                    {validation.reason === "mismatch" && (
+                      <div className="text-xs text-danger">{t("backup.passphraseMismatch")}</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         {backupProgress && (
@@ -140,7 +198,7 @@ export function BackupRestore() {
             ) : (
               <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
             )}
-            <span className="truncate">{backupProgress.message}</span>
+            <span className="truncate">{backupErrorText(backupProgress.message, t)}</span>
           </div>
         )}
 
@@ -149,7 +207,7 @@ export function BackupRestore() {
           size="sm"
           icon={<Download />}
           loading={backupBusy}
-          disabled={!anySelected || restoreBusy}
+          disabled={!anySelected || restoreBusy || !validation.ok}
           onClick={handleCreateBackup}
         >
           {t("backup.createBackup")}
@@ -187,7 +245,7 @@ export function BackupRestore() {
                 ) : (
                   <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
                 )}
-                <span className="truncate">{restoreProgress.message}</span>
+                <span className="truncate">{backupErrorText(restoreProgress.message, t)}</span>
               </div>
             )}
 
@@ -237,6 +295,11 @@ export function BackupRestore() {
                   <span className="text-text">{preview.manifest.stats.attachment_count}</span>
                 </div>
               )}
+              {preview.manifest.includes.tasks && (
+                <div className="flex justify-between">
+                  <span className="text-text-tertiary">{t("backup.tasksCount", { count: preview.manifest.stats.task_count })}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-text-tertiary">{t("backup.includes")}</span>
                 <span className="text-text">
@@ -246,6 +309,8 @@ export function BackupRestore() {
                     preview.manifest.includes.folders && t("backup.folders"),
                     preview.manifest.includes.mails && t("backup.emails"),
                     preview.manifest.includes.attachments && t("backup.attachments"),
+                    preview.manifest.includes.tasks && t("backup.includeTasks"),
+                    preview.manifest.includes.credentials && t("backup.includeCredentials"),
                   ].filter(Boolean).join(", ")}
                 </span>
               </div>
@@ -268,10 +333,25 @@ export function BackupRestore() {
               </div>
             )}
 
-            {preview.manifest.includes.accounts && (
+            {preview.manifest.includes.accounts && !preview.has_credentials && (
               <div className="flex items-start gap-2 p-2 rounded-lg bg-accent/5 text-xs text-text-secondary">
                 <HardDrive className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                 <span>{t("backup.passwordHint")}</span>
+              </div>
+            )}
+
+            {preview.has_credentials && (
+              <div className="space-y-1">
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={restorePassphrase}
+                  onChange={(e) => setRestorePassphrase(e.target.value)}
+                  placeholder={t("backup.restorePassphrase")}
+                  disabled={restoreBusy}
+                  className="w-full text-sm px-2 py-1.5 rounded-lg border border-border bg-bg-secondary text-text"
+                />
+                <div className="text-xs text-text-tertiary">{t("backup.restoreWithoutCredentials")}</div>
               </div>
             )}
 
@@ -297,7 +377,10 @@ export function BackupRestore() {
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => setPreview(null)}
+                onClick={() => {
+                  setPreview(null);
+                  setRestorePassphrase("");
+                }}
                 disabled={restoreBusy}
               >
                 {t("common.cancel")}
