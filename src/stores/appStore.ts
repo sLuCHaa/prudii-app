@@ -4,7 +4,7 @@ import type { Account, AppSettings, BackfillProgress, Folder, LicenseInfo, Mail,
 import type { ComposeMode } from "../components/compose/ComposeModal";
 import { parseMailtoUrl, type MailtoParams } from "../lib/mailtoParser";
 import type { Update } from "../lib/updater";
-import type { ToastData, ToastType } from "../components/ui/Toast";
+import type { ToastAction, ToastData, ToastType } from "../components/ui/Toast";
 import { prefers24HourClock } from "../lib/localeDefaults";
 
 export interface ComposeSnapshot {
@@ -131,6 +131,10 @@ interface AppState {
   setTasksViewMode: (mode: TasksViewMode) => void;
   openTaskId: string | null;
   setOpenTaskId: (id: string | null) => void;
+  // Bumped to ask the mounted QuickAdd row to focus itself (command palette entry point)
+  // without a global DOM event side-channel.
+  quickAddFocusNonce: number;
+  triggerQuickAddFocus: () => void;
 
   showAccountWizard: boolean;
   setShowAccountWizard: (show: boolean) => void;
@@ -187,7 +191,7 @@ interface AppState {
   resetTrackersBlocked: () => void;
 
   toasts: ToastData[];
-  addToast: (type: ToastType, title: string, message?: string, duration?: number) => void;
+  addToast: (type: ToastType, title: string, message?: string, duration?: number, action?: ToastAction) => void;
   removeToast: (id: string) => void;
 }
 
@@ -398,6 +402,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   openTaskId: null,
   setOpenTaskId: (openTaskId) => set({ openTaskId }),
+  quickAddFocusNonce: 0,
+  triggerQuickAddFocus: () => set((state) => ({ quickAddFocusNonce: state.quickAddFocusNonce + 1 })),
 
   showAccountWizard: false,
   setShowAccountWizard: (showAccountWizard) => set({ showAccountWizard }),
@@ -513,9 +519,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   resetTrackersBlocked: () => set({ trackersBlockedCount: 0 }),
 
   toasts: [],
-  addToast: (type, title, message, duration) => {
+  addToast: (type, title, message, duration, action) => {
     const id = `toast-${Date.now()}-${Math.random()}`;
-    const toast: ToastData = { id, type, title, message, duration };
+    const toast: ToastData = { id, type, title, message, duration, action };
     set((state) => ({ toasts: [...state.toasts, toast] }));
   },
   removeToast: (id) => {

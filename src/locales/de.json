@@ -1083,6 +1083,7 @@
     "quickAdd": "Schnell hinzufügen",
     "quickAddPlaceholder": "Neue Aufgabe… (probier „morgen 9:00“)",
     "created": "Aufgabe erstellt",
+    "openCreated": "Öffnen",
     "openTasks": "Offene Aufgaben",
     "mailGone": "Diese E-Mail ist nicht mehr verfügbar",
     "fileTooLarge": "Datei \"{{name}}\" ist zu groß (max. 25 MB)",

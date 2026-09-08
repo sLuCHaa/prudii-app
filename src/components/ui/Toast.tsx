@@ -10,12 +10,18 @@ import { StackedToast, type StackedToastItem } from "../motion/StackedToast";
 
 export type ToastType = "success" | "error" | "warning" | "info";
 
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 export interface ToastData {
   id: string;
   type: ToastType;
   title: string;
   message?: string;
   duration?: number;
+  action?: ToastAction;
 }
 
 const ICONS = {
@@ -59,6 +65,14 @@ function ToastBody({ toast }: { toast: ToastData }) {
         <p className="text-sm font-medium text-text">{toast.title}</p>
         {toast.message && (
           <p className="text-xs text-text-secondary mt-0.5 line-clamp-2">{toast.message}</p>
+        )}
+        {toast.action && (
+          <button
+            onClick={() => { toast.action!.onClick(); removeToast(toast.id); }}
+            className="mt-1 text-xs font-medium text-accent hover:underline"
+          >
+            {toast.action.label}
+          </button>
         )}
       </div>
       <button

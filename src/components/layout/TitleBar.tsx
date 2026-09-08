@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ClipboardList, Copy, Minus, Square, X } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useTranslation } from "react-i18next";
@@ -10,6 +10,7 @@ import { isMacOS } from "../../lib/platform";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { PrivacyBadge } from "../ui/PrivacyBadge";
 import { NumberTween } from "../motion/NumberTween";
+import { QuickAddPopover } from "../tasks/QuickAdd";
 import { useWindowsCaptionMaxButton, showSystemMenu } from "../../hooks/useWindowsCaption";
 import AppLogo from "../../assets/logo.webp";
 
@@ -20,6 +21,12 @@ export function TitleBar() {
   const setShowTasks = useAppStore((s) => s.setShowTasks);
   const appSettings = useAppStore((s) => s.appSettings);
   const { data: openTaskCount = 0 } = useOpenTaskCount();
+  const tasksButtonRef = useRef<HTMLButtonElement>(null);
+  const [quickAddAnchor, setQuickAddAnchor] = useState<DOMRect | null>(null);
+
+  function openQuickAdd() {
+    setQuickAddAnchor(tasksButtonRef.current?.getBoundingClientRect() ?? null);
+  }
 
   // Snap Layouts: the maximize button is reported to the native side and its
   // hover comes back as an event (the button lives in non-client space there).
@@ -78,7 +85,14 @@ export function TitleBar() {
       <div className="flex h-full">
         <PrivacyBadge />
         <button
-          onClick={() => setShowTasks(true)}
+          ref={tasksButtonRef}
+          onClick={(e) => { if (e.shiftKey) openQuickAdd(); else setShowTasks(true); }}
+          onContextMenu={(e) => {
+            // Otherwise this bubbles to the drag region's onContextMenu (line ~64) and opens the OS window menu.
+            e.preventDefault();
+            e.stopPropagation();
+            openQuickAdd();
+          }}
           className="relative inline-flex items-center justify-center w-11 h-full hover:bg-hover transition-colors text-text-secondary"
           title={t("tasks.title")}
           aria-label={t("tasks.title")}
@@ -90,6 +104,7 @@ export function TitleBar() {
             </span>
           )}
         </button>
+        {quickAddAnchor && <QuickAddPopover anchorRect={quickAddAnchor} onClose={() => setQuickAddAnchor(null)} />}
         <button
           onClick={() => setShowSettings(true)}
           className="inline-flex items-center justify-center w-11 h-full hover:bg-hover transition-colors text-text-secondary"
