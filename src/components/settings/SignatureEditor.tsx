@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Code, Type, Eye } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { escapeHtml, sanitizeSignatureHtml } from "../../lib/sanitize";
+import { escapeHtml, sanitizeSignatureHtml, sanitizeSignatureHtmlReport } from "../../lib/sanitize";
 import {
   collapseDataUris,
   derivePlainText,
@@ -22,16 +22,19 @@ interface SignatureEditorProps {
 // already exports a character-for-character identical one. Do not reintroduce it.
 
 // Strip non-content elements (style/script/head/meta/link) that come along when
-// pasting a full HTML document; DOMPurify runs last so the stored value is always sanitizer output.
-function cleanSignatureHtml(html: string): string {
-  if (!/<style|<head|<!doctype|<script|<meta|<link/i.test(html)) return sanitizeSignatureHtml(html).trim();
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  doc.querySelectorAll("style, script, link, meta, title, head").forEach((el) => el.remove());
-  return sanitizeSignatureHtml(doc.body?.innerHTML ?? html).trim();
-}
-
-function elementCount(html: string): number {
-  return new DOMParser().parseFromString(html, "text/html").body.querySelectorAll("*").length;
+// pasting a full HTML document. Only sanitizer output is ever parsed or stored.
+function cleanSignatureHtml(html: string): { html: string; sanitized: boolean } {
+  const first = sanitizeSignatureHtmlReport(html);
+  if (!/<style|<head|<!doctype|<script|<meta|<link/i.test(first.html)) {
+    return { html: first.html.trim(), sanitized: first.removed > 0 };
+  }
+  const doc = new DOMParser().parseFromString(first.html, "text/html");
+  const junk = doc.querySelectorAll("style, script, link, meta, title, head");
+  junk.forEach((el) => el.remove());
+  return {
+    html: sanitizeSignatureHtml(doc.body?.innerHTML ?? first.html).trim(),
+    sanitized: first.removed > 0 || junk.length > 0,
+  };
 }
 
 type Mode = "preview" | "text" | "html";
@@ -103,8 +106,8 @@ export function SignatureEditor({ htmlValue, textValue, onChange }: SignatureEdi
       setNotice(t("signature.imagePlaceholderBroken"));
       return;
     }
-    const cleaned = cleanSignatureHtml(expanded);
-    setNotice(elementCount(cleaned) < elementCount(expanded) ? t("signature.sanitized") : "");
+    const { html: cleaned, sanitized } = cleanSignatureHtml(expanded);
+    setNotice(sanitized ? t("signature.sanitized") : "");
     commit(cleaned);
   }, [source, collapsed, commit, t]);
 

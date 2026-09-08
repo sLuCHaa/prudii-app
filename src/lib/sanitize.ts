@@ -19,6 +19,12 @@ export function sanitizeSignatureHtml(html: string): string {
   return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
 }
 
+// `removed` counts elements and attributes DOMPurify dropped in this very call.
+export function sanitizeSignatureHtmlReport(html: string): { html: string; removed: number } {
+  const clean = DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+  return { html: clean, removed: DOMPurify.removed.length };
+}
+
 export interface TrackerInfo {
   domain: string;
   type: "pixel" | "tracking_domain" | "hidden";
