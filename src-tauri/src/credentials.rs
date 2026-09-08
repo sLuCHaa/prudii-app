@@ -176,8 +176,10 @@ fn get_password_from_db(account_id: &str) -> Option<String> {
 
 /// Write a password to the accounts.stored_password column.
 /// On Windows: encrypts with DPAPI before writing.
-fn store_password_to_db(account_id: &str, password: &str) {
-    let Some(conn) = open_db() else { return };
+/// Returns whether the value actually reached the column — callers need to know
+/// when a secret only survives in the session cache.
+fn store_password_to_db(account_id: &str, password: &str) -> bool {
+    let Some(conn) = open_db() else { return false };
 
     let value_to_store: String;
 
@@ -191,7 +193,7 @@ fn store_password_to_db(account_id: &str, password: &str) {
                 Some(encrypted) => encrypted,
                 None => {
                     log::error!("[credentials] DPAPI encrypt failed — refusing to store plaintext");
-                    return;
+                    return false;
                 }
             };
         }
@@ -209,9 +211,14 @@ fn store_password_to_db(account_id: &str, password: &str) {
         Ok(rows) => {
             if rows == 0 {
                 log::warn!("[credentials] DB store: 0 rows updated for account {} (account may not exist yet)", account_id);
+                return false;
             }
+            true
         }
-        Err(e) => log::error!("[credentials] DB store failed for {}: {}", account_id, e),
+        Err(e) => {
+            log::error!("[credentials] DB store failed for {}: {}", account_id, e);
+            false
+        }
     }
 }
 
@@ -233,20 +240,28 @@ pub fn store_password(account_id: &str, password: &str) -> Result<()> {
         cache.insert(account_id.to_string(), password.to_string());
     }
 
-    // Try OS keyring (best-effort — not fatal if it fails)
+    // Try OS keyring (not fatal on its own — the DB write below is the second chance)
+    let mut keyring_stored = false;
     match keyring::Entry::new(SERVICE_NAME, account_id) {
-        Ok(entry) => {
-            if let Err(e) = entry.set_password(password) {
-                log::warn!("[credentials] Keyring store failed (using memory cache): {}", e);
-            }
-        }
+        Ok(entry) => match entry.set_password(password) {
+            Ok(()) => keyring_stored = true,
+            Err(e) => log::warn!("[credentials] Keyring store failed (using memory cache): {}", e),
+        },
         Err(e) => {
             log::warn!("[credentials] Keyring entry creation failed (using memory cache): {}", e);
         }
     }
 
     // Also persist to DB so it survives restarts when keyring is unreliable
-    store_password_to_db(account_id, password);
+    let db_stored = store_password_to_db(account_id, password);
+
+    if !keyring_stored && !db_stored {
+        // Only the session cache holds it now — the caller has to be able to see that.
+        return Err(anyhow::anyhow!(
+            "Password for account {} could not be persisted (keyring and database both failed)",
+            account_id
+        ));
+    }
 
     Ok(())
 }

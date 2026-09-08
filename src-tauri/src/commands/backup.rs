@@ -87,8 +87,14 @@ pub async fn create_backup(
         return Err("Please select at least one category to backup.".into());
     }
 
-    if options.include_credentials && !options.include_accounts {
-        return Err("Credentials require accounts".into());
+    if options.include_credentials {
+        if !options.include_accounts {
+            return Err("Credentials require accounts".into());
+        }
+        let passphrase = options.passphrase.as_deref().unwrap_or("");
+        if passphrase.chars().count() < crate::crypto::MIN_PASSPHRASE_LEN {
+            return Err(SHORT_PASSPHRASE_KEY.into());
+        }
     }
 
     let now = chrono::Local::now();
@@ -152,9 +158,11 @@ async fn do_create_backup(
     if let Err(e) = result {
         // Clean up partial ZIP
         let _ = std::fs::remove_file(&file_path);
+        // Errors that are already i18n keys reach the UI verbatim so it can translate them.
+        let message = if e.starts_with("backup.") { e } else { format!("Backup failed: {}", e) };
         emit_backup_progress(&app, &BackupProgress {
             status: "error".into(),
-            message: format!("Backup failed: {}", e),
+            message,
             current_step: 0,
             total_steps: 0,
         });
@@ -983,9 +991,10 @@ pub(crate) fn extract_task_files<R: Read + Seek>(
     Ok(())
 }
 
-/// Emitted instead of a raw error message so the UI can translate the one failure
-/// the user can actually act on.
+/// Emitted instead of raw error text so the UI can translate the two failures the
+/// user can actually act on. Both paths pass `backup.`-prefixed errors through verbatim.
 const WRONG_PASSPHRASE_KEY: &str = "backup.wrongPassphrase";
+const SHORT_PASSPHRASE_KEY: &str = "backup.passphraseTooShort";
 
 /// One account's stored secret inside the encrypted `credentials.enc` payload.
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -1047,16 +1056,16 @@ pub(crate) fn read_credentials<R: Read + Seek>(
     Ok(Some(entries))
 }
 
-/// Stores the decrypted secrets of the accounts that were actually imported and returns
-/// their emails — those accounts no longer need a manual re-login.
+/// Stores the decrypted secrets of the accounts that were actually imported, matched by
+/// account id. Returns their emails — those accounts no longer need a manual re-login.
 pub(crate) fn restore_credentials(
     store: &dyn SecretStore,
     entries: &[CredentialEntry],
-    imported_emails: &[String],
+    imported_account_ids: &[String],
 ) -> Vec<String> {
     let mut restored = Vec::new();
     for entry in entries {
-        if !imported_emails.iter().any(|e| e == &entry.email) {
+        if !imported_account_ids.iter().any(|id| id == &entry.account_id) {
             continue;
         }
         match store.set(&entry.account_id, &entry.secret) {
@@ -1232,6 +1241,7 @@ fn do_restore_backup_inner(
     let mut current_step: u32 = 0;
 
     let mut accounts_needing_passwords: Vec<String> = Vec::new();
+    let mut imported_account_ids: Vec<String> = Vec::new();
     let mut tasks_imported: i64 = 0;
 
     // Decrypted up front: a wrong passphrase must abort before the first table is written.
@@ -1382,13 +1392,14 @@ fn do_restore_backup_inner(
                 ).map_err(|e| e.to_string())?;
 
                 accounts_needing_passwords.push(email.to_string());
+                imported_account_ids.push(id.to_string());
             }
         }
     }
 
     if let Some(entries) = &credentials {
         let store = crate::credentials::KeyringStore;
-        let restored = restore_credentials(&store, entries, &accounts_needing_passwords);
+        let restored = restore_credentials(&store, entries, &imported_account_ids);
         accounts_needing_passwords.retain(|email| !restored.contains(email));
     }
 
@@ -1889,6 +1900,8 @@ mod credentials_roundtrip {
     #[derive(Default)]
     struct MemoryStore {
         secrets: Mutex<HashMap<String, String>>,
+        /// Account ids whose `set` fails, standing in for a keyring plus DB write that both failed.
+        failing: Vec<String>,
     }
 
     impl MemoryStore {
@@ -1898,6 +1911,13 @@ mod credentials_roundtrip {
                 store.set(id, secret).unwrap();
             }
             store
+        }
+
+        fn failing_for(account_ids: &[&str]) -> Self {
+            MemoryStore {
+                failing: account_ids.iter().map(|id| id.to_string()).collect(),
+                ..MemoryStore::default()
+            }
         }
 
         fn stored(&self, account_id: &str) -> Option<String> {
@@ -1916,6 +1936,9 @@ mod credentials_roundtrip {
         }
 
         fn set(&self, account_id: &str, secret: &str) -> Result<(), String> {
+            if self.failing.iter().any(|id| id == account_id) {
+                return Err("keyring and database both failed".into());
+            }
             self.secrets.lock().unwrap().insert(account_id.to_string(), secret.to_string());
             Ok(())
         }
@@ -1951,14 +1974,35 @@ mod credentials_roundtrip {
         let entries = read_credentials(&mut archive, PASSPHRASE).unwrap().unwrap();
         assert_eq!(entries.len(), 2);
 
-        // Only one@example.com was imported; two@example.com already existed and was skipped.
+        // Only acc-1 was imported; acc-2 already existed and was skipped.
         let target = MemoryStore::default();
-        let imported = vec!["one@example.com".to_string()];
+        let imported = vec!["acc-1".to_string()];
         let restored = restore_credentials(&target, &entries, &imported);
 
         assert_eq!(restored, vec!["one@example.com".to_string()]);
         assert_eq!(target.stored("acc-1").as_deref(), Some("secret-one"));
         assert_eq!(target.stored("acc-2"), None);
+    }
+
+    #[test]
+    fn an_account_whose_secret_cannot_be_stored_still_needs_its_password() {
+        let source = MemoryStore::seeded(&[("acc-1", "secret-one"), ("acc-2", "secret-two")]);
+        let (_, bytes) = export_to_bytes(&source, PASSPHRASE);
+
+        let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+        let entries = read_credentials(&mut archive, PASSPHRASE).unwrap().unwrap();
+
+        let target = MemoryStore::failing_for(&["acc-1"]);
+        let imported_ids = vec!["acc-1".to_string(), "acc-2".to_string()];
+        let restored = restore_credentials(&target, &entries, &imported_ids);
+
+        // Same retain the restore path performs on the needs-passwords list.
+        let mut needs_passwords = vec!["one@example.com".to_string(), "two@example.com".to_string()];
+        needs_passwords.retain(|email| !restored.contains(email));
+
+        assert_eq!(needs_passwords, vec!["one@example.com".to_string()]);
+        assert_eq!(target.stored("acc-1"), None);
+        assert_eq!(target.stored("acc-2").as_deref(), Some("secret-two"));
     }
 
     #[test]
