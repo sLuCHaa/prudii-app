@@ -187,7 +187,7 @@ fn resolve_task_file_path(db: &Database, attachment_id: &str) -> Result<PathBuf,
     Ok(canonical_path)
 }
 
-fn list_tasks_impl(db: &Database, status: Option<String>) -> Result<Vec<Task>, String> {
+pub(crate) fn list_tasks_impl(db: &Database, status: Option<String>) -> Result<Vec<Task>, String> {
     let conn = db.lock_db();
     let sql = format!(
         "{} {} ORDER BY t.status, t.sort_order, t.created_at",

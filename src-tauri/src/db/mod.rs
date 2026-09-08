@@ -3,7 +3,7 @@ use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
-const SCHEMA_VERSION: u32 = 40;
+pub(crate) const SCHEMA_VERSION: u32 = 40;
 
 pub struct Database {
     pub conn: Mutex<Connection>,

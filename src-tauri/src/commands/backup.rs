@@ -1,7 +1,8 @@
 use crate::db::Database;
 use crate::models::{BackupIncludes, BackupManifest, BackupOptions, BackupProgress, BackupStats, RestorePreview};
 use crate::pool::ImapPool;
-use std::io::{Read, Write};
+use std::io::{Read, Seek, Write};
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -14,6 +15,44 @@ fn emit_backup_progress(app: &AppHandle, progress: &BackupProgress) {
 
 fn emit_restore_progress(app: &AppHandle, progress: &BackupProgress) {
     let _ = app.emit("restore-progress", progress);
+}
+
+/// Resolves a ZIP entry's relative path under `base`, rejecting directory traversal.
+/// Checked twice: the raw name before any I/O (`..`/absolute components), then a
+/// canonicalized path (defends against a symlinked ancestor directory).
+fn safe_extract_path(base: &Path, rel_path: &str) -> Option<PathBuf> {
+    if rel_path.contains("..") || rel_path.starts_with('/') || rel_path.starts_with('\\') {
+        return None;
+    }
+
+    let dest = base.join(rel_path);
+    let parent = dest.parent()?;
+    std::fs::create_dir_all(parent).ok()?;
+
+    let canonical_base = base.canonicalize().ok()?;
+    // `dest` itself usually doesn't exist yet on a fresh restore, so canonicalize()
+    // fails on it — fall back to its (now-created) parent, which still catches a
+    // symlinked ancestor. Comparing a canonical path to a non-canonical fallback would
+    // mismatch on Windows, where canonicalize() adds a `\\?\` prefix — canonicalize both.
+    let canonical_check = dest.canonicalize().or_else(|_| parent.canonicalize()).ok()?;
+    if !canonical_check.starts_with(&canonical_base) {
+        return None;
+    }
+
+    Some(dest)
+}
+
+/// Reads one archive entry to a string, or `None` if the archive predates that file
+/// (older backups without `tasks.json` etc. must still restore everything else).
+fn read_zip_json<R: Read + Seek>(archive: &mut zip::ZipArchive<R>, name: &str) -> Result<Option<String>, String> {
+    match archive.by_name(name) {
+        Ok(mut f) => {
+            let mut s = String::new();
+            f.read_to_string(&mut s).map_err(|e| e.to_string())?;
+            Ok(Some(s))
+        }
+        Err(_) => Ok(None),
+    }
 }
 
 #[tauri::command]
@@ -117,6 +156,7 @@ fn do_create_backup_inner(
     if options.include_folders { total_steps += 1; }
     if options.include_mails { total_steps += 2; } // mails + drafts
     if options.include_attachments { total_steps += 1; }
+    if options.include_tasks { total_steps += 1; }
 
     let mut current_step: u32 = 0;
 
@@ -137,6 +177,7 @@ fn do_create_backup_inner(
         folder_count: 0,
         mail_count: 0,
         attachment_count: 0,
+        task_count: 0,
     };
 
     if options.include_settings {
@@ -578,6 +619,19 @@ fn do_create_backup_inner(
         }
     }
 
+    if options.include_tasks {
+        current_step += 1;
+        emit_backup_progress(app, &BackupProgress {
+            status: "exporting_tasks".into(),
+            message: "Exporting tasks...".into(),
+            current_step,
+            total_steps,
+        });
+
+        let conn = db.lock_db();
+        stats.task_count = export_tasks(&conn, &mut zip, data_dir, &zip_options)? as u64;
+    }
+
     current_step += 1;
     emit_backup_progress(app, &BackupProgress {
         status: "exporting_manifest".into(),
@@ -588,7 +642,7 @@ fn do_create_backup_inner(
 
     let manifest = BackupManifest {
         version: 1,
-        schema_version: 26,
+        schema_version: crate::db::SCHEMA_VERSION,
         created_at: chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
         includes: BackupIncludes {
             app_settings: options.include_settings,
@@ -596,6 +650,7 @@ fn do_create_backup_inner(
             folders: options.include_folders,
             mails: options.include_mails,
             attachments: options.include_attachments,
+            tasks: options.include_tasks,
         },
         stats,
     };
@@ -614,6 +669,265 @@ fn do_create_backup_inner(
     });
 
     Ok(())
+}
+
+/// Writes the four task tables plus `task_files/{task_id}/{filename}` and returns
+/// the task count. A missing attachment file is logged, not fatal — the row is
+/// exported regardless so the DB side of the backup stays complete.
+pub(crate) fn export_tasks<W: Write + Seek>(
+    conn: &rusqlite::Connection,
+    zip: &mut zip::ZipWriter<W>,
+    data_dir: &Path,
+    opts: &zip::write::SimpleFileOptions,
+) -> Result<i64, String> {
+    let tasks: Vec<serde_json::Value> = {
+        let mut stmt = conn.prepare(
+            "SELECT id, title, description_html, status, priority, due_at, sort_order, reminder_sent, created_at, updated_at, completed_at
+             FROM tasks ORDER BY status, sort_order"
+        ).map_err(|e| e.to_string())?;
+        let rows = stmt.query_map([], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, String>(0)?,
+                "title": row.get::<_, String>(1)?,
+                "description_html": row.get::<_, String>(2)?,
+                "status": row.get::<_, String>(3)?,
+                "priority": row.get::<_, String>(4)?,
+                "due_at": row.get::<_, Option<String>>(5)?,
+                "sort_order": row.get::<_, f64>(6)?,
+                "reminder_sent": row.get::<_, i64>(7)?,
+                "created_at": row.get::<_, String>(8)?,
+                "updated_at": row.get::<_, String>(9)?,
+                "completed_at": row.get::<_, Option<String>>(10)?,
+            }))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+        rows
+    };
+    let task_count = tasks.len() as i64;
+
+    let json = serde_json::to_string_pretty(&tasks).map_err(|e| e.to_string())?;
+    zip.start_file("tasks.json", *opts).map_err(|e| e.to_string())?;
+    zip.write_all(json.as_bytes()).map_err(|e| e.to_string())?;
+
+    let checklist: Vec<serde_json::Value> = {
+        let mut stmt = conn.prepare(
+            "SELECT id, task_id, text, done, sort_order FROM task_checklist ORDER BY task_id, sort_order"
+        ).map_err(|e| e.to_string())?;
+        let rows = stmt.query_map([], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, String>(0)?,
+                "task_id": row.get::<_, String>(1)?,
+                "text": row.get::<_, String>(2)?,
+                "done": row.get::<_, i64>(3)?,
+                "sort_order": row.get::<_, f64>(4)?,
+            }))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+        rows
+    };
+    let json = serde_json::to_string_pretty(&checklist).map_err(|e| e.to_string())?;
+    zip.start_file("task_checklist.json", *opts).map_err(|e| e.to_string())?;
+    zip.write_all(json.as_bytes()).map_err(|e| e.to_string())?;
+
+    let links: Vec<serde_json::Value> = {
+        let mut stmt = conn.prepare(
+            "SELECT task_id, mail_id, account_id, subject, from_name, from_email, mail_date, created_at
+             FROM task_mail_links ORDER BY task_id, created_at"
+        ).map_err(|e| e.to_string())?;
+        let rows = stmt.query_map([], |row| {
+            Ok(serde_json::json!({
+                "task_id": row.get::<_, String>(0)?,
+                "mail_id": row.get::<_, String>(1)?,
+                "account_id": row.get::<_, String>(2)?,
+                "subject": row.get::<_, String>(3)?,
+                "from_name": row.get::<_, String>(4)?,
+                "from_email": row.get::<_, String>(5)?,
+                "mail_date": row.get::<_, Option<String>>(6)?,
+                "created_at": row.get::<_, String>(7)?,
+            }))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+        rows
+    };
+    let json = serde_json::to_string_pretty(&links).map_err(|e| e.to_string())?;
+    zip.start_file("task_mail_links.json", *opts).map_err(|e| e.to_string())?;
+    zip.write_all(json.as_bytes()).map_err(|e| e.to_string())?;
+
+    let attachments: Vec<serde_json::Value> = {
+        let mut stmt = conn.prepare(
+            "SELECT id, task_id, filename, mime_type, size_bytes, local_path, created_at
+             FROM task_attachments ORDER BY task_id, created_at"
+        ).map_err(|e| e.to_string())?;
+        let rows = stmt.query_map([], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, String>(0)?,
+                "task_id": row.get::<_, String>(1)?,
+                "filename": row.get::<_, String>(2)?,
+                "mime_type": row.get::<_, String>(3)?,
+                "size_bytes": row.get::<_, i64>(4)?,
+                "local_path": row.get::<_, String>(5)?,
+                "created_at": row.get::<_, String>(6)?,
+            }))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+        rows
+    };
+    let json = serde_json::to_string_pretty(&attachments).map_err(|e| e.to_string())?;
+    zip.start_file("task_attachments.json", *opts).map_err(|e| e.to_string())?;
+    zip.write_all(json.as_bytes()).map_err(|e| e.to_string())?;
+
+    let task_files_dir = data_dir.join("task_files");
+    if task_files_dir.exists() {
+        for att in &attachments {
+            if let (Some(task_id), Some(local_path)) = (
+                att.get("task_id").and_then(|v| v.as_str()),
+                att.get("local_path").and_then(|v| v.as_str()),
+            ) {
+                let src = Path::new(local_path);
+                if !src.exists() {
+                    log::warn!("Task attachment file missing, exporting row anyway: {}", local_path);
+                    continue;
+                }
+                if let Some(filename) = src.file_name().and_then(|f| f.to_str()) {
+                    let zip_path = format!("task_files/{}/{}", task_id, filename);
+                    if let Ok(mut file) = std::fs::File::open(src) {
+                        if zip.start_file(&zip_path, *opts).is_ok() {
+                            let _ = std::io::copy(&mut file, zip);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(task_count)
+}
+
+/// Imports the four task tables in FK order (tasks -> checklist -> links ->
+/// attachments) and extracts `task_files/*` with the same ZIP-slip guard as
+/// attachments. `local_path` is rewritten to this machine's `data_dir` since the
+/// backup may have been created on a different install. Returns the task count.
+pub(crate) fn import_tasks<R: Read + Seek>(
+    conn: &rusqlite::Connection,
+    archive: &mut zip::ZipArchive<R>,
+    data_dir: &Path,
+    is_replace: bool,
+) -> Result<i64, String> {
+    let insert_or = if is_replace { "INSERT OR REPLACE" } else { "INSERT OR IGNORE" };
+    let mut task_count = 0i64;
+
+    if let Some(s) = read_zip_json(archive, "tasks.json")? {
+        let tasks: Vec<serde_json::Value> = serde_json::from_str(&s).map_err(|e| e.to_string())?;
+        task_count = tasks.len() as i64;
+        let sql = format!(
+            "{} INTO tasks (id, title, description_html, status, priority, due_at, sort_order, reminder_sent, created_at, updated_at, completed_at)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
+            insert_or
+        );
+        for t in &tasks {
+            conn.execute(&sql, rusqlite::params![
+                t.get("id").and_then(|v| v.as_str()).unwrap_or(""),
+                t.get("title").and_then(|v| v.as_str()).unwrap_or(""),
+                t.get("description_html").and_then(|v| v.as_str()).unwrap_or(""),
+                t.get("status").and_then(|v| v.as_str()).unwrap_or("open"),
+                t.get("priority").and_then(|v| v.as_str()).unwrap_or("normal"),
+                t.get("due_at").and_then(|v| v.as_str()),
+                t.get("sort_order").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                t.get("reminder_sent").and_then(|v| v.as_i64()).unwrap_or(0),
+                t.get("created_at").and_then(|v| v.as_str()).unwrap_or(""),
+                t.get("updated_at").and_then(|v| v.as_str()).unwrap_or(""),
+                t.get("completed_at").and_then(|v| v.as_str()),
+            ]).map_err(|e| e.to_string())?;
+        }
+    }
+
+    if let Some(s) = read_zip_json(archive, "task_checklist.json")? {
+        let items: Vec<serde_json::Value> = serde_json::from_str(&s).map_err(|e| e.to_string())?;
+        let sql = format!(
+            "{} INTO task_checklist (id, task_id, text, done, sort_order) VALUES (?1,?2,?3,?4,?5)",
+            insert_or
+        );
+        for c in &items {
+            conn.execute(&sql, rusqlite::params![
+                c.get("id").and_then(|v| v.as_str()).unwrap_or(""),
+                c.get("task_id").and_then(|v| v.as_str()).unwrap_or(""),
+                c.get("text").and_then(|v| v.as_str()).unwrap_or(""),
+                c.get("done").and_then(|v| v.as_i64()).unwrap_or(0),
+                c.get("sort_order").and_then(|v| v.as_f64()).unwrap_or(0.0),
+            ]).map_err(|e| e.to_string())?;
+        }
+    }
+
+    if let Some(s) = read_zip_json(archive, "task_mail_links.json")? {
+        let links: Vec<serde_json::Value> = serde_json::from_str(&s).map_err(|e| e.to_string())?;
+        let sql = format!(
+            "{} INTO task_mail_links (task_id, mail_id, account_id, subject, from_name, from_email, mail_date, created_at)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",
+            insert_or
+        );
+        for l in &links {
+            conn.execute(&sql, rusqlite::params![
+                l.get("task_id").and_then(|v| v.as_str()).unwrap_or(""),
+                l.get("mail_id").and_then(|v| v.as_str()).unwrap_or(""),
+                l.get("account_id").and_then(|v| v.as_str()).unwrap_or(""),
+                l.get("subject").and_then(|v| v.as_str()).unwrap_or(""),
+                l.get("from_name").and_then(|v| v.as_str()).unwrap_or(""),
+                l.get("from_email").and_then(|v| v.as_str()).unwrap_or(""),
+                l.get("mail_date").and_then(|v| v.as_str()),
+                l.get("created_at").and_then(|v| v.as_str()).unwrap_or(""),
+            ]).map_err(|e| e.to_string())?;
+        }
+    }
+
+    if let Some(s) = read_zip_json(archive, "task_attachments.json")? {
+        let attachments: Vec<serde_json::Value> = serde_json::from_str(&s).map_err(|e| e.to_string())?;
+        let sql = format!(
+            "{} INTO task_attachments (id, task_id, filename, mime_type, size_bytes, local_path, created_at)
+             VALUES (?1,?2,?3,?4,?5,?6,?7)",
+            insert_or
+        );
+        for a in &attachments {
+            let task_id = a.get("task_id").and_then(|v| v.as_str()).unwrap_or("");
+            let filename = a.get("filename").and_then(|v| v.as_str()).unwrap_or("");
+            let new_local_path = data_dir.join("task_files").join(task_id).join(filename);
+
+            conn.execute(&sql, rusqlite::params![
+                a.get("id").and_then(|v| v.as_str()).unwrap_or(""),
+                task_id,
+                filename,
+                a.get("mime_type").and_then(|v| v.as_str()).unwrap_or("application/octet-stream"),
+                a.get("size_bytes").and_then(|v| v.as_i64()).unwrap_or(0),
+                new_local_path.to_string_lossy().to_string(),
+                a.get("created_at").and_then(|v| v.as_str()).unwrap_or(""),
+            ]).map_err(|e| e.to_string())?;
+        }
+
+        let task_files_base = data_dir.join("task_files");
+        for i in 0..archive.len() {
+            let mut entry = archive.by_index(i).map_err(|e| e.to_string())?;
+            let name = entry.name().to_string();
+            if name.starts_with("task_files/") && !entry.is_dir() {
+                let rel_path = &name["task_files/".len()..];
+                match safe_extract_path(&task_files_base, rel_path) {
+                    Some(dest) => {
+                        let mut out_file = std::fs::File::create(&dest).map_err(|e| e.to_string())?;
+                        std::io::copy(&mut entry, &mut out_file).map_err(|e| e.to_string())?;
+                    }
+                    None => log::warn!("ZIP Slip attempt blocked: {}", name),
+                }
+            }
+        }
+    }
+
+    Ok(task_count)
 }
 
 #[tauri::command]
@@ -771,9 +1085,11 @@ fn do_restore_backup_inner(
     if manifest.includes.folders { total_steps += 1; }
     if manifest.includes.mails { total_steps += 2; } // mails + FTS rebuild
     if manifest.includes.attachments { total_steps += 1; }
+    if manifest.includes.tasks { total_steps += 1; }
     let mut current_step: u32 = 0;
 
     let mut accounts_needing_passwords: Vec<String> = Vec::new();
+    let mut tasks_imported: i64 = 0;
 
     if manifest.includes.app_settings {
         if let Ok(mut f) = archive.by_name("app_settings.json") {
@@ -1229,39 +1545,39 @@ fn do_restore_backup_inner(
                 if name.starts_with("attachment_files/") && !entry.is_dir() {
                     // attachment_files/{mail_id}/{filename}
                     let rel_path = &name["attachment_files/".len()..];
-
-                    // ZIP Slip protection: reject path components that escape the base dir
-                    // Check BEFORE creating any directories or writing any files
-                    if rel_path.contains("..") || rel_path.starts_with('/') || rel_path.starts_with('\\') {
-                        log::warn!("ZIP Slip attempt blocked: {}", name);
-                        continue;
+                    match safe_extract_path(&attachments_base, rel_path) {
+                        Some(dest) => {
+                            let mut out_file = std::fs::File::create(&dest).map_err(|e| e.to_string())?;
+                            std::io::copy(&mut entry, &mut out_file).map_err(|e| e.to_string())?;
+                        }
+                        None => log::warn!("ZIP Slip attempt blocked: {}", name),
                     }
-
-                    let dest = attachments_base.join(rel_path);
-
-                    if let Some(parent) = dest.parent() {
-                        let _ = std::fs::create_dir_all(parent);
-                    }
-
-                    // Double-check: canonical path must be inside base dir
-                    let canonical_base = attachments_base.canonicalize().unwrap_or_else(|_| attachments_base.clone());
-                    let canonical_dest = dest.canonicalize().unwrap_or_else(|_| dest.clone());
-                    if !canonical_dest.starts_with(&canonical_base) {
-                        log::warn!("ZIP Slip attempt blocked (canonical check): {}", name);
-                        continue;
-                    }
-
-                    let mut out_file = std::fs::File::create(&dest).map_err(|e| e.to_string())?;
-                    std::io::copy(&mut entry, &mut out_file).map_err(|e| e.to_string())?;
                 }
             }
         }
+    }
+
+    if manifest.includes.tasks {
+        current_step += 1;
+        emit_restore_progress(app, &BackupProgress {
+            status: "restoring_tasks".into(),
+            message: "Restoring tasks...".into(),
+            current_step,
+            total_steps,
+        });
+
+        let conn = db.lock_db();
+        tasks_imported = import_tasks(&conn, &mut archive, &data_dir, is_replace)?;
     }
 
     if !accounts_needing_passwords.is_empty() {
         let _ = app.emit("restore-needs-passwords", serde_json::json!({
             "emails": accounts_needing_passwords,
         }));
+    }
+
+    if tasks_imported > 0 {
+        let _ = app.emit("tasks-changed", ());
     }
 
     emit_restore_progress(app, &BackupProgress {
@@ -1272,4 +1588,132 @@ fn do_restore_backup_inner(
     });
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tasks_roundtrip {
+    use super::*;
+    use crate::commands::tasks::list_tasks_impl;
+    use std::io::Cursor;
+
+    fn temp_db() -> Database {
+        Database::new(std::env::temp_dir().join(format!("prudii-test-{}", uuid::Uuid::new_v4()))).unwrap()
+    }
+
+    #[test]
+    fn export_then_import_preserves_tasks_checklist_links_and_files() {
+        let db_a = temp_db();
+        let task1 = uuid::Uuid::new_v4().to_string();
+        let task2 = uuid::Uuid::new_v4().to_string();
+
+        {
+            let conn = db_a.lock_db();
+            conn.execute("INSERT INTO tasks (id, title) VALUES (?1, 'Task one')", rusqlite::params![task1]).unwrap();
+            conn.execute("INSERT INTO tasks (id, title) VALUES (?1, 'Task two')", rusqlite::params![task2]).unwrap();
+            conn.execute(
+                "INSERT INTO task_checklist (id, task_id, text) VALUES (?1, ?2, 'do it')",
+                rusqlite::params![uuid::Uuid::new_v4().to_string(), task1],
+            ).unwrap();
+            conn.execute(
+                "INSERT INTO task_mail_links (task_id, mail_id, account_id, subject) VALUES (?1, 'mail1', 'acc1', 'Snapshot subject')",
+                rusqlite::params![task1],
+            ).unwrap();
+
+            let file_dir = db_a.data_dir.join("task_files").join(&task1);
+            std::fs::create_dir_all(&file_dir).unwrap();
+            let file_path = file_dir.join("a.txt");
+            std::fs::write(&file_path, b"attachment content").unwrap();
+            conn.execute(
+                "INSERT INTO task_attachments (id, task_id, filename, local_path) VALUES (?1, ?2, 'a.txt', ?3)",
+                rusqlite::params![uuid::Uuid::new_v4().to_string(), task1, file_path.to_string_lossy().to_string()],
+            ).unwrap();
+        }
+
+        let zip_options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        let exported_count = {
+            let conn = db_a.lock_db();
+            export_tasks(&conn, &mut zip, &db_a.data_dir, &zip_options).unwrap()
+        };
+        assert_eq!(exported_count, 2);
+        let bytes = zip.finish().unwrap().into_inner();
+
+        let db_b = temp_db();
+        let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+        let imported_count = {
+            let conn = db_b.lock_db();
+            import_tasks(&conn, &mut archive, &db_b.data_dir, false).unwrap()
+        };
+        assert_eq!(imported_count, 2);
+
+        let tasks = list_tasks_impl(&db_b, None).unwrap();
+        assert_eq!(tasks.len(), 2);
+        let restored_task1 = tasks.iter().find(|t| t.id == task1).unwrap();
+        assert_eq!(restored_task1.checklist_total, 1);
+        assert_eq!(restored_task1.link_count, 1);
+        assert_eq!(restored_task1.attachment_count, 1);
+        let restored_task2 = tasks.iter().find(|t| t.id == task2).unwrap();
+        assert_eq!(restored_task2.checklist_total, 0);
+        assert_eq!(restored_task2.link_count, 0);
+        assert_eq!(restored_task2.attachment_count, 0);
+
+        let restored_file = db_b.data_dir.join("task_files").join(&task1).join("a.txt");
+        assert!(restored_file.exists());
+        assert_eq!(std::fs::read(&restored_file).unwrap(), b"attachment content");
+
+        let local_path: String = db_b.lock_db().query_row(
+            "SELECT local_path FROM task_attachments WHERE task_id = ?1",
+            rusqlite::params![task1],
+            |row| row.get(0),
+        ).unwrap();
+        assert_eq!(std::path::Path::new(&local_path), restored_file);
+    }
+
+    #[test]
+    fn import_rejects_a_zip_slip_filename_and_writes_nothing_outside_the_base_dir() {
+        let db_b = temp_db();
+        let task_id = uuid::Uuid::new_v4().to_string();
+
+        let zip_options = zip::write::SimpleFileOptions::default();
+        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        let tasks_json = serde_json::json!([{
+            "id": task_id, "title": "t", "description_html": "", "status": "open", "priority": "normal",
+            "due_at": null, "sort_order": 0.0, "reminder_sent": 0, "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:00Z", "completed_at": null,
+        }]);
+        zip.start_file("tasks.json", zip_options).unwrap();
+        zip.write_all(serde_json::to_string(&tasks_json).unwrap().as_bytes()).unwrap();
+
+        let attachments_json = serde_json::json!([{
+            "id": uuid::Uuid::new_v4().to_string(), "task_id": task_id, "filename": "../evil.txt",
+            "mime_type": "text/plain", "size_bytes": 4, "local_path": "unused", "created_at": "2026-01-01T00:00:00Z",
+        }]);
+        zip.start_file("task_attachments.json", zip_options).unwrap();
+        zip.write_all(serde_json::to_string(&attachments_json).unwrap().as_bytes()).unwrap();
+
+        // The malicious entry's path, after stripping the "task_files/" prefix, contains
+        // ".." and must be rejected before any directory is created or file written.
+        zip.start_file(format!("task_files/{}/../evil.txt", task_id), zip_options).unwrap();
+        zip.write_all(b"evil").unwrap();
+
+        let bytes = zip.finish().unwrap().into_inner();
+        let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+
+        let imported_count = {
+            let conn = db_b.lock_db();
+            import_tasks(&conn, &mut archive, &db_b.data_dir, false).unwrap()
+        };
+        assert_eq!(imported_count, 1);
+
+        // Neither the escape target nor anything at the base dir root was written.
+        assert!(!db_b.data_dir.join("evil.txt").exists());
+        assert!(!db_b.data_dir.join("task_files").join("evil.txt").exists());
+        let task_files_dir = db_b.data_dir.join("task_files").join(&task_id);
+        let written: Vec<_> = if task_files_dir.exists() {
+            std::fs::read_dir(&task_files_dir).unwrap().collect()
+        } else {
+            Vec::new()
+        };
+        assert!(written.is_empty(), "no file should have been written for the malicious entry");
+    }
 }

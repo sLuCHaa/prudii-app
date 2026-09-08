@@ -217,6 +217,9 @@ pub struct BackupOptions {
     pub include_folders: bool,
     pub include_mails: bool,
     pub include_attachments: bool,
+    // Missing from older frontend calls deserializes to false, preserving prior backup behavior.
+    #[serde(default)]
+    pub include_tasks: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -243,6 +246,8 @@ pub struct BackupIncludes {
     pub folders: bool,
     pub mails: bool,
     pub attachments: bool,
+    #[serde(default)]
+    pub tasks: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -251,6 +256,8 @@ pub struct BackupStats {
     pub folder_count: u64,
     pub mail_count: u64,
     pub attachment_count: u64,
+    #[serde(default)]
+    pub task_count: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

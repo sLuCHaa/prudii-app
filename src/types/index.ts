@@ -235,6 +235,8 @@ export interface BackupOptions {
   include_folders: boolean;
   include_mails: boolean;
   include_attachments: boolean;
+  // Optional so callers built before this option existed still type-check.
+  include_tasks?: boolean;
 }
 
 export interface BackupProgress {
@@ -248,8 +250,8 @@ export interface BackupManifest {
   version: number;
   schema_version: number;
   created_at: string;
-  includes: { app_settings: boolean; accounts: boolean; folders: boolean; mails: boolean; attachments: boolean };
-  stats: { account_count: number; folder_count: number; mail_count: number; attachment_count: number };
+  includes: { app_settings: boolean; accounts: boolean; folders: boolean; mails: boolean; attachments: boolean; tasks: boolean };
+  stats: { account_count: number; folder_count: number; mail_count: number; attachment_count: number; task_count: number };
 }
 
 export interface BackfillProgress {
