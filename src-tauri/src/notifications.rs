@@ -1,5 +1,29 @@
 use crate::db::Database;
+use crate::models::Task;
 use tauri::AppHandle;
+
+// Re-read on every call: notifications fire from background loops, not menu
+// setup, so the tray's already-resolved language isn't in scope here.
+fn read_language(db: &Database) -> String {
+    let conn = db.lock_db();
+    conn.query_row("SELECT value FROM app_settings WHERE key = 'language'", [], |row| row.get::<_, String>(0))
+        .unwrap_or_else(|_| "en".to_string())
+}
+
+// `due_at` is stored as UTC RFC3339; a reminder should show the time the user
+// set it in, not UTC.
+fn format_due_time(due_at: Option<&str>) -> Option<String> {
+    due_at
+        .and_then(|d| chrono::DateTime::parse_from_rfc3339(d).ok())
+        .map(|dt| dt.with_timezone(&chrono::Local).format("%H:%M").to_string())
+}
+
+fn task_reminder_body(task: &Task) -> String {
+    match format_due_time(task.due_at.as_deref()) {
+        Some(time) => format!("{} · {}", task.title, time),
+        None => task.title.clone(),
+    }
+}
 
 #[cfg_attr(not(windows), allow(dead_code))]
 struct NewMailToast {
@@ -113,6 +137,69 @@ pub fn send_new_mail_notification(app: &AppHandle, account_id: &str, new_mails: 
 
     if let Err(e) = toast.show() {
         log::warn!("Failed to show notification: {:?}", e);
+    }
+}
+
+#[cfg(windows)]
+pub fn send_task_reminder(app: &AppHandle, task: &Task) {
+    use tauri::{Emitter, Manager};
+    use tauri_winrt_notification::Toast;
+
+    let db = app.state::<Database>();
+    let labels = crate::menu_labels::for_lang(&read_language(&db));
+
+    let mut toast = Toast::new("com.prudii.mail").title(labels.task_due).text1(&task_reminder_body(task));
+    toast = toast.add_button(labels.task_mark_done, &format!("task-done:{}", task.id));
+
+    let app_clone = app.clone();
+    let task_id = task.id.clone();
+    toast = toast.on_activated(move |action| {
+        match action.as_deref() {
+            Some(a) if a.starts_with("task-done:") => {
+                let id = a.trim_start_matches("task-done:").to_string();
+                let db = app_clone.state::<Database>();
+                let patch = crate::models::UpdateTaskPatch {
+                    title: None,
+                    description_html: None,
+                    status: Some("done".into()),
+                    priority: None,
+                    due_at: None,
+                    clear_due_at: None,
+                };
+                match crate::commands::tasks::update_task_impl(&db, &id, patch) {
+                    Ok(_) => { let _ = app_clone.emit("tasks-changed", ()); }
+                    Err(e) => log::warn!("failed to mark task {id} done from toast: {e}"),
+                }
+            }
+            _ => {
+                if let Some(window) = app_clone.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.unminimize();
+                    let _ = window.set_focus();
+                }
+                let _ = app_clone.emit("task-open", serde_json::json!({ "task_id": task_id }));
+            }
+        }
+        Ok(())
+    });
+
+    if let Err(e) = toast.show() {
+        log::warn!("Failed to show task reminder notification: {:?}", e);
+    }
+}
+
+#[cfg(not(windows))]
+pub fn send_task_reminder(app: &AppHandle, task: &Task) {
+    use tauri::Manager;
+    use tauri_plugin_notification::NotificationExt;
+
+    let db = app.state::<Database>();
+    let labels = crate::menu_labels::for_lang(&read_language(&db));
+
+    // No click/button callback on this platform's plugin — same limitation as
+    // the new-mail notification above.
+    if let Err(e) = app.notification().builder().title(labels.task_due).body(task_reminder_body(task)).show() {
+        log::warn!("Failed to show task reminder notification: {:?}", e);
     }
 }
 

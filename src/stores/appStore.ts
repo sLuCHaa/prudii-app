@@ -134,6 +134,8 @@ interface AppState {
   setTasksViewMode: (mode: TasksViewMode) => void;
   openTaskId: string | null;
   setOpenTaskId: (id: string | null) => void;
+  // Reminder click ("task-open" event): open the Tasks view and its drawer in one go.
+  openTaskById: (id: string) => void;
   // One-shot flag so a QuickAdd row mounted later (the Tasks view unmounts on close)
   // still autofocuses exactly once per palette request.
   quickAddFocusRequested: boolean;
@@ -411,6 +413,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   openTaskId: null,
   setOpenTaskId: (openTaskId) => set({ openTaskId }),
+  openTaskById: (id) => set({ openTaskId: id, showTasks: true, showSnoozed: false, showScheduled: false, showAttachmentBrowser: false, showAllInboxes: false, selectedFolderId: null, activeFilter: null, activeCombinedFolder: null, activeSplitId: null, selectedMailId: null, selectedMailIndex: -1, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
   quickAddFocusRequested: false,
   requestQuickAddFocus: () => set({ quickAddFocusRequested: true }),
   consumeQuickAddFocus: () => set({ quickAddFocusRequested: false }),

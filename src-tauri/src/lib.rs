@@ -20,6 +20,7 @@ pub mod rules;
 pub mod smtp;
 pub mod system_accent;
 pub mod task_registry;
+pub mod task_reminders;
 #[cfg(windows)]
 pub mod win_badge;
 #[cfg(windows)]
@@ -688,6 +689,7 @@ pub fn run() {
                             if let Err(e) = crate::commands::send::run_scheduled_check(&handle).await {
                                 log::warn!("scheduled-send check failed: {}", e);
                             }
+                            crate::task_reminders::run_task_reminder_check(&handle).await;
                             tokio::time::sleep(std::time::Duration::from_secs(60)).await;
                         }
                     });

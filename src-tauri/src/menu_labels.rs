@@ -16,6 +16,8 @@ pub struct MenuLabels {
     pub quit: &'static str,
     pub archive: &'static str,
     pub mark_read: &'static str,
+    pub task_due: &'static str,
+    pub task_mark_done: &'static str,
 }
 
 pub fn for_lang(lang: &str) -> MenuLabels {
@@ -36,6 +38,8 @@ pub fn for_lang(lang: &str) -> MenuLabels {
             quit: "Beenden",
             archive: "Archivieren",
             mark_read: "Als gelesen markieren",
+            task_due: "Aufgabe fällig",
+            task_mark_done: "Erledigt",
         },
         "es" => MenuLabels {
             settings: "Configuración…",
@@ -53,6 +57,8 @@ pub fn for_lang(lang: &str) -> MenuLabels {
             quit: "Salir",
             archive: "Archivar",
             mark_read: "Marcar como leído",
+            task_due: "Tarea vencida",
+            task_mark_done: "Hecho",
         },
         "fr" => MenuLabels {
             settings: "Paramètres…",
@@ -70,6 +76,8 @@ pub fn for_lang(lang: &str) -> MenuLabels {
             quit: "Quitter",
             archive: "Archiver",
             mark_read: "Marquer comme lu",
+            task_due: "Tâche échue",
+            task_mark_done: "Terminé",
         },
         "pt" => MenuLabels {
             settings: "Configurações…",
@@ -87,6 +95,8 @@ pub fn for_lang(lang: &str) -> MenuLabels {
             quit: "Sair",
             archive: "Arquivar",
             mark_read: "Marcar como lido",
+            task_due: "Tarefa vencida",
+            task_mark_done: "Concluída",
         },
         "ru" => MenuLabels {
             settings: "Настройки…",
@@ -104,6 +114,8 @@ pub fn for_lang(lang: &str) -> MenuLabels {
             quit: "Выход",
             archive: "В архив",
             mark_read: "Пометить прочитанным",
+            task_due: "Задача просрочена",
+            task_mark_done: "Готово",
         },
         "zh" => MenuLabels {
             settings: "设置…",
@@ -121,6 +133,8 @@ pub fn for_lang(lang: &str) -> MenuLabels {
             quit: "退出",
             archive: "归档",
             mark_read: "标为已读",
+            task_due: "任务到期",
+            task_mark_done: "完成",
         },
         _ => MenuLabels {
             settings: "Settings…",
@@ -138,6 +152,8 @@ pub fn for_lang(lang: &str) -> MenuLabels {
             quit: "Quit",
             archive: "Archive",
             mark_read: "Mark as read",
+            task_due: "Task due",
+            task_mark_done: "Done",
         },
     }
 }

@@ -309,7 +309,7 @@ fn create_task_impl(db: &Database, input: CreateTaskInput) -> Result<Task, Strin
     fetch_task(&conn, &id)
 }
 
-fn update_task_impl(db: &Database, id: &str, patch: UpdateTaskPatch) -> Result<Task, String> {
+pub(crate) fn update_task_impl(db: &Database, id: &str, patch: UpdateTaskPatch) -> Result<Task, String> {
     if let Some(status) = &patch.status {
         if !is_valid_status(status) {
             return Err("Invalid status".into());
@@ -427,6 +427,29 @@ fn move_task_impl(db: &Database, id: &str, status: &str, index: i64) -> Result<V
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
     Ok(tasks)
+}
+
+// `datetime()` parses both the frontend's `...Z` and Rust's `...+00:00` RFC3339
+// suffixes into the same value, so plain string comparison would miss matches.
+pub(crate) fn due_reminders_impl(db: &Database, now_iso: &str) -> Result<Vec<Task>, String> {
+    let conn = db.lock_db();
+    let sql = format!(
+        "{} WHERE t.due_at IS NOT NULL AND datetime(t.due_at) <= datetime(?1) AND t.reminder_sent = 0 AND t.status != 'done' ORDER BY t.due_at",
+        TASK_SELECT
+    );
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let tasks = stmt
+        .query_map(params![now_iso], row_to_task)
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(tasks)
+}
+
+pub(crate) fn mark_reminded_impl(db: &Database, id: &str) -> Result<(), String> {
+    let conn = db.lock_db();
+    conn.execute("UPDATE tasks SET reminder_sent = 1 WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 fn count_open_impl(db: &Database) -> Result<i64, String> {
@@ -995,6 +1018,31 @@ mod tests {
         }
         let renamed = update_task_impl(&db, &a.id, UpdateTaskPatch { title: Some("b".into()), description_html: None, status: None, priority: None, due_at: None, clear_due_at: None }).unwrap();
         assert!(renamed.reminder_sent);
+    }
+
+    #[test]
+    fn due_reminders_selects_only_due_unreminded_open_tasks() {
+        let db = temp_db();
+        let due = create_task_impl(&db, CreateTaskInput { title: "due".into(), description_html: None, status: None, priority: None, due_at: Some("2026-09-08T09:00:00.000Z".into()) }).unwrap();
+        let also_due = create_task_impl(&db, CreateTaskInput { title: "also_due".into(), description_html: None, status: None, priority: None, due_at: Some("2026-09-08T08:00:00.000Z".into()) }).unwrap();
+        let future = create_task_impl(&db, CreateTaskInput { title: "future".into(), description_html: None, status: None, priority: None, due_at: Some("2026-09-09T09:00:00.000Z".into()) }).unwrap();
+        let done_but_due = create_task_impl(&db, CreateTaskInput { title: "done".into(), description_html: None, status: Some("done".into()), priority: None, due_at: Some("2026-09-08T09:00:00.000Z".into()) }).unwrap();
+
+        let now = "2026-09-08T09:00:00+00:00"; // Rust-style RFC3339 suffix, deliberately not "...Z"
+        let due_tasks = due_reminders_impl(&db, now).unwrap();
+        assert_eq!(due_tasks.iter().map(|t| t.id.clone()).collect::<Vec<_>>(), vec![also_due.id.clone(), due.id.clone()]);
+        assert!(!due_tasks.iter().any(|t| t.id == future.id));
+        assert!(!due_tasks.iter().any(|t| t.id == done_but_due.id));
+
+        mark_reminded_impl(&db, &due.id).unwrap();
+        mark_reminded_impl(&db, &also_due.id).unwrap();
+        assert!(due_reminders_impl(&db, now).unwrap().is_empty());
+
+        let moved = update_task_impl(&db, &due.id, UpdateTaskPatch { title: None, description_html: None, status: None, priority: None, due_at: Some("2026-09-08T08:30:00.000Z".into()), clear_due_at: None }).unwrap();
+        assert!(!moved.reminder_sent);
+        let due_again = due_reminders_impl(&db, now).unwrap();
+        assert_eq!(due_again.len(), 1);
+        assert_eq!(due_again[0].id, due.id);
     }
 
     #[test]

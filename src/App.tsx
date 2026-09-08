@@ -355,6 +355,14 @@ function AppInner() {
     return () => { unlisten.then((fn) => fn()); };
   }, []);
 
+  // Rust shows/focuses the window for a task reminder click; this only opens the drawer.
+  useEffect(() => {
+    const unlisten = listen<{ task_id: string }>("task-open", (event) => {
+      useAppStore.getState().openTaskById(event.payload.task_id);
+    });
+    return () => { unlisten.then((fn) => fn()); };
+  }, []);
+
   // A saved draft is written straight to the local DB, so the list can refresh without
   // waiting for the sync that follows it.
   useEffect(() => {
