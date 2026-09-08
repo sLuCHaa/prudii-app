@@ -16,9 +16,10 @@ interface BoardColumnProps {
   status: TaskStatus;
   tasks: Task[];
   checkmarkIds: Set<string>;
+  dragging: boolean;
 }
 
-export function BoardColumn({ status, tasks, checkmarkIds }: BoardColumnProps) {
+export function BoardColumn({ status, tasks, checkmarkIds, dragging }: BoardColumnProps) {
   const { t } = useTranslation();
   const { setNodeRef } = useDroppable({ id: status, data: { type: "column", status } });
 
@@ -34,7 +35,7 @@ export function BoardColumn({ status, tasks, checkmarkIds }: BoardColumnProps) {
       <div ref={setNodeRef} className="flex-1 min-h-[80px] overflow-y-auto px-2 pb-2">
         <SortableContext items={tasks.map((task) => task.id)} strategy={verticalListSortingStrategy}>
           {tasks.map((task) => (
-            <TaskCard key={task.id} task={task} status={status} showCheckmark={checkmarkIds.has(task.id)} />
+            <TaskCard key={task.id} task={task} status={status} showCheckmark={checkmarkIds.has(task.id)} boardDragging={dragging} />
           ))}
         </SortableContext>
       </div>

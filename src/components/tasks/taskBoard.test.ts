@@ -1,24 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-
-// vi.hoisted runs before any static import below is evaluated — appStore's theme
-// init and motion's useReducedMotion both call matchMedia at load/hook time, and
-// jsdom doesn't implement it.
-vi.hoisted(() => {
-  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-  if (typeof window.matchMedia !== "function") {
-    window.matchMedia = ((query: string) => ({
-      matches: false,
-      media: query,
-      onchange: null,
-      addListener: () => {},
-      removeListener: () => {},
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      dispatchEvent: () => false,
-    })) as unknown as typeof window.matchMedia;
-  }
-});
-
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { createElement, act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -113,5 +93,30 @@ describe("TaskBoard", () => {
     });
 
     expect(useAppStore.getState().openTaskId).toBe("a");
+  });
+});
+
+describe("TaskBoard — all tasks done", () => {
+  const ALL_DONE: Task[] = [makeTask({ id: "z", title: "Zeta", status: "done", sort_order: 0 })];
+
+  it("keeps the done column instead of replacing the whole board", () => {
+    renderBoard(ALL_DONE);
+
+    const columns = document.querySelectorAll("[data-status]");
+    expect(columns.length).toBe(1);
+    expect(columns[0].getAttribute("data-status")).toBe("done");
+    expect(columns[0].textContent).toContain("Zeta");
+    expect(document.body.textContent).toContain("All done");
+  });
+
+  it("does not fire the completion confetti on initial mount", () => {
+    renderBoard(ALL_DONE);
+
+    // CelebrationConfetti only renders a wrapper once a burst exists (z-index 1000);
+    // an already-all-done board must not trigger one just by mounting.
+    const confettiWrapper = Array.from(document.querySelectorAll<HTMLElement>("[aria-hidden]")).find(
+      (el) => el.style.zIndex === "1000",
+    );
+    expect(confettiWrapper).toBeUndefined();
   });
 });

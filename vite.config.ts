@@ -10,6 +10,7 @@ export default defineConfig(async (): Promise<UserConfig> => ({
   test: {
     environment: "jsdom",
     include: ["src/**/*.test.ts"],
+    setupFiles: ["src/test/setup.ts"],
   },
   clearScreen: false,
   build: {

@@ -6,6 +6,7 @@ import {
   DragOverlay,
   PointerSensor,
   KeyboardSensor,
+  KeyboardCode,
   closestCorners,
   useSensor,
   useSensors,
@@ -43,6 +44,14 @@ function resolveTargetStatus(overId: string, overData: unknown, list: Task[]): T
   return statusOf(overId, list);
 }
 
+// Enter is reserved for opening a card (TaskCard's onKeyDown); only Space starts
+// a keyboard drag, otherwise dnd-kit's default codes fire on both keys.
+const KEYBOARD_CODES = {
+  start: [KeyboardCode.Space],
+  cancel: [KeyboardCode.Esc],
+  end: [KeyboardCode.Space, KeyboardCode.Tab],
+};
+
 interface TaskBoardProps {
   tasks: Task[];
 }
@@ -64,29 +73,39 @@ export function TaskBoard({ tasks }: TaskBoardProps) {
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates, keyboardCodes: KEYBOARD_CODES }),
   );
 
-  // While dragging, columns render from the local preview so a card can visibly
-  // jump to another column before the mutation settles; otherwise render straight
-  // from props (this is the "resync" — there's simply nothing to resync).
+  // Nothing to resync explicitly: outside a drag we simply render straight from props.
   const renderTasks = dragState?.preview ?? tasks;
   const columns = useMemo(() => groupByStatus(renderTasks), [renderTasks]);
 
-  // The "all done" transition is driven by the settled prop, not the drag preview,
-  // so it can never fire mid-drag off a not-yet-committed guess.
+  // Driven by the settled prop (never the drag preview) so it can't fire mid-drag.
   const settled = useMemo(() => groupByStatus(tasks), [tasks]);
   const allDone = tasks.length > 0 && settled.open.length === 0 && settled.in_progress.length === 0;
-  // Hold off the celebration screen until any pending checkmark overlay has played out.
-  const showAllDone = allDone && checkmarkIds.size === 0;
+  // Deferred while a checkmark plays out or a drag is live (e.g. pulling a card
+  // back out of "done" needs the real open/in_progress columns as drop targets).
+  const showAllDone = allDone && checkmarkIds.size === 0 && dragState === null;
 
-  const wasShowingAllDone = useRef(false);
+  // Seeded with the mount-time value so an already-all-done board never fires the
+  // confetti effect below on its first render — only a later false→true transition does.
+  const wasShowingAllDone = useRef(showAllDone);
   useEffect(() => {
     if (showAllDone && !wasShowingAllDone.current) {
       setCelebrateTrigger((count) => count + 1);
     }
     wasShowingAllDone.current = showAllDone;
   }, [showAllDone]);
+
+  // A prop update mid-drag (e.g. a realtime change from elsewhere) makes the local
+  // preview stale, so drop it rather than let onDragEnd compute off old data.
+  const tasksRef = useRef(tasks);
+  useEffect(() => {
+    if (dragState && tasksRef.current !== tasks) {
+      setDragState(null);
+    }
+    tasksRef.current = tasks;
+  }, [tasks, dragState]);
 
   function triggerCheckmark(id: string) {
     setCheckmarkIds((prev) => new Set(prev).add(id));
@@ -159,22 +178,6 @@ export function TaskBoard({ tasks }: TaskBoardProps) {
     setDragState(null);
   }
 
-  if (showAllDone) {
-    return (
-      <div className="relative flex-1 min-h-[320px] overflow-hidden">
-        <DaylightSky />
-        <CelebrationConfetti trigger={celebrateTrigger} />
-        <div className="relative z-10 h-full">
-          <EmptyState
-            icon={<CheckCircle2 className="w-10 h-10 text-success" />}
-            title={t("tasks.allDone")}
-            description={t("tasks.allDoneDesc")}
-          />
-        </div>
-      </div>
-    );
-  }
-
   const activeTask = dragState ? renderTasks.find((task) => task.id === dragState.activeId) : undefined;
   const dropAnimation: DropAnimation = reduce
     ? { duration: 0, easing: "linear", sideEffects: defaultDropAnimationSideEffects({}) }
@@ -194,9 +197,25 @@ export function TaskBoard({ tasks }: TaskBoardProps) {
       onDragCancel={handleDragCancel}
     >
       <div className="flex-1 min-h-0 flex gap-3 p-4 overflow-x-auto">
-        {TASK_STATUSES.map((status) => (
-          <BoardColumn key={status} status={status} tasks={columns[status]} checkmarkIds={checkmarkIds} />
-        ))}
+        {showAllDone ? (
+          <div className="relative flex-[2] min-w-0 overflow-hidden rounded-xl bg-bg-secondary/40">
+            <DaylightSky />
+            <CelebrationConfetti trigger={celebrateTrigger} />
+            <div className="relative z-10 h-full">
+              <EmptyState
+                icon={<CheckCircle2 className="w-10 h-10 text-success" />}
+                title={t("tasks.allDone")}
+                description={t("tasks.allDoneDesc")}
+              />
+            </div>
+          </div>
+        ) : (
+          <>
+            <BoardColumn status="open" tasks={columns.open} checkmarkIds={checkmarkIds} dragging={dragState !== null} />
+            <BoardColumn status="in_progress" tasks={columns.in_progress} checkmarkIds={checkmarkIds} dragging={dragState !== null} />
+          </>
+        )}
+        <BoardColumn status="done" tasks={columns.done} checkmarkIds={checkmarkIds} dragging={dragState !== null} />
       </div>
       <DragOverlay dropAnimation={dropAnimation}>{activeTask ? <TaskCardOverlay task={activeTask} /> : null}</DragOverlay>
     </DndContext>

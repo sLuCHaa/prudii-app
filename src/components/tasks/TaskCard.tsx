@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, KeyboardEvent } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { Link2, Paperclip } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
@@ -71,9 +71,12 @@ interface TaskCardProps {
   task: Task;
   status: TaskStatus;
   showCheckmark: boolean;
+  /** True while any card on the board is being dragged — suppresses FLIP layout
+   *  animation on every card so it can't compound with dnd-kit's own transform. */
+  boardDragging: boolean;
 }
 
-export function TaskCard({ task, status, showCheckmark }: TaskCardProps) {
+export function TaskCard({ task, status, showCheckmark, boardDragging }: TaskCardProps) {
   const reduce = useReducedMotion();
   const setOpenTaskId = useAppStore((s) => s.setOpenTaskId);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -87,9 +90,20 @@ export function TaskCard({ task, status, showCheckmark }: TaskCardProps) {
     opacity: isDragging ? 0.4 : 1,
   };
 
+  // Space stays dnd-kit's drag activator (TaskBoard's keyboardCodes); Enter opens
+  // instead, guarded to this element so a future nested control can't bubble it up.
+  function handleKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    if (e.key === "Enter" && e.target === e.currentTarget) {
+      e.preventDefault();
+      setOpenTaskId(task.id);
+      return;
+    }
+    listeners?.onKeyDown?.(e);
+  }
+
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <motion.div layout={!reduce && !isDragging} transition={SPRING_SNAPPY} className="mb-2">
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners} onKeyDown={handleKeyDown}>
+      <motion.div layout={!reduce && !boardDragging} transition={SPRING_SNAPPY} className="mb-2">
         <SpringCard lift={4} glow={false} onClick={() => setOpenTaskId(task.id)} className="relative overflow-hidden">
           <TaskCardBody task={task} />
           {showCheckmark && <CheckmarkOverlay reduce={!!reduce} />}
@@ -99,7 +113,8 @@ export function TaskCard({ task, status, showCheckmark }: TaskCardProps) {
   );
 }
 
-/** Static clone rendered inside DragOverlay — no sortable hooks, forced "lifted" look. */
+/** Rendered inside DragOverlay — SpringCard's hover glow can't apply to a clone
+ *  that's already lifted, so the "picked up" look is applied directly instead. */
 export function TaskCardOverlay({ task }: { task: Task }) {
   const reduce = useReducedMotion();
   return (
