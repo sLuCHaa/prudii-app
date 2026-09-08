@@ -22,7 +22,7 @@ fn google_config() -> OAuthConfig {
     OAuthConfig {
         client_id: "759670840729-n1d702agehiq37v6s91kstfabjlvd4fj.apps.googleusercontent.com",
         // Injected at compile time by build.rs; see README ("Gmail OAuth client secret")
-        client_secret: env!("PRUDII_GOOGLE_CLIENT_SECRET"),
+        client_secret: include_str!(concat!(env!("OUT_DIR"), "/google_client_secret.txt")),
         auth_url: "https://accounts.google.com/o/oauth2/v2/auth",
         token_url: "https://oauth2.googleapis.com/token",
         scopes: &[

@@ -4,7 +4,7 @@
 use base64::Engine;
 use ring::aead::{Aad, LessSafeKey, Nonce, UnboundKey, AES_256_GCM, NONCE_LEN};
 use ring::pbkdf2;
-use ring::rand::{SecureRandom, SystemRandom};
+use ring::rand::SystemRandom;
 use serde::{Deserialize, Serialize};
 use std::num::NonZeroU32;
 
@@ -69,10 +69,8 @@ pub fn encrypt_with_passphrase(plaintext: &[u8], passphrase: &str) -> Result<Str
     }
 
     let rng = SystemRandom::new();
-    let mut salt = [0u8; SALT_LEN];
-    rng.fill(&mut salt).map_err(|_| "Failed to generate salt".to_string())?;
-    let mut nonce_bytes = [0u8; NONCE_LEN];
-    rng.fill(&mut nonce_bytes).map_err(|_| "Failed to generate nonce".to_string())?;
+    let salt: [u8; SALT_LEN] = ring::rand::generate(&rng).map_err(|_| "Failed to generate salt".to_string())?.expose();
+    let nonce_bytes: [u8; NONCE_LEN] = ring::rand::generate(&rng).map_err(|_| "Failed to generate nonce".to_string())?.expose();
 
     let salt_b64 = b64().encode(salt);
     let aad = header_aad(ENVELOPE_VERSION, KDF_NAME, KDF_ITERATIONS, &salt_b64);
@@ -172,8 +170,9 @@ mod tests {
     fn an_envelope_sealed_without_the_header_aad_is_rejected() {
         // Seals a structurally valid envelope without binding the header, proving `open`
         // really requires the AAD rather than only the KDF parameters matching.
-        let salt = [7u8; SALT_LEN];
-        let nonce_bytes = [9u8; NONCE_LEN];
+        let rng = SystemRandom::new();
+        let salt: [u8; SALT_LEN] = ring::rand::generate(&rng).unwrap().expose();
+        let nonce_bytes: [u8; NONCE_LEN] = ring::rand::generate(&rng).unwrap().expose();
         let key = aead_key(PASSPHRASE, &salt, KDF_ITERATIONS).unwrap();
         let mut buf = b"secret payload".to_vec();
         key.seal_in_place_append_tag(

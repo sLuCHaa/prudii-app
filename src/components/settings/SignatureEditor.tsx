@@ -22,13 +22,12 @@ interface SignatureEditorProps {
 // already exports a character-for-character identical one. Do not reintroduce it.
 
 // Strip non-content elements (style/script/head/meta/link) that come along when
-// pasting a full HTML document, so the stored signature is just the real content.
+// pasting a full HTML document; DOMPurify runs last so the stored value is always sanitizer output.
 function cleanSignatureHtml(html: string): string {
-  const safe = sanitizeSignatureHtml(html);
-  if (!/<style|<head|<!doctype|<script|<meta|<link/i.test(safe)) return safe;
-  const doc = new DOMParser().parseFromString(safe, "text/html");
+  if (!/<style|<head|<!doctype|<script|<meta|<link/i.test(html)) return sanitizeSignatureHtml(html).trim();
+  const doc = new DOMParser().parseFromString(html, "text/html");
   doc.querySelectorAll("style, script, link, meta, title, head").forEach((el) => el.remove());
-  return (doc.body?.innerHTML ?? safe).trim();
+  return sanitizeSignatureHtml(doc.body?.innerHTML ?? html).trim();
 }
 
 function elementCount(html: string): number {

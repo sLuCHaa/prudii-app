@@ -2552,7 +2552,7 @@ pub fn get_thread_mails_inner(conn: &rusqlite::Connection, mail_id: &str) -> Res
     // click, plus a full-account GROUP BY to collapse cross-folder duplicates;
     // dedup_mails/dedupe_thread_copies below do that in Rust over the already
     // small thread set instead.
-    let account_param_idx = related_ids.len() + 1;
+    let owner_param_idx = related_ids.len() + 1;
     let simple_query = format!(
         "SELECT m.id, m.account_id, m.folder_id, m.message_id, m.uid, m.subject, m.from_name, m.from_email, m.to_json, m.cc_json, m.bcc_json, m.date, m.snippet, m.body_text, m.body_html, m.is_read, m.is_starred, m.is_flagged, m.is_replied, m.is_forwarded, m.has_attachments, m.thread_id, m.in_reply_to, m.size_bytes, COALESCE(m.flags, '') as flags, COALESCE(m.list_unsubscribe, '') as list_unsubscribe, COALESCE(m.is_pinned, 0) as is_pinned, COALESCE(m.snoozed_until, '') as snoozed_until, COALESCE(m.reply_to_json, '[]') as reply_to_json, COALESCE(m.\"references\", '')
          FROM mails m
@@ -2561,7 +2561,7 @@ pub fn get_thread_mails_inner(conn: &rusqlite::Connection, mail_id: &str) -> Res
             OR m.in_reply_to_norm IN ({0})
             OR m.thread_id_norm IN ({0}))
          ORDER BY m.date ASC",
-        placeholder_str, account_param_idx
+        placeholder_str, owner_param_idx
     );
 
     let mut stmt = conn.prepare(&simple_query).map_err(|e| e.to_string())?;

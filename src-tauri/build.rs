@@ -27,7 +27,10 @@ fn main() {
     if secret.is_empty() {
         println!("cargo:warning=PRUDII_GOOGLE_CLIENT_SECRET is not set; Gmail sign-in will not work in this build");
     }
-    println!("cargo:rustc-env=PRUDII_GOOGLE_CLIENT_SECRET={secret}");
+    // Handed over as a file in OUT_DIR rather than a rustc-env line, so the value never
+    // appears on cargo's stdout (verbose builds echo those lines).
+    let out = Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR is set by cargo")).join("google_client_secret.txt");
+    fs::write(&out, secret).expect("failed to write google_client_secret.txt");
     println!("cargo:rerun-if-env-changed=PRUDII_GOOGLE_CLIENT_SECRET");
     println!("cargo:rerun-if-changed=.env.local");
     tauri_build::build()

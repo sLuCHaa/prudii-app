@@ -1546,7 +1546,7 @@ async fn spawn_account_syncs(app: AppHandle, db: &Database, only_automatic: bool
                 Ok(cred) => {
                     do_sync_account(app_handle, account, account_id, cred, auth_type).await;
                 }
-                Err(e) => log::warn!("Skipping account {}: {}", account.email, e),
+                Err(e) => log::warn!("Skipping account {}: {}", account_id, e),
             }
         });
     }
