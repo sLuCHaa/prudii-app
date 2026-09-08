@@ -1036,6 +1036,7 @@ pub fn run() {
             commands::tasks::tasks_for_mail,
             commands::tasks::tasks_for_mails,
             commands::tasks::add_task_attachments,
+            commands::tasks::add_task_attachment_data,
             commands::tasks::remove_task_attachment,
             commands::tasks::open_task_attachment,
             commands::tasks::reveal_task_attachment,

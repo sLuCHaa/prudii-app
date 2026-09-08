@@ -1,0 +1,308 @@
+import { useEffect, useState } from "react";
+import type { DragEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useTranslation } from "react-i18next";
+import { motion } from "motion/react";
+import { parseISO } from "date-fns";
+import { X, Trash2 } from "lucide-react";
+import type { CreateTaskInput, Task, TaskPriority, TaskStatus, UpdateTaskPatch } from "../../types";
+import { TASK_STATUSES } from "../../types";
+import { useCreateTask, useDeleteTask, useTask, useTaskAttachments, useUpdateTask } from "../../hooks/useTasks";
+import { useAppStore } from "../../stores/appStore";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
+import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
+import { useDialog } from "../ui/DialogProvider";
+import { Select, type SelectOption } from "../ui/Select";
+import { Skeleton } from "../ui/Skeleton";
+import { RichTextEditor } from "../editor/RichTextEditor";
+import { STATUS_KEY } from "./TaskStatusBadge";
+import { ChecklistEditor } from "./ChecklistEditor";
+import { LinkedMails } from "./LinkedMails";
+import { TaskFiles } from "./TaskFiles";
+import { fromDatetimeLocalValue, quickDueDate, toDatetimeLocalValue } from "../../lib/tasks";
+import { formatDateTime } from "../../lib/dateUtils";
+import { SPRING_SNAPPY } from "../motion/tokens";
+
+const PRIORITY_KEY: Record<TaskPriority, string> = {
+  low: "tasks.priorityLow",
+  normal: "tasks.priorityNormal",
+  high: "tasks.priorityHigh",
+};
+
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error("read failed"));
+    reader.onload = () => {
+      const base64 = (reader.result as string).split(",")[1];
+      if (!base64) { reject(new Error("empty file")); return; }
+      resolve(base64);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function StatusSegment({ status, onChange }: { status: TaskStatus; onChange: (s: TaskStatus) => void }) {
+  const { t } = useTranslation();
+  return (
+    <div role="group" aria-label={t("tasks.status")} className="flex items-center gap-0.5 p-0.5 rounded-lg bg-bg-secondary">
+      {TASK_STATUSES.map((s) => (
+        <button
+          key={s}
+          type="button"
+          onClick={() => onChange(s)}
+          className="relative px-2.5 py-1 rounded-md text-xs font-medium"
+        >
+          {status === s && (
+            <motion.div layoutId="task-status-pill" className="absolute inset-0 bg-surface shadow-sm rounded-md" transition={SPRING_SNAPPY} />
+          )}
+          <span className={`relative z-10 ${status === s ? "text-accent" : "text-text-tertiary"}`}>{t(STATUS_KEY[s])}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function DueChips({ onPick }: { onPick: (iso: string) => void }) {
+  const { t } = useTranslation();
+  const chips: { key: "today" | "tomorrow" | "nextWeek"; label: string }[] = [
+    { key: "today", label: t("tasks.today") },
+    { key: "tomorrow", label: t("tasks.tomorrow") },
+    { key: "nextWeek", label: t("tasks.nextWeek") },
+  ];
+  return (
+    <div className="flex items-center gap-1.5">
+      {chips.map((c) => (
+        <button
+          key={c.key}
+          type="button"
+          onClick={() => onPick(quickDueDate(c.key, new Date()))}
+          className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-bg-secondary text-text-secondary hover:bg-hover transition-colors"
+        >
+          {c.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+interface TaskDrawerProps {
+  taskId: string; // "new" for the create form, otherwise a real task id
+  onClose: () => void;
+  // Test-only overrides — production callers rely on the default hooks.
+  onCreate?: (input: CreateTaskInput) => void;
+  onUpdate?: (vars: { id: string; patch: UpdateTaskPatch }) => void;
+}
+
+export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerProps) {
+  const { t } = useTranslation();
+  const isNew = taskId === "new";
+  const setOpenTaskId = useAppStore((s) => s.setOpenTaskId);
+  const addToast = useAppStore((s) => s.addToast);
+  const use24h = useAppStore((s) => s.appSettings.use_24h_clock);
+  const { data: detail, isLoading } = useTask(isNew ? null : taskId);
+  const task: Task | null = detail?.task ?? null;
+
+  const createTaskMutation = useCreateTask();
+  const updateTaskMutation = useUpdateTask();
+  const deleteTaskMutation = useDeleteTask();
+  const attachmentsApi = useTaskAttachments(isNew ? null : taskId);
+  const dialog = useDialog();
+
+  const [descEscapeBlocked, setDescEscapeBlocked] = useState(false);
+  const drawerRef = useFocusTrap<HTMLElement>(true, { initialFocus: false });
+
+  useEffect(() => {
+    function handleMouseDown(e: MouseEvent) {
+      if (drawerRef.current && !drawerRef.current.contains(e.target as Node)) onClose();
+    }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape" && !descEscapeBlocked) onClose();
+    }
+    document.addEventListener("mousedown", handleMouseDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleMouseDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose, descEscapeBlocked, drawerRef]);
+
+  function patch(p: UpdateTaskPatch) {
+    if (!task) return;
+    if (onUpdate) {
+      onUpdate({ id: task.id, patch: p });
+      return;
+    }
+    updateTaskMutation.mutate({ id: task.id, patch: p });
+  }
+
+  const debouncedTitleSave = useDebouncedCallback((title: string) => patch({ title }), 400);
+  const debouncedDescSave = useDebouncedCallback((html: string) => patch({ description_html: html }), 600);
+
+  function submitCreate(rawTitle: string) {
+    const title = rawTitle.trim();
+    if (!title) return;
+    const input: CreateTaskInput = { title };
+    if (onCreate) {
+      onCreate(input);
+      return;
+    }
+    createTaskMutation.mutate(input, { onSuccess: (created) => setOpenTaskId(created.id) });
+  }
+
+  async function handleDelete() {
+    if (!task) return;
+    const confirmed = await dialog.danger({
+      title: t("tasks.deleteConfirmTitle"),
+      message: t("tasks.deleteConfirmBody"),
+      confirmLabel: t("tasks.deleteTask"),
+    });
+    if (!confirmed) return;
+    deleteTaskMutation.mutate(task.id);
+    onClose();
+  }
+
+  function handleDrop(e: DragEvent) {
+    if (isNew || !task || !e.dataTransfer.types.includes("Files")) return;
+    e.preventDefault();
+    Array.from(e.dataTransfer.files).forEach((file) => {
+      if (file.size > MAX_ATTACHMENT_BYTES) {
+        addToast("error", t("tasks.fileTooLarge", { name: file.name }));
+        return;
+      }
+      readFileAsBase64(file)
+        .then((dataBase64) => attachmentsApi.addData.mutate({ filename: file.name, dataBase64 }))
+        .catch(() => addToast("error", t("errors.attachmentOpen")));
+    });
+  }
+
+  const priorityOptions: SelectOption[] = (["low", "normal", "high"] as TaskPriority[]).map((p) => ({
+    value: p,
+    label: t(PRIORITY_KEY[p]),
+  }));
+
+  return (
+    <motion.aside
+      ref={drawerRef}
+      initial={{ x: 40, opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      exit={{ x: 40, opacity: 0 }}
+      transition={SPRING_SNAPPY}
+      onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); }}
+      onDrop={handleDrop}
+      className="fixed inset-y-0 right-0 w-[440px] max-w-[92vw] bg-surface border-l border-border shadow-2xl z-40 flex flex-col"
+    >
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
+        {!isNew && task ? (
+          <StatusSegment status={task.status} onChange={(status) => patch({ status })} />
+        ) : (
+          <span className="text-sm font-semibold text-text">{t("tasks.new")}</span>
+        )}
+        <button
+          onClick={onClose}
+          aria-label={t("common.close")}
+          className="text-text-tertiary hover:text-text transition-colors rounded-md p-1 hover:bg-hover"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-5">
+        {isNew ? (
+          <input
+            autoFocus
+            placeholder={t("tasks.titlePlaceholder")}
+            onKeyDown={(e: ReactKeyboardEvent<HTMLInputElement>) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                submitCreate(e.currentTarget.value);
+              }
+            }}
+            className="w-full text-lg font-semibold bg-transparent focus:outline-none text-text placeholder:text-text-tertiary"
+          />
+        ) : !task ? (
+          <div className="space-y-3">
+            <Skeleton height="1.75rem" width="70%" />
+            <Skeleton height="8rem" />
+            <Skeleton height="1.5rem" width="40%" />
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Select
+                value={task.priority}
+                options={priorityOptions}
+                onChange={(v) => patch({ priority: v as TaskPriority })}
+                ariaLabel={t("tasks.priority")}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-border bg-bg-secondary text-text text-xs"
+              />
+              <input
+                type="datetime-local"
+                value={toDatetimeLocalValue(task.due_at)}
+                onChange={(e) => { if (e.target.value) patch({ due_at: fromDatetimeLocalValue(e.target.value) }); }}
+                className="bg-bg-secondary border border-border rounded-lg px-2 py-1 text-xs text-text focus:border-accent"
+              />
+              {task.due_at && (
+                <button
+                  type="button"
+                  onClick={() => patch({ clear_due_at: true })}
+                  aria-label={t("tasks.clearDueDate")}
+                  title={t("tasks.clearDueDate")}
+                  className="p-1 rounded hover:bg-hover text-text-tertiary hover:text-danger transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <DueChips onPick={(iso) => patch({ due_at: iso })} />
+
+            <input
+              key={task.id}
+              defaultValue={task.title}
+              placeholder={t("tasks.titlePlaceholder")}
+              onChange={(e) => debouncedTitleSave(e.target.value)}
+              onBlur={(e) => patch({ title: e.target.value })}
+              onKeyDown={(e: ReactKeyboardEvent<HTMLInputElement>) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+              className="w-full text-lg font-semibold bg-transparent focus:outline-none text-text placeholder:text-text-tertiary"
+            />
+
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary mb-2">{t("tasks.description")}</h3>
+              <RichTextEditor
+                key={task.id}
+                content={task.description_html}
+                onChange={debouncedDescSave}
+                placeholder={t("tasks.descriptionPlaceholder")}
+                editorClassName="prose prose-sm max-w-none focus:outline-none min-h-[140px] text-text"
+                toolbar
+                onEscapeBlockedChange={setDescEscapeBlocked}
+              />
+            </div>
+
+            <ChecklistEditor taskId={task.id} items={detail!.checklist} />
+            <LinkedMails taskId={task.id} links={detail!.links} />
+            <TaskFiles attachments={detail!.attachments} api={attachmentsApi} />
+          </>
+        )}
+      </div>
+
+      {!isNew && task && (
+        <div className="px-4 py-3 border-t border-border shrink-0 flex items-center justify-between gap-2">
+          <button
+            onClick={handleDelete}
+            className="flex items-center gap-1.5 text-xs font-medium text-danger hover:bg-danger/10 px-2 py-1 rounded-lg transition-colors"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            {t("tasks.deleteTask")}
+          </button>
+          <div className="text-[11px] text-text-tertiary text-right leading-tight">
+            <div>{t("tasks.createdAt", { date: formatDateTime(parseISO(task.created_at), use24h) })}</div>
+            <div>{t("tasks.updatedAt", { date: formatDateTime(parseISO(task.updated_at), use24h) })}</div>
+          </div>
+        </div>
+      )}
+    </motion.aside>
+  );
+}

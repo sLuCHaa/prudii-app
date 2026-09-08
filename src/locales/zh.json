@@ -1082,6 +1082,16 @@
     "quickAdd": "快速添加",
     "quickAddPlaceholder": "新任务…（试试“明天 9:00”）",
     "created": "任务已创建",
-    "openTasks": "未完成任务"
+    "openTasks": "未完成任务",
+    "mailGone": "该邮件已不可用",
+    "fileTooLarge": "文件\"{{name}}\"过大（最大 25MB）",
+    "nextWeek": "下周",
+    "clearDueDate": "清除截止日期",
+    "priority": "优先级",
+    "status": "状态",
+    "createdAt": "创建于 {{date}}",
+    "updatedAt": "更新于 {{date}}",
+    "openFile": "打开文件",
+    "removeFile": "删除文件"
   }
 }

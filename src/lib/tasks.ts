@@ -12,6 +12,31 @@ export function isDueToday(task: Pick<Task, "due_at">, now: Date): boolean {
   return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
 }
 
+/** ISO-UTC due date -> the local value an `<input type="datetime-local">` expects. */
+export function toDatetimeLocalValue(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** The reverse of `toDatetimeLocalValue` — reads the input's local value as local time, returns ISO-UTC. */
+export function fromDatetimeLocalValue(value: string): string {
+  return new Date(value).toISOString();
+}
+
+// Quick-pick due dates default to an end-of-day/morning time, mirroring parseQuickAdd's
+// own heuristics for bare "heute"/"morgen" tokens, so both entry paths feel consistent.
+export function quickDueDate(kind: "today" | "tomorrow" | "nextWeek", now: Date): string {
+  const at = (daysFromNow: number, hour: number) =>
+    new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysFromNow, hour, 0).toISOString();
+  switch (kind) {
+    case "today": return at(0, 18);
+    case "tomorrow": return at(1, 9);
+    case "nextWeek": return at(7, 9);
+  }
+}
+
 export function groupByStatus(tasks: Task[]): Record<TaskStatus, Task[]> {
   const grouped = { open: [], in_progress: [], done: [] } as Record<TaskStatus, Task[]>;
   for (const task of tasks) {

@@ -672,6 +672,12 @@ export async function addTaskAttachments(taskId: string): Promise<TaskAttachment
   return invoke("add_task_attachments", { taskId });
 }
 
+/// For an OS file dropped straight onto the drawer (no picker involved), so the
+/// backend gets the bytes directly rather than a path it would need to re-read.
+export async function addTaskAttachmentData(taskId: string, filename: string, dataBase64: string): Promise<TaskAttachment> {
+  return invoke("add_task_attachment_data", { taskId, filename, dataBase64 });
+}
+
 export async function removeTaskAttachment(id: string): Promise<void> {
   return invoke("remove_task_attachment", { id });
 }

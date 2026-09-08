@@ -1083,6 +1083,16 @@
     "quickAdd": "Quick add",
     "quickAddPlaceholder": "New task… (try “tomorrow 9:00”)",
     "created": "Task created",
-    "openTasks": "Open tasks"
+    "openTasks": "Open tasks",
+    "mailGone": "This email is no longer available",
+    "fileTooLarge": "File \"{{name}}\" is too large (max 25MB)",
+    "nextWeek": "Next week",
+    "clearDueDate": "Clear due date",
+    "priority": "Priority",
+    "status": "Status",
+    "createdAt": "Created {{date}}",
+    "updatedAt": "Updated {{date}}",
+    "openFile": "Open file",
+    "removeFile": "Remove file"
   }
 }

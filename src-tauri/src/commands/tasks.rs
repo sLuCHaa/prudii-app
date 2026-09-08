@@ -1,5 +1,6 @@
 use crate::db::Database;
 use crate::models::{ChecklistItem, CreateTaskInput, Task, TaskAttachment, TaskDetail, TaskMailLink, UpdateTaskPatch};
+use base64::Engine;
 use rusqlite::params;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -633,6 +634,38 @@ fn copy_files_into_task(db: &Database, task_id: &str, paths: Vec<PathBuf>) -> Re
     Ok(CopyOutcome { added, failed })
 }
 
+/// Decodes a dropped OS file's base64 payload to a scratch file, then hands it to
+/// `copy_files_into_task` so the collision-safe naming, mime-guessing and DB insert
+/// stay in one place. The scratch file is named after the drop's filename (not a
+/// random temp name) so the copy step sees the caller's intended name.
+fn add_task_attachment_data_impl(
+    db: &Database,
+    task_id: &str,
+    filename: &str,
+    data_base64: &str,
+) -> Result<TaskAttachment, String> {
+    let safe_filename = Path::new(filename)
+        .file_name()
+        .map(|f| f.to_string_lossy().to_string())
+        .filter(|f| !f.is_empty())
+        .unwrap_or_else(|| "file".to_string());
+
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(data_base64)
+        .map_err(|e| format!("Invalid file data: {}", e))?;
+
+    let scratch_dir = std::env::temp_dir().join(format!("prudii-drop-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&scratch_dir).map_err(|e| e.to_string())?;
+    let scratch_path = scratch_dir.join(&safe_filename);
+    std::fs::write(&scratch_path, &bytes).map_err(|e| e.to_string())?;
+
+    let outcome = copy_files_into_task(db, task_id, vec![scratch_path]);
+    let _ = std::fs::remove_dir_all(&scratch_dir);
+    let CopyOutcome { mut added, mut failed } = outcome?;
+
+    added.pop().ok_or_else(|| failed.pop().unwrap_or_else(|| "Failed to add attachment".to_string()))
+}
+
 #[tauri::command(async)]
 pub fn list_tasks(db: State<'_, Database>, status: Option<String>) -> Result<Vec<Task>, String> {
     super::catch_panic(|| list_tasks_impl(&db, status))
@@ -787,6 +820,21 @@ pub async fn add_task_attachments(app: AppHandle, db: State<'_, Database>, task_
         return Err(format!("Could not add: {}", outcome.failed.join(", ")));
     }
     Ok(outcome.added)
+}
+
+#[tauri::command(async)]
+pub fn add_task_attachment_data(
+    app: AppHandle,
+    db: State<'_, Database>,
+    task_id: String,
+    filename: String,
+    data_base64: String,
+) -> Result<TaskAttachment, String> {
+    super::catch_panic(|| {
+        let attachment = add_task_attachment_data_impl(&db, &task_id, &filename, &data_base64)?;
+        let _ = app.emit("tasks-changed", ());
+        Ok(attachment)
+    })
 }
 
 #[tauri::command(async)]
@@ -1012,6 +1060,36 @@ mod tests {
         assert!(std::path::Path::new(&detail.attachments[0].local_path).exists());
 
         let _ = std::fs::remove_dir_all(&src_dir);
+    }
+
+    #[test]
+    fn add_task_attachment_data_decodes_and_records_attachment() {
+        let db = temp_db();
+        let task = create_task_impl(&db, CreateTaskInput { title: "t".into(), description_html: None, status: None, priority: None, due_at: None }).unwrap();
+        let data_base64 = base64::engine::general_purpose::STANDARD.encode(b"dropped content");
+
+        let attachment = add_task_attachment_data_impl(&db, &task.id, "dropped.txt", &data_base64).unwrap();
+        assert_eq!(attachment.filename, "dropped.txt");
+        assert_eq!(attachment.mime_type, "text/plain");
+        assert!(std::path::Path::new(&attachment.local_path).exists());
+        assert_eq!(std::fs::read(&attachment.local_path).unwrap(), b"dropped content");
+
+        let detail = get_task_impl(&db, &task.id).unwrap();
+        assert_eq!(detail.attachments.len(), 1);
+    }
+
+    #[test]
+    fn add_task_attachment_data_rejects_invalid_base64() {
+        let db = temp_db();
+        let task = create_task_impl(&db, CreateTaskInput { title: "t".into(), description_html: None, status: None, priority: None, due_at: None }).unwrap();
+        assert!(add_task_attachment_data_impl(&db, &task.id, "note.txt", "not-base64!!").is_err());
+    }
+
+    #[test]
+    fn add_task_attachment_data_rejects_unknown_task_id() {
+        let db = temp_db();
+        let data_base64 = base64::engine::general_purpose::STANDARD.encode(b"x");
+        assert!(add_task_attachment_data_impl(&db, "does-not-exist", "note.txt", &data_base64).is_err());
     }
 
     #[test]

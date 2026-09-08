@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ClipboardList, LayoutGrid, List, Plus, Search, X } from "lucide-react";
+import { AnimatePresence } from "motion/react";
+import { ClipboardList, LayoutGrid, List, Plus, Search } from "lucide-react";
 import { useAppStore } from "../../stores/appStore";
-import { useTask, useTasks } from "../../hooks/useTasks";
+import { useTasks } from "../../hooks/useTasks";
 import { isDueToday, isOverdue } from "../../lib/tasks";
 import { TaskList } from "./TaskList";
 import { TaskBoard } from "./TaskBoard";
+import { TaskDrawer } from "./TaskDrawer";
 import { EmptyState } from "../ui/EmptyState";
 import { LoadingCrossfade } from "../motion/LoadingCrossfade";
 import { Skeleton } from "../ui/Skeleton";
@@ -138,30 +140,12 @@ export function TasksView() {
         )}
       </LoadingCrossfade>
 
-      {openTaskId && <TaskDrawerPlaceholder taskId={openTaskId} onClose={() => setOpenTaskId(null)} />}
-    </div>
-  );
-}
-
-// Minimal stand-in for the real drawer; Task 7 replaces this with TaskDrawer.
-function TaskDrawerPlaceholder({ taskId, onClose }: { taskId: string; onClose: () => void }) {
-  const { t } = useTranslation();
-  const isNew = taskId === "new";
-  const { data: detail } = useTask(isNew ? null : taskId);
-  const title = isNew ? t("tasks.new") : (detail?.task.title ?? "");
-
-  return (
-    <div className="fixed inset-y-0 right-0 w-96 bg-surface border-l border-border shadow-lg z-50 flex flex-col">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <h2 className="text-sm font-semibold text-text truncate">{title}</h2>
-        <button
-          onClick={onClose}
-          className="text-text-tertiary hover:text-text transition-colors rounded-md p-1 hover:bg-hover"
-          aria-label={t("common.close")}
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
+      <AnimatePresence>
+        {/* No per-task key: switching tasks while the drawer stays open must update
+            content in place, not replay the slide-in (TaskDrawer keys its own
+            initial-only fields — title input, editor — by task id internally). */}
+        {openTaskId && <TaskDrawer taskId={openTaskId} onClose={() => setOpenTaskId(null)} />}
+      </AnimatePresence>
     </div>
   );
 }

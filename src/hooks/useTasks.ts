@@ -14,6 +14,7 @@ import {
   linkTaskMail,
   unlinkTaskMail,
   addTaskAttachments,
+  addTaskAttachmentData,
   removeTaskAttachment,
   openTaskAttachment,
   revealTaskAttachment,
@@ -162,6 +163,11 @@ export function useTaskAttachments(taskId: string | null) {
     mutationFn: () => addTaskAttachments(requireTaskId(taskId)),
     onSuccess: invalidate,
   });
+  const addData = useMutation({
+    mutationFn: ({ filename, dataBase64 }: { filename: string; dataBase64: string }) =>
+      addTaskAttachmentData(requireTaskId(taskId), filename, dataBase64),
+    onSuccess: invalidate,
+  });
   const remove = useMutation({
     mutationFn: (id: string) => removeTaskAttachment(id),
     onSuccess: invalidate,
@@ -175,5 +181,5 @@ export function useTaskAttachments(taskId: string | null) {
   const startDrag = useMutation({
     mutationFn: (id: string) => startTaskAttachmentDrag(id),
   });
-  return { add, remove, open, reveal, startDrag };
+  return { add, addData, remove, open, reveal, startDrag };
 }

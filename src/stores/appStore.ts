@@ -84,6 +84,9 @@ interface AppState {
   setShowAllInboxes: (show: boolean) => void;
   setActiveCombinedFolder: (folderType: string | null) => void;
   setActiveSplitId: (splitId: string | null) => void;
+  // Shared by the notification-clicked handler (App.tsx) and LinkedMails — jumps to
+  // a specific mail on a specific account, clearing every other exclusive view state.
+  openMailById: (accountId: string, mailId: string, folderId?: string | null) => void;
 
   folderFilter: FolderFilter;
   setFolderFilter: (f: FolderFilter) => void;
@@ -260,6 +263,24 @@ export const useAppStore = create<AppState>((set, get) => ({
   setActiveCombinedFolder: (activeCombinedFolder) => set({ activeCombinedFolder, showAllInboxes: false, showSnoozed: false, showScheduled: false, showAttachmentBrowser: false, showTasks: false, selectedFolderId: null, activeFilter: null, activeSplitId: null, selectedMailId: null, selectedMailIndex: -1, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
   activeSplitId: null,
   setActiveSplitId: (activeSplitId) => set({ activeSplitId, showSnoozed: false, showScheduled: false, showAttachmentBrowser: false, showTasks: false, selectedMailId: null, selectedMailIndex: -1, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
+  openMailById: (accountId, mailId, folderId = null) => set({
+    selectedAccountId: accountId,
+    showAllInboxes: false,
+    activeCombinedFolder: null,
+    activeFilter: null,
+    activeSplitId: null,
+    showSnoozed: false,
+    showScheduled: false,
+    showAttachmentBrowser: false,
+    showTasks: false,
+    selectedFolderId: folderId,
+    selectedMailId: mailId,
+    selectedMailIndex: -1,
+    folderFilter: "all",
+    selectedMailIds: new Set(),
+    multiSelectMode: false,
+    lastSelectedMailId: null,
+  }),
 
   folderFilter: "all" as FolderFilter,
   setFolderFilter: (folderFilter) => set({ folderFilter }),

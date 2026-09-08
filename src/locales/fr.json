@@ -1083,6 +1083,16 @@
     "quickAdd": "Ajout rapide",
     "quickAddPlaceholder": "Nouvelle tâche… (essaie « demain 9:00 »)",
     "created": "Tâche créée",
-    "openTasks": "Tâches ouvertes"
+    "openTasks": "Tâches ouvertes",
+    "mailGone": "Cet e-mail n'est plus disponible",
+    "fileTooLarge": "Le fichier \"{{name}}\" est trop volumineux (max 25 Mo)",
+    "nextWeek": "La semaine prochaine",
+    "clearDueDate": "Effacer l'échéance",
+    "priority": "Priorité",
+    "status": "Statut",
+    "createdAt": "Créée le {{date}}",
+    "updatedAt": "Mise à jour le {{date}}",
+    "openFile": "Ouvrir le fichier",
+    "removeFile": "Supprimer le fichier"
   }
 }

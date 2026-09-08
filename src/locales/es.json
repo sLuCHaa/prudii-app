@@ -1083,6 +1083,16 @@
     "quickAdd": "Añadir rápido",
     "quickAddPlaceholder": "Nueva tarea… (prueba «mañana 9:00»)",
     "created": "Tarea creada",
-    "openTasks": "Tareas pendientes"
+    "openTasks": "Tareas pendientes",
+    "mailGone": "Este correo ya no está disponible",
+    "fileTooLarge": "El archivo \"{{name}}\" es demasiado grande (máx. 25MB)",
+    "nextWeek": "La próxima semana",
+    "clearDueDate": "Quitar fecha de vencimiento",
+    "priority": "Prioridad",
+    "status": "Estado",
+    "createdAt": "Creada el {{date}}",
+    "updatedAt": "Actualizada el {{date}}",
+    "openFile": "Abrir archivo",
+    "removeFile": "Quitar archivo"
   }
 }

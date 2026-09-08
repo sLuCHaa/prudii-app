@@ -1,6 +1,5 @@
-// Runs once before every test file's own module graph loads (vitest setupFiles),
-// so it's in place before any top-level code — e.g. appStore's theme init or
-// motion's useReducedMotion — calls matchMedia, which jsdom doesn't implement.
+// Runs before every test file's module graph loads, so it's in place before any
+// top-level code (e.g. appStore's theme init) calls matchMedia, which jsdom lacks.
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 if (typeof window.matchMedia !== "function") {

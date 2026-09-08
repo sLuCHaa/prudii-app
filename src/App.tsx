@@ -334,21 +334,7 @@ function AppInner() {
       "notification-clicked",
       (event) => {
         const { account_id, mail_id, folder_id } = event.payload;
-        useAppStore.getState().setSelectedAccountId(account_id);
-        useAppStore.setState({
-          showAllInboxes: false,
-          activeCombinedFolder: null,
-          activeFilter: null,
-          activeSplitId: null,
-          showTasks: false,
-          selectedFolderId: folder_id,
-          selectedMailId: mail_id,
-          selectedMailIndex: -1,
-          folderFilter: "all",
-          selectedMailIds: new Set(),
-          multiSelectMode: false,
-          lastSelectedMailId: null,
-        });
+        useAppStore.getState().openMailById(account_id, mail_id, folder_id);
       },
     );
     return () => { unlisten.then((fn) => fn()); };

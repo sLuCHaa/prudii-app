@@ -1083,6 +1083,16 @@
     "quickAdd": "Schnell hinzufügen",
     "quickAddPlaceholder": "Neue Aufgabe… (probier „morgen 9:00“)",
     "created": "Aufgabe erstellt",
-    "openTasks": "Offene Aufgaben"
+    "openTasks": "Offene Aufgaben",
+    "mailGone": "Diese E-Mail ist nicht mehr verfügbar",
+    "fileTooLarge": "Datei \"{{name}}\" ist zu groß (max. 25 MB)",
+    "nextWeek": "Nächste Woche",
+    "clearDueDate": "Fälligkeit entfernen",
+    "priority": "Priorität",
+    "status": "Status",
+    "createdAt": "Erstellt am {{date}}",
+    "updatedAt": "Aktualisiert am {{date}}",
+    "openFile": "Datei öffnen",
+    "removeFile": "Datei entfernen"
   }
 }
