@@ -43,8 +43,6 @@ enum ExtractCheck {
     IoError(String),
 }
 
-/// Resolves a ZIP entry's relative path under `base`, rejecting directory traversal
-/// (`..`/absolute) and a symlinked ancestor directory.
 /// True for a name that is exactly one ordinary path segment — no `..`, no separator,
 /// no root or drive prefix.
 fn is_plain_path_component(name: &str) -> bool {
@@ -53,6 +51,8 @@ fn is_plain_path_component(name: &str) -> bool {
         && components.next().is_none()
 }
 
+/// Resolves a ZIP entry's relative path under `base`, rejecting directory traversal
+/// (`..`/absolute) and a symlinked ancestor directory.
 fn safe_extract_path(base: &Path, rel_path: &str) -> ExtractCheck {
     // Before any filesystem call: `Path::join` silently replaces the base when the
     // argument has a root or drive prefix, so only plain components may pass.
