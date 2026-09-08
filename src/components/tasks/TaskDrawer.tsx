@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { DragEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { motion, useReducedMotion } from "motion/react";
-import { formatDistanceToNowStrict, parseISO } from "date-fns";
+import { format, formatDistanceToNowStrict, parseISO } from "date-fns";
 import { CalendarDays, X } from "lucide-react";
 import type { CreateTaskInput, Task, TaskPriority, TaskStatus, UpdateTaskPatch } from "../../types";
 import { TASK_STATUSES } from "../../types";
@@ -109,7 +109,7 @@ function DuePopover({
   onClear: () => void;
   onClose: () => void;
 }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const ref = useFocusTrap<HTMLDivElement>(true);
   const [value, setValue] = useState(() => toDatetimeLocalValue(dueAt));
 
@@ -123,7 +123,7 @@ function DuePopover({
     const d = new Date(iso);
     const time = formatTime(d, use24h);
     if (key !== "nextWeek") return time;
-    return `${new Intl.DateTimeFormat(i18n.language, { weekday: "short" }).format(d)} ${time}`;
+    return `${format(d, "EEE", { locale: dateLocale() })} ${time}`;
   }
 
   return (
@@ -131,7 +131,8 @@ function DuePopover({
       ref={ref}
       role="dialog"
       aria-label={t("tasks.due")}
-      className="absolute top-full left-0 mt-2 z-30 w-66 p-2 rounded-2xl bg-surface border border-border shadow-lg"
+      data-due-popover
+      className="absolute top-full left-0 mt-2 z-30 w-66 max-w-full p-2 rounded-2xl bg-surface border border-border shadow-lg"
     >
       <div className="grid grid-cols-2 gap-1.5 mb-2">
         {quick.map((q) => (
@@ -197,7 +198,7 @@ interface TaskDrawerProps {
 }
 
 export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerProps) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const isNew = taskId === "new";
   const setOpenTaskId = useAppStore((s) => s.setOpenTaskId);
   const addToast = useAppStore((s) => s.addToast);
@@ -215,7 +216,7 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
   const [descEscapeBlocked, setDescEscapeBlocked] = useState(false);
   const [duePopoverOpen, setDuePopoverOpen] = useState(false);
   const [dropActive, setDropActive] = useState(false);
-  const dueAnchorRef = useRef<HTMLDivElement>(null);
+  const dueChipRef = useRef<HTMLButtonElement>(null);
   // While the confirm dialog is up it owns Tab; two live traps bounce every Tab back.
   const drawerRef = useFocusTrap<HTMLElement>(!dialog.isOpen, { initialFocus: false });
 
@@ -265,8 +266,17 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
     // "outside" and its Escape would close the drawer underneath it.
     function handleMouseDown(e: MouseEvent) {
       if (dialog.isOpen) return;
-      const target = e.target as Node;
-      if (duePopoverOpen && !dueAnchorRef.current?.contains(target)) setDuePopoverOpen(false);
+      const target = e.target as Element;
+      if (
+        duePopoverOpen &&
+        !dueChipRef.current?.contains(target) &&
+        !target.closest?.("[data-due-popover]")
+      ) {
+        setDuePopoverOpen(false);
+      }
+      // ContextMenu (and the priority Select's listbox) portals to <body>, so its
+      // options land outside the drawer without being an outside click.
+      if (target.closest?.('[role="listbox"],[role="menu"]')) return;
       if (drawerRef.current && !drawerRef.current.contains(target)) closeDrawer();
     }
     function handleKeyDown(e: KeyboardEvent) {
@@ -346,9 +356,13 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
       ? t("tasks.today")
       : sameDay(d, tomorrow)
         ? t("tasks.tomorrow")
-        : new Intl.DateTimeFormat(i18n.language, { month: "short", day: "numeric" }).format(d);
+        : format(d, "d MMM", { locale: dateLocale() });
     return `${day}, ${formatTime(d, use24h)}`;
   }
+
+  // Sections are conditional (linked mails), so the stagger counts what actually renders.
+  let rendered = 0;
+  const sectionIndex = () => rendered++;
 
   const overdue = task ? isOverdue(task, new Date()) : false;
   const stripeClass = task ? STATUS_STRIPE[task.status] : "bg-accent";
@@ -436,7 +450,7 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
                 className="w-full resize-none overflow-hidden font-heading text-[22px] font-bold leading-tight bg-transparent focus:outline-none text-text placeholder:text-text-tertiary"
               />
 
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="relative flex flex-wrap items-center gap-2">
                 <Select
                   value={task.priority}
                   options={priorityOptions}
@@ -444,32 +458,31 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
                   ariaLabel={t("tasks.priority")}
                   className={PILL}
                 />
-                <div ref={dueAnchorRef} className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setDuePopoverOpen((open) => !open)}
-                    aria-haspopup="dialog"
-                    aria-expanded={duePopoverOpen}
-                    aria-label={t("tasks.due")}
-                    className={
-                      task.due_at
-                        ? `inline-flex items-center gap-2 h-[30px] px-3 rounded-full border border-transparent text-xs font-medium transition-colors ${overdue ? "bg-danger/10 text-danger" : "bg-accent/10 text-accent"}`
-                        : "inline-flex items-center gap-2 h-[30px] px-3 rounded-full border border-dashed border-border bg-transparent text-xs font-medium text-text-tertiary hover:border-text-tertiary hover:text-text-secondary transition-colors"
-                    }
-                  >
-                    <CalendarDays className="w-3.5 h-3.5" />
-                    {task.due_at ? dueLabel(task.due_at) : t("tasks.noDue")}
-                  </button>
-                  {duePopoverOpen && (
-                    <DuePopover
-                      dueAt={task.due_at}
-                      use24h={use24h}
-                      onPick={(iso) => patchTask(task.id, { due_at: iso })}
-                      onClear={() => patchTask(task.id, { clear_due_at: true })}
-                      onClose={() => setDuePopoverOpen(false)}
-                    />
-                  )}
-                </div>
+                <button
+                  ref={dueChipRef}
+                  type="button"
+                  onClick={() => setDuePopoverOpen((open) => !open)}
+                  aria-haspopup="dialog"
+                  aria-expanded={duePopoverOpen}
+                  aria-label={t("tasks.due")}
+                  className={
+                    task.due_at
+                      ? `inline-flex items-center gap-2 h-[30px] px-3 rounded-full border border-transparent text-xs font-medium transition-colors ${overdue ? "bg-danger/10 text-danger" : "bg-accent/10 text-accent"}`
+                      : "inline-flex items-center gap-2 h-[30px] px-3 rounded-full border border-dashed border-border bg-transparent text-xs font-medium text-text-tertiary hover:border-text-tertiary hover:text-text-secondary transition-colors"
+                  }
+                >
+                  <CalendarDays className="w-3.5 h-3.5" />
+                  {task.due_at ? dueLabel(task.due_at) : t("tasks.noDue")}
+                </button>
+                {duePopoverOpen && (
+                  <DuePopover
+                    dueAt={task.due_at}
+                    use24h={use24h}
+                    onPick={(iso) => patchTask(task.id, { due_at: iso })}
+                    onClear={() => patchTask(task.id, { clear_due_at: true })}
+                    onClose={() => setDuePopoverOpen(false)}
+                  />
+                )}
               </div>
             </>
           )}
@@ -480,9 +493,9 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
             <Skeleton height="8rem" />
           ) : !isNew && task && detail ? (
             <>
-              <Section index={0}>
+              <Section index={sectionIndex()}>
                 <TaskSectionHead title={t("tasks.description")} />
-                <div className="group rounded-2xl bg-bg-secondary border border-transparent focus-within:bg-surface focus-within:border-border focus-within:ring-3 focus-within:ring-accent/10 transition-colors">
+                <div className="group overflow-hidden rounded-2xl bg-bg-secondary border border-transparent focus-within:bg-surface focus-within:border-border focus-within:ring-3 focus-within:ring-accent/10 transition-colors">
                   <RichTextEditor
                     key={task.id}
                     content={task.description_html}
@@ -495,17 +508,17 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
                 </div>
               </Section>
 
-              <Section index={1}>
+              <Section index={sectionIndex()}>
                 <ChecklistEditor taskId={task.id} items={detail.checklist} />
               </Section>
 
               {detail.links.length > 0 && (
-                <Section index={2}>
+                <Section index={sectionIndex()}>
                   <LinkedMails taskId={task.id} links={detail.links} />
                 </Section>
               )}
 
-              <Section index={3}>
+              <Section index={sectionIndex()}>
                 <TaskFiles attachments={detail.attachments} api={attachmentsApi} dropActive={dropActive} />
               </Section>
             </>

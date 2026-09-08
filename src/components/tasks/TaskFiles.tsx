@@ -7,22 +7,24 @@ import { revealLabelKey } from "../../lib/attachmentActions";
 import { isMacOS, isWindows } from "../../lib/platform";
 import { SECTION_ACTION, TaskSectionHead } from "./TaskSectionHead";
 
+// Tinted chips, not solid fills: white-on-solid breaks against a re-themed accent
+// and reads far louder than the due chip it sits next to.
 const TYPE_FAMILIES: { extensions: RegExp; className: string }[] = [
-  { extensions: /^pdf$/, className: "bg-danger" },
-  { extensions: /^(jpg|jpeg|png|gif|webp|heic|heif|bmp|svg|tif|tiff|avif)$/, className: "bg-accent" },
-  { extensions: /^(xls|xlsx|xlsm|csv|ods|numbers)$/, className: "bg-success" },
-  { extensions: /^(zip|rar|7z|tar|gz|bz2|xz)$/, className: "bg-warning" },
-  { extensions: /^(doc|docx|odt|rtf|txt|md|pages|ppt|pptx|key|odp)$/, className: "bg-text-secondary" },
+  { extensions: /^pdf$/, className: "bg-danger/12 text-danger" },
+  { extensions: /^(jpg|jpeg|png|gif|webp|heic|heif|bmp|svg|tif|tiff|avif)$/, className: "bg-accent/12 text-accent" },
+  { extensions: /^(xls|xlsx|xlsm|csv|ods|numbers)$/, className: "bg-success/12 text-success" },
+  { extensions: /^(zip|rar|7z|tar|gz|bz2|xz)$/, className: "bg-warning/15 text-warning" },
+  { extensions: /^(doc|docx|odt|rtf|txt|md|pages|ppt|pptx|key|odp)$/, className: "bg-text-secondary/12 text-text-secondary" },
 ];
 
-/** Extension badge: short uppercase label plus a colour per file family. */
+/** Extension badge: short uppercase label plus a tint per file family. */
 export function fileBadge(filename: string): { label: string; className: string } {
   const dot = filename.lastIndexOf(".");
   const ext = dot > 0 ? filename.slice(dot + 1).toLowerCase() : "";
   const family = TYPE_FAMILIES.find((f) => f.extensions.test(ext));
   return {
     label: (ext || "file").slice(0, 4).toUpperCase(),
-    className: family?.className ?? "bg-text-tertiary",
+    className: family?.className ?? "bg-text-tertiary/12 text-text-tertiary",
   };
 }
 
@@ -81,7 +83,7 @@ export function TaskFiles({ attachments, api, dropActive = false }: TaskFilesPro
             >
               <span
                 aria-hidden
-                className={`w-[34px] h-10 rounded-[7px] grid place-items-center text-[9.5px] font-bold tracking-wide text-white ${badge.className}`}
+                className={`w-[34px] h-10 rounded-[7px] grid place-items-center text-[9.5px] font-bold tracking-wide ${badge.className}`}
               >
                 {badge.label}
               </span>
