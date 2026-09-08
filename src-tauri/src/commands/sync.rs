@@ -1388,7 +1388,9 @@ pub async fn sync_account(
     let credential = if let Some(pw) = password {
         // When password is provided directly (e.g. from Account Wizard),
         // also store it in the keyring so other commands can access it later
-        let _ = credentials::store_password(&account_id, &pw);
+        if let Err(e) = credentials::store_password(&account_id, &pw) {
+            log::warn!("[sync] Password for {} not persisted, session cache only: {}", account_id, e);
+        }
         pw
     } else {
         credentials::resolve_credential(&account_id, &auth_type, &provider)

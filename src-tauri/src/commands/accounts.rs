@@ -144,9 +144,11 @@ pub fn create_account(
 
     drop(conn);
 
-    // Store password in system credential manager (mandatory — no plaintext DB fallback)
-    credentials::store_password(&id, &request.password)
-        .map_err(|e| format!("Failed to store password in credential manager: {}", e))?;
+    // Stored in the system credential manager (never as plaintext in the DB). A failed
+    // persist keeps the account usable this session via the in-memory cache, so the row stays.
+    if let Err(e) = credentials::store_password(&id, &request.password) {
+        log::warn!("[accounts] Password for {} not persisted, session cache only: {}", id, e);
+    }
 
     Ok(Account {
         id,
@@ -193,8 +195,11 @@ pub fn store_account_password(
         return Err("Account not found".to_string());
     }
 
-    credentials::store_password(&account_id, &password)
-        .map_err(|e| format!("Failed to store password: {}", e))?;
+    // Called mid-save from the settings panel: a failed persist must not abort the rest of
+    // that save. The session cache still holds the secret, so the account keeps working.
+    if let Err(e) = credentials::store_password(&account_id, &password) {
+        log::warn!("[accounts] Password for {} not persisted, session cache only: {}", account_id, e);
+    }
 
     Ok(())
 }

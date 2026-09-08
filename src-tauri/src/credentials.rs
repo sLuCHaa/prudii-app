@@ -317,9 +317,12 @@ pub async fn resolve_credential(account_id: &str, auth_type: &str, provider: &st
         let refresh_token = get_password(account_id)?;
         let tokens = crate::oauth::refresh_access_token(provider, &refresh_token).await?;
         crate::oauth::cache_token(account_id, &tokens.access_token, tokens.expires_in);
-        // Update refresh_token if rotated
+        // A rotated refresh token that can't be persisted must not abort the running sync —
+        // the session cache carries it, and the problem resurfaces on the next refresh.
         if tokens.refresh_token != refresh_token {
-            store_password(account_id, &tokens.refresh_token)?;
+            if let Err(e) = store_password(account_id, &tokens.refresh_token) {
+                log::warn!("[credentials] Rotated refresh token not persisted for {}: {}", account_id, e);
+            }
         }
         Ok(tokens.access_token)
     } else {
