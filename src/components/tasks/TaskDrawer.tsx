@@ -284,6 +284,7 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
             <DueChips onPick={(iso) => patchTask(task.id, { due_at: iso })} />
 
             <input
+              key={task.id}
               defaultValue={task.title}
               placeholder={t("tasks.titlePlaceholder")}
               onChange={(e) => debouncedTitleSave(task.id, e.target.value)}
@@ -295,6 +296,7 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
             <div>
               <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary mb-2">{t("tasks.description")}</h3>
               <RichTextEditor
+                key={task.id}
                 content={task.description_html}
                 onChange={(html) => debouncedDescSave(task.id, html)}
                 placeholder={t("tasks.descriptionPlaceholder")}
