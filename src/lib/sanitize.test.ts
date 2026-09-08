@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { escapeHtml, sanitizeEmailHtml, sanitizeSignatureHtml } from "./sanitize";
+import { escapeHtml, sanitizeEmailHtml, sanitizeSignatureHtml, sanitizeSignatureHtmlReport } from "./sanitize";
 
 describe("escapeHtml", () => {
   it("escapes all HTML metacharacters", () => {
@@ -56,6 +56,16 @@ describe("sanitizeEmailHtml", () => {
       `<img src="https://click.sendgrid.net/img.png" width="200" height="80">`
     );
     expect(trackers.some((t) => t.type === "tracking_domain")).toBe(true);
+  });
+});
+
+describe("sanitizeSignatureHtmlReport", () => {
+  it("counts what DOMPurify dropped and reports zero for clean input", () => {
+    expect(sanitizeSignatureHtmlReport("<p><b>Alice</b></p>").removed).toBe(0);
+    const dirty = sanitizeSignatureHtmlReport(`<p onclick="x()">Hi</p><script>x()</script>`);
+    expect(dirty.removed).toBeGreaterThan(0);
+    expect(dirty.html).not.toContain("onclick");
+    expect(dirty.html).not.toContain("<script");
   });
 });
 
