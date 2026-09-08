@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isOverdue, isDueToday, groupByStatus, fullColumnDropIndex, parseQuickAdd } from "./tasks";
+import { isOverdue, isDueToday, groupByStatus, fullColumnDropIndex, parseQuickAdd, chunkIds, mergeCounts } from "./tasks";
 import type { Task } from "../types";
 
 // Tuesday, Sept 8 2026, 10:00 local.
@@ -173,5 +173,37 @@ describe("fullColumnDropIndex", () => {
     ];
     const visible = [sparse[0], makeTask({ id: "x", status: "open" })];
     expect(fullColumnDropIndex(sparse, "open", "x", visible)).toBe(2);
+  });
+});
+
+describe("chunkIds", () => {
+  it("splits into batches of at most size", () => {
+    expect(chunkIds(["a", "b", "c", "d", "e"], 2)).toEqual([["a", "b"], ["c", "d"], ["e"]]);
+  });
+
+  it("keeps a shorter list in one batch", () => {
+    expect(chunkIds(["a", "b"], 200)).toEqual([["a", "b"]]);
+  });
+
+  it("returns no batches for an empty list", () => {
+    expect(chunkIds([], 200)).toEqual([]);
+  });
+
+  it("falls back to a single batch for a non-positive size", () => {
+    expect(chunkIds(["a", "b"], 0)).toEqual([["a", "b"]]);
+  });
+});
+
+describe("mergeCounts", () => {
+  it("merges the counts of all chunks into one map", () => {
+    expect(mergeCounts([{ a: 1 }, { b: 2, c: 3 }])).toEqual({ a: 1, b: 2, c: 3 });
+  });
+
+  it("does not add up a repeated id", () => {
+    expect(mergeCounts([{ a: 2 }, { a: 2 }])).toEqual({ a: 2 });
+  });
+
+  it("returns an empty map without chunks", () => {
+    expect(mergeCounts([])).toEqual({});
   });
 });

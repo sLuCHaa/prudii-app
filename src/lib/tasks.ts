@@ -199,3 +199,21 @@ export function parseQuickAdd(input: string, now: Date): { title: string; dueAt:
   if (hour === null) return { title, dueAt: null };
   return { title, dueAt: new Date(year, month, day, hour, minute).toISOString() };
 }
+
+/** Splits mail ids into batches so one long mail list never becomes a single oversized query. */
+export function chunkIds(ids: string[], size: number): string[][] {
+  if (ids.length === 0) return [];
+  if (size < 1) return [ids];
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += size) chunks.push(ids.slice(i, i + size));
+  return chunks;
+}
+
+/** Folds the per-chunk link counts of `tasks_for_mails` back into one map. */
+export function mergeCounts(chunks: Record<string, number>[]): Record<string, number> {
+  const merged: Record<string, number> = {};
+  for (const chunk of chunks) {
+    for (const id of Object.keys(chunk)) merged[id] = chunk[id];
+  }
+  return merged;
+}

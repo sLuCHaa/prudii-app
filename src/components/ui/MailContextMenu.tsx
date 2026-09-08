@@ -1,4 +1,4 @@
-import { Reply, ReplyAll, Forward, Star, StarOff, Mail as MailIcon, MailOpen, Archive, Trash2, Pin, PinOff, Clock, FolderInput } from "lucide-react";
+import { Reply, ReplyAll, Forward, Star, StarOff, Mail as MailIcon, MailOpen, Archive, Trash2, Pin, PinOff, Clock, FolderInput, ClipboardList, ClipboardPlus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Mail, Folder } from "../../types";
 import { useAppStore } from "../../stores/appStore";
@@ -16,6 +16,8 @@ interface MailContextMenuProps {
   onReplyAll: (mail: Mail) => void;
   onForward: (mail: Mail) => void;
   onToggleStar: (mail: Mail) => void;
+  onCreateTask: (mail: Mail) => void;
+  onAddToTask: (mail: Mail) => void;
   onToggleRead: (mail: Mail) => void;
   onArchive: (mail: Mail) => void;
   onTrash: (mail: Mail) => void;
@@ -81,6 +83,8 @@ export function MailContextMenu({
   onReplyAll,
   onForward,
   onToggleStar,
+  onCreateTask,
+  onAddToTask,
   onToggleRead,
   onArchive,
   onTrash,
@@ -104,6 +108,9 @@ export function MailContextMenu({
     { kind: "item", id: "reply", label: t("mailDetail.reply"), icon: <Reply className="w-4 h-4" />, onSelect: () => onReply(mail) },
     { kind: "item", id: "replyAll", label: t("compose.replyAll"), icon: <ReplyAll className="w-4 h-4" />, onSelect: () => onReplyAll(mail) },
     { kind: "item", id: "forward", label: t("mailDetail.forward"), icon: <Forward className="w-4 h-4" />, onSelect: () => onForward(mail) },
+    { kind: "separator" },
+    { kind: "item", id: "createTask", label: t("tasks.createFromMail"), icon: <ClipboardList className="w-4 h-4" />, onSelect: () => onCreateTask(mail) },
+    { kind: "item", id: "addToTask", label: t("tasks.addToTask"), icon: <ClipboardPlus className="w-4 h-4" />, onSelect: () => onAddToTask(mail) },
     { kind: "separator" },
     { kind: "item", id: "star", label: mail.is_starred ? t("mailDetail.unstar") : t("mailDetail.star"), icon: mail.is_starred ? <StarOff className="w-4 h-4" /> : <Star className="w-4 h-4" />, onSelect: () => onToggleStar(mail) },
     ...(onTogglePin ? [{ kind: "item" as const, id: "pin", label: mail.is_pinned ? t("mailDetail.unpin") : t("mailDetail.pin"), icon: mail.is_pinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />, onSelect: () => onTogglePin(mail) }] : []),

@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
   listTasks,
@@ -19,9 +20,13 @@ import {
   openTaskAttachment,
   revealTaskAttachment,
   startTaskAttachmentDrag,
+  createTaskFromMail,
+  tasksForMail,
+  tasksForMails,
 } from "../lib/tauri";
 import type { CreateTaskInput, Task, TaskStatus, UpdateTaskPatch } from "../types";
 import { useAppStore } from "../stores/appStore";
+import { chunkIds, mergeCounts } from "../lib/tasks";
 import i18n from "../lib/i18n";
 
 // Every task mutation can move a card's counts, checklist, links or attachments,
@@ -205,4 +210,58 @@ export function useTaskAttachments(taskId: string | null) {
     onError,
   });
   return { add, addData, remove, open, reveal, startDrag };
+}
+
+const TASKS_FOR_MAILS_CHUNK = 200;
+const NO_COUNTS: Record<string, number> = {};
+
+/** Link counts for a whole visible mail list — one batched query instead of one per row. */
+export function useTasksForMails(mailIds: string[]): Record<string, number> {
+  const key = Array.from(new Set(mailIds)).sort().join(",");
+  // Derived from the joined key, so a re-rendered list with the same mails keeps one stable query.
+  const ids = useMemo(() => (key ? key.split(",") : []), [key]);
+  const { data } = useQuery({
+    queryKey: ["tasks-for-mail", "batch", key],
+    queryFn: async () => mergeCounts(await Promise.all(chunkIds(ids, TASKS_FOR_MAILS_CHUNK).map(tasksForMails))),
+    enabled: ids.length > 0,
+    staleTime: 30_000,
+  });
+  return data ?? NO_COUNTS;
+}
+
+export function useMailTasks(mailId: string | null) {
+  return useQuery({
+    queryKey: ["tasks-for-mail", mailId],
+    queryFn: () => tasksForMail(mailId!),
+    enabled: !!mailId,
+  });
+}
+
+export function useCreateTaskFromMail() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (mailId: string) => createTaskFromMail(mailId),
+    onSuccess: (task: Task) => {
+      invalidateTaskQueries(queryClient);
+      const store = useAppStore.getState();
+      store.openTaskById(task.id);
+      store.addToast("success", i18n.t("tasks.createdFromMail"), undefined, undefined, {
+        label: i18n.t("tasks.openCreated"),
+        onClick: () => useAppStore.getState().openTaskById(task.id),
+      });
+    },
+    onError,
+  });
+}
+
+export function useLinkMailToTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, mailId }: { taskId: string; mailId: string }) => linkTaskMail(taskId, mailId),
+    onSuccess: () => {
+      invalidateTaskQueries(queryClient);
+      useAppStore.getState().addToast("success", i18n.t("tasks.linkedToTask"));
+    },
+    onError,
+  });
 }

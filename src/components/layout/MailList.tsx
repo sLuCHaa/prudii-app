@@ -12,6 +12,9 @@ import gsap from "gsap";
 import { useShallow } from "zustand/react/shallow";
 import { useAppStore } from "../../stores/appStore";
 import type { FolderFilter } from "../../stores/appStore";
+import { useTasksForMails, useCreateTaskFromMail, useLinkMailToTask } from "../../hooks/useTasks";
+import { MailTaskChip } from "../tasks/MailTaskChip";
+import { TaskPickerDialog } from "../tasks/TaskPickerDialog";
 import { useMails, useFilteredMails, useAllInboxMails, useCombinedFolderMails, useSnoozedMails, useSplitInboxMails, useInboxSplits, useToggleStar, useTogglePin, useFolders } from "../../hooks/useAccounts";
 import { useSearchMails } from "../../hooks/useSync";
 import { useScroller } from "../../hooks/useScroller";
@@ -434,6 +437,7 @@ type VirtualItem =
 interface VirtualMailListProps {
   listRef: React.RefObject<HTMLDivElement | null>;
   filteredMails: Mail[];
+  taskCounts: Record<string, number>;
   selectedMailIndex: number;
   selectedMailId: string | null;
   selectedMailIds: Set<string>;
@@ -466,6 +470,7 @@ interface VirtualMailListProps {
 function VirtualMailList({
   listRef,
   filteredMails,
+  taskCounts,
   selectedMailIndex,
   selectedMailId,
   selectedMailIds,
@@ -907,12 +912,13 @@ function VirtualMailList({
                       >
                         {mail.subject || t("compose.noSubject")}
                       </span>
-                      {(mail.is_pinned || mail.is_starred || (mail.flags && mail.flags.length > 0) || mail.has_attachments) && (
+                      {(mail.is_pinned || mail.is_starred || (mail.flags && mail.flags.length > 0) || mail.has_attachments || taskCounts[mail.id] > 0) && (
                         <span className="flex shrink-0 items-center gap-1.5 text-text-tertiary">
                           {mail.is_pinned && <Pin className="w-3 h-3 text-accent" />}
                           {mail.is_starred && <StarIcon size={12} color="var(--c-warning)" />}
                           {mail.flags && mail.flags.length > 0 && <FlagDots flags={mail.flags} size={9} />}
                           {mail.has_attachments && <Paperclip className="w-3 h-3" />}
+                          <MailTaskChip count={taskCounts[mail.id] ?? 0} />
                         </span>
                       )}
                     </div>
@@ -1385,6 +1391,13 @@ export function MailList() {
 
   const toggleStarMutation = useToggleStar();
   const togglePinMutation = useTogglePin();
+
+  // One batched count query for the whole loaded page instead of one per row.
+  const mailIdsForTaskCounts = useMemo(() => filteredMails.map((m) => m.id), [filteredMails]);
+  const taskCounts = useTasksForMails(mailIdsForTaskCounts);
+  const createTaskFromMailMutation = useCreateTaskFromMail();
+  const linkMailToTaskMutation = useLinkMailToTask();
+  const [taskPickerMailId, setTaskPickerMailId] = useState<string | null>(null);
 
   const dateGroupLabels: Record<string, string> = useMemo(() => ({
     today: t("dateGroups.today"),
@@ -2067,6 +2080,7 @@ export function MailList() {
             <VirtualMailList
               listRef={listRef}
               filteredMails={filteredMails}
+              taskCounts={taskCounts}
               selectedMailIndex={selectedMailIndex}
               selectedMailId={selectedMailId}
               selectedMailIds={selectedMailIds}
@@ -2110,6 +2124,8 @@ export function MailList() {
           onReply={(m) => openCompose("reply", m)}
           onReplyAll={(m) => openCompose("replyAll", m)}
           onForward={(m) => openCompose("forward", m)}
+          onCreateTask={(m) => createTaskFromMailMutation.mutate(m.id)}
+          onAddToTask={(m) => setTaskPickerMailId(m.id)}
           onToggleStar={(m) => {
             const prev = m.is_starred;
             setMails((prev_) => prev_.map((ml) => ml.id === m.id ? { ...ml, is_starred: !prev } : ml));
@@ -2160,6 +2176,14 @@ export function MailList() {
           onBulkSnooze={contextMenu.bulk ? handleBulkSnooze : undefined}
           onBulkMove={contextMenu.bulk ? handleBulkMove : undefined}
           moveFolders={contextMenu.bulk ? bulkMoveFolders : undefined}
+        />
+      )}
+
+      {taskPickerMailId && (
+        <TaskPickerDialog
+          open
+          onClose={() => setTaskPickerMailId(null)}
+          onPick={(taskId) => linkMailToTaskMutation.mutate({ taskId, mailId: taskPickerMailId })}
         />
       )}
     </div>

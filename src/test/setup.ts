@@ -14,3 +14,9 @@ if (typeof window.matchMedia !== "function") {
     dispatchEvent: () => false,
   })) as unknown as typeof window.matchMedia;
 }
+
+// jsdom has no layout, so it ships no scrollIntoView — list components call it
+// to keep the active row visible.
+if (typeof Element.prototype.scrollIntoView !== "function") {
+  Element.prototype.scrollIntoView = () => {};
+}

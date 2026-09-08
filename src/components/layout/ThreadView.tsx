@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback, memo, useMemo } from "react";
 import { Tooltip } from "../ui/Tooltip";
 import { parseISO } from "date-fns";
-import { Reply, ReplyAll, Forward, Archive, Paperclip, FileText, Image, Film, Music, File, Loader2, Download, ChevronDown, ChevronRight, MessageSquare, Copy, Check, Code, Eye, FileType, Printer, MailMinus, ImageOff, FolderOpen } from "lucide-react";
+import { Reply, ReplyAll, Forward, Archive, Paperclip, FileText, Image, Film, Music, File, Loader2, Download, ChevronDown, ChevronRight, MessageSquare, Copy, Check, Code, Eye, FileType, Printer, MailMinus, ImageOff, FolderOpen, ClipboardList, ClipboardPlus } from "lucide-react";
 import { SkeletonText } from "../ui/Skeleton";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -30,6 +30,11 @@ import { TrackingIndicator } from "./TrackingIndicator";
 import { AiSummaryButton, AiSummaryPanel } from "../ai/AiSummary";
 import { AiReplyButton, AiReplySuggestionsPanel } from "../ai/AiReplySuggestions";
 import { useDialog } from "../ui/DialogProvider";
+import { ContextMenu } from "../ui/ContextMenu";
+import type { MenuEntry } from "../../lib/menuModel";
+import { useMailTasks, useCreateTaskFromMail, useLinkMailToTask } from "../../hooks/useTasks";
+import { LinkedTaskChip } from "../tasks/MailTaskChip";
+import { TaskPickerDialog } from "../tasks/TaskPickerDialog";
 import type { Mail, Attachment, MailAddress } from "../../types";
 import { useTranslation } from "react-i18next";
 import { ImageLightbox, type ImageLightboxItem } from "./ImageLightbox";
@@ -1162,6 +1167,16 @@ export function ThreadView({ mail }: ThreadViewProps) {
   const isInTrash = currentFolder?.folder_type === "trash";
   const [showAiSummary, setShowAiSummary] = useState(false);
   const [showAiReplies, setShowAiReplies] = useState(false);
+  const [taskMenu, setTaskMenu] = useState<{ x: number; y: number } | null>(null);
+  const [taskPickerOpen, setTaskPickerOpen] = useState(false);
+  const linkedTasks = useMailTasks(mail.id);
+  const createTaskFromMailMutation = useCreateTaskFromMail();
+  const linkMailToTaskMutation = useLinkMailToTask();
+
+  const taskMenuEntries: MenuEntry[] = [
+    { kind: "item", id: "createTask", label: t("tasks.createFromMail"), icon: <ClipboardList className="w-4 h-4" />, onSelect: () => createTaskFromMailMutation.mutate(mail.id) },
+    { kind: "item", id: "addToTask", label: t("tasks.addToTask"), icon: <ClipboardPlus className="w-4 h-4" />, onSelect: () => setTaskPickerOpen(true) },
+  ];
 
   const handlePrint = useCallback(async () => {
     const withBodies = await ensureBodies(threadMails);
@@ -1373,6 +1388,13 @@ export function ThreadView({ mail }: ThreadViewProps) {
             </span>
           </div>
         )}
+        {linkedTasks.data && linkedTasks.data.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 mt-2">
+            {linkedTasks.data.map((task) => (
+              <LinkedTaskChip key={task.id} task={task} />
+            ))}
+          </div>
+        )}
       </div>
 
       {showAiSummary && <AiSummaryPanel mailId={mail.id} threadMode={!isSingleMail} />}
@@ -1406,6 +1428,23 @@ export function ThreadView({ mail }: ThreadViewProps) {
             className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
           >
             <Forward className="w-4 h-4" />
+          </button>
+        </Tooltip>
+        <Tooltip label={t("tasks.title")}>
+          <button
+            aria-label={t("tasks.title")}
+            aria-haspopup="menu"
+            aria-expanded={taskMenu !== null}
+            // Keeps the menu's outside-mousedown handler from closing it right
+            // before this click would toggle it back open.
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              setTaskMenu((open) => (open ? null : { x: r.left, y: r.bottom + 4 }));
+            }}
+            className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
+          >
+            <ClipboardList className="w-4 h-4" />
           </button>
         </Tooltip>
         <Tooltip label={t("mailDetail.print")}>
@@ -1469,6 +1508,19 @@ export function ThreadView({ mail }: ThreadViewProps) {
           />
         </div>
       </div>
+
+      {taskMenu && (
+        <ContextMenu entries={taskMenuEntries} x={taskMenu.x} y={taskMenu.y} onClose={() => setTaskMenu(null)} ariaLabel={t("tasks.title")} />
+      )}
+
+      {taskPickerOpen && (
+        <TaskPickerDialog
+          open
+          onClose={() => setTaskPickerOpen(false)}
+          onPick={(taskId) => linkMailToTaskMutation.mutate({ taskId, mailId: mail.id })}
+          excludeTaskIds={linkedTasks.data?.map((task) => task.id)}
+        />
+      )}
     </div>
   );
 }
