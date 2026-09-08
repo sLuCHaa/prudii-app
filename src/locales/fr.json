@@ -1116,7 +1116,6 @@
     "mailGone": "Cet e-mail n'est plus disponible",
     "fileTooLarge": "Le fichier \"{{name}}\" est trop volumineux (max 25 Mo)",
     "nextWeek": "La semaine prochaine",
-    "clearDueDate": "Effacer l'échéance",
     "priority": "Priorité",
     "status": "Statut",
     "createdAt": "Créée le {{date}}",

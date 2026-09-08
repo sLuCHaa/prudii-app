@@ -1115,7 +1115,6 @@
     "mailGone": "该邮件已不可用",
     "fileTooLarge": "文件\"{{name}}\"过大（最大 25MB）",
     "nextWeek": "下周",
-    "clearDueDate": "清除截止日期",
     "priority": "优先级",
     "status": "状态",
     "createdAt": "创建于 {{date}}",
