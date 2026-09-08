@@ -1122,6 +1122,11 @@
     "updatedAt": "更新于 {{date}}",
     "openFile": "打开文件",
     "removeFile": "删除文件",
-    "taskGone": "此任务已不存在"
+    "taskGone": "此任务已不存在",
+    "dueApply": "应用",
+    "dueNoDate": "无日期",
+    "dueDateTime": "日期和时间",
+    "addFilesHint": "将文件拖到此处",
+    "createdUpdated": "创建于 {{created}} · 更新于 {{updated}}"
   }
 }

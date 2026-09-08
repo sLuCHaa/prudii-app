@@ -1123,6 +1123,11 @@
     "updatedAt": "Mise à jour le {{date}}",
     "openFile": "Ouvrir le fichier",
     "removeFile": "Supprimer le fichier",
-    "taskGone": "Cette tâche n'existe plus"
+    "taskGone": "Cette tâche n'existe plus",
+    "dueApply": "Appliquer",
+    "dueNoDate": "Aucune date",
+    "dueDateTime": "Date et heure",
+    "addFilesHint": "Déposez des fichiers ici",
+    "createdUpdated": "Créée {{created}} · modifiée {{updated}}"
   }
 }

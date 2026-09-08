@@ -88,7 +88,9 @@ export interface RichTextEditorProps {
   placeholder?: string;
   extraExtensions?: AnyExtension[]; // ComposeModal: [TiptapImage.configure(...), SignatureNode]
   editorClassName?: string;
-  toolbar?: boolean;
+  /** `"focus"` keeps the toolbar collapsed until something inside the surrounding
+   *  `.group` element takes focus — the task drawer's quiet-until-edited card. */
+  toolbar?: boolean | "focus";
   autofocus?: boolean;
   onEscapeBlockedChange?: (blocked: boolean) => void; // true while the link dialog is open
 }
@@ -123,7 +125,13 @@ export function RichTextEditor({
 
   return (
     <>
-      {toolbar !== false && <EditorToolbar editor={editor} linkDialogOpen={linkDialogOpen} setLinkDialogOpen={setLinkDialogOpen} />}
+      {toolbar === "focus" ? (
+        <div className="max-h-0 overflow-hidden opacity-0 transition-all duration-200 group-focus-within:max-h-12 group-focus-within:opacity-100">
+          <EditorToolbar editor={editor} linkDialogOpen={linkDialogOpen} setLinkDialogOpen={setLinkDialogOpen} />
+        </div>
+      ) : toolbar !== false ? (
+        <EditorToolbar editor={editor} linkDialogOpen={linkDialogOpen} setLinkDialogOpen={setLinkDialogOpen} />
+      ) : null}
       <EditorContent editor={editor} className={editorClassName} />
     </>
   );

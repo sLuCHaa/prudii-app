@@ -6,6 +6,7 @@ import type { MenuEntry } from "../../lib/menuModel";
 export interface SelectOption {
   value: string;
   label: string;
+  /** Rendered both in the list and — for the selected option — inside the trigger. */
   icon?: React.ReactNode;
 }
 
@@ -63,6 +64,7 @@ export function Select({ value, options, onChange, placeholder, className = DEFA
         }}
         className={className}
       >
+        {current?.icon}
         <span className="flex-1 truncate">{current?.label ?? placeholder ?? ""}</span>
         <ChevronDown className="w-4 h-4 text-text-tertiary shrink-0" />
       </button>

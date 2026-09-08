@@ -52,6 +52,7 @@
   --c-scrollbar:       #cbd5e1;
   --c-scrollbar-hover: #94a3b8;
   --c-overlay:         rgba(0, 0, 0, 0.6);
+  --c-drawer-backdrop: rgba(15, 23, 42, 0.28);
 
   /* Spacing: Tailwind's 4px-grid utilities (p-*, gap-*) ARE the spacing
      system — no parallel token set. Typography sizes live in @theme
@@ -119,6 +120,7 @@
   --c-scrollbar:       #475569;
   --c-scrollbar-hover: #64748b;
   --c-overlay:         rgba(0, 0, 0, 0.6);
+  --c-drawer-backdrop: rgba(2, 6, 23, 0.55);
 
   /* Shadows (Dark Mode): stronger values for direct var(--shadow-*)
      consumers (modal panels, scrollbar chrome). shadow-* utilities keep the
@@ -282,6 +284,13 @@ h3 { font-size: var(--text-base); }
   background-color: var(--c-overlay);
   backdrop-filter: blur(var(--blur-md, 8px));
   -webkit-backdrop-filter: blur(var(--blur-md, 8px));
+}
+
+/* Side panels dim far less than modals — the list behind stays readable. */
+.drawer-backdrop {
+  background-color: var(--c-drawer-backdrop);
+  backdrop-filter: blur(1.5px);
+  -webkit-backdrop-filter: blur(1.5px);
 }
 
 /* Shared entrance for modals/menus that don't run their own JS animation */

@@ -1123,6 +1123,11 @@
     "updatedAt": "Updated {{date}}",
     "openFile": "Open file",
     "removeFile": "Remove file",
-    "taskGone": "This task no longer exists"
+    "taskGone": "This task no longer exists",
+    "dueApply": "Apply",
+    "dueNoDate": "No date",
+    "dueDateTime": "Date & time",
+    "addFilesHint": "Drop files here",
+    "createdUpdated": "Created {{created}} · updated {{updated}}"
   }
 }

@@ -1129,6 +1129,11 @@
     "updatedAt": "Обновлено {{date}}",
     "openFile": "Открыть файл",
     "removeFile": "Удалить файл",
-    "taskGone": "Эта задача больше не существует"
+    "taskGone": "Эта задача больше не существует",
+    "dueApply": "Применить",
+    "dueNoDate": "Без даты",
+    "dueDateTime": "Дата и время",
+    "addFilesHint": "Перетащите файлы сюда",
+    "createdUpdated": "Создано {{created}} · изменено {{updated}}"
   }
 }
