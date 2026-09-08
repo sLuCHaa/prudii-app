@@ -59,6 +59,12 @@ export function BackupExportWindow() {
     const unlisten = listen<BackupProgress>("backup-progress", (event) => {
       setProgress(event.payload);
       if (event.payload.status !== "error") setError(null);
+      // Only a finished write may clear the fields — `create_backup` also resolves
+      // when the user cancels the save dialog, and then the input must survive.
+      if (event.payload.status === "done") {
+        setPassphrase("");
+        setPassphraseRepeat("");
+      }
     });
     return () => { unlisten.then((fn) => fn()); };
   }, []);
@@ -73,8 +79,6 @@ export function BackupExportWindow() {
         ...options,
         passphrase: options.include_credentials ? passphrase : undefined,
       });
-      setPassphrase("");
-      setPassphraseRepeat("");
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(backupErrorText(message, t));

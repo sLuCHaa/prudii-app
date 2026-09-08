@@ -35,6 +35,12 @@ export function BackupRestore() {
   useEffect(() => {
     const unlistenBackup = listen<BackupProgress>("backup-progress", (event) => {
       setBackupProgress(event.payload);
+      // Only a finished write may clear the fields — `create_backup` also resolves
+      // when the user cancels the save dialog, and then the input must survive.
+      if (event.payload.status === "done") {
+        setPassphrase("");
+        setPassphraseRepeat("");
+      }
       if (event.payload.status === "done" || event.payload.status === "error") {
         setTimeout(() => setBackupProgress(null), 4000);
       }
@@ -64,8 +70,6 @@ export function BackupRestore() {
         ...options,
         passphrase: options.include_credentials ? passphrase : undefined,
       });
-      setPassphrase("");
-      setPassphraseRepeat("");
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       addToast("error", t("errors.backupCreate"), backupErrorText(message, t));
@@ -79,7 +83,8 @@ export function BackupRestore() {
       setRestorePassphrase("");
       setPasswordHintEmails([]);
     } catch (err) {
-      addToast("error", t("errors.backupPreview"), err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      addToast("error", t("errors.backupPreview"), backupErrorText(message, t));
     }
   }
 
@@ -235,7 +240,8 @@ export function BackupRestore() {
               )}
               {preview.manifest.includes.tasks && (
                 <div className="flex justify-between">
-                  <span className="text-text-tertiary">{t("backup.tasksCount", { count: preview.manifest.stats.task_count })}</span>
+                  <span className="text-text-tertiary">{t("backup.tasksCount")}</span>
+                  <span className="text-text">{preview.manifest.stats.task_count}</span>
                 </div>
               )}
               <div className="flex justify-between">

@@ -32,6 +32,15 @@ describe("validateBackupOptions", () => {
     expect(validateBackupOptions(options, "longenough", "different")).toEqual({ ok: false, reason: "mismatch" });
   });
 
+  it("counts astral characters as one each, like the Rust guard", () => {
+    const options = { ...baseOptions, include_credentials: true };
+    const sevenEmoji = "😀😁😂😃😄😅😆";
+    expect(sevenEmoji.length).toBe(14);
+    expect(validateBackupOptions(options, sevenEmoji, sevenEmoji)).toEqual({ ok: false, reason: "tooShort" });
+    const eightEmoji = sevenEmoji + "😇";
+    expect(validateBackupOptions(options, eightEmoji, eightEmoji)).toEqual({ ok: true });
+  });
+
   it("accepts a matching passphrase of sufficient length", () => {
     const options = { ...baseOptions, include_credentials: true };
     expect(validateBackupOptions(options, "longenough", "longenough")).toEqual({ ok: true });

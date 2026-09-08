@@ -17,7 +17,9 @@ export function validateBackupOptions(
 ): ValidateBackupOptionsResult {
   if (!options.include_credentials) return { ok: true };
   if (!options.include_accounts) return { ok: false, reason: "needsAccounts" };
-  if (passphrase.length < 8) return { ok: false, reason: "tooShort" };
+  // Count code points, not UTF-16 units — the Rust guard uses `chars().count()`,
+  // so astral characters must not pass here and be rejected by the backend.
+  if ([...passphrase].length < 8) return { ok: false, reason: "tooShort" };
   if (passphrase !== repeat) return { ok: false, reason: "mismatch" };
   return { ok: true };
 }
