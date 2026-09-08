@@ -3,6 +3,7 @@ import { createElement, act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "../../lib/i18n";
+import type { Task, TaskDetail, UpdateTaskPatch } from "../../types";
 import { DialogProvider } from "../ui/DialogProvider";
 import { TaskDrawer } from "./TaskDrawer";
 
@@ -14,7 +15,9 @@ beforeEach(() => {
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
-  queryClient = new QueryClient();
+  // staleTime Infinity: seeded task detail must not trigger a background fetch
+  // into the (unmocked) tauri bridge.
+  queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
 });
 
 afterEach(() => {
@@ -109,5 +112,95 @@ describe("TaskDrawer — new task", () => {
     });
 
     expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+const TASK: Task = {
+  id: "t1",
+  title: "Follow up with Bangert",
+  description_html: "",
+  status: "in_progress",
+  priority: "high",
+  due_at: null,
+  sort_order: 0,
+  reminder_sent: false,
+  created_at: "2026-09-01T08:00:00.000Z",
+  updated_at: "2026-09-01T08:00:00.000Z",
+  completed_at: null,
+  checklist_done: 0,
+  checklist_total: 0,
+  link_count: 0,
+  attachment_count: 0,
+};
+
+function renderExisting(onUpdate: (vars: { id: string; patch: UpdateTaskPatch }) => void) {
+  const detail: TaskDetail = { task: TASK, checklist: [], links: [], attachments: [] };
+  queryClient.setQueryData(["task", TASK.id], detail);
+  act(() => {
+    root.render(
+      createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        createElement(
+          DialogProvider,
+          null,
+          createElement(TaskDrawer, { taskId: TASK.id, onClose: () => {}, onUpdate }),
+        ),
+      ),
+    );
+  });
+}
+
+function buttonWithText(text: string): HTMLButtonElement {
+  const match = Array.from(host.querySelectorAll("button")).find((b) => b.textContent?.trim().startsWith(text));
+  if (!match) throw new Error(`no button starting with "${text}"`);
+  return match as HTMLButtonElement;
+}
+
+function openDuePopover() {
+  const chip = host.querySelector('button[aria-haspopup="dialog"]') as HTMLButtonElement;
+  expect(chip).not.toBeNull();
+  act(() => chip.click());
+  expect(host.querySelector('[role="dialog"]')).not.toBeNull();
+}
+
+describe("TaskDrawer — due popover", () => {
+  it("sends a future due_at for a quick pick", () => {
+    const onUpdate = vi.fn();
+    renderExisting(onUpdate);
+    openDuePopover();
+
+    act(() => buttonWithText("Tomorrow").click());
+
+    expect(onUpdate).toHaveBeenCalledTimes(1);
+    const { id, patch } = onUpdate.mock.calls[0][0];
+    expect(id).toBe(TASK.id);
+    expect(patch.clear_due_at).toBeUndefined();
+    expect(new Date(patch.due_at as string).getTime()).toBeGreaterThan(Date.now());
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it("clears the due date via the no-date pick", () => {
+    const onUpdate = vi.fn();
+    renderExisting(onUpdate);
+    openDuePopover();
+
+    act(() => buttonWithText("No date").click());
+
+    expect(onUpdate).toHaveBeenCalledWith({ id: TASK.id, patch: { clear_due_at: true } });
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it("closes the popover on Escape without closing the drawer", () => {
+    const onUpdate = vi.fn();
+    renderExisting(onUpdate);
+    openDuePopover();
+
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+    expect(host.querySelector("textarea")).not.toBeNull();
   });
 });
