@@ -133,7 +133,10 @@ const TASK: Task = {
   attachment_count: 0,
 };
 
-function renderExisting(onUpdate: (vars: { id: string; patch: UpdateTaskPatch }) => void) {
+function renderExisting(
+  onUpdate: (vars: { id: string; patch: UpdateTaskPatch }) => void,
+  onClose: () => void = () => {},
+) {
   const detail: TaskDetail = { task: TASK, checklist: [], links: [], attachments: [] };
   queryClient.setQueryData(["task", TASK.id], detail);
   act(() => {
@@ -144,10 +147,16 @@ function renderExisting(onUpdate: (vars: { id: string; patch: UpdateTaskPatch })
         createElement(
           DialogProvider,
           null,
-          createElement(TaskDrawer, { taskId: TASK.id, onClose: () => {}, onUpdate }),
+          createElement(TaskDrawer, { taskId: TASK.id, onClose, onUpdate }),
         ),
       ),
     );
+  });
+}
+
+function pressEscape() {
+  act(() => {
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
   });
 }
 
@@ -191,16 +200,35 @@ describe("TaskDrawer — due popover", () => {
     expect(host.querySelector('[role="dialog"]')).toBeNull();
   });
 
-  it("closes the popover on Escape without closing the drawer", () => {
-    const onUpdate = vi.fn();
-    renderExisting(onUpdate);
+  it("closes the popover on the first Escape and the drawer only on the second", () => {
+    const onClose = vi.fn();
+    renderExisting(vi.fn(), onClose);
     openDuePopover();
 
-    act(() => {
-      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    });
-
+    pressEscape();
     expect(host.querySelector('[role="dialog"]')).toBeNull();
     expect(host.querySelector("textarea")).not.toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+
+    pressEscape();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores a mousedown inside a portaled listbox", () => {
+    const onClose = vi.fn();
+    renderExisting(vi.fn(), onClose);
+
+    const listbox = document.createElement("div");
+    listbox.setAttribute("role", "listbox");
+    const option = document.createElement("div");
+    listbox.appendChild(option);
+    document.body.appendChild(listbox);
+
+    act(() => {
+      option.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    });
+
+    expect(onClose).not.toHaveBeenCalled();
+    listbox.remove();
   });
 });
