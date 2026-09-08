@@ -7,6 +7,8 @@ import { useTasks } from "../../hooks/useTasks";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { DueChip } from "./DueChip";
 
+const NO_TASKS: Task[] = [];
+
 export interface TaskPickerDialogProps {
   open: boolean;
   onClose: () => void;
@@ -25,7 +27,7 @@ export function TaskPickerDialog({ open, onClose, onPick, excludeTaskIds, tasks 
   const listRef = useRef<HTMLDivElement>(null);
   const panelRef = useFocusTrap<HTMLDivElement>(open, { initialFocus: false });
 
-  const source = tasks ?? query.data ?? [];
+  const source = tasks ?? query.data ?? NO_TASKS;
   const excludedKey = (excludeTaskIds ?? []).join(",");
   const items = useMemo(() => {
     const excluded = new Set(excludedKey ? excludedKey.split(",") : []);
@@ -52,11 +54,12 @@ export function TaskPickerDialog({ open, onClose, onPick, excludeTaskIds, tasks 
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
-    if (!["ArrowDown", "ArrowUp", "Enter", "Escape"].includes(e.key)) return;
-    // The mail list keeps a document-level shortcut handler that also reacts to
-    // arrows and Enter while its search is open — this dialog owns those keys.
-    e.preventDefault();
+    // The mail list keeps a window-level shortcut handler (a/e/Delete, arrows,
+    // Enter): as a modal, this dialog swallows every plain key press.
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     e.stopPropagation();
+    if (!["ArrowDown", "ArrowUp", "Enter", "Escape"].includes(e.key)) return;
+    e.preventDefault();
     if (e.key === "ArrowDown") {
       setActive((i) => (items.length === 0 ? 0 : (i + 1) % items.length));
     } else if (e.key === "ArrowUp") {

@@ -1435,9 +1435,9 @@ export function ThreadView({ mail }: ThreadViewProps) {
             aria-label={t("tasks.title")}
             aria-haspopup="menu"
             aria-expanded={taskMenu !== null}
-            // Keeps the menu's outside-mousedown handler from closing it right
-            // before this click would toggle it back open.
-            onMouseDown={(e) => e.stopPropagation()}
+            // While the menu is open its outside-mousedown handler would close it
+            // right before this click could toggle it back open.
+            onMouseDown={(e) => { if (taskMenu) e.stopPropagation(); }}
             onClick={(e) => {
               const r = e.currentTarget.getBoundingClientRect();
               setTaskMenu((open) => (open ? null : { x: r.left, y: r.bottom + 4 }));

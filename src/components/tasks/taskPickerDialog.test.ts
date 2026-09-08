@@ -158,6 +158,20 @@ describe("TaskPickerDialog", () => {
     expect(onPick).not.toHaveBeenCalled();
   });
 
+  it("keeps plain key presses inside the modal", () => {
+    renderDialog();
+    const seen: string[] = [];
+    const listener = (e: Event) => seen.push((e as KeyboardEvent).key);
+    window.addEventListener("keydown", listener);
+    try {
+      press("a");
+      press("Delete");
+    } finally {
+      window.removeEventListener("keydown", listener);
+    }
+    expect(seen).toEqual([]);
+  });
+
   it("does not pick anything when the list is empty", () => {
     const onPick = vi.fn();
     renderDialog({ onPick, tasks: [] });

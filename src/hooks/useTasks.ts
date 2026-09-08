@@ -215,16 +215,30 @@ export function useTaskAttachments(taskId: string | null) {
 const TASKS_FOR_MAILS_CHUNK = 200;
 const NO_COUNTS: Record<string, number> = {};
 
+// A failing chunk must not blank the counts of the chunks that came back.
+async function fetchMailTaskCounts(ids: string[]): Promise<Record<string, number>> {
+  const results = await Promise.allSettled(chunkIds(ids, TASKS_FOR_MAILS_CHUNK).map((chunk) => tasksForMails(chunk)));
+  const counts: Record<string, number>[] = [];
+  for (const result of results) {
+    if (result.status === "fulfilled") counts.push(result.value);
+    else console.error("tasks_for_mails failed for one batch", result.reason);
+  }
+  return mergeCounts(counts);
+}
+
 /** Link counts for a whole visible mail list — one batched query instead of one per row. */
 export function useTasksForMails(mailIds: string[]): Record<string, number> {
-  const key = Array.from(new Set(mailIds)).sort().join(",");
+  const key = useMemo(() => Array.from(new Set(mailIds)).sort().join(","), [mailIds]);
   // Derived from the joined key, so a re-rendered list with the same mails keeps one stable query.
   const ids = useMemo(() => (key ? key.split(",") : []), [key]);
   const { data } = useQuery({
     queryKey: ["tasks-for-mail", "batch", key],
-    queryFn: async () => mergeCounts(await Promise.all(chunkIds(ids, TASKS_FOR_MAILS_CHUNK).map(tasksForMails))),
+    queryFn: () => fetchMailTaskCounts(ids),
     enabled: ids.length > 0,
     staleTime: 30_000,
+    // A new page appends ids and thus a new key — keep the previous counts on
+    // screen instead of letting every chip disappear during the refetch.
+    placeholderData: (previous) => previous,
   });
   return data ?? NO_COUNTS;
 }
@@ -245,10 +259,7 @@ export function useCreateTaskFromMail() {
       invalidateTaskQueries(queryClient);
       const store = useAppStore.getState();
       store.openTaskById(task.id);
-      store.addToast("success", i18n.t("tasks.createdFromMail"), undefined, undefined, {
-        label: i18n.t("tasks.openCreated"),
-        onClick: () => useAppStore.getState().openTaskById(task.id),
-      });
+      store.addToast("success", i18n.t("tasks.createdFromMail"));
     },
     onError,
   });
