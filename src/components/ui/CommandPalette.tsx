@@ -59,7 +59,7 @@ export function CommandPalette() {
     toggleSidebar,
     setShowTasks,
     setOpenTaskId,
-    triggerQuickAddFocus,
+    requestQuickAddFocus,
   } = useAppStore(
     useShallow((s) => ({
       accounts: s.accounts,
@@ -79,7 +79,7 @@ export function CommandPalette() {
       toggleSidebar: s.toggleSidebar,
       setShowTasks: s.setShowTasks,
       setOpenTaskId: s.setOpenTaskId,
-      triggerQuickAddFocus: s.triggerQuickAddFocus,
+      requestQuickAddFocus: s.requestQuickAddFocus,
     }))
   );
 
@@ -150,7 +150,7 @@ export function CommandPalette() {
       label: t("tasks.quickAdd"),
       icon: <ClipboardList className="w-4 h-4" />,
       section: groupActions,
-      action: () => { setShowTasks(true); triggerQuickAddFocus(); },
+      action: () => { setShowTasks(true); requestQuickAddFocus(); },
     });
 
     items.push({

@@ -2,9 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createElement, act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MotionConfig } from "motion/react";
 import "../../lib/i18n";
 import type { CreateTaskInput } from "../../types";
-import { QuickAdd } from "./QuickAdd";
+import { useAppStore } from "../../stores/appStore";
+import { QuickAdd, type QuickAddProps } from "./QuickAdd";
 
 let root: Root;
 let host: HTMLDivElement;
@@ -15,6 +17,7 @@ beforeEach(() => {
   document.body.appendChild(host);
   root = createRoot(host);
   queryClient = new QueryClient();
+  useAppStore.setState({ quickAddFocusRequested: false });
 });
 
 afterEach(() => {
@@ -23,14 +26,19 @@ afterEach(() => {
   queryClient.clear();
 });
 
-// onCreate overrides useCreateTask, same pattern as TaskDrawer's test-only prop.
-function renderQuickAdd(props: { onCreate?: (input: CreateTaskInput) => void } = {}) {
+// reducedMotion="always" makes every transition instant, so AnimatePresence's exit
+// resolves synchronously inside act() instead of leaving the chip mid-fade forever.
+function renderQuickAdd(props: QuickAddProps = {}) {
   act(() => {
     root.render(
       createElement(
-        QueryClientProvider,
-        { client: queryClient },
-        createElement(QuickAdd, { onCreate: props.onCreate }),
+        MotionConfig,
+        { reducedMotion: "always" },
+        createElement(
+          QueryClientProvider,
+          { client: queryClient },
+          createElement(QuickAdd, props),
+        ),
       ),
     );
   });
@@ -92,15 +100,7 @@ describe("QuickAdd", () => {
 
   it("closes the popover variant on Escape instead of only clearing", () => {
     const onClose = vi.fn();
-    act(() => {
-      root.render(
-        createElement(
-          QueryClientProvider,
-          { client: queryClient },
-          createElement(QuickAdd, { onClose }),
-        ),
-      );
-    });
+    renderQuickAdd({ onClose });
     const input = host.querySelector("input") as HTMLInputElement;
     type(input, "Something");
 
@@ -109,5 +109,20 @@ describe("QuickAdd", () => {
     });
 
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("autofocuses when the store's quickAddFocusRequested flag is set, then consumes it", () => {
+    useAppStore.setState({ quickAddFocusRequested: true });
+    renderQuickAdd();
+    const input = host.querySelector("input") as HTMLInputElement;
+
+    expect(document.activeElement).toBe(input);
+    expect(useAppStore.getState().quickAddFocusRequested).toBe(false);
+  });
+
+  it("does not autofocus on an ordinary mount when the flag is not set", () => {
+    renderQuickAdd();
+    const input = host.querySelector("input") as HTMLInputElement;
+    expect(document.activeElement).not.toBe(input);
   });
 });

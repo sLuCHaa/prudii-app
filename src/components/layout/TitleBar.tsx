@@ -88,7 +88,7 @@ export function TitleBar() {
           ref={tasksButtonRef}
           onClick={(e) => { if (e.shiftKey) openQuickAdd(); else setShowTasks(true); }}
           onContextMenu={(e) => {
-            // Otherwise this bubbles to the drag region's onContextMenu (line ~64) and opens the OS window menu.
+            // Otherwise this bubbles to the title bar's drag-region onContextMenu and opens the OS window menu.
             e.preventDefault();
             e.stopPropagation();
             openQuickAdd();

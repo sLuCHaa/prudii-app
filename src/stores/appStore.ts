@@ -131,10 +131,12 @@ interface AppState {
   setTasksViewMode: (mode: TasksViewMode) => void;
   openTaskId: string | null;
   setOpenTaskId: (id: string | null) => void;
-  // Bumped to ask the mounted QuickAdd row to focus itself (command palette entry point)
-  // without a global DOM event side-channel.
-  quickAddFocusNonce: number;
-  triggerQuickAddFocus: () => void;
+  // Consumable one-shot flag (not a counter) so a QuickAdd row mounted later — the
+  // Tasks view unmounts on close — still autofocuses exactly once per palette request,
+  // and a later ordinary open never re-triggers it.
+  quickAddFocusRequested: boolean;
+  requestQuickAddFocus: () => void;
+  consumeQuickAddFocus: () => void;
 
   showAccountWizard: boolean;
   setShowAccountWizard: (show: boolean) => void;
@@ -402,8 +404,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   openTaskId: null,
   setOpenTaskId: (openTaskId) => set({ openTaskId }),
-  quickAddFocusNonce: 0,
-  triggerQuickAddFocus: () => set((state) => ({ quickAddFocusNonce: state.quickAddFocusNonce + 1 })),
+  quickAddFocusRequested: false,
+  requestQuickAddFocus: () => set({ quickAddFocusRequested: true }),
+  consumeQuickAddFocus: () => set({ quickAddFocusRequested: false }),
 
   showAccountWizard: false,
   setShowAccountWizard: (showAccountWizard) => set({ showAccountWizard }),

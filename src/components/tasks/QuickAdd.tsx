@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotionConfig } from "motion/react";
 import { CalendarClock, Plus } from "lucide-react";
 import type { CreateTaskInput } from "../../types";
 import { useCreateTask } from "../../hooks/useTasks";
@@ -13,32 +13,40 @@ import { SPRING_SNAPPY } from "../motion/tokens";
 export interface QuickAddProps {
   className?: string;
   autoFocus?: boolean;
-  /** Bumped by callers (command palette) to (re)focus this row without a global side-channel. */
-  focusNonce?: number;
   /** Present only for the popover variant: Escape (and outside click, handled by the caller) closes it instead of just clearing. */
   onClose?: () => void;
   /** Test-only override — production callers rely on useCreateTask (see TaskDrawer for the same pattern). */
   onCreate?: (input: CreateTaskInput) => void;
 }
 
-export function QuickAdd({ className = "", autoFocus, focusNonce, onClose, onCreate }: QuickAddProps) {
+export function QuickAdd({ className = "", autoFocus, onClose, onCreate }: QuickAddProps) {
   const { t, i18n } = useTranslation();
   const [value, setValue] = useState("");
   const [invalid, setInvalid] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const reduce = useReducedMotion();
+  // Config-aware: unlike the plain useReducedMotion() hook this also honors a
+  // <MotionConfig reducedMotion="always"> ancestor, which is how the test makes
+  // the exit animation resolve synchronously instead of only skipping it in prod.
+  const reduce = useReducedMotionConfig();
 
   const addToast = useAppStore((s) => s.addToast);
   const setShowTasks = useAppStore((s) => s.setShowTasks);
   const setOpenTaskId = useAppStore((s) => s.setOpenTaskId);
+  const quickAddFocusRequested = useAppStore((s) => s.quickAddFocusRequested);
+  const consumeQuickAddFocus = useAppStore((s) => s.consumeQuickAddFocus);
   const createTaskMutation = useCreateTask();
 
   const parsed = useMemo(() => parseQuickAdd(value, new Date(), i18n.language), [value, i18n.language]);
   const previewTask = parsed.dueAt ? { due_at: parsed.dueAt, status: "open" as const } : null;
 
+  // One-shot: focus once per palette request, then consume it immediately so a later
+  // ordinary open of this same (possibly remounted) row doesn't refocus it again.
   useEffect(() => {
-    if (focusNonce) inputRef.current?.focus();
-  }, [focusNonce]);
+    if (quickAddFocusRequested) {
+      inputRef.current?.focus();
+      consumeQuickAddFocus();
+    }
+  }, [quickAddFocusRequested, consumeQuickAddFocus]);
 
   function reset() {
     setValue("");
@@ -99,19 +107,21 @@ export function QuickAdd({ className = "", autoFocus, focusNonce, onClose, onCre
         aria-label={t("tasks.quickAdd")}
         className="flex-1 min-w-0 bg-transparent text-sm text-text placeholder:text-text-tertiary focus:outline-none"
       />
-      {previewTask && (
-        // No exit animation (unmounts instantly on clear): AnimatePresence's exit would
-        // otherwise keep the chip mounted mid-fade even after the due date is gone.
-        <motion.span
-          initial={reduce ? false : { opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={SPRING_SNAPPY}
-          className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent/10 shrink-0"
-        >
-          <CalendarClock className="w-3 h-3 text-accent" />
-          <DueChip task={previewTask} />
-        </motion.span>
-      )}
+      <AnimatePresence>
+        {previewTask && (
+          <motion.span
+            key="due-preview"
+            initial={reduce ? false : { opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={reduce ? undefined : { opacity: 0, scale: 0.9 }}
+            transition={SPRING_SNAPPY}
+            className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent/10 shrink-0"
+          >
+            <CalendarClock className="w-3 h-3 text-accent" />
+            <DueChip task={previewTask} />
+          </motion.span>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
