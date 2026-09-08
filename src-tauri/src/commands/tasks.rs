@@ -267,6 +267,10 @@ fn get_task_impl(db: &Database, id: &str) -> Result<TaskDetail, String> {
 }
 
 fn create_task_impl(db: &Database, input: CreateTaskInput) -> Result<Task, String> {
+    let title = input.title.trim().to_string();
+    if title.is_empty() {
+        return Err("Title required".into());
+    }
     let status = input.status.unwrap_or_else(|| "open".into());
     let priority = input.priority.unwrap_or_else(|| "normal".into());
     if !is_valid_status(&status) {
@@ -290,7 +294,7 @@ fn create_task_impl(db: &Database, input: CreateTaskInput) -> Result<Task, Strin
         "INSERT INTO tasks (id, title, description_html, status, priority, due_at, sort_order, created_at, updated_at, completed_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?8,?9)",
         params![
             id,
-            input.title.trim(),
+            title,
             input.description_html.unwrap_or_default(),
             status,
             priority,
@@ -318,8 +322,12 @@ fn update_task_impl(db: &Database, id: &str, patch: UpdateTaskPatch) -> Result<T
     }
 
     let now = chrono::Utc::now().to_rfc3339();
-    let conn = db.lock_db();
     let title = patch.title.as_ref().map(|t| t.trim().to_string());
+    if title.as_deref() == Some("") {
+        return Err("Title required".into());
+    }
+
+    let conn = db.lock_db();
     let affected = conn
         .execute(
             "UPDATE tasks SET
@@ -328,6 +336,8 @@ fn update_task_impl(db: &Database, id: &str, patch: UpdateTaskPatch) -> Result<T
                 status = COALESCE(?3, status),
                 priority = COALESCE(?4, priority),
                 due_at = CASE WHEN ?5 = 1 THEN NULL WHEN ?6 IS NOT NULL THEN ?6 ELSE due_at END,
+                -- A moved or cleared due date must be able to remind again.
+                reminder_sent = CASE WHEN ?5 = 1 OR ?6 IS NOT NULL THEN 0 ELSE reminder_sent END,
                 completed_at = CASE WHEN ?3 IS NULL THEN completed_at WHEN ?3 = 'done' THEN COALESCE(completed_at, ?7) ELSE NULL END,
                 updated_at = ?7
             WHERE id = ?8",
@@ -362,7 +372,9 @@ fn delete_task_impl(db: &Database, id: &str) -> Result<(), String> {
 
     let dir = db.data_dir.join("task_files").join(id);
     if dir.exists() {
-        let _ = std::fs::remove_dir_all(&dir);
+        if let Err(e) = std::fs::remove_dir_all(&dir) {
+            log::warn!("Failed to remove task file directory for {}: {}", id, e);
+        }
     }
     Ok(())
 }
@@ -479,9 +491,12 @@ fn reorder_checklist_impl(db: &Database, task_id: &str, ids: Vec<String>) -> Res
     tx.commit().map_err(|e| e.to_string())
 }
 
-fn create_task_from_mail_impl(db: &Database, mail_id: &str, account_id: &str) -> Result<Task, String> {
+fn create_task_from_mail_impl(db: &Database, mail_id: &str) -> Result<Task, String> {
     let now = chrono::Utc::now().to_rfc3339();
     let conn = db.lock_db();
+    let account_id: String = conn
+        .query_row("SELECT account_id FROM mails WHERE id = ?1", params![mail_id], |r| r.get(0))
+        .map_err(|e| format!("Mail not found: {}", e))?;
     let snap = mail_snapshot(&conn, mail_id)?;
     let title = if snap.subject.trim().is_empty() { "(no subject)".to_string() } else { snap.subject.clone() };
     let description_html = format!("<p>{}</p>", escape_html(&snap.snippet));
@@ -503,7 +518,7 @@ fn create_task_from_mail_impl(db: &Database, mail_id: &str, account_id: &str) ->
     )
     .map_err(|e| e.to_string())?;
 
-    insert_mail_link(&tx, &id, mail_id, account_id, &snap, &now)?;
+    insert_mail_link(&tx, &id, mail_id, &account_id, &snap, &now)?;
     tx.commit().map_err(|e| e.to_string())?;
 
     fetch_task(&conn, &id)
@@ -563,7 +578,21 @@ fn tasks_for_mails_impl(db: &Database, mail_ids: Vec<String>) -> Result<HashMap<
 }
 
 fn remove_task_attachment_impl(db: &Database, id: &str) -> Result<(), String> {
-    let path = resolve_task_file_path(db, id)?;
+    let stored: String = {
+        let conn = db.lock_db();
+        conn.query_row("SELECT local_path FROM task_attachments WHERE id = ?1", params![id], |row| row.get(0))
+            .map_err(|e| format!("Attachment not found: {}", e))?
+    };
+
+    // A file deleted outside the app cannot be canonicalized, so fall back to the
+    // stored path for the containment check - the row must stay removable either way.
+    let raw = PathBuf::from(&stored);
+    let path = raw.canonicalize().unwrap_or(raw);
+    let data_dir = db.data_dir.canonicalize().unwrap_or_else(|_| db.data_dir.clone());
+    if !path.starts_with(&data_dir) && !path.starts_with(&db.data_dir) {
+        return Err("Attachment path is outside app data directory".into());
+    }
+
     let affected = {
         let conn = db.lock_db();
         conn.execute("DELETE FROM task_attachments WHERE id = ?1", params![id]).map_err(|e| e.to_string())?
@@ -577,24 +606,24 @@ fn remove_task_attachment_impl(db: &Database, id: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Result of copying picked files into a task's folder: files that made it in,
-/// plus the filenames of any that didn't (copy or DB-insert failure). Kept
-/// separate from a plain `Result` so the caller can emit `tasks-changed` for
-/// the partial success case and still surface which files need retrying.
+/// Files that made it into the task folder plus the names of those that didn't,
+/// so a partial success can still emit `tasks-changed` and name what to retry.
 #[derive(Debug)]
 struct CopyOutcome {
     added: Vec<TaskAttachment>,
     failed: Vec<String>,
 }
 
-/// Copies picked files into `data_dir/task_files/{task_id}/`, recording one
-/// `task_attachments` row per successful copy. A per-file failure is recorded
-/// in `failed` and does not stop the remaining files from being processed;
-/// only an unknown task id (checked up front, before any directory is
-/// created) fails the whole call.
+/// Copies picked files into `data_dir/task_files/{task_id}/`, one
+/// `task_attachments` row per successful copy. Only an unknown task id (checked
+/// before any directory is created) fails the whole call.
 fn copy_files_into_task(db: &Database, task_id: &str, paths: Vec<PathBuf>) -> Result<CopyOutcome, String> {
-    let conn = db.lock_db();
-    fetch_task(&conn, task_id).map_err(|_| "Task not found".to_string())?;
+    {
+        // The copies below can run for minutes; holding the guard across them
+        // would stall every other DB caller (sync, list, count).
+        let conn = db.lock_db();
+        fetch_task(&conn, task_id).map_err(|_| "Task not found".to_string())?;
+    }
 
     let dest_dir = db.data_dir.join("task_files").join(task_id);
     std::fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
@@ -618,10 +647,14 @@ fn copy_files_into_task(db: &Database, task_id: &str, paths: Vec<PathBuf>) -> Re
         let id = uuid::Uuid::new_v4().to_string();
         let now = chrono::Utc::now().to_rfc3339();
 
-        if let Err(e) = conn.execute(
-            "INSERT INTO task_attachments (id, task_id, filename, mime_type, size_bytes, local_path, created_at) VALUES (?1,?2,?3,?4,?5,?6,?7)",
-            params![id, task_id, dest_filename, mime, size_bytes, local_path, now],
-        ) {
+        let inserted = {
+            let conn = db.lock_db();
+            conn.execute(
+                "INSERT INTO task_attachments (id, task_id, filename, mime_type, size_bytes, local_path, created_at) VALUES (?1,?2,?3,?4,?5,?6,?7)",
+                params![id, task_id, dest_filename, mime, size_bytes, local_path, now],
+            )
+        };
+        if let Err(e) = inserted {
             log::warn!("Failed to record attachment \"{}\" for task {}: {}", dest_filename, task_id, e);
             let _ = std::fs::remove_file(&dest); // don't leave a file on disk with no DB record
             failed.push(dest_filename);
@@ -758,9 +791,9 @@ pub fn reorder_checklist(app: AppHandle, db: State<'_, Database>, task_id: Strin
 }
 
 #[tauri::command(async)]
-pub fn create_task_from_mail(app: AppHandle, db: State<'_, Database>, mail_id: String, account_id: String) -> Result<Task, String> {
+pub fn create_task_from_mail(app: AppHandle, db: State<'_, Database>, mail_id: String) -> Result<Task, String> {
     super::catch_panic(|| {
-        let task = create_task_from_mail_impl(&db, &mail_id, &account_id)?;
+        let task = create_task_from_mail_impl(&db, &mail_id)?;
         let _ = app.emit("tasks-changed", ());
         Ok(task)
     })
@@ -921,6 +954,46 @@ mod tests {
     }
 
     #[test]
+    fn create_and_update_reject_an_empty_title() {
+        let db = temp_db();
+        assert!(create_task_impl(&db, CreateTaskInput { title: "   ".into(), description_html: None, status: None, priority: None, due_at: None }).is_err());
+
+        let a = create_task_impl(&db, CreateTaskInput { title: "  a  ".into(), description_html: None, status: None, priority: None, due_at: None }).unwrap();
+        assert_eq!(a.title, "a");
+        assert!(update_task_impl(&db, &a.id, UpdateTaskPatch { title: Some("  ".into()), description_html: None, status: None, priority: None, due_at: None, clear_due_at: None }).is_err());
+        assert_eq!(get_task_impl(&db, &a.id).unwrap().task.title, "a");
+    }
+
+    #[test]
+    fn update_rearms_the_reminder_when_the_due_date_moves() {
+        let db = temp_db();
+        let a = create_task_impl(&db, CreateTaskInput { title: "a".into(), description_html: None, status: None, priority: None, due_at: Some("2026-09-08T08:00:00Z".into()) }).unwrap();
+        {
+            let conn = db.lock_db();
+            conn.execute("UPDATE tasks SET reminder_sent = 1 WHERE id = ?1", params![a.id]).unwrap();
+        }
+        assert!(fetch_task(&db.lock_db(), &a.id).unwrap().reminder_sent);
+
+        let moved = update_task_impl(&db, &a.id, UpdateTaskPatch { title: None, description_html: None, status: None, priority: None, due_at: Some("2026-09-09T08:00:00Z".into()), clear_due_at: None }).unwrap();
+        assert!(!moved.reminder_sent);
+
+        {
+            let conn = db.lock_db();
+            conn.execute("UPDATE tasks SET reminder_sent = 1 WHERE id = ?1", params![a.id]).unwrap();
+        }
+        let cleared = update_task_impl(&db, &a.id, UpdateTaskPatch { title: None, description_html: None, status: None, priority: None, due_at: None, clear_due_at: Some(true) }).unwrap();
+        assert!(!cleared.reminder_sent);
+        assert!(cleared.due_at.is_none());
+
+        {
+            let conn = db.lock_db();
+            conn.execute("UPDATE tasks SET reminder_sent = 1 WHERE id = ?1", params![a.id]).unwrap();
+        }
+        let renamed = update_task_impl(&db, &a.id, UpdateTaskPatch { title: Some("b".into()), description_html: None, status: None, priority: None, due_at: None, clear_due_at: None }).unwrap();
+        assert!(renamed.reminder_sent);
+    }
+
+    #[test]
     fn delete_removes_the_task_file_directory() {
         let db = temp_db();
         let a = create_task_impl(&db, CreateTaskInput { title: "a".into(), description_html: None, status: None, priority: None, due_at: None }).unwrap();
@@ -979,7 +1052,7 @@ mod tests {
         let db = temp_db();
         insert_mail_row(&db, "mail1", "Hello World", "A short preview");
 
-        let task = create_task_from_mail_impl(&db, "mail1", "acc1").unwrap();
+        let task = create_task_from_mail_impl(&db, "mail1").unwrap();
         assert_eq!(task.title, "Hello World");
         assert_eq!(task.link_count, 1);
         assert_eq!(task.description_html, "<p>A short preview</p>");
@@ -1001,7 +1074,7 @@ mod tests {
     fn create_task_from_mail_defaults_title_and_escapes_snippet() {
         let db = temp_db();
         insert_mail_row(&db, "mail2", "", "<b>Bold</b> & more");
-        let task = create_task_from_mail_impl(&db, "mail2", "acc1").unwrap();
+        let task = create_task_from_mail_impl(&db, "mail2").unwrap();
         assert_eq!(task.title, "(no subject)");
         assert_eq!(task.description_html, "<p>&lt;b&gt;Bold&lt;/b&gt; &amp; more</p>");
     }
@@ -1126,5 +1199,45 @@ mod tests {
         assert!(!file_path.exists());
         assert!(resolve_task_file_path(&db, &att_id).is_err());
         assert!(remove_task_attachment_impl(&db, &att_id).is_err());
+    }
+
+    #[test]
+    fn remove_task_attachment_deletes_the_row_when_the_file_is_gone() {
+        let db = temp_db();
+        let task = create_task_impl(&db, CreateTaskInput { title: "t".into(), description_html: None, status: None, priority: None, due_at: None }).unwrap();
+        let dir = db.data_dir.join("task_files").join(&task.id);
+        std::fs::create_dir_all(&dir).unwrap();
+        let missing = dir.join("vanished.txt");
+        let att_id = uuid::Uuid::new_v4().to_string();
+        {
+            let conn = db.lock_db();
+            conn.execute(
+                "INSERT INTO task_attachments (id, task_id, filename, mime_type, size_bytes, local_path) VALUES (?1,?2,'vanished.txt','text/plain',2,?3)",
+                params![att_id, task.id, missing.to_string_lossy().to_string()],
+            )
+            .unwrap();
+        }
+
+        remove_task_attachment_impl(&db, &att_id).unwrap();
+        assert!(get_task_impl(&db, &task.id).unwrap().attachments.is_empty());
+    }
+
+    #[test]
+    fn remove_task_attachment_rejects_a_path_outside_the_data_dir() {
+        let db = temp_db();
+        let task = create_task_impl(&db, CreateTaskInput { title: "t".into(), description_html: None, status: None, priority: None, due_at: None }).unwrap();
+        let outside = std::env::temp_dir().join(format!("prudii-outside-{}.txt", uuid::Uuid::new_v4()));
+        let att_id = uuid::Uuid::new_v4().to_string();
+        {
+            let conn = db.lock_db();
+            conn.execute(
+                "INSERT INTO task_attachments (id, task_id, filename, mime_type, size_bytes, local_path) VALUES (?1,?2,'outside.txt','text/plain',2,?3)",
+                params![att_id, task.id, outside.to_string_lossy().to_string()],
+            )
+            .unwrap();
+        }
+
+        assert!(remove_task_attachment_impl(&db, &att_id).is_err());
+        assert_eq!(get_task_impl(&db, &task.id).unwrap().attachments.len(), 1);
     }
 }

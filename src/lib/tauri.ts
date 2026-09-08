@@ -647,8 +647,8 @@ export async function reorderChecklist(taskId: string, ids: string[]): Promise<v
   return invoke("reorder_checklist", { taskId, ids });
 }
 
-export async function createTaskFromMail(mailId: string, accountId: string): Promise<Task> {
-  return invoke("create_task_from_mail", { mailId, accountId });
+export async function createTaskFromMail(mailId: string): Promise<Task> {
+  return invoke("create_task_from_mail", { mailId });
 }
 
 export async function linkTaskMail(taskId: string, mailId: string): Promise<void> {

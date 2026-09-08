@@ -696,24 +696,9 @@ fn resolve_attachment_path(db: &Database, attachment_id: &str) -> Result<std::pa
 /// Hands a resolved path to the OS's default handler. Shared by mail and
 /// task attachments so both stay behind the same path-traversal check.
 pub(crate) fn open_path_with_os(path: &std::path::Path) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    std::process::Command::new("cmd")
-        .args(["/C", "start", "", &path.to_string_lossy()])
-        .spawn()
-        .map_err(|e| format!("Failed to open file: {}", e))?;
-
-    #[cfg(target_os = "macos")]
-    std::process::Command::new("open")
-        .arg(path)
-        .spawn()
-        .map_err(|e| format!("Failed to open file: {}", e))?;
-
-    #[cfg(target_os = "linux")]
-    std::process::Command::new("xdg-open")
-        .arg(path)
-        .spawn()
-        .map_err(|e| format!("Failed to open file: {}", e))?;
-    Ok(())
+    // Via the opener plugin (like reveal): a shell line would let `&`/`^` in a
+    // filename be read as command syntax on Windows.
+    tauri_plugin_opener::open_path(path, None::<&str>).map_err(|e| format!("Failed to open file: {}", e))
 }
 
 #[tauri::command(async)]
