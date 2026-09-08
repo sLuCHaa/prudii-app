@@ -1069,8 +1069,6 @@
     "linkedCount_other": "{{count}} 个关联任务",
     "openTask": "打开任务",
     "dropToCreate": "松开以创建任务",
-    "dropToLink": "松开以添加到此任务",
-    "reminderTitle": "任务到期",
     "title": "任务",
     "openCount_one": "{{count}} 项未完成",
     "openCount_other": "{{count}} 项未完成",

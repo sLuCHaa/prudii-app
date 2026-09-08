@@ -1070,8 +1070,6 @@
     "linkedCount_other": "{{count}} tâches liées",
     "openTask": "Ouvrir la tâche",
     "dropToCreate": "Déposez pour créer une tâche",
-    "dropToLink": "Déposez pour ajouter à cette tâche",
-    "reminderTitle": "Tâche à échéance",
     "title": "Tâches",
     "openCount_one": "{{count}} en cours",
     "openCount_other": "{{count}} en cours",

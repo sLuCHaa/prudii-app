@@ -1076,8 +1076,6 @@
     "linkedCount_other": "{{count}} связанных задач",
     "openTask": "Открыть задачу",
     "dropToCreate": "Отпустите, чтобы создать задачу",
-    "dropToLink": "Отпустите, чтобы добавить в эту задачу",
-    "reminderTitle": "Срок задачи",
     "title": "Задачи",
     "openCount_one": "{{count}} открыта",
     "openCount_other": "{{count}} открыто",

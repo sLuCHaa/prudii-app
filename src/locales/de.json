@@ -1070,8 +1070,6 @@
     "linkedCount_other": "{{count}} verknüpfte Aufgaben",
     "openTask": "Aufgabe öffnen",
     "dropToCreate": "Loslassen, um eine Aufgabe zu erstellen",
-    "dropToLink": "Loslassen, um zu dieser Aufgabe hinzuzufügen",
-    "reminderTitle": "Aufgabe fällig",
     "title": "Aufgaben",
     "openCount_one": "{{count}} offen",
     "openCount_other": "{{count}} offen",

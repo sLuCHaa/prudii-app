@@ -1070,8 +1070,6 @@
     "linkedCount_other": "{{count}} tareas vinculadas",
     "openTask": "Abrir tarea",
     "dropToCreate": "Suelta para crear una tarea",
-    "dropToLink": "Suelta para añadir a esta tarea",
-    "reminderTitle": "Vencimiento de tarea",
     "title": "Tareas",
     "openCount_one": "{{count}} pendiente",
     "openCount_other": "{{count}} pendientes",

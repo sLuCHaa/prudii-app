@@ -6,8 +6,7 @@ import { parseISO } from "date-fns";
 import { X, Trash2 } from "lucide-react";
 import type { CreateTaskInput, Task, TaskPriority, TaskStatus, UpdateTaskPatch } from "../../types";
 import { TASK_STATUSES } from "../../types";
-import { useCreateTask, useDeleteTask, useLinkMailToTask, useTask, useTaskAttachments, useUpdateTask } from "../../hooks/useTasks";
-import { isMailDrag, readMailDrag } from "../../lib/mailDrag";
+import { useCreateTask, useDeleteTask, useTask, useTaskAttachments, useUpdateTask } from "../../hooks/useTasks";
 import { useAppStore } from "../../stores/appStore";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
@@ -108,12 +107,10 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
   const createTaskMutation = useCreateTask();
   const updateTaskMutation = useUpdateTask();
   const deleteTaskMutation = useDeleteTask();
-  const linkMailMutation = useLinkMailToTask();
   const attachmentsApi = useTaskAttachments(isNew ? null : taskId);
   const dialog = useDialog();
 
   const [descEscapeBlocked, setDescEscapeBlocked] = useState(false);
-  const [mailDropActive, setMailDropActive] = useState(false);
   // While the confirm dialog is up it owns Tab; two live traps bounce every Tab back.
   const drawerRef = useFocusTrap<HTMLElement>(!dialog.isOpen, { initialFocus: false });
 
@@ -209,32 +206,7 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
     discardAndClose();
   }
 
-  function handleDragOver(e: DragEvent) {
-    // Mail drags must win over the file-drop check below: both can carry a
-    // "Files"-like type in some browsers' drag state.
-    if (isMailDrag(e.dataTransfer)) {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "copy";
-      if (!mailDropActive) setMailDropActive(true);
-      return;
-    }
-    if (e.dataTransfer.types.includes("Files")) e.preventDefault();
-  }
-
-  function handleDragLeave(e: DragEvent) {
-    if (drawerRef.current && e.relatedTarget instanceof Node && drawerRef.current.contains(e.relatedTarget)) return;
-    setMailDropActive(false);
-  }
-
   function handleDrop(e: DragEvent) {
-    if (isMailDrag(e.dataTransfer)) {
-      e.preventDefault();
-      setMailDropActive(false);
-      if (isNew || !task) return;
-      const dragged = readMailDrag(e.dataTransfer);
-      if (dragged) linkMailMutation.mutate({ taskId: task.id, mailId: dragged.mailId });
-      return;
-    }
     if (isNew || !task || !e.dataTransfer.types.includes("Files")) return;
     e.preventDefault();
     Array.from(e.dataTransfer.files).forEach((file) => {
@@ -260,8 +232,7 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
       animate={{ x: 0, opacity: 1 }}
       exit={{ x: 40, opacity: 0 }}
       transition={SPRING_SNAPPY}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
+      onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); }}
       onDrop={handleDrop}
       className="fixed top-8 bottom-0 right-0 w-[440px] max-w-[92vw] bg-surface border-l border-border shadow-2xl z-40 flex flex-col"
     >
@@ -369,7 +340,7 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
             </div>
 
             <ChecklistEditor taskId={task.id} items={detail!.checklist} />
-            <LinkedMails taskId={task.id} links={detail!.links} dropActive={mailDropActive} />
+            <LinkedMails taskId={task.id} links={detail!.links} />
             <TaskFiles attachments={detail!.attachments} api={attachmentsApi} />
           </>
         )}

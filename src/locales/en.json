@@ -1070,8 +1070,6 @@
     "linkedCount_other": "{{count}} linked tasks",
     "openTask": "Open task",
     "dropToCreate": "Drop to create a task",
-    "dropToLink": "Drop to add to this task",
-    "reminderTitle": "Task due",
     "title": "Tasks",
     "openCount_one": "{{count}} open",
     "openCount_other": "{{count}} open",

@@ -1070,8 +1070,6 @@
     "linkedCount_other": "{{count}} tarefas vinculadas",
     "openTask": "Abrir tarefa",
     "dropToCreate": "Solte para criar uma tarefa",
-    "dropToLink": "Solte para adicionar a esta tarefa",
-    "reminderTitle": "Tarefa a vencer",
     "title": "Tarefas",
     "openCount_one": "{{count}} pendente",
     "openCount_other": "{{count}} pendentes",
