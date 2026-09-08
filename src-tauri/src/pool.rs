@@ -256,6 +256,22 @@ impl ImapPool {
         Ok((session, InUseGuard { pool: self, account_id: account_id.to_string() }))
     }
 
+    /// Like `get_session_max_wait`, but additionally returns an `InUseGuard`.
+    /// Use this from any spawned background task — see `get_session_guarded`.
+    pub async fn get_session_max_wait_guarded<'a>(
+        &'a self,
+        account_id: &str,
+        host: &str,
+        port: u16,
+        email: &str,
+        credential: &str,
+        auth_type: &str,
+        max_wait: Duration,
+    ) -> anyhow::Result<(ImapSession, InUseGuard<'a>)> {
+        let (session, _folder) = self.take_session(account_id, host, port, email, credential, auth_type, max_wait).await?;
+        Ok((session, InUseGuard { pool: self, account_id: account_id.to_string() }))
+    }
+
     /// Get a session AND the folder it was in when last returned to the pool.
     /// Use this when you want to skip EXAMINE if the session is already in the right folder.
     pub async fn get_session_with_folder(

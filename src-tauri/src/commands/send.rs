@@ -265,8 +265,8 @@ async fn save_sent_copy(
     let sent_folder_reconcile = sent_folder.clone();
     if !is_gmail_imap {
         if let Some((sent_id, sent_path)) = sent_folder {
-            let sent_save_result = match pool.get_session_max_wait(&account_id, &imap_host, imap_port, &email, &credential, &auth_type, crate::pool::APPEND_WAIT).await {
-                Ok(mut session) => {
+            let sent_save_result = match pool.get_session_max_wait_guarded(&account_id, &imap_host, imap_port, &email, &credential, &auth_type, crate::pool::APPEND_WAIT).await {
+                Ok((mut session, _guard)) => {
                     match imap::append_to_folder(&mut session, &sent_path, &message_bytes, &["\\Seen"]).await {
                         Ok(_) => {
                             pool.return_session(&account_id, session).await;
