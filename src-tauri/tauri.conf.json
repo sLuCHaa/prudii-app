@@ -48,7 +48,8 @@
         "sidebarImage": "nsis/sidebar.bmp",
         "installerIcon": "icons/icon.ico",
         "displayLanguageSelector": false,
-        "installMode": "currentUser"
+        "installMode": "currentUser",
+        "installerHooks": "nsis/hooks.nsh"
       }
     }
   },
