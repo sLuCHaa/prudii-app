@@ -567,6 +567,7 @@
     "passphraseRepeat": "重复密码短语",
     "passphraseTooShort": "至少 8 个字符",
     "passphraseMismatch": "密码短语不一致",
+    "nothingSelected": "请至少选择一个要备份的类别。",
     "restoreTitle": "从备份恢复",
     "selectFile": "选择备份文件",
     "passwordsNeeded": "需要密码",

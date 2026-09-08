@@ -148,6 +148,8 @@ interface AppState {
   openAccountSettings: (accountId: string) => void;
   settingsLastTab: string;
   setSettingsLastTab: (tab: string) => void;
+  settingsTargetTab: string | null;
+  setSettingsTargetTab: (tab: string | null) => void;
 
   searchQuery: string;
   searchOpen: boolean;
@@ -421,6 +423,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   openAccountSettings: (settingsAccountId) => set({ showSettings: true, settingsAccountId }),
   settingsLastTab: "general",
   setSettingsLastTab: (settingsLastTab) => set({ settingsLastTab }),
+  settingsTargetTab: null,
+  setSettingsTargetTab: (settingsTargetTab) => set({ settingsTargetTab }),
 
   searchQuery: "",
   searchOpen: false,

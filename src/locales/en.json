@@ -568,6 +568,7 @@
     "passphraseRepeat": "Repeat passphrase",
     "passphraseTooShort": "At least 8 characters",
     "passphraseMismatch": "Passphrases do not match",
+    "nothingSelected": "Select at least one category to back up.",
     "restoreTitle": "Restore from Backup",
     "selectFile": "Select Backup File",
     "passwordsNeeded": "Passwords needed",

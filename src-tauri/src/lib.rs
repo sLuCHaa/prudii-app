@@ -426,7 +426,9 @@ pub fn run() {
             if args.iter().any(|a| a == "--compose") {
                 let _ = app.emit("compose-open", ());
             }
-            if args.iter().any(|a| a == "--export-backup") {
+            // An export-backup instance is the uninstall window itself — it has no
+            // settings panel to hand the request to.
+            if !is_export_backup_mode() && args.iter().any(|a| a == "--export-backup") {
                 let _ = app.emit("export-backup-open", ());
             }
         }))
@@ -916,7 +918,7 @@ pub fn run() {
             }
 
             // Register global shortcut: Ctrl+Shift+M to show/focus the window
-            {
+            if !export_backup {
                 use tauri_plugin_global_shortcut::{
                     Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState,
                 };
@@ -1112,9 +1114,13 @@ pub fn run() {
                 }
 
                 // Export-backup mode has no tray to fall back to — closing that
-                // window ends the process instead of hiding it.
+                // window ends the process, unless a backup is still being written.
                 if is_export_backup_mode() {
-                    window.app_handle().exit(0);
+                    if crate::commands::backup::backup_in_progress() {
+                        api.prevent_close();
+                    } else {
+                        window.app_handle().exit(0);
+                    }
                     return;
                 }
 

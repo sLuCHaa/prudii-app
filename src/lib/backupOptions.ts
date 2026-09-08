@@ -23,6 +23,21 @@ export function validateBackupOptions(
 }
 
 /**
+ * Mirrors the backend guard in `create_backup`: credentials ride along with the
+ * accounts, they are not a category of their own.
+ */
+export function hasBackupCategory(options: BackupOptions): boolean {
+  return (
+    options.include_settings ||
+    options.include_accounts ||
+    options.include_folders ||
+    options.include_mails ||
+    options.include_attachments ||
+    options.include_tasks === true
+  );
+}
+
+/**
  * Backend progress/error events carry either a bare `backup.*` i18n key or a
  * plain diagnostic string; only the former should ever be translated.
  */

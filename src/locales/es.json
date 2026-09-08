@@ -568,6 +568,7 @@
     "passphraseRepeat": "Repetir frase de contraseña",
     "passphraseTooShort": "Al menos 8 caracteres",
     "passphraseMismatch": "Las frases de contraseña no coinciden",
+    "nothingSelected": "Selecciona al menos una categoría para la copia de seguridad.",
     "restoreTitle": "Restaurar desde copia de seguridad",
     "selectFile": "Seleccionar archivo de copia de seguridad",
     "passwordsNeeded": "Se necesitan contraseñas",

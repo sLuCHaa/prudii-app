@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateBackupOptions, backupErrorText } from "./backupOptions";
+import { validateBackupOptions, backupErrorText, hasBackupCategory } from "./backupOptions";
 import type { BackupOptions } from "../types";
 
 const baseOptions: BackupOptions = {
@@ -35,6 +35,30 @@ describe("validateBackupOptions", () => {
   it("accepts a matching passphrase of sufficient length", () => {
     const options = { ...baseOptions, include_credentials: true };
     expect(validateBackupOptions(options, "longenough", "longenough")).toEqual({ ok: true });
+  });
+});
+
+describe("hasBackupCategory", () => {
+  const nothing: BackupOptions = {
+    include_settings: false,
+    include_accounts: false,
+    include_folders: false,
+    include_mails: false,
+    include_attachments: false,
+    include_tasks: false,
+    include_credentials: false,
+  };
+
+  it("accepts a tasks-only backup", () => {
+    expect(hasBackupCategory({ ...nothing, include_tasks: true })).toBe(true);
+  });
+
+  it("rejects an empty selection", () => {
+    expect(hasBackupCategory(nothing)).toBe(false);
+  });
+
+  it("does not count credentials as a category of their own", () => {
+    expect(hasBackupCategory({ ...nothing, include_credentials: true })).toBe(false);
   });
 });
 

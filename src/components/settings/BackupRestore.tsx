@@ -3,7 +3,7 @@ import { Download, Upload, HardDrive, AlertTriangle, CheckCircle, Loader2 } from
 import { listen } from "@tauri-apps/api/event";
 import { Button } from "../ui/Button";
 import { createBackup, previewRestore, restoreBackup } from "../../lib/tauri";
-import { validateBackupOptions, backupErrorText } from "../../lib/backupOptions";
+import { validateBackupOptions, backupErrorText, hasBackupCategory } from "../../lib/backupOptions";
 import { BackupOptionsForm } from "./BackupOptionsForm";
 import type { BackupOptions, BackupProgress, RestorePreview } from "../../types";
 import { useTranslation } from "react-i18next";
@@ -95,7 +95,7 @@ export function BackupRestore() {
     }
   }
 
-  const anySelected = Object.values(options).some((v) => v === true);
+  const anySelected = hasBackupCategory(options);
 
   return (
     <div>

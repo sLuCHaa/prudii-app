@@ -10,6 +10,12 @@ use tauri::{AppHandle, Emitter, Manager, State};
 static BACKUP_IN_PROGRESS: std::sync::LazyLock<Mutex<bool>> =
     std::sync::LazyLock::new(|| Mutex::new(false));
 
+/// True while a backup or restore is writing — the export-backup window must not
+/// let the OS close button kill the process mid-write.
+pub fn backup_in_progress() -> bool {
+    *BACKUP_IN_PROGRESS.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 fn emit_backup_progress(app: &AppHandle, progress: &BackupProgress) {
     let _ = app.emit("backup-progress", progress);
 }
@@ -83,8 +89,9 @@ pub async fn create_backup(
         && !options.include_folders
         && !options.include_mails
         && !options.include_attachments
+        && !options.include_tasks
     {
-        return Err("Please select at least one category to backup.".into());
+        return Err(NOTHING_SELECTED_KEY.into());
     }
 
     if options.include_credentials {
@@ -995,6 +1002,7 @@ pub(crate) fn extract_task_files<R: Read + Seek>(
 /// user can actually act on. Both paths pass `backup.`-prefixed errors through verbatim.
 const WRONG_PASSPHRASE_KEY: &str = "backup.wrongPassphrase";
 const SHORT_PASSPHRASE_KEY: &str = "backup.passphraseTooShort";
+const NOTHING_SELECTED_KEY: &str = "backup.nothingSelected";
 
 /// One account's stored secret inside the encrypted `credentials.enc` payload.
 #[derive(serde::Serialize, serde::Deserialize)]

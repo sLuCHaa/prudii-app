@@ -568,6 +568,7 @@
     "passphraseRepeat": "Répéter la phrase secrète",
     "passphraseTooShort": "Au moins 8 caractères",
     "passphraseMismatch": "Les phrases secrètes ne correspondent pas",
+    "nothingSelected": "Sélectionne au moins une catégorie à sauvegarder.",
     "restoreTitle": "Restaurer depuis une sauvegarde",
     "selectFile": "Sélectionner le fichier de sauvegarde",
     "passwordsNeeded": "Mots de passe requis",
@@ -585,8 +586,8 @@
     "wrongPassphrase": "Phrase secrète incorrecte ou sauvegarde endommagée",
     "newerVersion": "Cette sauvegarde a été créée par une version plus récente de Prudii",
     "exportTitle": "Créer une sauvegarde avant la désinstallation",
-    "exportIntro": "Enregistrez vos comptes, e-mails et tâches dans un fichier que vous pourrez restaurer sur un autre ordinateur.",
-    "exportDone": "Sauvegarde créée. Vous pouvez fermer cette fenêtre.",
+    "exportIntro": "Enregistre tes comptes, e-mails et tâches dans un fichier que tu pourras restaurer sur un autre ordinateur.",
+    "exportDone": "Sauvegarde créée. Tu peux fermer cette fenêtre.",
     "exportSkip": "Ignorer"
   },
   "welcome": {

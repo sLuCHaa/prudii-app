@@ -568,6 +568,7 @@
     "passphraseRepeat": "Passphrase wiederholen",
     "passphraseTooShort": "Mindestens 8 Zeichen",
     "passphraseMismatch": "Passphrasen stimmen nicht überein",
+    "nothingSelected": "Wähle mindestens eine Kategorie für das Backup aus.",
     "restoreTitle": "Aus Backup wiederherstellen",
     "selectFile": "Backup-Datei auswählen",
     "passwordsNeeded": "Passwörter erforderlich",
@@ -585,8 +586,8 @@
     "wrongPassphrase": "Falsche Passphrase oder beschädigtes Backup",
     "newerVersion": "Dieses Backup wurde mit einer neueren Version von Prudii erstellt",
     "exportTitle": "Vor der Deinstallation ein Backup erstellen",
-    "exportIntro": "Sichern Sie Ihre Konten, E-Mails und Aufgaben in einer Datei, die Sie auf einem anderen Computer wiederherstellen können.",
-    "exportDone": "Backup erstellt. Sie können dieses Fenster schließen.",
+    "exportIntro": "Sichere deine Konten, E-Mails und Aufgaben in einer Datei, die du auf einem anderen Computer wiederherstellen kannst.",
+    "exportDone": "Backup erstellt. Du kannst dieses Fenster schließen.",
     "exportSkip": "Überspringen"
   },
   "welcome": {

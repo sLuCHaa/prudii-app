@@ -559,13 +559,14 @@ export function SettingsPanel() {
   const trapRef = useFocusTrap<HTMLDivElement>(true);
   // useShallow-scoped: an unselected useAppStore() re-renders the whole
   // settings panel on every store write (sync ticks, toasts, selection).
-  const { setShowSettings, setShowAccountWizard, themeMode, setThemeMode, settingsAccountId, appSettings, setAppSettings, hasFeature, systemAccentHex } = useAppStore(
+  const { setShowSettings, setShowAccountWizard, themeMode, setThemeMode, settingsAccountId, settingsTargetTab, appSettings, setAppSettings, hasFeature, systemAccentHex } = useAppStore(
     useShallow((s) => ({
       setShowSettings: s.setShowSettings,
       setShowAccountWizard: s.setShowAccountWizard,
       themeMode: s.themeMode,
       setThemeMode: s.setThemeMode,
       settingsAccountId: s.settingsAccountId,
+      settingsTargetTab: s.settingsTargetTab,
       appSettings: s.appSettings,
       setAppSettings: s.setAppSettings,
       hasFeature: s.hasFeature,
@@ -612,6 +613,17 @@ export function SettingsPanel() {
     }
     useAppStore.setState({ settingsAccountId: null });
   }, [settingsAccountId, accounts]);
+
+  // Entry point for callers that need a specific tab (e.g. --export-backup while
+  // the app is running): works even when the panel is already open.
+  useEffect(() => {
+    if (!settingsTargetTab) return;
+    if (SETTINGS_TABS.some((tab) => tab.id === settingsTargetTab)) {
+      setActiveTab(settingsTargetTab as SettingsTab);
+      setView("main");
+    }
+    useAppStore.setState({ settingsTargetTab: null });
+  }, [settingsTargetTab]);
 
   async function requestClose() {
     const dirty = !settingsSaved || accountDirtyRef.current;

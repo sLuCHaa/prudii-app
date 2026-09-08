@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "../ui/Button";
 import { BackupOptionsForm } from "../settings/BackupOptionsForm";
 import { createBackup, getAppSettings, getSystemAccentColor } from "../../lib/tauri";
-import { validateBackupOptions, backupErrorText } from "../../lib/backupOptions";
+import { validateBackupOptions, backupErrorText, hasBackupCategory } from "../../lib/backupOptions";
 import { isAccentHex, DEFAULT_ACCENT_HEX } from "../../lib/accents";
 import type { BackupOptions, BackupProgress } from "../../types";
 
@@ -64,7 +64,7 @@ export function BackupExportWindow() {
   }, []);
 
   const validation = validateBackupOptions(options, passphrase, passphraseRepeat);
-  const anySelected = Object.values(options).some((v) => v === true);
+  const anySelected = hasBackupCategory(options);
 
   async function handleCreateBackup() {
     setError(null);

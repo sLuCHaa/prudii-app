@@ -299,11 +299,11 @@ function AppInner() {
   }, []);
 
   // --export-backup while the app is already running: no separate window, just
-  // open Settings on the backup tab (settingsLastTab seeds the panel's tab).
+  // open Settings on the backup tab.
   useEffect(() => {
     const unlisten = listen("export-backup-open", () => {
       const s = useAppStore.getState();
-      s.setSettingsLastTab("backup");
+      s.setSettingsTargetTab("backup");
       s.setShowSettings(true);
     });
     return () => { unlisten.then((fn) => fn()); };
