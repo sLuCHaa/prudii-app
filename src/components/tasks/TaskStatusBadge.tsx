@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import type { TaskStatus } from "../../types";
 
-const STATUS_KEY: Record<TaskStatus, string> = {
+export const STATUS_KEY: Record<TaskStatus, string> = {
   open: "tasks.statusOpen",
   in_progress: "tasks.statusInProgress",
   done: "tasks.statusDone",

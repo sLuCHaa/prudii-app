@@ -8,7 +8,7 @@ import { TASK_STATUSES } from "../../types";
 import { groupByStatus } from "../../lib/tasks";
 import { useAppStore } from "../../stores/appStore";
 import { useUpdateTask } from "../../hooks/useTasks";
-import { TaskStatusBadge } from "./TaskStatusBadge";
+import { TaskStatusBadge, STATUS_KEY } from "./TaskStatusBadge";
 import { DueChip } from "./DueChip";
 import { SPRING_SNAPPY, FADE_FAST } from "../motion/tokens";
 
@@ -84,7 +84,7 @@ export function TaskList({ tasks }: TaskListProps) {
       >
         <button
           onClick={(e) => { e.stopPropagation(); toggleDone(task); }}
-          aria-label={t(done ? "tasks.statusOpen" : "tasks.statusDone")}
+          aria-label={t(done ? STATUS_KEY.open : STATUS_KEY.done)}
           className={`shrink-0 w-4.5 h-4.5 rounded-full border-[1.5px] flex items-center justify-center transition-colors ${
             done ? "border-accent bg-accent/10" : "border-text-tertiary/40 hover:border-accent"
           }`}

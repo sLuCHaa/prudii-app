@@ -5,6 +5,7 @@ import { useAppStore } from "../../stores/appStore";
 import { useTask, useTasks } from "../../hooks/useTasks";
 import { isDueToday, isOverdue } from "../../lib/tasks";
 import { TaskList } from "./TaskList";
+import { TaskBoard } from "./TaskBoard";
 import { EmptyState } from "../ui/EmptyState";
 import { LoadingCrossfade } from "../motion/LoadingCrossfade";
 import { Skeleton } from "../ui/Skeleton";
@@ -133,8 +134,7 @@ export function TasksView() {
         ) : tasksViewMode === "list" ? (
           <TaskList tasks={filteredTasks} />
         ) : (
-          // TaskBoard lands in Task 6; the list stands in for board mode until then.
-          <TaskList tasks={filteredTasks} />
+          <TaskBoard tasks={filteredTasks} />
         )}
       </LoadingCrossfade>
 
