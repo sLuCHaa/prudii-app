@@ -1,8 +1,28 @@
 use std::collections::{HashMap, HashSet};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 
 use crate::imap::{self, ImapSession};
+
+/// How long a sync-sized operation waits for the pooled session before it
+/// opens a second connection.
+const SYNC_WAIT: Duration = Duration::from_secs(60);
+
+/// Wait for work that only appends a message (Sent copy, draft). Such a call
+/// must not sit behind a whole sync run — a second connection is cheaper than
+/// keeping the user waiting.
+pub const APPEND_WAIT: Duration = Duration::from_secs(3);
+
+/// How long a waiter may still wait for the busy session, or `None` when the
+/// deadline has passed and it should open its own connection.
+fn remaining_wait(now: Instant, deadline: Instant) -> Option<Duration> {
+    let remaining = deadline.saturating_duration_since(now);
+    if remaining.is_zero() {
+        None
+    } else {
+        Some(remaining)
+    }
+}
 
 /// RAII guard for the pool's `in_use` slot. Released automatically when the
 /// owning future is cancelled (e.g. via `task_registry::abort_account`),
@@ -75,8 +95,9 @@ impl ImapPool {
         email: &str,
         credential: &str,
         auth_type: &str,
+        max_wait: Duration,
     ) -> anyhow::Result<(ImapSession, Option<String>)> {
-        let deadline = Instant::now() + std::time::Duration::from_secs(60);
+        let deadline = Instant::now() + max_wait;
 
         loop {
             // Register BEFORE inspecting state: notify_waiters() stores no
@@ -136,14 +157,13 @@ impl ImapPool {
             };
 
             if is_in_use {
-                let remaining = deadline.saturating_duration_since(Instant::now());
-                if remaining.is_zero() {
+                let Some(remaining) = remaining_wait(Instant::now(), deadline) else {
                     log::warn!(
                         "IMAP pool: timeout waiting for session for {}, creating new connection",
                         account_id
                     );
                     break;
-                }
+                };
 
                 log::debug!(
                     "IMAP pool: session for {} is in use, waiting ({:.0}s remaining)...",
@@ -198,7 +218,24 @@ impl ImapPool {
         credential: &str,
         auth_type: &str,
     ) -> anyhow::Result<ImapSession> {
-        let (session, _folder) = self.take_session(account_id, host, port, email, credential, auth_type).await?;
+        let (session, _folder) = self.take_session(account_id, host, port, email, credential, auth_type, SYNC_WAIT).await?;
+        Ok(session)
+    }
+
+    /// Like `get_session`, but gives up on the busy session after `max_wait`
+    /// and opens a second connection instead. For short, latency-sensitive work
+    /// that must not queue behind a full sync.
+    pub async fn get_session_max_wait(
+        &self,
+        account_id: &str,
+        host: &str,
+        port: u16,
+        email: &str,
+        credential: &str,
+        auth_type: &str,
+        max_wait: Duration,
+    ) -> anyhow::Result<ImapSession> {
+        let (session, _folder) = self.take_session(account_id, host, port, email, credential, auth_type, max_wait).await?;
         Ok(session)
     }
 
@@ -215,7 +252,7 @@ impl ImapPool {
         credential: &str,
         auth_type: &str,
     ) -> anyhow::Result<(ImapSession, InUseGuard<'a>)> {
-        let (session, _folder) = self.take_session(account_id, host, port, email, credential, auth_type).await?;
+        let (session, _folder) = self.take_session(account_id, host, port, email, credential, auth_type, SYNC_WAIT).await?;
         Ok((session, InUseGuard { pool: self, account_id: account_id.to_string() }))
     }
 
@@ -230,7 +267,7 @@ impl ImapPool {
         credential: &str,
         auth_type: &str,
     ) -> anyhow::Result<(ImapSession, Option<String>)> {
-        self.take_session(account_id, host, port, email, credential, auth_type).await
+        self.take_session(account_id, host, port, email, credential, auth_type, SYNC_WAIT).await
     }
 
     /// Like `get_session_with_folder`, but additionally returns an `InUseGuard`.
@@ -244,7 +281,7 @@ impl ImapPool {
         credential: &str,
         auth_type: &str,
     ) -> anyhow::Result<(ImapSession, Option<String>, InUseGuard<'a>)> {
-        let (session, folder) = self.take_session(account_id, host, port, email, credential, auth_type).await?;
+        let (session, folder) = self.take_session(account_id, host, port, email, credential, auth_type, SYNC_WAIT).await?;
         Ok((session, folder, InUseGuard { pool: self, account_id: account_id.to_string() }))
     }
 
@@ -356,5 +393,33 @@ impl ImapPool {
             in_use.clear();
         }
         self.returned.notify_waiters();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn waits_the_time_left_until_the_deadline() {
+        let now = Instant::now();
+        let remaining = remaining_wait(now, now + Duration::from_secs(5));
+        assert_eq!(remaining, Some(Duration::from_secs(5)));
+    }
+
+    #[test]
+    fn gives_up_once_the_deadline_is_reached() {
+        let now = Instant::now();
+        assert_eq!(remaining_wait(now, now), None);
+        assert_eq!(remaining_wait(now, now - Duration::from_secs(1)), None);
+    }
+
+    #[test]
+    fn append_wait_caps_the_wait_far_below_a_sync_wait() {
+        let now = Instant::now();
+        let append = remaining_wait(now, now + APPEND_WAIT).expect("append wait is not elapsed");
+        let sync = remaining_wait(now, now + SYNC_WAIT).expect("sync wait is not elapsed");
+        assert!(append <= APPEND_WAIT);
+        assert!(append < sync);
     }
 }
