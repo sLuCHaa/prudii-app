@@ -10,25 +10,33 @@ fn read_language(db: &Database) -> String {
         .unwrap_or_else(|_| "en".to_string())
 }
 
+// Settings flags are stored as text; a missing row keeps the caller's default.
+fn setting_flag(db: &Database, key: &str, default: bool) -> bool {
+    let conn = db.lock_db();
+    conn.query_row("SELECT value FROM app_settings WHERE key = ?1", [key], |row| row.get::<_, String>(0))
+        .map(|v| v == "true" || v == "1")
+        .unwrap_or(default)
+}
+
 // Same on/off switch `build_new_mail_toast` checks — task reminders must not
 // pop up when the user has notifications disabled either.
 fn notifications_enabled(db: &Database) -> bool {
-    let conn = db.lock_db();
-    conn.query_row("SELECT value FROM app_settings WHERE key = 'notifications_enabled'", [], |row| row.get::<_, String>(0))
-        .map(|v| v == "true" || v == "1")
-        .unwrap_or(true)
+    setting_flag(db, "notifications_enabled", true)
 }
 
 // `due_at` is stored as UTC RFC3339; a reminder should show the time the user
 // set it in, not UTC.
-fn format_due_time(due_at: Option<&str>) -> Option<String> {
+fn format_due_time(due_at: Option<&str>, use_24h: bool) -> Option<String> {
     due_at
         .and_then(|d| chrono::DateTime::parse_from_rfc3339(d).ok())
-        .map(|dt| dt.with_timezone(&chrono::Local).format("%H:%M").to_string())
+        .map(|dt| {
+            let local = dt.with_timezone(&chrono::Local);
+            if use_24h { local.format("%H:%M").to_string() } else { local.format("%-I:%M %p").to_string() }
+        })
 }
 
-fn task_reminder_body(task: &Task) -> String {
-    match format_due_time(task.due_at.as_deref()) {
+fn task_reminder_body(task: &Task, use_24h: bool) -> String {
+    match format_due_time(task.due_at.as_deref(), use_24h) {
         Some(time) => format!("{} · {}", task.title, time),
         None => task.title.clone(),
     }
@@ -140,15 +148,18 @@ pub fn send_new_mail_notification(app: &AppHandle, account_id: &str, new_mails: 
 #[cfg(windows)]
 pub fn send_task_reminder(app: &AppHandle, task: &Task) {
     use tauri::{Emitter, Manager};
-    use tauri_winrt_notification::Toast;
+    use tauri_winrt_notification::{Sound, Toast};
 
     let db = app.state::<Database>();
     if !notifications_enabled(&db) {
         return;
     }
+    let sound = setting_flag(&db, "notification_sound", true);
+    let use_24h = setting_flag(&db, "use_24h_clock", true);
     let labels = crate::menu_labels::for_lang(&read_language(&db));
 
-    let mut toast = Toast::new("com.prudii.mail").title(labels.task_due).text1(&task_reminder_body(task));
+    let mut toast = Toast::new("com.prudii.mail").title(labels.task_due).text1(&task_reminder_body(task, use_24h));
+    toast = if sound { toast.sound(Some(Sound::Default)) } else { toast.sound(None) };
     toast = toast.add_button(labels.task_mark_done, &format!("task-done:{}", task.id));
 
     let app_clone = app.clone();
@@ -197,11 +208,22 @@ pub fn send_task_reminder(app: &AppHandle, task: &Task) {
     if !notifications_enabled(&db) {
         return;
     }
+    let sound = setting_flag(&db, "notification_sound", true);
+    let use_24h = setting_flag(&db, "use_24h_clock", true);
     let labels = crate::menu_labels::for_lang(&read_language(&db));
 
     // No click/button callback on this platform's plugin — same limitation as
     // the new-mail notification above.
-    if let Err(e) = app.notification().builder().title(labels.task_due).body(task_reminder_body(task)).show() {
+    let mut builder = app.notification().builder().title(labels.task_due).body(task_reminder_body(task, use_24h));
+    if sound {
+        // freedesktop sound theme id; macOS understands "default"
+        #[cfg(target_os = "linux")]
+        let name = "message-new-email";
+        #[cfg(not(target_os = "linux"))]
+        let name = "default";
+        builder = builder.sound(name);
+    }
+    if let Err(e) = builder.show() {
         log::warn!("Failed to show task reminder notification: {:?}", e);
     }
 }

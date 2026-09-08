@@ -1043,6 +1043,14 @@ mod tests {
         let due_again = due_reminders_impl(&db, now).unwrap();
         assert_eq!(due_again.len(), 1);
         assert_eq!(due_again[0].id, due.id);
+
+        // The loop's `now` is `Utc::now().to_rfc3339()`: nine fractional digits and
+        // "+00:00", so a task due earlier in the same second must still be selected.
+        let same_second = create_task_impl(&db, CreateTaskInput { title: "same_second".into(), description_html: None, status: None, priority: None, due_at: Some("2026-09-08T09:00:00.900Z".into()) }).unwrap();
+        let chrono_now = "2026-09-08T09:00:00.123456789+00:00";
+        let ids = due_reminders_impl(&db, chrono_now).unwrap().iter().map(|t| t.id.clone()).collect::<Vec<_>>();
+        assert!(ids.contains(&same_second.id));
+        assert!(ids.contains(&due.id));
     }
 
     #[test]
