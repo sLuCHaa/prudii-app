@@ -583,7 +583,11 @@
     "restorePassphrase": "Frase secreta deste backup",
     "restoreWithoutCredentials": "Deixe em branco para restaurar sem credenciais",
     "wrongPassphrase": "Frase secreta incorreta ou backup danificado",
-    "newerVersion": "Este backup foi criado por uma versão mais recente do Prudii"
+    "newerVersion": "Este backup foi criado por uma versão mais recente do Prudii",
+    "exportTitle": "Criar um backup antes de desinstalar",
+    "exportIntro": "Guarde as suas contas, e-mails e tarefas num ficheiro que pode restaurar noutro computador.",
+    "exportDone": "Backup criado. Pode fechar esta janela.",
+    "exportSkip": "Ignorar"
   },
   "welcome": {
     "title": "Bem-vindo ao Prudii Mail",

@@ -583,7 +583,11 @@
     "restorePassphrase": "Frase de contraseña de esta copia de seguridad",
     "restoreWithoutCredentials": "Déjalo vacío para restaurar sin credenciales",
     "wrongPassphrase": "Frase de contraseña incorrecta o copia de seguridad dañada",
-    "newerVersion": "Esta copia de seguridad fue creada con una versión más reciente de Prudii"
+    "newerVersion": "Esta copia de seguridad fue creada con una versión más reciente de Prudii",
+    "exportTitle": "Crea una copia de seguridad antes de desinstalar",
+    "exportIntro": "Guarda tus cuentas, correos y tareas en un archivo que podrás restaurar en otro ordenador.",
+    "exportDone": "Copia de seguridad creada. Puedes cerrar esta ventana.",
+    "exportSkip": "Omitir"
   },
   "welcome": {
     "title": "Bienvenido a Prudii Mail",

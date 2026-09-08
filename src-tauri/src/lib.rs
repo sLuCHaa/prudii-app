@@ -46,6 +46,14 @@ static STARTUP_MAILTO: std::sync::LazyLock<Mutex<Option<String>>> =
 
 static STARTUP_COMPOSE: AtomicBool = AtomicBool::new(false);
 
+/// `--export-backup` (used by the uninstaller): the process runs only a small
+/// standalone backup window — no tray, no sync loops, no hide-to-tray on close.
+static EXPORT_BACKUP_MODE: AtomicBool = AtomicBool::new(false);
+
+fn is_export_backup_mode() -> bool {
+    EXPORT_BACKUP_MODE.load(Ordering::Relaxed)
+}
+
 /// Detect whether Windows is using dark app theme via registry.
 #[cfg(windows)]
 fn is_system_dark_mode() -> bool {
@@ -335,6 +343,10 @@ fn cleanup_dead_uninstall_entries() {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    if std::env::args().any(|a| a == "--export-backup") {
+        EXPORT_BACKUP_MODE.store(true, Ordering::Relaxed);
+    }
+
     // Install rustls CryptoProvider globally (needed by reqwest for OAuth token exchange)
     let _ = rustls::crypto::ring::default_provider().install_default();
 
@@ -413,6 +425,9 @@ pub fn run() {
             }
             if args.iter().any(|a| a == "--compose") {
                 let _ = app.emit("compose-open", ());
+            }
+            if args.iter().any(|a| a == "--export-backup") {
+                let _ = app.emit("export-backup-open", ());
             }
         }))
         .plugin(tauri_plugin_shell::init())
@@ -517,12 +532,27 @@ pub fn run() {
                 cleanup_dead_uninstall_entries();
             });
 
-            let mut win_builder = WebviewWindowBuilder::new(app, "main", Default::default())
-                .title("Prudii Mail")
+            let export_backup = is_export_backup_mode();
+            let mut win_builder = if export_backup {
+                WebviewWindowBuilder::new(
+                    app,
+                    "main",
+                    tauri::WebviewUrl::App("index.html?backup=true".into()),
+                )
+                .title("Prudii Backup")
                 .visible(false)
-                .inner_size(1200.0, 800.0)
-                .min_inner_size(900.0, 600.0)
-                .disable_drag_drop_handler();
+                .inner_size(560.0, 640.0)
+                .min_inner_size(480.0, 560.0)
+                .resizable(false)
+                .disable_drag_drop_handler()
+            } else {
+                WebviewWindowBuilder::new(app, "main", Default::default())
+                    .title("Prudii Mail")
+                    .visible(false)
+                    .inner_size(1200.0, 800.0)
+                    .min_inner_size(900.0, 600.0)
+                    .disable_drag_drop_handler()
+            };
 
             // macOS: native decorations with the title bar overlaying our own —
             // real traffic lights, rounded corners, shadow, fullscreen animation.
@@ -531,7 +561,7 @@ pub fn run() {
             // height = button height + y), not the button's top offset — the
             // buttons render ~6px higher than y, hence 16 for visual center.
             #[cfg(target_os = "macos")]
-            {
+            if !export_backup {
                 win_builder = win_builder
                     .title_bar_style(tauri::TitleBarStyle::Overlay)
                     .hidden_title(true)
@@ -546,11 +576,11 @@ pub fn run() {
             // backdrop is needed, avoiding WebView2's transparent-window
             // rendering cost.
             #[cfg(windows)]
-            {
+            if !export_backup {
                 win_builder = win_builder.decorations(false);
             }
             #[cfg(target_os = "linux")]
-            {
+            if !export_backup {
                 win_builder = win_builder.decorations(false);
             }
 
@@ -598,23 +628,30 @@ pub fn run() {
                 })
                 .collect();
 
-            let target = saved_geom.and_then(|g| window_geometry::validate(g, &monitors, 900.0, 600.0));
+            if !export_backup {
+                let target = saved_geom.and_then(|g| window_geometry::validate(g, &monitors, 900.0, 600.0));
 
-            if let Some(g) = target {
-                let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(g.width, g.height)));
-                let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition::new(g.x, g.y)));
-                if g.maximized {
-                    let _ = window.maximize();
+                if let Some(g) = target {
+                    let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(g.width, g.height)));
+                    let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition::new(g.x, g.y)));
+                    if g.maximized {
+                        let _ = window.maximize();
+                    }
+                } else if let Some(first) = monitors.first() {
+                    let w = 1200.0_f64.min(first.width);
+                    let h = 800.0_f64.min(first.height);
+                    let x = first.x + (first.width - w) / 2.0;
+                    let y = first.y + (first.height - h) / 2.0;
+                    let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(w, h)));
+                    let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition::new(x, y)));
                 }
+                // else: no monitors detected — keep builder default (1200x800), let OS place it.
             } else if let Some(first) = monitors.first() {
-                let w = 1200.0_f64.min(first.width);
-                let h = 800.0_f64.min(first.height);
-                let x = first.x + (first.width - w) / 2.0;
-                let y = first.y + (first.height - h) / 2.0;
-                let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(w, h)));
+                // The export window has no saved geometry — centre its fixed size.
+                let x = first.x + (first.width - 560.0) / 2.0;
+                let y = first.y + (first.height - 640.0) / 2.0;
                 let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition::new(x, y)));
             }
-            // else: no monitors detected — keep builder default (1200x800), let OS place it.
 
             // Set window background color + DWM theme BEFORE showing the window
             let dark = is_system_dark_mode();
@@ -632,53 +669,55 @@ pub fn run() {
             app.manage(database);
             app.manage(ImapPool::new());
 
-            // Scheduled sends fire from Rust so they go out even while the
-            // window is hidden to tray (a JS interval pauses with the window).
-            // First check shortly after launch catches mails that came due
-            // while the app was closed; then every minute.
-            {
-                let handle = app.handle().clone();
-                tauri::async_runtime::spawn(async move {
-                    tokio::time::sleep(std::time::Duration::from_secs(15)).await;
-                    loop {
-                        if let Err(e) = crate::commands::send::run_scheduled_check(&handle).await {
-                            log::warn!("scheduled-send check failed: {}", e);
+            if !export_backup {
+                // Scheduled sends fire from Rust so they go out even while the
+                // window is hidden to tray (a JS interval pauses with the window).
+                // First check shortly after launch catches mails that came due
+                // while the app was closed; then every minute.
+                {
+                    let handle = app.handle().clone();
+                    tauri::async_runtime::spawn(async move {
+                        tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+                        loop {
+                            if let Err(e) = crate::commands::send::run_scheduled_check(&handle).await {
+                                log::warn!("scheduled-send check failed: {}", e);
+                            }
+                            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
                         }
-                        tokio::time::sleep(std::time::Duration::from_secs(60)).await;
-                    }
-                });
-            }
+                    });
+                }
 
-            // Initial contacts fold (first run after the migration walks the
-            // whole mailbox) — delayed and in the background so it never
-            // competes with the launch path. Later runs happen after each sync.
-            {
-                let handle = app.handle().clone();
-                tauri::async_runtime::spawn(async move {
-                    tokio::time::sleep(std::time::Duration::from_secs(20)).await;
-                    let db = handle.state::<Database>();
-                    let conn = db.lock_db();
-                    crate::contacts::update_contacts_incremental(&conn);
-                });
-            }
+                // Initial contacts fold (first run after the migration walks the
+                // whole mailbox) — delayed and in the background so it never
+                // competes with the launch path. Later runs happen after each sync.
+                {
+                    let handle = app.handle().clone();
+                    tauri::async_runtime::spawn(async move {
+                        tokio::time::sleep(std::time::Duration::from_secs(20)).await;
+                        let db = handle.state::<Database>();
+                        let conn = db.lock_db();
+                        crate::contacts::update_contacts_incremental(&conn);
+                    });
+                }
 
-            // Save geometry when the window is closed (e.g. title-bar close / OS quit).
-            {
-                let win = window.clone();
-                let app_handle = app.handle().clone();
-                window.on_window_event(move |event| {
-                    if let tauri::WindowEvent::CloseRequested { .. } = event {
-                        if let Some(g) = capture_geometry(&win) {
-                            // Use try_lock() to avoid blocking the main thread when a sync
-                            // task holds the DB mutex. Geometry save is best-effort — skip
-                            // if lock is contended (mirrors the on_window_event try_lock idiom).
-                            let db = app_handle.state::<Database>();
-                            if let Ok(conn) = db.conn.try_lock() {
-                                window_geometry::save(&conn, &g);
-                            };
+                // Save geometry when the window is closed (e.g. title-bar close / OS quit).
+                {
+                    let win = window.clone();
+                    let app_handle = app.handle().clone();
+                    window.on_window_event(move |event| {
+                        if let tauri::WindowEvent::CloseRequested { .. } = event {
+                            if let Some(g) = capture_geometry(&win) {
+                                // Use try_lock() to avoid blocking the main thread when a sync
+                                // task holds the DB mutex. Geometry save is best-effort — skip
+                                // if lock is contended (mirrors the on_window_event try_lock idiom).
+                                let db = app_handle.state::<Database>();
+                                if let Ok(conn) = db.conn.try_lock() {
+                                    window_geometry::save(&conn, &g);
+                                };
+                            }
                         }
-                    }
-                });
+                    });
+                }
             }
 
             // Initialize credentials with DB path for fallback password storage
@@ -697,83 +736,85 @@ pub fn run() {
             };
             let labels = crate::menu_labels::for_lang(&lang);
 
-            // Taskbar jump list "New message" task — convenience only, never
-            // a start-up blocker; failures are logged inside install().
-            #[cfg(windows)]
-            win_jumplist::install(labels.new_message);
+            if !export_backup {
+                // Taskbar jump list "New message" task — convenience only, never
+                // a start-up blocker; failures are logged inside install().
+                #[cfg(windows)]
+                win_jumplist::install(labels.new_message);
 
-            let new_message_item =
-                MenuItemBuilder::with_id("new_message", labels.new_message).build(app)?;
-            let sync_item = MenuItemBuilder::with_id("sync_all", labels.sync_all).build(app)?;
-            let show_item = MenuItemBuilder::with_id("show", labels.show).build(app)?;
-            let quit_item = MenuItemBuilder::with_id("quit", labels.quit).build(app)?;
-            let tray_menu = MenuBuilder::new(app)
-                .item(&new_message_item)
-                .item(&sync_item)
-                .separator()
-                .item(&show_item)
-                .separator()
-                .item(&quit_item)
-                .build()?;
+                let new_message_item =
+                    MenuItemBuilder::with_id("new_message", labels.new_message).build(app)?;
+                let sync_item = MenuItemBuilder::with_id("sync_all", labels.sync_all).build(app)?;
+                let show_item = MenuItemBuilder::with_id("show", labels.show).build(app)?;
+                let quit_item = MenuItemBuilder::with_id("quit", labels.quit).build(app)?;
+                let tray_menu = MenuBuilder::new(app)
+                    .item(&new_message_item)
+                    .item(&sync_item)
+                    .separator()
+                    .item(&show_item)
+                    .separator()
+                    .item(&quit_item)
+                    .build()?;
 
-            let tray_icon = Image::from_path("icons/32x32.png")
-                .unwrap_or_else(|_| Image::from_bytes(include_bytes!("../icons/32x32.png")).unwrap());
+                let tray_icon = Image::from_path("icons/32x32.png")
+                    .unwrap_or_else(|_| Image::from_bytes(include_bytes!("../icons/32x32.png")).unwrap());
 
-            let _tray = TrayIconBuilder::with_id("main")
-                .icon(tray_icon)
-                .menu(&tray_menu)
-                .tooltip("Prudii Mail")
-                .on_menu_event(|app, event| match event.id().as_ref() {
-                    "new_message" | "sync_all" => {
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.unminimize();
-                            let _ = window.set_focus();
-                        }
-                        let id = if event.id().0 == "new_message" {
-                            "menu:new_message"
-                        } else {
-                            "menu:sync_all"
-                        };
-                        let _ = app.emit("menu", id);
-                    }
-                    "show" => {
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
-                    }
-                    "quit" => {
-                        if let Some(window) = app.get_webview_window("main") {
-                            if let Some(g) = capture_geometry(&window) {
-                                // Use try_lock() to avoid blocking when a sync task holds
-                                // the DB mutex. Geometry save is best-effort — skip if contended.
-                                let db = app.state::<Database>();
-                                if let Ok(conn) = db.conn.try_lock() {
-                                    window_geometry::save(&conn, &g);
-                                };
+                let _tray = TrayIconBuilder::with_id("main")
+                    .icon(tray_icon)
+                    .menu(&tray_menu)
+                    .tooltip("Prudii Mail")
+                    .on_menu_event(|app, event| match event.id().as_ref() {
+                        "new_message" | "sync_all" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.unminimize();
+                                let _ = window.set_focus();
                             }
-                            let _ = window.close();
+                            let id = if event.id().0 == "new_message" {
+                                "menu:new_message"
+                            } else {
+                                "menu:sync_all"
+                            };
+                            let _ = app.emit("menu", id);
                         }
-                        app.exit(0);
-                    }
-                    _ => {}
-                })
-                .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click {
-                        button: MouseButton::Left,
-                        button_state: MouseButtonState::Up,
-                        ..
-                    } = event
-                    {
-                        let app = tray.app_handle();
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
+                        "show" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
                         }
-                    }
-                })
-                .build(app)?;
+                        "quit" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                if let Some(g) = capture_geometry(&window) {
+                                    // Use try_lock() to avoid blocking when a sync task holds
+                                    // the DB mutex. Geometry save is best-effort — skip if contended.
+                                    let db = app.state::<Database>();
+                                    if let Ok(conn) = db.conn.try_lock() {
+                                        window_geometry::save(&conn, &g);
+                                    };
+                                }
+                                let _ = window.close();
+                            }
+                            app.exit(0);
+                        }
+                        _ => {}
+                    })
+                    .on_tray_icon_event(|tray, event| {
+                        if let TrayIconEvent::Click {
+                            button: MouseButton::Left,
+                            button_state: MouseButtonState::Up,
+                            ..
+                        } = event
+                        {
+                            let app = tray.app_handle();
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                    })
+                    .build(app)?;
+            }
 
             // Build the native macOS menu bar (app menu, File/Edit/Mailbox/Message/Window).
             // Labels are localized using the same DB language value read above for the tray menu.
@@ -1067,6 +1108,13 @@ pub fn run() {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 // Only hide-to-tray for the main window — compose windows must close normally
                 if window.label() != "main" {
+                    return;
+                }
+
+                // Export-backup mode has no tray to fall back to — closing that
+                // window ends the process instead of hiding it.
+                if is_export_backup_mode() {
+                    window.app_handle().exit(0);
                     return;
                 }
 

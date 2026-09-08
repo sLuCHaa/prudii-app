@@ -21,6 +21,9 @@ import { ShortcutHelp } from "./components/ui/ShortcutHelp";
 const ComposeWindow = lazy(() =>
   import("./components/compose/ComposeWindow").then((m) => ({ default: m.ComposeWindow }))
 );
+const BackupExportWindow = lazy(() =>
+  import("./components/backup/BackupExportWindow").then((m) => ({ default: m.BackupExportWindow }))
+);
 import { useAppStore } from "./stores/appStore";
 import { invalidateTaskQueries } from "./hooks/useTasks";
 import { useSyncAll, useSyncAutomatic } from "./hooks/useSync";
@@ -31,6 +34,7 @@ import { backfillBodies, bootstrapState, getAppSettings, checkLicenseStartup, ge
 import { isAccentHex, effectiveAccentHex } from "./lib/accents";
 import { checkForUpdate } from "./lib/updater";
 import { installGlobalTooltips } from "./lib/globalTooltips";
+import { resolveAppMode } from "./lib/appMode";
 import { checkFirstHundredOnce } from "./lib/achievements";
 import { playSentSound } from "./lib/sounds";
 import { useDialog } from "./components/ui/DialogProvider";
@@ -290,6 +294,17 @@ function AppInner() {
   useEffect(() => {
     const unlisten = listen("compose-open", () => {
       useAppStore.getState().openCompose("new");
+    });
+    return () => { unlisten.then((fn) => fn()); };
+  }, []);
+
+  // --export-backup while the app is already running: no separate window, just
+  // open Settings on the backup tab (settingsLastTab seeds the panel's tab).
+  useEffect(() => {
+    const unlisten = listen("export-backup-open", () => {
+      const s = useAppStore.getState();
+      s.setSettingsLastTab("backup");
+      s.setShowSettings(true);
     });
     return () => { unlisten.then((fn) => fn()); };
   }, []);
@@ -620,15 +635,24 @@ function AppInner() {
   );
 }
 
-const isComposeWindow = new URLSearchParams(window.location.search).has("compose");
+const appMode = resolveAppMode(window.location.search);
 
 export default function App() {
   useEffect(() => installGlobalTooltips(), []);
-  if (isComposeWindow) {
+  if (appMode === "compose") {
     return (
       <ErrorBoundary>
         <Suspense fallback={null}>
           <ComposeWindow />
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+  if (appMode === "backup") {
+    return (
+      <ErrorBoundary>
+        <Suspense fallback={null}>
+          <BackupExportWindow />
         </Suspense>
       </ErrorBoundary>
     );

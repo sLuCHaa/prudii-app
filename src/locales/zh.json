@@ -582,7 +582,11 @@
     "restorePassphrase": "此备份的密码短语",
     "restoreWithoutCredentials": "留空以在不含凭据的情况下恢复",
     "wrongPassphrase": "密码短语错误或备份已损坏",
-    "newerVersion": "此备份由更新版本的 Prudii 创建"
+    "newerVersion": "此备份由更新版本的 Prudii 创建",
+    "exportTitle": "卸载前创建备份",
+    "exportIntro": "将您的账户、邮件和任务保存到文件中，可在其他电脑上恢复。",
+    "exportDone": "备份已创建。您可以关闭此窗口。",
+    "exportSkip": "跳过"
   },
   "welcome": {
     "title": "欢迎使用 Prudii Mail",

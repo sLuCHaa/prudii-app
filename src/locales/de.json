@@ -583,7 +583,11 @@
     "restorePassphrase": "Passphrase dieses Backups",
     "restoreWithoutCredentials": "Leer lassen, um ohne Zugangsdaten wiederherzustellen",
     "wrongPassphrase": "Falsche Passphrase oder beschädigtes Backup",
-    "newerVersion": "Dieses Backup wurde mit einer neueren Version von Prudii erstellt"
+    "newerVersion": "Dieses Backup wurde mit einer neueren Version von Prudii erstellt",
+    "exportTitle": "Vor der Deinstallation ein Backup erstellen",
+    "exportIntro": "Sichern Sie Ihre Konten, E-Mails und Aufgaben in einer Datei, die Sie auf einem anderen Computer wiederherstellen können.",
+    "exportDone": "Backup erstellt. Sie können dieses Fenster schließen.",
+    "exportSkip": "Überspringen"
   },
   "welcome": {
     "title": "Willkommen bei Prudii Mail",
