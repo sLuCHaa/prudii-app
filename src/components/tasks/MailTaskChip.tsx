@@ -6,16 +6,16 @@ import { useAppStore } from "../../stores/appStore";
 
 interface MailTaskChipProps {
   count: number;
+  /** Passed in, not hooked: one i18n store subscription per mail row is too much. */
+  t: (key: string, options?: { count: number }) => string;
 }
 
 /** Mail-list marker: how many tasks this email is linked to. */
-export function MailTaskChip({ count }: MailTaskChipProps) {
-  const { t } = useTranslation();
-  if (count <= 0) return null;
+export function MailTaskChip({ count, t }: MailTaskChipProps) {
   const label = t("tasks.linkedCount", { count });
   return (
     <Tooltip label={label}>
-      <span aria-label={label} className="flex items-center gap-0.5 text-accent">
+      <span role="img" aria-label={label} className="flex items-center gap-0.5 text-accent">
         <ClipboardList className="w-3 h-3" />
         <span className="text-[11px] leading-none tabular-nums">{count}</span>
       </span>

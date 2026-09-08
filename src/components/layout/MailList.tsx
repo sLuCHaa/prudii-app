@@ -464,7 +464,7 @@ interface VirtualMailListProps {
   trashMail: (id: string) => Promise<unknown>;
   snoozeMail: (id: string, until: string) => Promise<unknown>;
   onArchiveSuccess: (archivedIds: string[], preActionVisible: number) => void;
-  t: (key: string) => string;
+  t: (key: string, options?: { count: number }) => string;
 }
 
 function VirtualMailList({
@@ -918,7 +918,7 @@ function VirtualMailList({
                           {mail.is_starred && <StarIcon size={12} color="var(--c-warning)" />}
                           {mail.flags && mail.flags.length > 0 && <FlagDots flags={mail.flags} size={9} />}
                           {mail.has_attachments && <Paperclip className="w-3 h-3" />}
-                          <MailTaskChip count={taskCounts[mail.id] ?? 0} />
+                          {taskCounts[mail.id] > 0 && <MailTaskChip count={taskCounts[mail.id]} t={t} />}
                         </span>
                       )}
                     </div>

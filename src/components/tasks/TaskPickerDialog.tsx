@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Search } from "lucide-react";
@@ -25,6 +25,7 @@ export function TaskPickerDialog({ open, onClose, onPick, excludeTaskIds, tasks 
   const [search, setSearch] = useState("");
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
+  const listId = useId();
   const panelRef = useFocusTrap<HTMLDivElement>(open, { initialFocus: false });
 
   const source = tasks ?? query.data ?? NO_TASKS;
@@ -36,6 +37,10 @@ export function TaskPickerDialog({ open, onClose, onPick, excludeTaskIds, tasks 
       .filter((task) => task.status !== "done" && !excluded.has(task.id))
       .filter((task) => !needle || task.title.toLowerCase().includes(needle));
   }, [source, excludedKey, search]);
+
+  // A refetch or a longer excludeTaskIds can shrink the list under a stored
+  // index, so the highlight is clamped at use instead of only reset on search.
+  const current = Math.min(active, Math.max(items.length - 1, 0));
 
   useEffect(() => {
     setActive(0);
@@ -61,11 +66,11 @@ export function TaskPickerDialog({ open, onClose, onPick, excludeTaskIds, tasks 
     if (!["ArrowDown", "ArrowUp", "Enter", "Escape"].includes(e.key)) return;
     e.preventDefault();
     if (e.key === "ArrowDown") {
-      setActive((i) => (items.length === 0 ? 0 : (i + 1) % items.length));
+      setActive(items.length === 0 ? 0 : (current + 1) % items.length);
     } else if (e.key === "ArrowUp") {
-      setActive((i) => (items.length === 0 ? 0 : (i - 1 + items.length) % items.length));
+      setActive(items.length === 0 ? 0 : (current - 1 + items.length) % items.length);
     } else if (e.key === "Enter") {
-      pick(items[active]);
+      pick(items[current]);
     } else {
       onClose();
     }
@@ -95,24 +100,29 @@ export function TaskPickerDialog({ open, onClose, onPick, excludeTaskIds, tasks 
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t("tasks.pickTaskSearch")}
             aria-label={t("tasks.pickTaskSearch")}
+            role="combobox"
+            aria-expanded="true"
+            aria-controls={listId}
+            aria-activedescendant={items[current] ? `${listId}-${items[current].id}` : undefined}
             className="min-w-0 flex-1 bg-transparent text-sm text-text placeholder:text-text-tertiary focus:outline-none"
           />
         </div>
-        <div ref={listRef} role="listbox" aria-label={t("tasks.pickTask")} className="max-h-[min(50vh,320px)] overflow-y-auto py-1">
+        <div ref={listRef} id={listId} role="listbox" aria-label={t("tasks.pickTask")} className="max-h-[min(50vh,320px)] overflow-y-auto py-1">
           {items.length === 0 ? (
             <div className="px-3 py-6 text-center text-sm text-text-tertiary">{t("tasks.noOpenTasks")}</div>
           ) : (
             items.map((task, i) => (
               <button
                 key={task.id}
+                id={`${listId}-${task.id}`}
                 type="button"
                 role="option"
-                aria-selected={i === active}
-                data-active={i === active}
+                aria-selected={i === current}
+                data-active={i === current}
                 onMouseEnter={() => setActive(i)}
                 onClick={() => pick(task)}
                 className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors ${
-                  i === active ? "bg-hover" : ""
+                  i === current ? "bg-hover" : ""
                 }`}
               >
                 <span className="min-w-0 flex-1 truncate text-text">{task.title}</span>

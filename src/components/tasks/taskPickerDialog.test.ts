@@ -172,6 +172,19 @@ describe("TaskPickerDialog", () => {
     expect(seen).toEqual([]);
   });
 
+  it("still picks the last entry when the list shrinks under the highlight", () => {
+    const onPick = vi.fn();
+    renderDialog({ onPick });
+    press("ArrowDown");
+
+    // A refetch while the dialog is open can drop the highlighted task.
+    renderDialog({ onPick, tasks: [TASKS[0]] });
+
+    expect(options()[0].getAttribute("aria-selected")).toBe("true");
+    press("Enter");
+    expect(onPick).toHaveBeenCalledWith("a");
+  });
+
   it("does not pick anything when the list is empty", () => {
     const onPick = vi.fn();
     renderDialog({ onPick, tasks: [] });
