@@ -154,24 +154,34 @@ export function BackupRestore() {
                 </label>
                 {key === "include_credentials" && options.include_credentials && (
                   <div className="ml-9 mr-2 mb-1 space-y-1.5">
-                    <input
-                      type="password"
-                      autoComplete="new-password"
-                      value={passphrase}
-                      onChange={(e) => setPassphrase(e.target.value)}
-                      placeholder={t("backup.passphrase")}
-                      disabled={backupBusy || restoreBusy}
-                      className="w-full text-sm px-2 py-1.5 rounded-lg border border-border bg-bg-secondary text-text"
-                    />
-                    <input
-                      type="password"
-                      autoComplete="new-password"
-                      value={passphraseRepeat}
-                      onChange={(e) => setPassphraseRepeat(e.target.value)}
-                      placeholder={t("backup.passphraseRepeat")}
-                      disabled={backupBusy || restoreBusy}
-                      className="w-full text-sm px-2 py-1.5 rounded-lg border border-border bg-bg-secondary text-text"
-                    />
+                    <div>
+                      <label htmlFor="backup-passphrase" className="block text-sm font-medium text-text-secondary mb-1">
+                        {t("backup.passphrase")}
+                      </label>
+                      <input
+                        id="backup-passphrase"
+                        type="password"
+                        autoComplete="new-password"
+                        value={passphrase}
+                        onChange={(e) => setPassphrase(e.target.value)}
+                        disabled={backupBusy || restoreBusy}
+                        className="w-full text-sm px-2 py-1.5 rounded-lg border border-border bg-bg-secondary text-text"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="backup-passphrase-repeat" className="block text-sm font-medium text-text-secondary mb-1">
+                        {t("backup.passphraseRepeat")}
+                      </label>
+                      <input
+                        id="backup-passphrase-repeat"
+                        type="password"
+                        autoComplete="new-password"
+                        value={passphraseRepeat}
+                        onChange={(e) => setPassphraseRepeat(e.target.value)}
+                        disabled={backupBusy || restoreBusy}
+                        className="w-full text-sm px-2 py-1.5 rounded-lg border border-border bg-bg-secondary text-text"
+                      />
+                    </div>
                     {validation.reason === "tooShort" && (
                       <div className="text-xs text-danger">{t("backup.passphraseTooShort")}</div>
                     )}
@@ -342,12 +352,15 @@ export function BackupRestore() {
 
             {preview.has_credentials && (
               <div className="space-y-1">
+                <label htmlFor="backup-restore-passphrase" className="block text-sm font-medium text-text-secondary mb-1">
+                  {t("backup.restorePassphrase")}
+                </label>
                 <input
+                  id="backup-restore-passphrase"
                   type="password"
                   autoComplete="new-password"
                   value={restorePassphrase}
                   onChange={(e) => setRestorePassphrase(e.target.value)}
-                  placeholder={t("backup.restorePassphrase")}
                   disabled={restoreBusy}
                   className="w-full text-sm px-2 py-1.5 rounded-lg border border-border bg-bg-secondary text-text"
                 />
