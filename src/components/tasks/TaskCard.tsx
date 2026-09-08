@@ -111,11 +111,14 @@ export function TaskCard({ task, status, showCheckmark, boardDragging }: TaskCar
     if (!isMailDrag(e.dataTransfer)) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = "copy";
-    setMailDropActive(true);
+    if (!mailDropActive) setMailDropActive(true);
   }
 
+  // Only clear once the pointer actually leaves the card — dragleave also
+  // fires when moving over a child element (e.g. the due-date chip).
   function handleDragLeave(e: DragEvent<HTMLDivElement>) {
     if (!isMailDrag(e.dataTransfer)) return;
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
     setMailDropActive(false);
   }
 

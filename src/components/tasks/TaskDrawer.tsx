@@ -215,7 +215,7 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
     if (isMailDrag(e.dataTransfer)) {
       e.preventDefault();
       e.dataTransfer.dropEffect = "copy";
-      setMailDropActive(true);
+      if (!mailDropActive) setMailDropActive(true);
       return;
     }
     if (e.dataTransfer.types.includes("Files")) e.preventDefault();

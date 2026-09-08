@@ -1129,10 +1129,13 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
     if (!isMailDrag(e.dataTransfer)) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = "copy";
-    setTasksDropActive(true);
+    if (!tasksDropActive) setTasksDropActive(true);
   }
 
-  function handleTasksDragLeave() {
+  // Only clear once the pointer actually leaves the entry — dragleave also
+  // fires when moving over a child element (icon/badge), same as folders.
+  function handleTasksDragLeave(e: React.DragEvent) {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
     setTasksDropActive(false);
   }
 
