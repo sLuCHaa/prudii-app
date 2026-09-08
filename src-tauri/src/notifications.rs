@@ -10,6 +10,15 @@ fn read_language(db: &Database) -> String {
         .unwrap_or_else(|_| "en".to_string())
 }
 
+// Same on/off switch `build_new_mail_toast` checks — task reminders must not
+// pop up when the user has notifications disabled either.
+fn notifications_enabled(db: &Database) -> bool {
+    let conn = db.lock_db();
+    conn.query_row("SELECT value FROM app_settings WHERE key = 'notifications_enabled'", [], |row| row.get::<_, String>(0))
+        .map(|v| v == "true" || v == "1")
+        .unwrap_or(true)
+}
+
 // `due_at` is stored as UTC RFC3339; a reminder should show the time the user
 // set it in, not UTC.
 fn format_due_time(due_at: Option<&str>) -> Option<String> {
@@ -72,19 +81,7 @@ pub fn send_new_mail_notification(app: &AppHandle, account_id: &str, new_mails: 
     use tauri_winrt_notification::{Sound, Toast};
 
     let Some(t) = build_new_mail_toast(account_id, db) else { return };
-
-    // Called from sync, not menu setup, so the tray's already-resolved
-    // language isn't in scope here — re-read it from the DB.
-    let lang = {
-        let conn = db.lock_db();
-        conn.query_row(
-            "SELECT value FROM app_settings WHERE key = 'language'",
-            [],
-            |row| row.get::<_, String>(0),
-        )
-        .unwrap_or_else(|_| "en".to_string())
-    };
-    let labels = crate::menu_labels::for_lang(&lang);
+    let labels = crate::menu_labels::for_lang(&read_language(db));
 
     let mut toast = Toast::new("com.prudii.mail").title(&t.title).text1(&t.subject);
     if new_mails > 1 {
@@ -146,6 +143,9 @@ pub fn send_task_reminder(app: &AppHandle, task: &Task) {
     use tauri_winrt_notification::Toast;
 
     let db = app.state::<Database>();
+    if !notifications_enabled(&db) {
+        return;
+    }
     let labels = crate::menu_labels::for_lang(&read_language(&db));
 
     let mut toast = Toast::new("com.prudii.mail").title(labels.task_due).text1(&task_reminder_body(task));
@@ -194,6 +194,9 @@ pub fn send_task_reminder(app: &AppHandle, task: &Task) {
     use tauri_plugin_notification::NotificationExt;
 
     let db = app.state::<Database>();
+    if !notifications_enabled(&db) {
+        return;
+    }
     let labels = crate::menu_labels::for_lang(&read_language(&db));
 
     // No click/button callback on this platform's plugin — same limitation as
