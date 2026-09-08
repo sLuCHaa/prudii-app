@@ -1,11 +1,7 @@
 import { escapeHtml } from "../../lib/sanitize";
 
-/**
- * Pasted content adopts the compose style (like Apple Mail): semantic tags
- * survive, styling is discarded. Clipboard HTML from IDEs/chats carries tens
- * of thousands of styled spans whose style recalc can freeze the webview;
- * oversized pastes fall back to plain text.
- */
+/** Pasted content adopts the editor's style: semantic tags survive, styling is
+ *  discarded; an oversized paste falls back to plain text (style recalc freezes the webview). */
 export function cleanPastedHtml(html: string): string {
   if (html.length > 400_000) {
     const text = new DOMParser().parseFromString(html, "text/html").body.textContent ?? "";

@@ -6,12 +6,11 @@ import { GripVertical, Plus } from "lucide-react";
 import {
   DndContext,
   PointerSensor,
-  KeyboardSensor,
   closestCenter,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { DragEndEvent } from "@dnd-kit/core";
 import type { ChecklistItem } from "../../types";
@@ -95,7 +94,7 @@ function ChecklistRow({ item, onToggle, onCommit, onEnter, onBackspaceEmpty, onD
         ref={(el) => registerInput(item.id, el)}
         value={text}
         onChange={(e) => setText(e.target.value)}
-        onBlur={() => onCommit(text)}
+        onBlur={() => { if (text.trim()) onCommit(text); else onDelete(); }}
         onKeyDown={handleKeyDown}
         className={`flex-1 min-w-0 bg-transparent text-sm focus:outline-none ${item.done ? "line-through text-text-tertiary" : "text-text"}`}
       />
@@ -134,10 +133,7 @@ export function ChecklistEditor({ taskId, items }: ChecklistEditorProps) {
     }
   }, [items]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   const total = items.length;
   const done = items.filter((i) => i.done).length;

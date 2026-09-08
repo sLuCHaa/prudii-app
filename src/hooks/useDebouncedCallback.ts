@@ -8,10 +8,8 @@ export interface DebouncedCallback<Args extends unknown[]> {
   cancel: () => void;
 }
 
-/** Delays `fn` by `ms` after the last call; a call within the window resets the timer.
- *  Reads `fn` through a ref so the returned function stays stable across re-renders.
- *  A pending call is flushed (not dropped) on unmount — e.g. type then immediately
- *  close/switch — so an in-flight edit still reaches the backend. */
+/** Delays `fn` by `ms` after the last call; `fn` is read through a ref so the
+ *  returned function stays stable, and a pending call is flushed on unmount. */
 export function useDebouncedCallback<Args extends unknown[]>(fn: (...args: Args) => void, ms: number): DebouncedCallback<Args> {
   const fnRef = useRef(fn);
   fnRef.current = fn;

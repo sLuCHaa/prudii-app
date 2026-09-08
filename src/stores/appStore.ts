@@ -39,7 +39,7 @@ function getStoredThemeMode(): ThemeMode {
 
 function getStoredTasksViewMode(): TasksViewMode {
   try {
-    return localStorage.getItem("tasks-view-mode") === "list" ? "list" : "board";
+    return localStorage.getItem("prudii-tasks-view-mode") === "list" ? "list" : "board";
   } catch {
     return "board";
   }
@@ -131,9 +131,8 @@ interface AppState {
   setTasksViewMode: (mode: TasksViewMode) => void;
   openTaskId: string | null;
   setOpenTaskId: (id: string | null) => void;
-  // Consumable one-shot flag (not a counter) so a QuickAdd row mounted later — the
-  // Tasks view unmounts on close — still autofocuses exactly once per palette request,
-  // and a later ordinary open never re-triggers it.
+  // One-shot flag so a QuickAdd row mounted later (the Tasks view unmounts on close)
+  // still autofocuses exactly once per palette request.
   quickAddFocusRequested: boolean;
   requestQuickAddFocus: () => void;
   consumeQuickAddFocus: () => void;
@@ -399,7 +398,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setShowTasks: (showTasks) => set({ showTasks, showSnoozed: false, showScheduled: false, showAttachmentBrowser: false, showAllInboxes: false, selectedFolderId: null, activeFilter: null, activeCombinedFolder: null, activeSplitId: null, selectedMailId: null, selectedMailIndex: -1, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
   tasksViewMode: getStoredTasksViewMode(),
   setTasksViewMode: (tasksViewMode) => {
-    try { localStorage.setItem("tasks-view-mode", tasksViewMode); } catch { /* private-mode storage may reject writes */ }
+    try { localStorage.setItem("prudii-tasks-view-mode", tasksViewMode); } catch { /* private-mode storage may reject writes */ }
     set({ tasksViewMode });
   },
   openTaskId: null,
