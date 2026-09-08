@@ -79,8 +79,10 @@ export function ShortcutHelp({ isOpen, onClose }: ShortcutHelpProps) {
         onClose();
       }
     }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    // Capture phase: the panel is the topmost layer, so it must consume Escape
+    // before the document-level handlers of anything below it run.
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => document.removeEventListener("keydown", handleKeyDown, true);
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;

@@ -131,7 +131,7 @@ export function CommandPalette() {
 
     items.push({
       id: "tasks-open",
-      label: t("tasks.openTasks"),
+      label: t("shortcuts.desc.openTasks"),
       icon: <ClipboardList className="w-4 h-4" />,
       section: groupActions,
       action: () => setShowTasks(true),
@@ -395,6 +395,8 @@ export function CommandPalette() {
       e.preventDefault();
       executeCommand(selectedIndex);
     } else if (e.key === "Escape") {
+      // Mark it consumed so a drawer/overlay below does not close as well.
+      e.preventDefault();
       setOpen(false);
     }
   }

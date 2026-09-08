@@ -20,13 +20,12 @@ export interface QuickAddProps {
 }
 
 export function QuickAdd({ className = "", autoFocus, onClose, onCreate }: QuickAddProps) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const [value, setValue] = useState("");
   const [invalid, setInvalid] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  // Config-aware: unlike the plain useReducedMotion() hook this also honors a
-  // <MotionConfig reducedMotion="always"> ancestor, which is how the test makes
-  // the exit animation resolve synchronously instead of only skipping it in prod.
+  // Config-aware unlike useReducedMotion(): also honors a <MotionConfig reducedMotion>
+  // ancestor, which is how the test resolves the exit animation synchronously.
   const reduce = useReducedMotionConfig();
 
   const addToast = useAppStore((s) => s.addToast);
@@ -36,7 +35,7 @@ export function QuickAdd({ className = "", autoFocus, onClose, onCreate }: Quick
   const consumeQuickAddFocus = useAppStore((s) => s.consumeQuickAddFocus);
   const createTaskMutation = useCreateTask();
 
-  const parsed = useMemo(() => parseQuickAdd(value, new Date(), i18n.language), [value, i18n.language]);
+  const parsed = useMemo(() => parseQuickAdd(value, new Date()), [value]);
   const previewTask = parsed.dueAt ? { due_at: parsed.dueAt, status: "open" as const } : null;
 
   // One-shot: focus once per palette request, then consume it immediately so a later
@@ -84,9 +83,12 @@ export function QuickAdd({ className = "", autoFocus, onClose, onCreate }: Quick
       e.preventDefault();
       submit();
     } else if (e.key === "Escape") {
+      // preventDefault marks Escape as consumed for overlays below (e.g. the task drawer).
       if (onClose) {
+        e.preventDefault();
         onClose();
-      } else {
+      } else if (value) {
+        e.preventDefault();
         reset();
       }
     }

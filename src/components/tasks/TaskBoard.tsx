@@ -20,7 +20,7 @@ import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useReducedMotion } from "motion/react";
 import type { Task, TaskStatus } from "../../types";
 import { TASK_STATUSES } from "../../types";
-import { groupByStatus } from "../../lib/tasks";
+import { fullColumnDropIndex, groupByStatus } from "../../lib/tasks";
 import { useMoveTask } from "../../hooks/useTasks";
 import { BoardColumn } from "./BoardColumn";
 import { TaskCardOverlay } from "./TaskCard";
@@ -29,7 +29,9 @@ import { DaylightSky } from "../motion/DaylightSky";
 import { CelebrationConfetti } from "../motion/CelebrationConfetti";
 
 interface DragState {
-  activeId: string;
+  // null while a finished drop settles: the preview keeps rendering until the
+  // mutation's cache write reaches us as a new `tasks` prop.
+  activeId: string | null;
   preview: Task[];
 }
 
@@ -54,9 +56,11 @@ const KEYBOARD_CODES = {
 
 interface TaskBoardProps {
   tasks: Task[];
+  /** Unfiltered board contents — a drop index only means something against these. */
+  allTasks: Task[];
 }
 
-export function TaskBoard({ tasks }: TaskBoardProps) {
+export function TaskBoard({ tasks, allTasks }: TaskBoardProps) {
   const { t } = useTranslation();
   const reduce = useReducedMotion();
   const moveTask = useMoveTask();
@@ -97,8 +101,8 @@ export function TaskBoard({ tasks }: TaskBoardProps) {
     wasShowingAllDone.current = showAllDone;
   }, [showAllDone]);
 
-  // A prop update mid-drag (e.g. a realtime change from elsewhere) makes the local
-  // preview stale, so drop it rather than let onDragEnd compute off old data.
+  // A prop update makes the local preview stale — mid-drag it would feed onDragEnd
+  // old data, after a drop it is exactly the settled result we were waiting for.
   const tasksRef = useRef(tasks);
   useEffect(() => {
     if (dragState && tasksRef.current !== tasks) {
@@ -160,25 +164,33 @@ export function TaskBoard({ tasks }: TaskBoardProps) {
     const finalStatus =
       statusOf(activeId, finalList) ?? (over ? resolveTargetStatus(String(over.id), over.data.current, finalList) : undefined);
 
-    if (finalStatus) {
-      const columnTasks = finalList.filter((task) => task.status === finalStatus);
-      const index = columnTasks.findIndex((task) => task.id === activeId);
-      moveTask.mutate({ id: activeId, status: finalStatus, index: index >= 0 ? index : columnTasks.length });
-
-      const originalStatus = statusOf(activeId, tasks);
-      if (finalStatus === "done" && originalStatus !== "done") {
-        triggerCheckmark(activeId);
-      }
+    if (!finalStatus) {
+      setDragState(null);
+      return;
     }
 
-    setDragState(null);
+    const columnTasks = finalList.filter((task) => task.status === finalStatus);
+    const index = fullColumnDropIndex(allTasks, finalStatus, activeId, columnTasks);
+    moveTask.mutate(
+      { id: activeId, status: finalStatus, index },
+      { onError: () => setDragState(null) },
+    );
+
+    const originalStatus = statusOf(activeId, tasks);
+    if (finalStatus === "done" && originalStatus !== "done") {
+      triggerCheckmark(activeId);
+    }
+
+    // Keep the preview on screen: clearing it here would render one frame from the
+    // stale prop (the optimistic cache write only notifies on the next tick).
+    setDragState({ activeId: null, preview: finalList });
   }
 
   function handleDragCancel() {
     setDragState(null);
   }
 
-  const activeTask = dragState ? renderTasks.find((task) => task.id === dragState.activeId) : undefined;
+  const activeTask = dragState?.activeId ? renderTasks.find((task) => task.id === dragState.activeId) : undefined;
   const dropAnimation: DropAnimation = reduce
     ? { duration: 0, easing: "linear", sideEffects: defaultDropAnimationSideEffects({}) }
     : {

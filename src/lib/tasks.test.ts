@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isOverdue, isDueToday, groupByStatus, parseQuickAdd } from "./tasks";
+import { isOverdue, isDueToday, groupByStatus, fullColumnDropIndex, parseQuickAdd } from "./tasks";
 import type { Task } from "../types";
 
 // Tuesday, Sept 8 2026, 10:00 local.
@@ -28,14 +28,14 @@ function makeTask(overrides: Partial<Task> = {}): Task {
 
 describe("parseQuickAdd", () => {
   it("strips the date token and schedules tomorrow 09:00", () => {
-    const r = parseQuickAdd("Rechnung prüfen morgen", now, "de");
+    const r = parseQuickAdd("Rechnung prüfen morgen", now);
     expect(r.title).toBe("Rechnung prüfen");
     expect(new Date(r.dueAt!).getDate()).toBe(9);
     expect(new Date(r.dueAt!).getHours()).toBe(9);
   });
 
   it("understands english weekdays and explicit times", () => {
-    const r = parseQuickAdd("Call Bob friday 14:30", now, "en");
+    const r = parseQuickAdd("Call Bob friday 14:30", now);
     expect(r.title).toBe("Call Bob");
     const d = new Date(r.dueAt!);
     expect(d.getDay()).toBe(5);
@@ -44,19 +44,19 @@ describe("parseQuickAdd", () => {
   });
 
   it("uses today 18:00 for 'heute', and today or tomorrow for a bare time", () => {
-    expect(new Date(parseQuickAdd("x heute", now, "de").dueAt!).getHours()).toBe(18);
-    expect(new Date(parseQuickAdd("x 9 uhr", now, "de").dueAt!).getDate()).toBe(9); // 09:00 already passed → tomorrow
-    expect(new Date(parseQuickAdd("x 15:00", now, "de").dueAt!).getDate()).toBe(8);
+    expect(new Date(parseQuickAdd("x heute", now).dueAt!).getHours()).toBe(18);
+    expect(new Date(parseQuickAdd("x 9 uhr", now).dueAt!).getDate()).toBe(9); // 09:00 already passed → tomorrow
+    expect(new Date(parseQuickAdd("x 15:00", now).dueAt!).getDate()).toBe(8);
   });
 
   it("handles 'in 3 tagen' / 'in 2 weeks' and leaves plain titles alone", () => {
-    expect(new Date(parseQuickAdd("x in 3 tagen", now, "de").dueAt!).getDate()).toBe(11);
-    expect(new Date(parseQuickAdd("x in 2 weeks", now, "en").dueAt!).getDate()).toBe(22);
-    expect(parseQuickAdd("Nur ein Titel", now, "de")).toEqual({ title: "Nur ein Titel", dueAt: null });
+    expect(new Date(parseQuickAdd("x in 3 tagen", now).dueAt!).getDate()).toBe(11);
+    expect(new Date(parseQuickAdd("x in 2 weeks", now).dueAt!).getDate()).toBe(22);
+    expect(parseQuickAdd("Nur ein Titel", now)).toEqual({ title: "Nur ein Titel", dueAt: null });
   });
 
   it("schedules übermorgen two days out at 09:00", () => {
-    const r = parseQuickAdd("Ticket übermorgen", now, "de");
+    const r = parseQuickAdd("Ticket übermorgen", now);
     expect(r.title).toBe("Ticket");
     const d = new Date(r.dueAt!);
     expect(d.getDate()).toBe(10);
@@ -64,13 +64,13 @@ describe("parseQuickAdd", () => {
   });
 
   it("trims trailing punctuation left behind after stripping a token", () => {
-    expect(parseQuickAdd("Sachen erledigen, do", now, "de").title).toBe("Sachen erledigen");
+    expect(parseQuickAdd("Sachen erledigen, do", now).title).toBe("Sachen erledigen");
   });
 
   it("does not mangle a title where a short weekday token appears mid-sentence", () => {
     // "so" is a German short token for Sunday, but is not the last word here
     // and is not followed by a time token, so it must stay part of the title.
-    const r = parseQuickAdd("Mach das so schnell", now, "de");
+    const r = parseQuickAdd("Mach das so schnell", now);
     expect(r.title).toBe("Mach das so schnell");
     expect(r.dueAt).toBeNull();
   });
@@ -131,5 +131,47 @@ describe("groupByStatus", () => {
     const grouped = groupByStatus([makeTask({ id: "a", status: "open" })]);
     expect(grouped.in_progress).toEqual([]);
     expect(grouped.done).toEqual([]);
+  });
+});
+
+describe("fullColumnDropIndex", () => {
+  // Full "open" column: a(0), b(1), c(2); "x" is the card being dropped into it.
+  const all = [
+    makeTask({ id: "a", status: "open", sort_order: 0 }),
+    makeTask({ id: "b", status: "open", sort_order: 1 }),
+    makeTask({ id: "c", status: "open", sort_order: 2 }),
+    makeTask({ id: "x", status: "in_progress", sort_order: 0 }),
+  ];
+
+  it("keeps the visible index when nothing is filtered out", () => {
+    const visible = [all[0], makeTask({ id: "x", status: "open" }), all[1], all[2]];
+    expect(fullColumnDropIndex(all, "open", "x", visible)).toBe(1);
+  });
+
+  it("translates a drop below a filtered column to the position after its predecessor", () => {
+    // Only "c" passes the filter; dropping below it must land after c, not at index 1.
+    const visible = [all[2], makeTask({ id: "x", status: "open" })];
+    expect(fullColumnDropIndex(all, "open", "x", visible)).toBe(3);
+  });
+
+  it("puts a drop above the first visible card at the top of the full column", () => {
+    const visible = [makeTask({ id: "x", status: "open" }), all[2]];
+    expect(fullColumnDropIndex(all, "open", "x", visible)).toBe(0);
+  });
+
+  it("appends when the card is not in the visible column and when its predecessor is gone", () => {
+    expect(fullColumnDropIndex(all, "open", "x", [])).toBe(3);
+    const stale = [makeTask({ id: "gone", status: "open" }), makeTask({ id: "x", status: "open" })];
+    expect(fullColumnDropIndex(all, "open", "x", stale)).toBe(3);
+  });
+
+  it("ignores sort_order gaps and other columns", () => {
+    const sparse = [
+      makeTask({ id: "a", status: "open", sort_order: 5 }),
+      makeTask({ id: "b", status: "open", sort_order: 1 }),
+      makeTask({ id: "d", status: "done", sort_order: 0 }),
+    ];
+    const visible = [sparse[0], makeTask({ id: "x", status: "open" })];
+    expect(fullColumnDropIndex(sparse, "open", "x", visible)).toBe(2);
   });
 });

@@ -139,7 +139,7 @@ export function TasksView() {
         ) : tasksViewMode === "list" ? (
           <TaskList tasks={filteredTasks} />
         ) : (
-          <TaskBoard tasks={filteredTasks} />
+          <TaskBoard tasks={filteredTasks} allTasks={tasks ?? []} />
         )}
       </LoadingCrossfade>
 

@@ -111,7 +111,8 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
   const dialog = useDialog();
 
   const [descEscapeBlocked, setDescEscapeBlocked] = useState(false);
-  const drawerRef = useFocusTrap<HTMLElement>(true, { initialFocus: false });
+  // While the confirm dialog is up it owns Tab; two live traps bounce every Tab back.
+  const drawerRef = useFocusTrap<HTMLElement>(!dialog.isOpen, { initialFocus: false });
 
   function patchTask(id: string, p: UpdateTaskPatch) {
     if (onUpdate) {
@@ -124,7 +125,9 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
   // The id travels as an explicit argument (not read from the `task` closure at
   // flush time) so a pending edit still lands on the task it was typed into, even
   // after switching to a different one before the debounce window elapses.
-  const debouncedTitleSave = useDebouncedCallback((id: string, title: string) => patchTask(id, { title }), 400);
+  const debouncedTitleSave = useDebouncedCallback((id: string, title: string) => {
+    if (title.trim()) patchTask(id, { title });
+  }, 400);
   const debouncedDescSave = useDebouncedCallback((id: string, html: string) => patchTask(id, { description_html: html }), 600);
 
   // Issue pending saves immediately rather than waiting for the exit animation
@@ -144,10 +147,16 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
   }
 
   useEffect(() => {
+    // The confirm dialog renders outside the drawer, so its clicks read as
+    // "outside" and its Escape would close the drawer underneath it.
     function handleMouseDown(e: MouseEvent) {
+      if (dialog.isOpen) return;
       if (drawerRef.current && !drawerRef.current.contains(e.target as Node)) closeDrawer();
     }
     function handleKeyDown(e: KeyboardEvent) {
+      // Overlays above the drawer (palette, shortcut help, quick-add popover) mark
+      // the Escape they consume as handled.
+      if (e.defaultPrevented || dialog.isOpen) return;
       if (e.key === "Escape" && !descEscapeBlocked) closeDrawer();
     }
     document.addEventListener("mousedown", handleMouseDown);
@@ -156,7 +165,7 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
       document.removeEventListener("mousedown", handleMouseDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [onClose, descEscapeBlocked, drawerRef, debouncedTitleSave, debouncedDescSave]);
+  }, [onClose, descEscapeBlocked, dialog.isOpen, drawerRef, debouncedTitleSave, debouncedDescSave]);
 
   // The task vanished (deleted elsewhere) — bail out instead of showing a dead form forever.
   useEffect(() => {
@@ -216,7 +225,7 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
       transition={SPRING_SNAPPY}
       onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); }}
       onDrop={handleDrop}
-      className="fixed inset-y-0 right-0 w-[440px] max-w-[92vw] bg-surface border-l border-border shadow-2xl z-40 flex flex-col"
+      className="fixed top-8 bottom-0 right-0 w-[440px] max-w-[92vw] bg-surface border-l border-border shadow-2xl z-40 flex flex-col"
     >
       <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
         {!isNew && task ? (
@@ -263,9 +272,18 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
                 className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-border bg-bg-secondary text-text text-xs"
               />
               <input
+                // Keyed on the stored value: uncontrolled while editing (no PATCH per
+                // keystroke), yet remounted when the due date changes elsewhere.
+                key={`due-${task.id}-${task.due_at ?? ""}`}
                 type="datetime-local"
-                value={toDatetimeLocalValue(task.due_at)}
-                onChange={(e) => { if (e.target.value) patchTask(task.id, { due_at: fromDatetimeLocalValue(e.target.value) }); }}
+                defaultValue={toDatetimeLocalValue(task.due_at)}
+                onBlur={(e) => {
+                  const value = e.target.value;
+                  if (value && value !== toDatetimeLocalValue(task.due_at)) {
+                    patchTask(task.id, { due_at: fromDatetimeLocalValue(value) });
+                  }
+                }}
+                onKeyDown={(e: ReactKeyboardEvent<HTMLInputElement>) => { if (e.key === "Enter") e.currentTarget.blur(); }}
                 className="bg-bg-secondary border border-border rounded-lg px-2 py-1 text-xs text-text focus:border-accent"
               />
               {task.due_at && (
@@ -288,7 +306,12 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
               defaultValue={task.title}
               placeholder={t("tasks.titlePlaceholder")}
               onChange={(e) => debouncedTitleSave(task.id, e.target.value)}
-              onBlur={(e) => patchTask(task.id, { title: e.target.value })}
+              onBlur={(e) => {
+                debouncedTitleSave.cancel();
+                const next = e.target.value.trim();
+                if (!next) { e.target.value = task.title; return; }
+                if (next !== task.title) patchTask(task.id, { title: next });
+              }}
               onKeyDown={(e: ReactKeyboardEvent<HTMLInputElement>) => { if (e.key === "Enter") e.currentTarget.blur(); }}
               className="w-full text-lg font-semibold bg-transparent focus:outline-none text-text placeholder:text-text-tertiary"
             />

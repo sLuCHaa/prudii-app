@@ -25,8 +25,7 @@ export function fromDatetimeLocalValue(value: string): string {
   return new Date(value).toISOString();
 }
 
-// Quick-pick due dates default to an end-of-day/morning time, mirroring parseQuickAdd's
-// own heuristics for bare "heute"/"morgen" tokens, so both entry paths feel consistent.
+// Mirrors parseQuickAdd's times for bare "heute"/"morgen" so both entry paths agree.
 export function quickDueDate(kind: "today" | "tomorrow" | "nextWeek", now: Date): string {
   const at = (daysFromNow: number, hour: number) =>
     new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysFromNow, hour, 0).toISOString();
@@ -48,6 +47,23 @@ export function groupByStatus(tasks: Task[]): Record<TaskStatus, Task[]> {
   return grouped;
 }
 
+/**
+ * Board drops are computed against the visible (possibly filtered) column, while
+ * `move_task` inserts among all tasks of that status — so anchor on the visible
+ * predecessor to translate the one index into the other.
+ */
+export function fullColumnDropIndex(allTasks: Task[], status: TaskStatus, movingId: string, visibleColumn: Task[]): number {
+  const column = allTasks
+    .filter((task) => task.status === status && task.id !== movingId)
+    .sort((a, b) => a.sort_order - b.sort_order);
+  const visibleIndex = visibleColumn.findIndex((task) => task.id === movingId);
+  if (visibleIndex < 0) return column.length;
+  if (visibleIndex === 0) return 0;
+  const predecessorId = visibleColumn[visibleIndex - 1].id;
+  const at = column.findIndex((task) => task.id === predecessorId);
+  return at >= 0 ? at + 1 : column.length;
+}
+
 // JS `\b` only treats [A-Za-z0-9_] as word characters, so it fails to bound a word
 // starting with an umlaut (e.g. "übermorgen" right after a space). Build boundaries
 // from an explicit charset that includes German letters instead.
@@ -66,9 +82,8 @@ const WEEKDAYS_SHORT: Record<string, number> = {
   mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6, sun: 0,
 };
 
-// Group 1/2 = "H:MM" (optional am/pm); group 4/5 = "H" directly followed by am/pm/uhr.
-// Requiring a colon or a suffix keeps a bare number in a title (e.g. "Kunde 9") from
-// ever being read as a time.
+// Requiring a colon or an am/pm/uhr suffix keeps a bare number in a title
+// (e.g. "Kunde 9") from ever being read as a time.
 const TIME_PATTERN = "\\b(\\d{1,2}):(\\d{2})\\s*(am|pm)?\\b|\\b(\\d{1,2})\\s*(am|pm|uhr)\\b";
 const TIME_RE = new RegExp(TIME_PATTERN, "i");
 const TIME_START_RE = new RegExp(`^(?:${TIME_PATTERN})`, "i");
@@ -88,7 +103,7 @@ function nextWeekday(from: Date, target: number): Date {
 
 /// Parses natural-language date/time hints out of a quick-add title (de + en) and
 /// returns the cleaned title plus an ISO-UTC due date, or null when nothing matched.
-export function parseQuickAdd(input: string, now: Date, _lang: string): { title: string; dueAt: string | null } {
+export function parseQuickAdd(input: string, now: Date): { title: string; dueAt: string | null } {
   let text = input;
   let year = now.getFullYear();
   let month = now.getMonth();

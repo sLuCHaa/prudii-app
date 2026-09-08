@@ -30,7 +30,11 @@ export function LinkedMails({ taskId, links }: LinkedMailsProps) {
         addToast("error", t("tasks.mailGone"));
         return;
       }
-      openMailById(link.account_id, link.mail_id);
+      // Without the folder the mail list has nothing to query and the sidebar's
+      // "no folder selected" effect overwrites the selection right away.
+      openMailById(link.account_id, link.mail_id, mail.folder_id);
+    } catch {
+      addToast("error", t("tasks.mailGone"));
     } finally {
       setNavigatingId(null);
     }

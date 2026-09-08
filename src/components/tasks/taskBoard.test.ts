@@ -49,10 +49,10 @@ afterEach(() => {
   queryClient.clear();
 });
 
-function renderBoard(tasks: Task[]) {
+function renderBoard(tasks: Task[], allTasks: Task[] = tasks) {
   act(() => {
     root.render(
-      createElement(QueryClientProvider, { client: queryClient }, createElement(TaskBoard, { tasks })),
+      createElement(QueryClientProvider, { client: queryClient }, createElement(TaskBoard, { tasks, allTasks })),
     );
   });
 }
