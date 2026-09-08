@@ -16,6 +16,16 @@ pub fn backup_in_progress() -> bool {
     *BACKUP_IN_PROGRESS.lock().unwrap_or_else(|e| e.into_inner())
 }
 
+/// Clears the flag even if the backup task panics — otherwise the export window's
+/// close guard would keep the process alive forever and block the uninstaller.
+struct InProgressGuard;
+
+impl Drop for InProgressGuard {
+    fn drop(&mut self) {
+        *BACKUP_IN_PROGRESS.lock().unwrap_or_else(|e| e.into_inner()) = false;
+    }
+}
+
 fn emit_backup_progress(app: &AppHandle, progress: &BackupProgress) {
     let _ = app.emit("backup-progress", progress);
 }
@@ -35,8 +45,22 @@ enum ExtractCheck {
 
 /// Resolves a ZIP entry's relative path under `base`, rejecting directory traversal
 /// (`..`/absolute) and a symlinked ancestor directory.
+/// True for a name that is exactly one ordinary path segment — no `..`, no separator,
+/// no root or drive prefix.
+fn is_plain_path_component(name: &str) -> bool {
+    let mut components = Path::new(name).components();
+    matches!(components.next(), Some(std::path::Component::Normal(c)) if c == name)
+        && components.next().is_none()
+}
+
 fn safe_extract_path(base: &Path, rel_path: &str) -> ExtractCheck {
-    if rel_path.contains("..") || rel_path.starts_with('/') || rel_path.starts_with('\\') {
+    // Before any filesystem call: `Path::join` silently replaces the base when the
+    // argument has a root or drive prefix, so only plain components may pass.
+    if rel_path.is_empty()
+        || !Path::new(rel_path)
+            .components()
+            .all(|c| matches!(c, std::path::Component::Normal(_)))
+    {
         return ExtractCheck::Rejected;
     }
 
@@ -74,6 +98,26 @@ fn read_zip_json<R: Read + Seek>(archive: &mut zip::ZipArchive<R>, name: &str) -
         }
         Err(_) => Ok(None),
     }
+}
+
+/// Parses `manifest.json` and refuses archives written by a newer schema — their
+/// columns and semantics are unknown here, so this runs before the first write.
+pub(crate) fn read_manifest<R: Read + Seek>(archive: &mut zip::ZipArchive<R>) -> Result<BackupManifest, String> {
+    let manifest: BackupManifest = {
+        let mut f = archive
+            .by_name("manifest.json")
+            .map_err(|_| "Not a valid Prudii backup: manifest.json not found.".to_string())?;
+        let mut contents = String::new();
+        f.read_to_string(&mut contents)
+            .map_err(|e| format!("Failed to read manifest: {}", e))?;
+        serde_json::from_str(&contents).map_err(|e| format!("Failed to parse manifest: {}", e))?
+    };
+
+    if manifest.schema_version > crate::db::SCHEMA_VERSION {
+        return Err(NEWER_VERSION_KEY.into());
+    }
+
+    Ok(manifest)
 }
 
 #[tauri::command]
@@ -154,13 +198,9 @@ async fn do_create_backup(
         }
         *in_progress = true;
     }
+    let _guard = InProgressGuard;
 
     let result = do_create_backup_inner(&app, &options, &file_path, &data_dir);
-
-    {
-        let mut in_progress = BACKUP_IN_PROGRESS.lock().unwrap_or_else(|e| e.into_inner());
-        *in_progress = false;
-    }
 
     if let Err(e) = result {
         // Clean up partial ZIP
@@ -668,8 +708,7 @@ fn do_create_backup_inner(
             total_steps,
         });
 
-        let conn = db.lock_db();
-        stats.task_count = export_tasks(&conn, &mut zip, data_dir, &zip_options)? as u64;
+        stats.task_count = export_tasks(&db, &mut zip, data_dir, &zip_options)? as u64;
     }
 
     current_step += 1;
@@ -715,114 +754,116 @@ fn do_create_backup_inner(
 /// Writes the four task tables plus `task_files/{task_id}/{filename}`; a missing
 /// attachment file is logged, not fatal — the row is still exported.
 pub(crate) fn export_tasks<W: Write + Seek>(
-    conn: &rusqlite::Connection,
+    db: &Database,
     zip: &mut zip::ZipWriter<W>,
     data_dir: &Path,
     opts: &zip::write::SimpleFileOptions,
 ) -> Result<i64, String> {
-    let tasks: Vec<serde_json::Value> = {
-        let mut stmt = conn.prepare(
-            "SELECT id, title, description_html, status, priority, due_at, sort_order, reminder_sent, created_at, updated_at, completed_at
-             FROM tasks ORDER BY status, sort_order"
-        ).map_err(|e| e.to_string())?;
-        let rows = stmt.query_map([], |row| {
-            Ok(serde_json::json!({
-                "id": row.get::<_, String>(0)?,
-                "title": row.get::<_, String>(1)?,
-                "description_html": row.get::<_, String>(2)?,
-                "status": row.get::<_, String>(3)?,
-                "priority": row.get::<_, String>(4)?,
-                "due_at": row.get::<_, Option<String>>(5)?,
-                "sort_order": row.get::<_, f64>(6)?,
-                "reminder_sent": row.get::<_, i64>(7)?,
-                "created_at": row.get::<_, String>(8)?,
-                "updated_at": row.get::<_, String>(9)?,
-                "completed_at": row.get::<_, Option<String>>(10)?,
-            }))
-        })
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
-        rows
+    // The DB lock covers only the four queries; writing the ZIP and copying task
+    // files afterwards would otherwise stall every other DB-backed command.
+    let (tasks, checklist, links, attachments) = {
+        let conn = db.lock_db();
+        let tasks: Vec<serde_json::Value> = {
+            let mut stmt = conn.prepare(
+                "SELECT id, title, description_html, status, priority, due_at, sort_order, reminder_sent, created_at, updated_at, completed_at
+                 FROM tasks ORDER BY status, sort_order"
+            ).map_err(|e| e.to_string())?;
+            let rows = stmt.query_map([], |row| {
+                Ok(serde_json::json!({
+                    "id": row.get::<_, String>(0)?,
+                    "title": row.get::<_, String>(1)?,
+                    "description_html": row.get::<_, String>(2)?,
+                    "status": row.get::<_, String>(3)?,
+                    "priority": row.get::<_, String>(4)?,
+                    "due_at": row.get::<_, Option<String>>(5)?,
+                    "sort_order": row.get::<_, f64>(6)?,
+                    "reminder_sent": row.get::<_, i64>(7)?,
+                    "created_at": row.get::<_, String>(8)?,
+                    "updated_at": row.get::<_, String>(9)?,
+                    "completed_at": row.get::<_, Option<String>>(10)?,
+                }))
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+            rows
+        };
+
+        let checklist: Vec<serde_json::Value> = {
+            let mut stmt = conn.prepare(
+                "SELECT id, task_id, text, done, sort_order FROM task_checklist ORDER BY task_id, sort_order"
+            ).map_err(|e| e.to_string())?;
+            let rows = stmt.query_map([], |row| {
+                Ok(serde_json::json!({
+                    "id": row.get::<_, String>(0)?,
+                    "task_id": row.get::<_, String>(1)?,
+                    "text": row.get::<_, String>(2)?,
+                    "done": row.get::<_, i64>(3)?,
+                    "sort_order": row.get::<_, f64>(4)?,
+                }))
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+            rows
+        };
+        let links: Vec<serde_json::Value> = {
+            let mut stmt = conn.prepare(
+                "SELECT task_id, mail_id, account_id, subject, from_name, from_email, mail_date, created_at
+                 FROM task_mail_links ORDER BY task_id, created_at"
+            ).map_err(|e| e.to_string())?;
+            let rows = stmt.query_map([], |row| {
+                Ok(serde_json::json!({
+                    "task_id": row.get::<_, String>(0)?,
+                    "mail_id": row.get::<_, String>(1)?,
+                    "account_id": row.get::<_, String>(2)?,
+                    "subject": row.get::<_, String>(3)?,
+                    "from_name": row.get::<_, String>(4)?,
+                    "from_email": row.get::<_, String>(5)?,
+                    "mail_date": row.get::<_, Option<String>>(6)?,
+                    "created_at": row.get::<_, String>(7)?,
+                }))
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+            rows
+        };
+        let attachments: Vec<serde_json::Value> = {
+            let mut stmt = conn.prepare(
+                "SELECT id, task_id, filename, mime_type, size_bytes, local_path, created_at
+                 FROM task_attachments ORDER BY task_id, created_at"
+            ).map_err(|e| e.to_string())?;
+            let rows = stmt.query_map([], |row| {
+                Ok(serde_json::json!({
+                    "id": row.get::<_, String>(0)?,
+                    "task_id": row.get::<_, String>(1)?,
+                    "filename": row.get::<_, String>(2)?,
+                    "mime_type": row.get::<_, String>(3)?,
+                    "size_bytes": row.get::<_, i64>(4)?,
+                    "local_path": row.get::<_, String>(5)?,
+                    "created_at": row.get::<_, String>(6)?,
+                }))
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+            rows
+        };
+        (tasks, checklist, links, attachments)
     };
     let task_count = tasks.len() as i64;
 
-    let json = serde_json::to_string_pretty(&tasks).map_err(|e| e.to_string())?;
-    zip.start_file("tasks.json", *opts).map_err(|e| e.to_string())?;
-    zip.write_all(json.as_bytes()).map_err(|e| e.to_string())?;
-
-    let checklist: Vec<serde_json::Value> = {
-        let mut stmt = conn.prepare(
-            "SELECT id, task_id, text, done, sort_order FROM task_checklist ORDER BY task_id, sort_order"
-        ).map_err(|e| e.to_string())?;
-        let rows = stmt.query_map([], |row| {
-            Ok(serde_json::json!({
-                "id": row.get::<_, String>(0)?,
-                "task_id": row.get::<_, String>(1)?,
-                "text": row.get::<_, String>(2)?,
-                "done": row.get::<_, i64>(3)?,
-                "sort_order": row.get::<_, f64>(4)?,
-            }))
-        })
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
-        rows
-    };
-    let json = serde_json::to_string_pretty(&checklist).map_err(|e| e.to_string())?;
-    zip.start_file("task_checklist.json", *opts).map_err(|e| e.to_string())?;
-    zip.write_all(json.as_bytes()).map_err(|e| e.to_string())?;
-
-    let links: Vec<serde_json::Value> = {
-        let mut stmt = conn.prepare(
-            "SELECT task_id, mail_id, account_id, subject, from_name, from_email, mail_date, created_at
-             FROM task_mail_links ORDER BY task_id, created_at"
-        ).map_err(|e| e.to_string())?;
-        let rows = stmt.query_map([], |row| {
-            Ok(serde_json::json!({
-                "task_id": row.get::<_, String>(0)?,
-                "mail_id": row.get::<_, String>(1)?,
-                "account_id": row.get::<_, String>(2)?,
-                "subject": row.get::<_, String>(3)?,
-                "from_name": row.get::<_, String>(4)?,
-                "from_email": row.get::<_, String>(5)?,
-                "mail_date": row.get::<_, Option<String>>(6)?,
-                "created_at": row.get::<_, String>(7)?,
-            }))
-        })
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
-        rows
-    };
-    let json = serde_json::to_string_pretty(&links).map_err(|e| e.to_string())?;
-    zip.start_file("task_mail_links.json", *opts).map_err(|e| e.to_string())?;
-    zip.write_all(json.as_bytes()).map_err(|e| e.to_string())?;
-
-    let attachments: Vec<serde_json::Value> = {
-        let mut stmt = conn.prepare(
-            "SELECT id, task_id, filename, mime_type, size_bytes, local_path, created_at
-             FROM task_attachments ORDER BY task_id, created_at"
-        ).map_err(|e| e.to_string())?;
-        let rows = stmt.query_map([], |row| {
-            Ok(serde_json::json!({
-                "id": row.get::<_, String>(0)?,
-                "task_id": row.get::<_, String>(1)?,
-                "filename": row.get::<_, String>(2)?,
-                "mime_type": row.get::<_, String>(3)?,
-                "size_bytes": row.get::<_, i64>(4)?,
-                "local_path": row.get::<_, String>(5)?,
-                "created_at": row.get::<_, String>(6)?,
-            }))
-        })
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
-        rows
-    };
-    let json = serde_json::to_string_pretty(&attachments).map_err(|e| e.to_string())?;
-    zip.start_file("task_attachments.json", *opts).map_err(|e| e.to_string())?;
-    zip.write_all(json.as_bytes()).map_err(|e| e.to_string())?;
+    for (name, rows) in [
+        ("tasks.json", &tasks),
+        ("task_checklist.json", &checklist),
+        ("task_mail_links.json", &links),
+        ("task_attachments.json", &attachments),
+    ] {
+        let json = serde_json::to_string_pretty(rows).map_err(|e| e.to_string())?;
+        zip.start_file(name, *opts).map_err(|e| e.to_string())?;
+        zip.write_all(json.as_bytes()).map_err(|e| e.to_string())?;
+    }
 
     let task_files_dir = data_dir.join("task_files");
     if task_files_dir.exists() {
@@ -950,6 +991,12 @@ pub(crate) fn import_task_rows<R: Read + Seek>(
         for a in &attachments {
             let task_id = a.get("task_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
             let filename = a.get("filename").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            // A row whose path parts are not plain names could never be extracted, so
+            // importing it would only leave a dead attachment pointing outside the base.
+            if !is_plain_path_component(&task_id) || !is_plain_path_component(&filename) {
+                log::warn!("Skipping task attachment with an unsafe path: {}/{}", task_id, filename);
+                continue;
+            }
             let new_local_path = data_dir.join("task_files").join(&task_id).join(&filename);
 
             tx.execute(&sql, rusqlite::params![
@@ -1003,6 +1050,7 @@ pub(crate) fn extract_task_files<R: Read + Seek>(
 const WRONG_PASSPHRASE_KEY: &str = "backup.wrongPassphrase";
 const SHORT_PASSPHRASE_KEY: &str = "backup.passphraseTooShort";
 const NOTHING_SELECTED_KEY: &str = "backup.nothingSelected";
+const NEWER_VERSION_KEY: &str = "backup.newerVersion";
 
 /// One account's stored secret inside the encrypted `credentials.enc` payload.
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -1113,15 +1161,7 @@ pub async fn preview_restore(
     let mut archive = zip::ZipArchive::new(file)
         .map_err(|e| format!("Invalid ZIP file: {}", e))?;
 
-    let manifest: BackupManifest = {
-        let mut manifest_file = archive.by_name("manifest.json")
-            .map_err(|_| "Not a valid Prudii backup: manifest.json not found.".to_string())?;
-        let mut contents = String::new();
-        manifest_file.read_to_string(&mut contents)
-            .map_err(|e| format!("Failed to read manifest: {}", e))?;
-        serde_json::from_str(&contents)
-            .map_err(|e| format!("Failed to parse manifest: {}", e))?
-    };
+    let manifest = read_manifest(&mut archive)?;
 
     let mut existing_account_emails = Vec::new();
     if manifest.includes.accounts {
@@ -1190,6 +1230,7 @@ async fn do_restore_backup(
         }
         *in_progress = true;
     }
+    let _guard = InProgressGuard;
 
     let result = do_restore_backup_inner(&app, &file_path, &strategy, passphrase.as_deref());
 
@@ -1197,11 +1238,6 @@ async fn do_restore_backup(
     if result.is_ok() {
         let pool = app.state::<ImapPool>();
         pool.clear_all().await;
-    }
-
-    {
-        let mut in_progress = BACKUP_IN_PROGRESS.lock().unwrap_or_else(|e| e.into_inner());
-        *in_progress = false;
     }
 
     if let Err(e) = result {
@@ -1231,13 +1267,7 @@ fn do_restore_backup_inner(
     let mut archive = zip::ZipArchive::new(file)
         .map_err(|e| format!("Invalid ZIP file: {}", e))?;
 
-    let manifest: BackupManifest = {
-        let mut f = archive.by_name("manifest.json")
-            .map_err(|_| "manifest.json not found".to_string())?;
-        let mut s = String::new();
-        f.read_to_string(&mut s).map_err(|e| e.to_string())?;
-        serde_json::from_str(&s).map_err(|e| e.to_string())?
-    };
+    let manifest = read_manifest(&mut archive)?;
 
     let mut total_steps: u32 = 0;
     if manifest.includes.app_settings { total_steps += 1; }
@@ -1810,10 +1840,7 @@ mod tasks_roundtrip {
 
         let zip_options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
         let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
-        let exported_count = {
-            let conn = db_a.lock_db();
-            export_tasks(&conn, &mut zip, &db_a.data_dir, &zip_options).unwrap()
-        };
+        let exported_count = export_tasks(&db_a, &mut zip, &db_a.data_dir, &zip_options).unwrap();
         assert_eq!(exported_count, 2);
         let bytes = zip.finish().unwrap().into_inner();
 
@@ -1864,10 +1891,16 @@ mod tasks_roundtrip {
         zip.start_file("tasks.json", zip_options).unwrap();
         zip.write_all(serde_json::to_string(&tasks_json).unwrap().as_bytes()).unwrap();
 
-        let attachments_json = serde_json::json!([{
-            "id": uuid::Uuid::new_v4().to_string(), "task_id": task_id, "filename": "../evil.txt",
-            "mime_type": "text/plain", "size_bytes": 4, "local_path": "unused", "created_at": "2026-01-01T00:00:00Z",
-        }]);
+        let attachments_json = serde_json::json!([
+            {
+                "id": uuid::Uuid::new_v4().to_string(), "task_id": task_id, "filename": "../evil.txt",
+                "mime_type": "text/plain", "size_bytes": 4, "local_path": "unused", "created_at": "2026-01-01T00:00:00Z",
+            },
+            {
+                "id": uuid::Uuid::new_v4().to_string(), "task_id": task_id, "filename": "C:/evil-drive.txt",
+                "mime_type": "text/plain", "size_bytes": 4, "local_path": "unused", "created_at": "2026-01-01T00:00:00Z",
+            },
+        ]);
         zip.start_file("task_attachments.json", zip_options).unwrap();
         zip.write_all(serde_json::to_string(&attachments_json).unwrap().as_bytes()).unwrap();
 
@@ -1884,7 +1917,15 @@ mod tasks_roundtrip {
             import_task_rows(&conn, &mut archive, &db_b.data_dir, false).unwrap()
         };
         assert_eq!(imported_count, 1);
+        assert!(files.is_empty(), "no unsafe attachment row should be planned for extraction");
         extract_task_files(&mut archive, &db_b.data_dir, &files).unwrap();
+
+        let attachment_rows: i64 = db_b.lock_db().query_row(
+            "SELECT COUNT(*) FROM task_attachments",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert_eq!(attachment_rows, 0, "an attachment row with an unsafe path must not be inserted");
 
         // Neither the escape target nor anything at the base dir root was written.
         assert!(!db_b.data_dir.join("evil.txt").exists());
@@ -1896,6 +1937,67 @@ mod tasks_roundtrip {
             Vec::new()
         };
         assert!(written.is_empty(), "no file should have been written for the malicious entry");
+    }
+
+    #[test]
+    fn safe_extract_path_rejects_prefixed_paths_before_creating_any_directory() {
+        let base = std::env::temp_dir().join(format!("prudii-slip-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&base).unwrap();
+
+        for rel in ["C:/evil.txt", "C:evil.txt", "/evil.txt", "\\evil.txt", "../evil.txt", "a/../../evil.txt", ""] {
+            assert!(
+                matches!(safe_extract_path(&base, rel), ExtractCheck::Rejected),
+                "{} should be rejected",
+                rel
+            );
+        }
+
+        // Nothing outside the base may be created while rejecting those paths.
+        assert!(!std::path::Path::new("C:/evil.txt").exists());
+        assert!(!base.parent().unwrap().join("evil.txt").exists());
+        assert_eq!(std::fs::read_dir(&base).unwrap().count(), 0);
+
+        // A dot inside a plain file name is legal and must still resolve.
+        match safe_extract_path(&base, "task-1/report..pdf") {
+            ExtractCheck::Ok(dest) => assert_eq!(dest, base.join("task-1").join("report..pdf")),
+            _ => panic!("a plain file name containing dots must be accepted"),
+        }
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_manifest_from_a_newer_schema_is_rejected_before_anything_is_imported() {
+        let db = temp_db();
+
+        let make_archive = |schema_version: u32| {
+            let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+            let opts = zip::write::SimpleFileOptions::default();
+            let manifest = serde_json::json!({
+                "version": 1,
+                "schema_version": schema_version,
+                "created_at": "2026-01-01 00:00:00",
+                "includes": { "app_settings": false, "accounts": false, "folders": false, "mails": false, "attachments": false, "tasks": true, "credentials": false },
+                "stats": { "account_count": 0, "folder_count": 0, "mail_count": 0, "attachment_count": 0, "task_count": 1 },
+            });
+            zip.start_file("manifest.json", opts).unwrap();
+            zip.write_all(serde_json::to_string(&manifest).unwrap().as_bytes()).unwrap();
+            let tasks = serde_json::json!([{ "id": "t1", "title": "Task one" }]);
+            zip.start_file("tasks.json", opts).unwrap();
+            zip.write_all(serde_json::to_string(&tasks).unwrap().as_bytes()).unwrap();
+            zip::ZipArchive::new(Cursor::new(zip.finish().unwrap().into_inner())).unwrap()
+        };
+
+        let mut newer = make_archive(crate::db::SCHEMA_VERSION + 1);
+        assert_eq!(read_manifest(&mut newer).unwrap_err(), "backup.newerVersion");
+
+        let task_rows: i64 = db.lock_db()
+            .query_row("SELECT COUNT(*) FROM tasks", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(task_rows, 0, "a rejected archive must not import anything");
+
+        let mut current = make_archive(crate::db::SCHEMA_VERSION);
+        assert_eq!(read_manifest(&mut current).unwrap().schema_version, crate::db::SCHEMA_VERSION);
     }
 }
 

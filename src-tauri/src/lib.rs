@@ -529,10 +529,14 @@ pub fn run() {
             // old installs (user-scope, no admin). Safe: only removes entries whose
             // uninstaller file is gone. Runs in the background — it enumerates
             // every HKCU uninstall subkey and must not delay first paint.
+            // The export-backup window is launched by the uninstaller and must have no
+            // registry side effects of its own.
             #[cfg(all(windows, not(debug_assertions)))]
-            tauri::async_runtime::spawn(async move {
-                cleanup_dead_uninstall_entries();
-            });
+            if !is_export_backup_mode() {
+                tauri::async_runtime::spawn(async move {
+                    cleanup_dead_uninstall_entries();
+                });
+            }
 
             let export_backup = is_export_backup_mode();
             let mut win_builder = if export_backup {
