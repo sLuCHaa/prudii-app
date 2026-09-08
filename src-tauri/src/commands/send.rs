@@ -52,7 +52,7 @@ fn decode_attachments(attachments: Option<Vec<SendAttachment>>) -> Result<Vec<Em
 }
 
 #[tauri::command]
-pub async fn send_mail(app: AppHandle, db: State<'_, Database>, pool: State<'_, ImapPool>, request: SendMailRequest) -> Result<(), String> {
+pub async fn send_mail(app: AppHandle, db: State<'_, Database>, request: SendMailRequest) -> Result<(), String> {
     // Get account details, before any await
     let (account_id, email, display_name, smtp_host, smtp_port, smtp_security, imap_host, imap_port, auth_type, provider, sent_folder) = {
         let conn = db.lock_db();
@@ -212,109 +212,145 @@ pub async fn send_mail(app: AppHandle, db: State<'_, Database>, pool: State<'_, 
 
         let is_gmail_imap = imap_host.contains("gmail.com") || imap_host.contains("googlemail.com");
 
-        // Append to Sent folder via IMAP (skip for Gmail which auto-saves sent mails).
-        // The mail was already sent successfully via SMTP — if saving to Sent fails,
-        // emit a non-blocking warning event so the user knows, but don't fail the send.
-        let sent_folder_reconcile = sent_folder.clone();
-        if !is_gmail_imap {
-            if let Some((sent_id, sent_path)) = sent_folder {
-                let sent_save_result = match pool.get_session(&account_id, &imap_host, imap_port as u16, &email, &credential, &auth_type).await {
-                    Ok(mut session) => {
-                        match imap::append_to_folder(&mut session, &sent_path, &message_bytes, &["\\Seen"]).await {
-                            Ok(_) => {
-                                pool.return_session(&account_id, session).await;
-                                // Insert the sent copy locally so it appears immediately,
-                                // instead of relying on a later sync to re-fetch it (which
-                                // is unreliable on some servers, e.g. GMX). The next sync
-                                // claims this row by Message-ID and backfills the real UID.
-                                match imap::insert_local_sent_mail(&db, &account_id, &sent_id, &message_bytes) {
-                                    // Store the attachments from the same bytes — the local row has
-                                    // no UID yet, so opening the sent mail cannot fetch them.
-                                    Ok(sent_mail_id) => {
-                                        if let Err(e) = imap::store_body_and_attachments(&db, &sent_mail_id, &message_bytes).await {
-                                            log::error!("Failed to store attachments of the local sent copy: {}", e);
-                                        }
-                                    }
-                                    Err(e) => log::warn!("Failed to insert local sent copy (will appear after next sync): {}", e),
-                                }
-                                Ok(())
-                            }
-                            Err(e) => {
-                                let err_msg = format!("Failed to append to Sent folder: {}", e);
-                                log::warn!("{}", err_msg);
-                                if let Err(le) = session.logout().await {
-                                    log::warn!("Failed to logout IMAP session after Sent append failure: {}", le);
-                                }
-                                pool.release(&account_id);
-                                Err(err_msg)
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        let err_msg = format!("Could not connect to IMAP to save sent mail: {}", e);
-                        log::warn!("{}", err_msg);
-                        Err(err_msg)
-                    }
-                };
-                if let Err(msg) = sent_save_result {
-                    let _ = app.emit("sent-folder-save-failed", serde_json::json!({
-                        "account_id": account_id,
-                        "error": msg,
-                    }));
-                }
-            } else {
-                // No folder is classified as Sent for this account — the sent copy
-                // would silently vanish. Surface it instead of dropping it quietly.
-                log::warn!("send_mail: no Sent folder detected for account {} — sent copy not saved", account_id);
-                let _ = app.emit("sent-folder-save-failed", serde_json::json!({
-                    "account_id": account_id,
-                    "error": "No 'Sent' folder was detected for this account, so the sent copy could not be saved.",
-                }));
-            }
-        }
-
-        // Background reconcile of only the Sent folder: claims the mirrored
-        // row's UID; for Gmail-IMAP imports the auto-saved copy.
-        if let Some((sent_id, sent_path)) = sent_folder_reconcile {
-            let app = app.clone();
-            let account_id = account_id.clone();
-            let imap_host = imap_host.clone();
-            let email = email.clone();
-            let credential = credential.clone();
-            let auth_type = auth_type.clone();
-            crate::task_registry::spawn_for_account(&account_id.clone(), async move {
-                let db = app.state::<crate::db::Database>();
-                let pool = app.state::<crate::pool::ImapPool>();
-                let folder = crate::models::Folder {
-                    id: sent_id,
-                    account_id: account_id.clone(),
-                    name: "Sent".to_string(),
-                    folder_type: "sent".to_string(),
-                    path: sent_path,
-                    unread_count: 0,
-                    total_count: 0,
-                    is_local: false,
-                    color: String::new(),
-                };
-                match pool.get_session_guarded(&account_id, &imap_host, imap_port as u16, &email, &credential, &auth_type).await {
-                    Ok((mut session, _guard)) => {
-                        match imap::sync_mails(&mut session, &folder, &account_id, &db, None).await {
-                            Ok(_) => pool.return_session(&account_id, session).await,
-                            Err(e) => {
-                                log::warn!("Sent-folder reconcile failed (next sync catches up): {}", e);
-                                drop(session);
-                                pool.release(&account_id);
-                            }
-                        }
-                        let _ = app.emit("mails-changed", serde_json::json!({ "account_id": account_id }));
-                    }
-                    Err(e) => log::warn!("Sent-folder reconcile: no IMAP session: {}", e),
-                };
-            });
-        }
+        // The mail has left the building — everything below only archives a copy.
+        // It needs the account's IMAP session, which a running sync can hold for
+        // a minute, so it must not keep the caller (and its toast) waiting.
+        let bg_app = app.clone();
+        let bg_account_id = account_id.clone();
+        crate::task_registry::spawn_for_account(&account_id, async move {
+            save_sent_copy(
+                bg_app,
+                bg_account_id,
+                imap_host,
+                imap_port as u16,
+                email,
+                credential,
+                auth_type,
+                sent_folder,
+                message_bytes,
+                is_gmail_imap,
+            )
+            .await;
+        });
     }
 
     Ok(())
+}
+
+/// Archive an already sent mail: APPEND it to the IMAP Sent folder, mirror it
+/// into the local DB and reconcile the folder afterwards.
+///
+/// Runs detached from `send_mail` — every failure here is reported through
+/// events (`sent-folder-save-failed`) or the log, never to the sender, because
+/// the mail itself is already out.
+#[allow(clippy::too_many_arguments)]
+async fn save_sent_copy(
+    app: AppHandle,
+    account_id: String,
+    imap_host: String,
+    imap_port: u16,
+    email: String,
+    credential: String,
+    auth_type: String,
+    sent_folder: Option<(String, String)>,
+    message_bytes: Vec<u8>,
+    is_gmail_imap: bool,
+) {
+    let db = app.state::<Database>();
+    let pool = app.state::<ImapPool>();
+
+    // Append to Sent folder via IMAP (skip for Gmail which auto-saves sent mails).
+    // The mail was already sent successfully via SMTP — if saving to Sent fails,
+    // emit a non-blocking warning event so the user knows, but don't fail the send.
+    let sent_folder_reconcile = sent_folder.clone();
+    if !is_gmail_imap {
+        if let Some((sent_id, sent_path)) = sent_folder {
+            let sent_save_result = match pool.get_session(&account_id, &imap_host, imap_port, &email, &credential, &auth_type).await {
+                Ok(mut session) => {
+                    match imap::append_to_folder(&mut session, &sent_path, &message_bytes, &["\\Seen"]).await {
+                        Ok(_) => {
+                            pool.return_session(&account_id, session).await;
+                            // Insert the sent copy locally so it appears immediately,
+                            // instead of relying on a later sync to re-fetch it (which
+                            // is unreliable on some servers, e.g. GMX). The next sync
+                            // claims this row by Message-ID and backfills the real UID.
+                            match imap::insert_local_sent_mail(&db, &account_id, &sent_id, &message_bytes) {
+                                // Store the attachments from the same bytes — the local row has
+                                // no UID yet, so opening the sent mail cannot fetch them.
+                                Ok(sent_mail_id) => {
+                                    if let Err(e) = imap::store_body_and_attachments(&db, &sent_mail_id, &message_bytes).await {
+                                        log::error!("Failed to store attachments of the local sent copy: {}", e);
+                                    }
+                                    // The send already returned — tell the UI the row exists.
+                                    let _ = app.emit("mails-changed", serde_json::json!({ "account_id": account_id }));
+                                }
+                                Err(e) => log::warn!("Failed to insert local sent copy (will appear after next sync): {}", e),
+                            }
+                            Ok(())
+                        }
+                        Err(e) => {
+                            let err_msg = format!("Failed to append to Sent folder: {}", e);
+                            log::warn!("{}", err_msg);
+                            if let Err(le) = session.logout().await {
+                                log::warn!("Failed to logout IMAP session after Sent append failure: {}", le);
+                            }
+                            pool.release(&account_id);
+                            Err(err_msg)
+                        }
+                    }
+                }
+                Err(e) => {
+                    let err_msg = format!("Could not connect to IMAP to save sent mail: {}", e);
+                    log::warn!("{}", err_msg);
+                    Err(err_msg)
+                }
+            };
+            if let Err(msg) = sent_save_result {
+                let _ = app.emit("sent-folder-save-failed", serde_json::json!({
+                    "account_id": account_id,
+                    "error": msg,
+                }));
+            }
+        } else {
+            // No folder is classified as Sent for this account — the sent copy
+            // would silently vanish. Surface it instead of dropping it quietly.
+            log::warn!("send_mail: no Sent folder detected for account {} — sent copy not saved", account_id);
+            let _ = app.emit("sent-folder-save-failed", serde_json::json!({
+                "account_id": account_id,
+                "error": "No 'Sent' folder was detected for this account, so the sent copy could not be saved.",
+            }));
+        }
+    }
+
+    // Reconcile of only the Sent folder: claims the mirrored row's UID;
+    // for Gmail-IMAP imports the auto-saved copy.
+    if let Some((sent_id, sent_path)) = sent_folder_reconcile {
+        let folder = crate::models::Folder {
+            id: sent_id,
+            account_id: account_id.clone(),
+            name: "Sent".to_string(),
+            folder_type: "sent".to_string(),
+            path: sent_path,
+            unread_count: 0,
+            total_count: 0,
+            is_local: false,
+            color: String::new(),
+        };
+        match pool.get_session_guarded(&account_id, &imap_host, imap_port, &email, &credential, &auth_type).await {
+            Ok((mut session, _guard)) => {
+                match imap::sync_mails(&mut session, &folder, &account_id, &db, None).await {
+                    Ok(_) => pool.return_session(&account_id, session).await,
+                    Err(e) => {
+                        log::warn!("Sent-folder reconcile failed (next sync catches up): {}", e);
+                        drop(session);
+                        pool.release(&account_id);
+                    }
+                }
+                let _ = app.emit("mails-changed", serde_json::json!({ "account_id": account_id }));
+            }
+            Err(e) => log::warn!("Sent-folder reconcile: no IMAP session: {}", e),
+        };
+    }
 }
 
 #[tauri::command]
@@ -736,8 +772,7 @@ pub async fn run_scheduled_check(app: &AppHandle) -> Result<i32, String> {
         };
 
         let db_state: tauri::State<'_, Database> = app.state();
-        let pool_state: tauri::State<'_, ImapPool> = app.state();
-        match send_mail(app.clone(), db_state, pool_state, request).await {
+        match send_mail(app.clone(), db_state, request).await {
             Ok(()) => {
                 let db_ref = app.state::<Database>();
                 let conn = db_ref.lock_db();

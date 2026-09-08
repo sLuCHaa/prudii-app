@@ -50,8 +50,8 @@ export function UndoToast() {
           );
         });
       }
-      // The sent mail and the trashed draft are already in the local DB — show them
-      // now instead of waiting for the sync that follows to report back.
+      // The trashed draft is already gone from the local DB — show that now instead
+      // of waiting for the sync; the sent copy emits its own event once it lands.
       emit("mails-changed", { account_id: undoSend.request.account_id });
       syncAccount(undoSend.request.account_id).catch(() => {});
       if (useAppStore.getState().appSettings.notification_sound) playSentSound();

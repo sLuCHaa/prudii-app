@@ -1200,8 +1200,8 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
           });
         }
         emit("mails-changed", { account_id: request.account_id });
-        // IMAP accounts already mirror the sent copy locally and the backend
-        // reconciles the Sent folder — no full sync needed. API accounts
+        // IMAP accounts mirror the sent copy in the background and emit
+        // mails-changed once it lands — no full sync needed. API accounts
         // (Gmail/Outlook OAuth) get their sent copy only via their quiet
         // incremental sync, so trigger that one.
         const sentAccount = accounts?.find((a) => a.id === request.account_id);
