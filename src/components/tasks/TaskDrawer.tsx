@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import type { DragEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
+import type { DragEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { motion } from "motion/react";
-import { parseISO } from "date-fns";
-import { X, Trash2 } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
+import { formatDistanceToNowStrict, parseISO } from "date-fns";
+import { CalendarDays, X } from "lucide-react";
 import type { CreateTaskInput, Task, TaskPriority, TaskStatus, UpdateTaskPatch } from "../../types";
 import { TASK_STATUSES } from "../../types";
 import { useCreateTask, useDeleteTask, useTask, useTaskAttachments, useUpdateTask } from "../../hooks/useTasks";
@@ -18,15 +18,30 @@ import { STATUS_KEY } from "./TaskStatusBadge";
 import { ChecklistEditor } from "./ChecklistEditor";
 import { LinkedMails } from "./LinkedMails";
 import { TaskFiles } from "./TaskFiles";
-import { fromDatetimeLocalValue, quickDueDate, toDatetimeLocalValue } from "../../lib/tasks";
-import { formatDateTime } from "../../lib/dateUtils";
-import { SPRING_SNAPPY } from "../motion/tokens";
+import { TaskSectionHead } from "./TaskSectionHead";
+import { fromDatetimeLocalValue, isOverdue, quickDueDate, toDatetimeLocalValue } from "../../lib/tasks";
+import { dateLocale, formatDateTime, formatTime } from "../../lib/dateUtils";
+import { ENTRANCE, SPRING_SNAPPY, TRANSITION_INSTANT } from "../motion/tokens";
 
 const PRIORITY_KEY: Record<TaskPriority, string> = {
   low: "tasks.priorityLow",
   normal: "tasks.priorityNormal",
   high: "tasks.priorityHigh",
 };
+
+const PRIORITY_DOT: Record<TaskPriority, string> = {
+  low: "bg-text-tertiary",
+  normal: "bg-accent",
+  high: "bg-danger",
+};
+
+const STATUS_STRIPE: Record<TaskStatus, string> = {
+  open: "bg-accent",
+  in_progress: "bg-warning",
+  done: "bg-success",
+};
+
+const PILL = "inline-flex items-center gap-2 h-[30px] px-3 rounded-full border border-border bg-bg-secondary text-text text-xs font-medium hover:border-text-tertiary transition-colors";
 
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
@@ -46,43 +61,129 @@ function readFileAsBase64(file: File): Promise<string> {
 function StatusSegment({ status, onChange }: { status: TaskStatus; onChange: (s: TaskStatus) => void }) {
   const { t } = useTranslation();
   return (
-    <div role="group" aria-label={t("tasks.status")} className="flex items-center gap-0.5 p-0.5 rounded-lg bg-bg-secondary">
+    <div role="group" aria-label={t("tasks.status")} className="inline-flex items-center gap-0.5 p-0.5 rounded-full bg-bg-tertiary">
       {TASK_STATUSES.map((s) => (
         <button
           key={s}
           type="button"
           onClick={() => onChange(s)}
-          className="relative px-2.5 py-1 rounded-md text-xs font-medium"
+          aria-pressed={status === s}
+          className="relative px-2.5 py-1 rounded-full text-xs font-medium"
         >
           {status === s && (
-            <motion.div layoutId="task-status-pill" className="absolute inset-0 bg-surface shadow-sm rounded-md" transition={SPRING_SNAPPY} />
+            <motion.div layoutId="task-status-pill" className="absolute inset-0 bg-surface shadow-sm rounded-full" transition={SPRING_SNAPPY} />
           )}
-          <span className={`relative z-10 ${status === s ? "text-accent" : "text-text-tertiary"}`}>{t(STATUS_KEY[s])}</span>
+          <span className={`relative z-10 ${status === s ? "text-text" : "text-text-secondary"}`}>{t(STATUS_KEY[s])}</span>
         </button>
       ))}
     </div>
   );
 }
 
-function DueChips({ onPick }: { onPick: (iso: string) => void }) {
-  const { t } = useTranslation();
-  const chips: { key: "today" | "tomorrow" | "nextWeek"; label: string }[] = [
-    { key: "today", label: t("tasks.today") },
-    { key: "tomorrow", label: t("tasks.tomorrow") },
-    { key: "nextWeek", label: t("tasks.nextWeek") },
-  ];
+/** Section wrapper: staggered rise, matching the drawer's entrance rhythm. */
+function Section({ index, children }: { index: number; children: ReactNode }) {
+  const reduce = useReducedMotion();
   return (
-    <div className="flex items-center gap-1.5">
-      {chips.map((c) => (
+    <motion.section
+      initial={reduce ? false : { y: ENTRANCE.y, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={reduce ? TRANSITION_INSTANT : { duration: ENTRANCE.duration, delay: 0.04 + index * 0.05, ease: "easeOut" }}
+    >
+      {children}
+    </motion.section>
+  );
+}
+
+type QuickKey = "today" | "tomorrow" | "nextWeek";
+
+function DuePopover({
+  dueAt,
+  use24h,
+  onPick,
+  onClear,
+  onClose,
+}: {
+  dueAt: string | null;
+  use24h: boolean;
+  onPick: (iso: string) => void;
+  onClear: () => void;
+  onClose: () => void;
+}) {
+  const { t, i18n } = useTranslation();
+  const ref = useFocusTrap<HTMLDivElement>(true);
+  const [value, setValue] = useState(() => toDatetimeLocalValue(dueAt));
+
+  const quick: { key: QuickKey; label: string; iso: string }[] = (["today", "tomorrow", "nextWeek"] as QuickKey[]).map((key) => ({
+    key,
+    label: t(`tasks.${key}`),
+    iso: quickDueDate(key, new Date()),
+  }));
+
+  function subLabel(key: QuickKey, iso: string): string {
+    const d = new Date(iso);
+    const time = formatTime(d, use24h);
+    if (key !== "nextWeek") return time;
+    return `${new Intl.DateTimeFormat(i18n.language, { weekday: "short" }).format(d)} ${time}`;
+  }
+
+  return (
+    <div
+      ref={ref}
+      role="dialog"
+      aria-label={t("tasks.due")}
+      className="absolute top-full left-0 mt-2 z-30 w-66 p-2 rounded-2xl bg-surface border border-border shadow-lg"
+    >
+      <div className="grid grid-cols-2 gap-1.5 mb-2">
+        {quick.map((q) => (
+          <button
+            key={q.key}
+            type="button"
+            onClick={() => { onPick(q.iso); onClose(); }}
+            className="flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl bg-bg-secondary text-xs font-medium text-text hover:bg-accent/10 hover:text-accent transition-colors text-left"
+          >
+            <span>{q.label}</span>
+            <span className="text-text-tertiary font-normal tabular-nums">{subLabel(q.key, q.iso)}</span>
+          </button>
+        ))}
         <button
-          key={c.key}
           type="button"
-          onClick={() => onPick(quickDueDate(c.key, new Date()))}
-          className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-bg-secondary text-text-secondary hover:bg-hover transition-colors"
+          onClick={() => { onClear(); onClose(); }}
+          className="px-2.5 py-2 rounded-xl bg-bg-secondary text-xs font-medium text-text hover:bg-accent/10 hover:text-accent transition-colors text-left"
         >
-          {c.label}
+          {t("tasks.dueNoDate")}
         </button>
-      ))}
+      </div>
+
+      <label htmlFor="task-due-input" className="block px-1 mb-1 text-[11px] uppercase tracking-wider text-text-tertiary">
+        {t("tasks.dueDateTime")}
+      </label>
+      <input
+        id="task-due-input"
+        type="datetime-local"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e: ReactKeyboardEvent<HTMLInputElement>) => {
+          if (e.key !== "Enter" || !value) return;
+          e.preventDefault();
+          onPick(fromDatetimeLocalValue(value));
+          onClose();
+        }}
+        className="w-full h-9 px-2.5 rounded-xl border border-border bg-bg-secondary text-text text-xs focus:border-accent transition-colors"
+      />
+
+      <div className="flex items-center justify-between mt-2 px-1">
+        <button type="button" onClick={onClose} className="text-xs text-text-secondary hover:text-text transition-colors py-1">
+          {t("common.cancel")}
+        </button>
+        <button
+          type="button"
+          disabled={!value}
+          onClick={() => { onPick(fromDatetimeLocalValue(value)); onClose(); }}
+          className="text-xs font-semibold text-accent hover:text-accent-hover transition-colors py-1 disabled:opacity-40"
+        >
+          {t("tasks.dueApply")}
+        </button>
+      </div>
     </div>
   );
 }
@@ -96,12 +197,12 @@ interface TaskDrawerProps {
 }
 
 export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const isNew = taskId === "new";
   const setOpenTaskId = useAppStore((s) => s.setOpenTaskId);
   const addToast = useAppStore((s) => s.addToast);
   const use24h = useAppStore((s) => s.appSettings.use_24h_clock);
-  const { data: detail, isLoading, isError } = useTask(isNew ? null : taskId);
+  const { data: detail, isError } = useTask(isNew ? null : taskId);
   const task: Task | null = detail?.task ?? null;
 
   const createTaskMutation = useCreateTask();
@@ -109,8 +210,12 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
   const deleteTaskMutation = useDeleteTask();
   const attachmentsApi = useTaskAttachments(isNew ? null : taskId);
   const dialog = useDialog();
+  const reduce = useReducedMotion();
 
   const [descEscapeBlocked, setDescEscapeBlocked] = useState(false);
+  const [duePopoverOpen, setDuePopoverOpen] = useState(false);
+  const [dropActive, setDropActive] = useState(false);
+  const dueAnchorRef = useRef<HTMLDivElement>(null);
   // While the confirm dialog is up it owns Tab; two live traps bounce every Tab back.
   const drawerRef = useFocusTrap<HTMLElement>(!dialog.isOpen, { initialFocus: false });
 
@@ -160,13 +265,17 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
     // "outside" and its Escape would close the drawer underneath it.
     function handleMouseDown(e: MouseEvent) {
       if (dialog.isOpen) return;
-      if (drawerRef.current && !drawerRef.current.contains(e.target as Node)) closeDrawer();
+      const target = e.target as Node;
+      if (duePopoverOpen && !dueAnchorRef.current?.contains(target)) setDuePopoverOpen(false);
+      if (drawerRef.current && !drawerRef.current.contains(target)) closeDrawer();
     }
     function handleKeyDown(e: KeyboardEvent) {
       // Overlays above the drawer (palette, shortcut help, quick-add popover) mark
       // the Escape they consume as handled.
       if (e.defaultPrevented || dialog.isOpen) return;
-      if (e.key === "Escape" && !descEscapeBlocked) closeDrawer();
+      if (e.key !== "Escape" || descEscapeBlocked) return;
+      if (duePopoverOpen) { setDuePopoverOpen(false); return; }
+      closeDrawer();
     }
     document.addEventListener("mousedown", handleMouseDown);
     document.addEventListener("keydown", handleKeyDown);
@@ -174,7 +283,7 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
       document.removeEventListener("mousedown", handleMouseDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [onClose, descEscapeBlocked, dialog.isOpen, drawerRef, debouncedTitleSave, debouncedDescSave]);
+  }, [onClose, descEscapeBlocked, dialog.isOpen, duePopoverOpen, drawerRef, debouncedTitleSave, debouncedDescSave]);
 
   // The task vanished (deleted elsewhere) — bail out instead of showing a dead form forever.
   useEffect(() => {
@@ -207,6 +316,7 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
   }
 
   function handleDrop(e: DragEvent) {
+    setDropActive(false);
     if (isNew || !task || !e.dataTransfer.types.includes("Files")) return;
     e.preventDefault();
     Array.from(e.dataTransfer.files).forEach((file) => {
@@ -223,144 +333,212 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
   const priorityOptions: SelectOption[] = (["low", "normal", "high"] as TaskPriority[]).map((p) => ({
     value: p,
     label: t(PRIORITY_KEY[p]),
+    icon: <span className={`w-2 h-2 rounded-full shrink-0 ${PRIORITY_DOT[p]}`} />,
   }));
 
+  function dueLabel(due: string): string {
+    const d = new Date(due);
+    const now = new Date();
+    const sameDay = (a: Date, b: Date) =>
+      a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const day = sameDay(d, now)
+      ? t("tasks.today")
+      : sameDay(d, tomorrow)
+        ? t("tasks.tomorrow")
+        : new Intl.DateTimeFormat(i18n.language, { month: "short", day: "numeric" }).format(d);
+    return `${day}, ${formatTime(d, use24h)}`;
+  }
+
+  const overdue = task ? isOverdue(task, new Date()) : false;
+  const stripeClass = task ? STATUS_STRIPE[task.status] : "bg-accent";
+
   return (
-    <motion.aside
-      ref={drawerRef}
-      initial={{ x: 40, opacity: 0 }}
-      animate={{ x: 0, opacity: 1 }}
-      exit={{ x: 40, opacity: 0 }}
-      transition={SPRING_SNAPPY}
-      onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); }}
-      onDrop={handleDrop}
-      className="fixed top-8 bottom-0 right-0 w-[440px] max-w-[92vw] bg-surface border-l border-border shadow-2xl z-40 flex flex-col"
-    >
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
-        {!isNew && task ? (
-          <StatusSegment status={task.status} onChange={(status) => patchTask(task.id, { status })} />
-        ) : (
-          <span className="text-sm font-semibold text-text">{t("tasks.new")}</span>
-        )}
-        <button
-          onClick={closeDrawer}
-          aria-label={t("common.close")}
-          className="text-text-tertiary hover:text-text transition-colors rounded-md p-1 hover:bg-hover"
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
+    <>
+      <motion.div
+        aria-hidden
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={reduce ? TRANSITION_INSTANT : { duration: 0.2, ease: "easeOut" }}
+        className="fixed top-8 inset-x-0 bottom-0 z-30 drawer-backdrop"
+      />
+      <motion.aside
+        ref={drawerRef}
+        aria-label={t("tasks.title")}
+        initial={reduce ? false : { x: 28, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        exit={reduce ? { opacity: 0 } : { x: 28, opacity: 0 }}
+        transition={reduce ? TRANSITION_INSTANT : SPRING_SNAPPY}
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes("Files")) return;
+          e.preventDefault();
+          setDropActive(true);
+        }}
+        onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropActive(false); }}
+        onDrop={handleDrop}
+        className="fixed top-8 bottom-0 right-0 w-[480px] max-w-[92vw] bg-surface border-l border-border shadow-2xl z-40 flex flex-col"
+      >
+        <div className={`h-[3px] shrink-0 transition-colors duration-300 ${stripeClass}`} />
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-5">
-        {isNew ? (
-          <input
-            autoFocus
-            placeholder={t("tasks.titlePlaceholder")}
-            onKeyDown={(e: ReactKeyboardEvent<HTMLInputElement>) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                submitCreate(e.currentTarget.value);
-              }
-            }}
-            className="w-full text-lg font-semibold bg-transparent focus:outline-none text-text placeholder:text-text-tertiary"
-          />
-        ) : !task ? (
-          <div className="space-y-3">
-            <Skeleton height="1.75rem" width="70%" />
-            <Skeleton height="8rem" />
-            <Skeleton height="1.5rem" width="40%" />
+        <div className="shrink-0 grid gap-3 px-5 pt-4 pb-3">
+          <div className="flex items-center justify-between gap-2">
+            {!isNew && task ? (
+              <StatusSegment status={task.status} onChange={(status) => patchTask(task.id, { status })} />
+            ) : (
+              <span className="font-heading text-sm font-bold text-text">{t("tasks.new")}</span>
+            )}
+            <button
+              onClick={closeDrawer}
+              aria-label={t("common.close")}
+              className="w-[30px] h-[30px] grid place-items-center rounded-lg text-text-tertiary hover:bg-hover hover:text-text transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
-        ) : (
-          <>
-            <div className="flex items-center gap-2 flex-wrap">
-              <Select
-                value={task.priority}
-                options={priorityOptions}
-                onChange={(v) => patchTask(task.id, { priority: v as TaskPriority })}
-                ariaLabel={t("tasks.priority")}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-border bg-bg-secondary text-text text-xs"
-              />
-              <input
-                // Keyed on the stored value: uncontrolled while editing (no PATCH per
-                // keystroke), yet remounted when the due date changes elsewhere.
-                key={`due-${task.id}-${task.due_at ?? ""}`}
-                type="datetime-local"
-                defaultValue={toDatetimeLocalValue(task.due_at)}
-                onBlur={(e) => {
-                  const value = e.target.value;
-                  if (value && value !== toDatetimeLocalValue(task.due_at)) {
-                    patchTask(task.id, { due_at: fromDatetimeLocalValue(value) });
-                  }
-                }}
-                onKeyDown={(e: ReactKeyboardEvent<HTMLInputElement>) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-                className="bg-bg-secondary border border-border rounded-lg px-2 py-1 text-xs text-text focus:border-accent"
-              />
-              {task.due_at && (
-                <button
-                  type="button"
-                  onClick={() => patchTask(task.id, { clear_due_at: true })}
-                  aria-label={t("tasks.clearDueDate")}
-                  title={t("tasks.clearDueDate")}
-                  className="p-1 rounded hover:bg-hover text-text-tertiary hover:text-danger transition-colors"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
 
-            <DueChips onPick={(iso) => patchTask(task.id, { due_at: iso })} />
-
+          {isNew ? (
             <input
-              key={task.id}
-              defaultValue={task.title}
+              autoFocus
               placeholder={t("tasks.titlePlaceholder")}
-              onChange={(e) => debouncedTitleSave(task.id, e.target.value)}
-              onBlur={(e) => {
-                debouncedTitleSave.cancel();
-                const next = e.target.value.trim();
-                if (!next) { e.target.value = task.title; return; }
-                const saved = lastSavedTitle.current?.id === task.id ? lastSavedTitle.current.title : task.title;
-                if (next !== saved) saveTitle(task.id, next);
+              onKeyDown={(e: ReactKeyboardEvent<HTMLInputElement>) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  submitCreate(e.currentTarget.value);
+                }
               }}
-              onKeyDown={(e: ReactKeyboardEvent<HTMLInputElement>) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-              className="w-full text-lg font-semibold bg-transparent focus:outline-none text-text placeholder:text-text-tertiary"
+              className="w-full font-heading text-[22px] font-bold leading-tight bg-transparent focus:outline-none text-text placeholder:text-text-tertiary"
             />
-
-            <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary mb-2">{t("tasks.description")}</h3>
-              <RichTextEditor
-                key={task.id}
-                content={task.description_html}
-                onChange={(html) => debouncedDescSave(task.id, html)}
-                placeholder={t("tasks.descriptionPlaceholder")}
-                editorClassName="prose prose-sm max-w-none focus:outline-none min-h-[140px] text-text"
-                toolbar
-                onEscapeBlockedChange={setDescEscapeBlocked}
-              />
+          ) : !task ? (
+            <div className="space-y-3">
+              <Skeleton height="1.75rem" width="70%" />
+              <Skeleton height="1.5rem" width="40%" />
             </div>
+          ) : (
+            <>
+              <textarea
+                key={task.id}
+                rows={1}
+                spellCheck={false}
+                ref={autoGrow}
+                defaultValue={task.title}
+                aria-label={t("tasks.titlePlaceholder")}
+                placeholder={t("tasks.titlePlaceholder")}
+                onChange={(e) => { autoGrow(e.currentTarget); debouncedTitleSave(task.id, e.target.value); }}
+                onBlur={(e) => {
+                  debouncedTitleSave.cancel();
+                  const next = e.target.value.trim();
+                  if (!next) { e.target.value = task.title; autoGrow(e.currentTarget); return; }
+                  const saved = lastSavedTitle.current?.id === task.id ? lastSavedTitle.current.title : task.title;
+                  if (next !== saved) saveTitle(task.id, next);
+                }}
+                onKeyDown={(e: ReactKeyboardEvent<HTMLTextAreaElement>) => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }}
+                className="w-full resize-none overflow-hidden font-heading text-[22px] font-bold leading-tight bg-transparent focus:outline-none text-text placeholder:text-text-tertiary"
+              />
 
-            <ChecklistEditor taskId={task.id} items={detail!.checklist} />
-            <LinkedMails taskId={task.id} links={detail!.links} />
-            <TaskFiles attachments={detail!.attachments} api={attachmentsApi} />
-          </>
-        )}
-      </div>
-
-      {!isNew && task && (
-        <div className="px-4 py-3 border-t border-border shrink-0 flex items-center justify-between gap-2">
-          <button
-            onClick={handleDelete}
-            className="flex items-center gap-1.5 text-xs font-medium text-danger hover:bg-danger/10 px-2 py-1 rounded-lg transition-colors"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            {t("tasks.deleteTask")}
-          </button>
-          <div className="text-[11px] text-text-tertiary text-right leading-tight">
-            <div>{t("tasks.createdAt", { date: formatDateTime(parseISO(task.created_at), use24h) })}</div>
-            <div>{t("tasks.updatedAt", { date: formatDateTime(parseISO(task.updated_at), use24h) })}</div>
-          </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Select
+                  value={task.priority}
+                  options={priorityOptions}
+                  onChange={(v) => patchTask(task.id, { priority: v as TaskPriority })}
+                  ariaLabel={t("tasks.priority")}
+                  className={PILL}
+                />
+                <div ref={dueAnchorRef} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setDuePopoverOpen((open) => !open)}
+                    aria-haspopup="dialog"
+                    aria-expanded={duePopoverOpen}
+                    aria-label={t("tasks.due")}
+                    className={
+                      task.due_at
+                        ? `inline-flex items-center gap-2 h-[30px] px-3 rounded-full border border-transparent text-xs font-medium transition-colors ${overdue ? "bg-danger/10 text-danger" : "bg-accent/10 text-accent"}`
+                        : "inline-flex items-center gap-2 h-[30px] px-3 rounded-full border border-dashed border-border bg-transparent text-xs font-medium text-text-tertiary hover:border-text-tertiary hover:text-text-secondary transition-colors"
+                    }
+                  >
+                    <CalendarDays className="w-3.5 h-3.5" />
+                    {task.due_at ? dueLabel(task.due_at) : t("tasks.noDue")}
+                  </button>
+                  {duePopoverOpen && (
+                    <DuePopover
+                      dueAt={task.due_at}
+                      use24h={use24h}
+                      onPick={(iso) => patchTask(task.id, { due_at: iso })}
+                      onClear={() => patchTask(task.id, { clear_due_at: true })}
+                      onClose={() => setDuePopoverOpen(false)}
+                    />
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </div>
-      )}
-    </motion.aside>
+
+        <div className="flex-1 min-h-0 overflow-y-auto grid gap-6 content-start px-5 pt-1 pb-5">
+          {!isNew && !task ? (
+            <Skeleton height="8rem" />
+          ) : !isNew && task && detail ? (
+            <>
+              <Section index={0}>
+                <TaskSectionHead title={t("tasks.description")} />
+                <div className="group rounded-2xl bg-bg-secondary border border-transparent focus-within:bg-surface focus-within:border-border focus-within:ring-3 focus-within:ring-accent/10 transition-colors">
+                  <RichTextEditor
+                    key={task.id}
+                    content={task.description_html}
+                    onChange={(html) => debouncedDescSave(task.id, html)}
+                    placeholder={t("tasks.descriptionPlaceholder")}
+                    editorClassName="prose prose-sm max-w-none focus:outline-none min-h-[60px] px-3.5 py-3 text-text"
+                    toolbar="focus"
+                    onEscapeBlockedChange={setDescEscapeBlocked}
+                  />
+                </div>
+              </Section>
+
+              <Section index={1}>
+                <ChecklistEditor taskId={task.id} items={detail.checklist} />
+              </Section>
+
+              {detail.links.length > 0 && (
+                <Section index={2}>
+                  <LinkedMails taskId={task.id} links={detail.links} />
+                </Section>
+              )}
+
+              <Section index={3}>
+                <TaskFiles attachments={detail.attachments} api={attachmentsApi} dropActive={dropActive} />
+              </Section>
+            </>
+          ) : null}
+        </div>
+
+        {!isNew && task && (
+          <div className="shrink-0 flex items-center justify-between gap-3 px-5 py-2.5 border-t border-border-light bg-surface">
+            <span
+              className="text-[11px] text-text-tertiary truncate"
+              title={`${t("tasks.createdAt", { date: formatDateTime(parseISO(task.created_at), use24h) })} · ${t("tasks.updatedAt", { date: formatDateTime(parseISO(task.updated_at), use24h) })}`}
+            >
+              {t("tasks.createdUpdated", {
+                created: formatDistanceToNowStrict(parseISO(task.created_at), { addSuffix: true, locale: dateLocale() }),
+                updated: formatDistanceToNowStrict(parseISO(task.updated_at), { addSuffix: true, locale: dateLocale() }),
+              })}
+            </span>
+            <button
+              onClick={handleDelete}
+              className="shrink-0 px-2.5 py-1.5 rounded-lg text-xs text-text-tertiary hover:text-danger hover:bg-danger/10 transition-colors"
+            >
+              {t("tasks.deleteTask")}
+            </button>
+          </div>
+        )}
+      </motion.aside>
+    </>
   );
+}
+
+/** Textareas do not grow on their own — re-measure on mount and on every edit. */
+function autoGrow(el: HTMLTextAreaElement | null) {
+  if (!el) return;
+  el.style.height = "auto";
+  el.style.height = `${el.scrollHeight}px`;
 }
