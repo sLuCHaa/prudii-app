@@ -586,7 +586,11 @@ fn remove_task_attachment_impl(db: &Database, id: &str) -> Result<(), String> {
 
     // A file deleted outside the app cannot be canonicalized, so fall back to the
     // stored path for the containment check - the row must stay removable either way.
+    // `..` is rejected outright: the fallback's starts_with cannot see through it.
     let raw = PathBuf::from(&stored);
+    if raw.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+        return Err("Attachment path is outside app data directory".into());
+    }
     let path = raw.canonicalize().unwrap_or(raw);
     let data_dir = db.data_dir.canonicalize().unwrap_or_else(|_| db.data_dir.clone());
     if !path.starts_with(&data_dir) && !path.starts_with(&db.data_dir) {
@@ -1220,6 +1224,45 @@ mod tests {
 
         remove_task_attachment_impl(&db, &att_id).unwrap();
         assert!(get_task_impl(&db, &task.id).unwrap().attachments.is_empty());
+    }
+
+    #[test]
+    fn remove_task_attachment_rejects_a_parent_dir_escape() {
+        let db = temp_db();
+        let task = create_task_impl(&db, CreateTaskInput { title: "t".into(), description_html: None, status: None, priority: None, due_at: None }).unwrap();
+        std::fs::create_dir_all(db.data_dir.join("task_files").join(&task.id)).unwrap();
+
+        // data_dir/task_files/{task}/../../.. lands in the temp dir that holds data_dir.
+        let outside = std::env::temp_dir().join(format!("prudii-escape-{}.txt", uuid::Uuid::new_v4()));
+        std::fs::write(&outside, b"do not touch").unwrap();
+        let filename = outside.file_name().unwrap().to_string_lossy().to_string();
+        let escape = db.data_dir.join("task_files").join(&task.id).join("..").join("..").join("..").join(&filename);
+
+        let existing_id = uuid::Uuid::new_v4().to_string();
+        let missing_id = uuid::Uuid::new_v4().to_string();
+        {
+            let conn = db.lock_db();
+            conn.execute(
+                "INSERT INTO task_attachments (id, task_id, filename, mime_type, size_bytes, local_path) VALUES (?1,?2,'escape.txt','text/plain',2,?3)",
+                params![existing_id, task.id, escape.to_string_lossy().to_string()],
+            )
+            .unwrap();
+            // Same escape, but a target that does not exist: canonicalize fails, so only
+            // the explicit `..` check can catch this one.
+            let missing = db.data_dir.join("task_files").join(&task.id).join("..").join("..").join("..").join("prudii-escape-missing.txt");
+            conn.execute(
+                "INSERT INTO task_attachments (id, task_id, filename, mime_type, size_bytes, local_path) VALUES (?1,?2,'escape2.txt','text/plain',2,?3)",
+                params![missing_id, task.id, missing.to_string_lossy().to_string()],
+            )
+            .unwrap();
+        }
+
+        assert!(remove_task_attachment_impl(&db, &existing_id).is_err());
+        assert!(remove_task_attachment_impl(&db, &missing_id).is_err());
+        assert!(outside.exists());
+        assert_eq!(get_task_impl(&db, &task.id).unwrap().attachments.len(), 2);
+
+        let _ = std::fs::remove_file(&outside);
     }
 
     #[test]

@@ -264,10 +264,15 @@ export function AccountWizard() {
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") close();
+      // Capture + preventDefault: the wizard sits above everything else, which
+      // must not close along with it.
+      if (e.key === "Escape") {
+        e.preventDefault();
+        close();
+      }
     }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
   }, []);
 
   return (

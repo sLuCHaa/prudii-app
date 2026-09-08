@@ -173,7 +173,12 @@ export function TaskBoard({ tasks, allTasks }: TaskBoardProps) {
     const index = fullColumnDropIndex(allTasks, finalStatus, activeId, columnTasks);
     moveTask.mutate(
       { id: activeId, status: finalStatus, index },
-      { onError: () => setDragState(null) },
+      {
+        onError: () => setDragState(null),
+        // A drop that changes nothing leaves the prop identical (structural sharing),
+        // so the effect below never fires — release the preview here.
+        onSettled: () => setDragState((state) => (state && state.activeId === null ? null : state)),
+      },
     );
 
     const originalStatus = statusOf(activeId, tasks);

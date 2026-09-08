@@ -87,6 +87,9 @@ interface AppState {
   // Shared by the notification-clicked handler (App.tsx) and LinkedMails — jumps to
   // a specific mail on a specific account, clearing every other exclusive view state.
   openMailById: (accountId: string, mailId: string, folderId?: string | null) => void;
+  // Set by openMailById: an externally opened mail (task link, notification) may sit
+  // beyond the folder's first page, so MailList must not validate it away.
+  pinnedMailId: string | null;
 
   folderFilter: FolderFilter;
   setFolderFilter: (f: FolderFilter) => void;
@@ -226,6 +229,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setMails: (mails) => set((state) => ({
     mails: typeof mails === "function" ? mails(state.mails) : mails,
   })),
+  pinnedMailId: null,
   setSelectedMailId: (selectedMailId) => set((state) => {
     let folderSelection = state.folderSelection;
     if (state.selectedFolderId) {
@@ -239,6 +243,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
     return {
       selectedMailId,
+      pinnedMailId: state.pinnedMailId === selectedMailId ? state.pinnedMailId : null,
       selectedMailIds: new Set(),
       multiSelectMode: false,
       lastSelectedMailId: selectedMailId,
@@ -280,6 +285,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     showTasks: false,
     selectedFolderId: folderId,
     selectedMailId: mailId,
+    pinnedMailId: mailId,
     selectedMailIndex: -1,
     folderFilter: "all",
     selectedMailIds: new Set(),

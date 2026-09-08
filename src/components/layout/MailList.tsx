@@ -1072,6 +1072,7 @@ export function MailList() {
   const {
     selectedFolderId,
     selectedMailId,
+    pinnedMailId,
     setSelectedMailId,
     selectedMailIndex,
     setSelectedMailIndex,
@@ -1104,6 +1105,7 @@ export function MailList() {
   } = useAppStore(useShallow((s) => ({
     selectedFolderId: s.selectedFolderId,
     selectedMailId: s.selectedMailId,
+    pinnedMailId: s.pinnedMailId,
     setSelectedMailId: s.setSelectedMailId,
     selectedMailIndex: s.selectedMailIndex,
     setSelectedMailIndex: s.setSelectedMailIndex,
@@ -1323,12 +1325,14 @@ export function MailList() {
     if (!searchOpen && folderFilter === "all" && selectedFolderId && selectedMailId && queryData !== undefined) {
       const index = fetchedMails.findIndex((m) => m.id === selectedMailId);
       if (index === -1) {
-        setSelectedMailId(null);
+        // A pinned mail (opened from a task link or a notification) is routinely
+        // older than the first page, so absence there says nothing about it.
+        if (selectedMailId !== pinnedMailId) setSelectedMailId(null);
       } else {
         setSelectedMailIndex(index);
       }
     }
-  }, [fetchedMails, searchOpen, folderFilter, selectedFolderId, selectedMailId, queryData, setSelectedMailId, setSelectedMailIndex]);
+  }, [fetchedMails, searchOpen, folderFilter, selectedFolderId, selectedMailId, pinnedMailId, queryData, setSelectedMailId, setSelectedMailIndex]);
 
   // Infinite scroll handler — called directly via onScroll prop (no stale closures)
   const handleListScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {

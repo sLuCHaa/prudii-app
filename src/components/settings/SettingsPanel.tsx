@@ -648,11 +648,14 @@ export function SettingsPanel() {
       // document-level listeners, so we must bail explicitly).
       if (dialog.isOpen) return;
       if (e.key === "Escape") {
+        // Capture + preventDefault: the panel sits above the mail view and the task
+        // drawer, which must not close along with it.
+        e.preventDefault();
         requestClose();
       }
     }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
   });
 
   async function handleSaveAppSettings() {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { DragEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { motion } from "motion/react";
@@ -122,11 +122,20 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
     updateTaskMutation.mutate({ id, patch: p });
   }
 
+  // The `task` prop lags a just-sent PATCH, so remember what we wrote: an
+  // outside click flushes the debounce and then blurs, which must not write again.
+  const lastSavedTitle = useRef<{ id: string; title: string } | null>(null);
+  function saveTitle(id: string, title: string) {
+    lastSavedTitle.current = { id, title };
+    patchTask(id, { title });
+  }
+
   // The id travels as an explicit argument (not read from the `task` closure at
   // flush time) so a pending edit still lands on the task it was typed into, even
   // after switching to a different one before the debounce window elapses.
   const debouncedTitleSave = useDebouncedCallback((id: string, title: string) => {
-    if (title.trim()) patchTask(id, { title });
+    const next = title.trim();
+    if (next) saveTitle(id, next);
   }, 400);
   const debouncedDescSave = useDebouncedCallback((id: string, html: string) => patchTask(id, { description_html: html }), 600);
 
@@ -310,7 +319,8 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
                 debouncedTitleSave.cancel();
                 const next = e.target.value.trim();
                 if (!next) { e.target.value = task.title; return; }
-                if (next !== task.title) patchTask(task.id, { title: next });
+                const saved = lastSavedTitle.current?.id === task.id ? lastSavedTitle.current.title : task.title;
+                if (next !== saved) saveTitle(task.id, next);
               }}
               onKeyDown={(e: ReactKeyboardEvent<HTMLInputElement>) => { if (e.key === "Enter") e.currentTarget.blur(); }}
               className="w-full text-lg font-semibold bg-transparent focus:outline-none text-text placeholder:text-text-tertiary"
