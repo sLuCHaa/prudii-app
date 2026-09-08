@@ -1153,10 +1153,8 @@ export function ThreadView({ mail }: ThreadViewProps) {
   const [threadMails, setThreadMails] = useState<Mail[]>([mail]);
   const [loading, setLoading] = useState(true);
   const openCompose = useAppStore((s) => s.openCompose);
-  const mails = useAppStore((s) => s.mails);
   const setMails = useAppStore((s) => s.setMails);
   const setSelectedMailId = useAppStore((s) => s.setSelectedMailId);
-  const selectedMailIndex = useAppStore((s) => s.selectedMailIndex);
   const setPendingRemoveId = useAppStore((s) => s.setPendingRemoveId);
   const folders = useAppStore((s) => s.folders);
   const selectedFolderId = useAppStore((s) => s.selectedFolderId);
