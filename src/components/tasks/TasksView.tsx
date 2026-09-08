@@ -141,10 +141,9 @@ export function TasksView() {
       </LoadingCrossfade>
 
       <AnimatePresence>
-        {/* No per-task key: switching tasks while the drawer stays open must update
-            content in place, not replay the slide-in (TaskDrawer keys its own
-            initial-only fields — title input, editor — by task id internally). */}
-        {openTaskId && <TaskDrawer taskId={openTaskId} onClose={() => setOpenTaskId(null)} />}
+        {/* Keyed by task id: switching tasks remounts the drawer body, so no state
+            (debounced edits, local drafts) carries over from the previous task. */}
+        {openTaskId && <TaskDrawer key={openTaskId} taskId={openTaskId} onClose={() => setOpenTaskId(null)} />}
       </AnimatePresence>
     </div>
   );

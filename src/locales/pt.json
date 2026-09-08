@@ -1093,6 +1093,7 @@
     "createdAt": "Criada em {{date}}",
     "updatedAt": "Atualizada em {{date}}",
     "openFile": "Abrir arquivo",
-    "removeFile": "Remover arquivo"
+    "removeFile": "Remover arquivo",
+    "taskGone": "Esta tarefa não existe mais"
   }
 }

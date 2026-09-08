@@ -1092,6 +1092,7 @@
     "createdAt": "创建于 {{date}}",
     "updatedAt": "更新于 {{date}}",
     "openFile": "打开文件",
-    "removeFile": "删除文件"
+    "removeFile": "删除文件",
+    "taskGone": "此任务已不存在"
   }
 }

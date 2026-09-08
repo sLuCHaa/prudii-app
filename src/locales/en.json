@@ -1093,6 +1093,7 @@
     "createdAt": "Created {{date}}",
     "updatedAt": "Updated {{date}}",
     "openFile": "Open file",
-    "removeFile": "Remove file"
+    "removeFile": "Remove file",
+    "taskGone": "This task no longer exists"
   }
 }

@@ -1093,6 +1093,7 @@
     "createdAt": "Créée le {{date}}",
     "updatedAt": "Mise à jour le {{date}}",
     "openFile": "Ouvrir le fichier",
-    "removeFile": "Supprimer le fichier"
+    "removeFile": "Supprimer le fichier",
+    "taskGone": "Cette tâche n'existe plus"
   }
 }

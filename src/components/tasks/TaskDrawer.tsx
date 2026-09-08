@@ -101,7 +101,7 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
   const setOpenTaskId = useAppStore((s) => s.setOpenTaskId);
   const addToast = useAppStore((s) => s.addToast);
   const use24h = useAppStore((s) => s.appSettings.use_24h_clock);
-  const { data: detail, isLoading } = useTask(isNew ? null : taskId);
+  const { data: detail, isLoading, isError } = useTask(isNew ? null : taskId);
   const task: Task | null = detail?.task ?? null;
 
   const createTaskMutation = useCreateTask();
@@ -113,12 +113,42 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
   const [descEscapeBlocked, setDescEscapeBlocked] = useState(false);
   const drawerRef = useFocusTrap<HTMLElement>(true, { initialFocus: false });
 
+  function patchTask(id: string, p: UpdateTaskPatch) {
+    if (onUpdate) {
+      onUpdate({ id, patch: p });
+      return;
+    }
+    updateTaskMutation.mutate({ id, patch: p });
+  }
+
+  // The id travels as an explicit argument (not read from the `task` closure at
+  // flush time) so a pending edit still lands on the task it was typed into, even
+  // after switching to a different one before the debounce window elapses.
+  const debouncedTitleSave = useDebouncedCallback((id: string, title: string) => patchTask(id, { title }), 400);
+  const debouncedDescSave = useDebouncedCallback((id: string, html: string) => patchTask(id, { description_html: html }), 600);
+
+  // Issue pending saves immediately rather than waiting for the exit animation
+  // to finish unmounting the component (which would flush them too, just later).
+  function closeDrawer() {
+    debouncedTitleSave.flush();
+    debouncedDescSave.flush();
+    onClose();
+  }
+
+  // Deleting (or the task having vanished) makes a pending edit moot — drop it
+  // instead of firing a doomed PATCH at a task that's gone.
+  function discardAndClose() {
+    debouncedTitleSave.cancel();
+    debouncedDescSave.cancel();
+    onClose();
+  }
+
   useEffect(() => {
     function handleMouseDown(e: MouseEvent) {
-      if (drawerRef.current && !drawerRef.current.contains(e.target as Node)) onClose();
+      if (drawerRef.current && !drawerRef.current.contains(e.target as Node)) closeDrawer();
     }
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && !descEscapeBlocked) onClose();
+      if (e.key === "Escape" && !descEscapeBlocked) closeDrawer();
     }
     document.addEventListener("mousedown", handleMouseDown);
     document.addEventListener("keydown", handleKeyDown);
@@ -126,19 +156,14 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
       document.removeEventListener("mousedown", handleMouseDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [onClose, descEscapeBlocked, drawerRef]);
+  }, [onClose, descEscapeBlocked, drawerRef, debouncedTitleSave, debouncedDescSave]);
 
-  function patch(p: UpdateTaskPatch) {
-    if (!task) return;
-    if (onUpdate) {
-      onUpdate({ id: task.id, patch: p });
-      return;
-    }
-    updateTaskMutation.mutate({ id: task.id, patch: p });
-  }
-
-  const debouncedTitleSave = useDebouncedCallback((title: string) => patch({ title }), 400);
-  const debouncedDescSave = useDebouncedCallback((html: string) => patch({ description_html: html }), 600);
+  // The task vanished (deleted elsewhere) — bail out instead of showing a dead form forever.
+  useEffect(() => {
+    if (isNew || !isError) return;
+    addToast("error", t("tasks.taskGone"));
+    discardAndClose();
+  }, [isNew, isError]);
 
   function submitCreate(rawTitle: string) {
     const title = rawTitle.trim();
@@ -160,7 +185,7 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
     });
     if (!confirmed) return;
     deleteTaskMutation.mutate(task.id);
-    onClose();
+    discardAndClose();
   }
 
   function handleDrop(e: DragEvent) {
@@ -195,12 +220,12 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
     >
       <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
         {!isNew && task ? (
-          <StatusSegment status={task.status} onChange={(status) => patch({ status })} />
+          <StatusSegment status={task.status} onChange={(status) => patchTask(task.id, { status })} />
         ) : (
           <span className="text-sm font-semibold text-text">{t("tasks.new")}</span>
         )}
         <button
-          onClick={onClose}
+          onClick={closeDrawer}
           aria-label={t("common.close")}
           className="text-text-tertiary hover:text-text transition-colors rounded-md p-1 hover:bg-hover"
         >
@@ -233,20 +258,20 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
               <Select
                 value={task.priority}
                 options={priorityOptions}
-                onChange={(v) => patch({ priority: v as TaskPriority })}
+                onChange={(v) => patchTask(task.id, { priority: v as TaskPriority })}
                 ariaLabel={t("tasks.priority")}
                 className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-border bg-bg-secondary text-text text-xs"
               />
               <input
                 type="datetime-local"
                 value={toDatetimeLocalValue(task.due_at)}
-                onChange={(e) => { if (e.target.value) patch({ due_at: fromDatetimeLocalValue(e.target.value) }); }}
+                onChange={(e) => { if (e.target.value) patchTask(task.id, { due_at: fromDatetimeLocalValue(e.target.value) }); }}
                 className="bg-bg-secondary border border-border rounded-lg px-2 py-1 text-xs text-text focus:border-accent"
               />
               {task.due_at && (
                 <button
                   type="button"
-                  onClick={() => patch({ clear_due_at: true })}
+                  onClick={() => patchTask(task.id, { clear_due_at: true })}
                   aria-label={t("tasks.clearDueDate")}
                   title={t("tasks.clearDueDate")}
                   className="p-1 rounded hover:bg-hover text-text-tertiary hover:text-danger transition-colors"
@@ -256,14 +281,13 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
               )}
             </div>
 
-            <DueChips onPick={(iso) => patch({ due_at: iso })} />
+            <DueChips onPick={(iso) => patchTask(task.id, { due_at: iso })} />
 
             <input
-              key={task.id}
               defaultValue={task.title}
               placeholder={t("tasks.titlePlaceholder")}
-              onChange={(e) => debouncedTitleSave(e.target.value)}
-              onBlur={(e) => patch({ title: e.target.value })}
+              onChange={(e) => debouncedTitleSave(task.id, e.target.value)}
+              onBlur={(e) => patchTask(task.id, { title: e.target.value })}
               onKeyDown={(e: ReactKeyboardEvent<HTMLInputElement>) => { if (e.key === "Enter") e.currentTarget.blur(); }}
               className="w-full text-lg font-semibold bg-transparent focus:outline-none text-text placeholder:text-text-tertiary"
             />
@@ -271,9 +295,8 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
             <div>
               <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary mb-2">{t("tasks.description")}</h3>
               <RichTextEditor
-                key={task.id}
                 content={task.description_html}
-                onChange={debouncedDescSave}
+                onChange={(html) => debouncedDescSave(task.id, html)}
                 placeholder={t("tasks.descriptionPlaceholder")}
                 editorClassName="prose prose-sm max-w-none focus:outline-none min-h-[140px] text-text"
                 toolbar

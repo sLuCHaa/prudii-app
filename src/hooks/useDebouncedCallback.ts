@@ -1,18 +1,49 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+
+export interface DebouncedCallback<Args extends unknown[]> {
+  (...args: Args): void;
+  /** Runs the pending call now (if any) and clears the timer. */
+  flush: () => void;
+  /** Drops the pending call without running it. */
+  cancel: () => void;
+}
 
 /** Delays `fn` by `ms` after the last call; a call within the window resets the timer.
- *  Reads `fn` through a ref so the returned function stays stable across re-renders. */
-export function useDebouncedCallback<Args extends unknown[]>(fn: (...args: Args) => void, ms: number): (...args: Args) => void {
+ *  Reads `fn` through a ref so the returned function stays stable across re-renders.
+ *  A pending call is flushed (not dropped) on unmount — e.g. type then immediately
+ *  close/switch — so an in-flight edit still reaches the backend. */
+export function useDebouncedCallback<Args extends unknown[]>(fn: (...args: Args) => void, ms: number): DebouncedCallback<Args> {
   const fnRef = useRef(fn);
   fnRef.current = fn;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingArgsRef = useRef<Args | null>(null);
 
-  useEffect(() => () => {
+  const cancel = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = null;
+    pendingArgsRef.current = null;
   }, []);
 
-  return useCallback((...args: Args) => {
+  const flush = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => fnRef.current(...args), ms);
-  }, [ms]);
+    timerRef.current = null;
+    const pending = pendingArgsRef.current;
+    pendingArgsRef.current = null;
+    if (pending) fnRef.current(...pending);
+  }, []);
+
+  const call = useCallback((...args: Args) => {
+    pendingArgsRef.current = args;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(flush, ms);
+  }, [ms, flush]);
+
+  useEffect(() => () => flush(), [flush]);
+
+  return useMemo(() => {
+    const debounced = call as DebouncedCallback<Args>;
+    debounced.flush = flush;
+    debounced.cancel = cancel;
+    return debounced;
+  }, [call, flush, cancel]);
 }

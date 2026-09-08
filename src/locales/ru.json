@@ -1097,6 +1097,7 @@
     "createdAt": "Создано {{date}}",
     "updatedAt": "Обновлено {{date}}",
     "openFile": "Открыть файл",
-    "removeFile": "Удалить файл"
+    "removeFile": "Удалить файл",
+    "taskGone": "Эта задача больше не существует"
   }
 }

@@ -634,10 +634,8 @@ fn copy_files_into_task(db: &Database, task_id: &str, paths: Vec<PathBuf>) -> Re
     Ok(CopyOutcome { added, failed })
 }
 
-/// Decodes a dropped OS file's base64 payload to a scratch file, then hands it to
-/// `copy_files_into_task` so the collision-safe naming, mime-guessing and DB insert
-/// stay in one place. The scratch file is named after the drop's filename (not a
-/// random temp name) so the copy step sees the caller's intended name.
+/// Decodes a dropped file's base64 payload to a scratch file (named after the drop's
+/// filename), then reuses `copy_files_into_task` for naming, mime-guessing and the DB insert.
 fn add_task_attachment_data_impl(
     db: &Database,
     task_id: &str,
