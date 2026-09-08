@@ -46,7 +46,7 @@ export function TasksView() {
   ];
 
   return (
-    <div className="flex flex-col h-full bg-surface">
+    <div className="relative flex flex-col h-full bg-surface">
       <div className="px-6 py-3 border-b border-border flex items-center gap-4">
         <div className="flex items-center gap-2.5">
           <ClipboardList className="w-4.5 h-4.5 text-accent" />

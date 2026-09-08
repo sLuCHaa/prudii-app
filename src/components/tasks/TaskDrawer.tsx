@@ -375,7 +375,9 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={reduce ? TRANSITION_INSTANT : { duration: 0.2, ease: "easeOut" }}
-        className="fixed top-8 inset-x-0 bottom-0 z-30 drawer-backdrop"
+        // Absolute inside the tasks view: the sidebar stays clickable, so one click there
+        // closes the drawer and navigates.
+        className="absolute inset-0 z-30 drawer-backdrop"
       />
       <motion.aside
         ref={drawerRef}
