@@ -1,4 +1,4 @@
-import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { WebviewWindow, getAllWebviewWindows } from "@tauri-apps/api/webviewWindow";
 import { getCurrentWindow, currentMonitor, availableMonitors } from "@tauri-apps/api/window";
 import { LogicalPosition } from "@tauri-apps/api/dpi";
 import { emitTo, listen } from "@tauri-apps/api/event";
@@ -6,16 +6,54 @@ import { isMacOS } from "./platform";
 import i18n from "./i18n";
 import { useAppStore } from "../stores/appStore";
 import { pickComposePosition } from "./composePosition";
+import { MAX_COMPOSE_WINDOWS, composeLabels, oldestComposeLabel } from "./composeLimit";
 import type { ComposeInitData } from "../components/compose/ComposeModal";
 
 let composeCounter = 0;
 let opening = false;
+
+/**
+ * Refuses the open once MAX_COMPOSE_WINDOWS drafts are up and brings the oldest
+ * one forward instead, so the reply that is actually overdue is the one the user
+ * lands on. Returns true when the caller should stop.
+ *
+ * A window-enumeration failure lets the open through: the limit is a nicety, and
+ * silently swallowing a compose click would be the worse failure.
+ */
+async function composeLimitReached(): Promise<boolean> {
+  let labels: string[];
+  try {
+    labels = (await getAllWebviewWindows()).map((w) => w.label);
+  } catch {
+    return false;
+  }
+  if (composeLabels(labels).length < MAX_COMPOSE_WINDOWS) return false;
+
+  const oldest = oldestComposeLabel(labels);
+  if (oldest) {
+    try {
+      const win = await WebviewWindow.getByLabel(oldest);
+      await win?.unminimize();
+      await win?.setFocus();
+    } catch {
+      // Window vanished between listing and focusing — the toast still applies.
+    }
+  }
+  useAppStore.getState().addToast(
+    "info",
+    i18n.t("compose.tooManyWindowsTitle"),
+    i18n.t("compose.tooManyWindowsMessage"),
+  );
+  return true;
+}
 
 export async function openComposeWindow(data: ComposeInitData): Promise<void> {
   // Prevent duplicate opens (React StrictMode runs effects twice)
   if (opening) return;
   opening = true;
   setTimeout(() => { opening = false; }, 300);
+
+  if (await composeLimitReached()) return;
 
   try {
     // Timestamp keeps labels unique even after a main-window reload resets the

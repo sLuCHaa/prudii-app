@@ -66,7 +66,9 @@
     "accountMenu": {
       "sync": "Synchroniser maintenant",
       "settings": "Réglages du compte…"
-    }
+    },
+    "collapseAccount": "Réduire le compte",
+    "expandAccount": "Développer le compte"
   },
   "attachments": {
     "search": "Rechercher des pièces jointes...",
@@ -191,7 +193,9 @@
     "draftSavedAt": "Enregistré {{time}}",
     "savedAgo": "Sauvegarde automatique {{time}}",
     "attachmentsSize": "Total : {{size}}",
-    "attachmentsSizeWarning": "proche de la limite de 25 Mo"
+    "attachmentsSizeWarning": "proche de la limite de 25 Mo",
+    "tooManyWindowsTitle": "5 brouillons maximum à la fois",
+    "tooManyWindowsMessage": "Fermez une fenêtre de rédaction pour en ouvrir une nouvelle."
   },
   "imageLightbox": {
     "close": "Fermer",
@@ -997,7 +1001,8 @@
       "server": "Erreur du serveur"
     },
     "bodyLoad": "Impossible de charger ce message depuis le serveur.",
-    "generic": "Une erreur s'est produite. Veuillez réessayer."
+    "generic": "Une erreur s'est produite. Veuillez réessayer.",
+    "copyMailAttachments": "Impossible de copier les pièces jointes"
   },
   "privacy": {
     "badge": "Confidentialité",
@@ -1127,6 +1132,13 @@
     "dueNoDate": "Aucune date",
     "dueDateTime": "Date et heure",
     "addFilesHint": "Déposez des fichiers ici",
-    "createdUpdated": "Créée {{created}} · modifiée {{updated}}"
+    "createdUpdated": "Créée {{created}} · modifiée {{updated}}",
+    "attachFromMailTitle": "Inclure les pièces jointes ?",
+    "attachFromMailDesc": "Choisissez les pièces jointes à copier dans la nouvelle tâche.",
+    "attachInline": "Intégré",
+    "attachSelectAll": "Tout sélectionner",
+    "attachSelectNone": "Effacer la sélection",
+    "attachSkip": "Sans pièces jointes",
+    "attachConfirm": "Créer la tâche"
   }
 }

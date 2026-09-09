@@ -66,7 +66,9 @@
     "accountMenu": {
       "sync": "Синхронизировать сейчас",
       "settings": "Настройки аккаунта…"
-    }
+    },
+    "collapseAccount": "Свернуть аккаунт",
+    "expandAccount": "Развернуть аккаунт"
   },
   "attachments": {
     "search": "Поиск вложений...",
@@ -195,7 +197,9 @@
     "draftSavedAt": "Сохранено {{time}}",
     "savedAgo": "Автосохранение {{time}}",
     "attachmentsSize": "Итого: {{size}}",
-    "attachmentsSizeWarning": "близко к лимиту 25 МБ"
+    "attachmentsSizeWarning": "близко к лимиту 25 МБ",
+    "tooManyWindowsTitle": "Не более 5 черновиков одновременно",
+    "tooManyWindowsMessage": "Закройте одно окно написания, чтобы открыть новое."
   },
   "imageLightbox": {
     "close": "Закрыть",
@@ -1001,7 +1005,8 @@
       "server": "Ошибка сервера"
     },
     "bodyLoad": "Не удалось загрузить это письмо с сервера.",
-    "generic": "Что-то пошло не так. Попробуйте ещё раз."
+    "generic": "Что-то пошло не так. Попробуйте ещё раз.",
+    "copyMailAttachments": "Не удалось скопировать вложения"
   },
   "privacy": {
     "badge": "Конфиденциальность",
@@ -1133,6 +1138,13 @@
     "dueNoDate": "Без даты",
     "dueDateTime": "Дата и время",
     "addFilesHint": "Перетащите файлы сюда",
-    "createdUpdated": "Создано {{created}} · изменено {{updated}}"
+    "createdUpdated": "Создано {{created}} · изменено {{updated}}",
+    "attachFromMailTitle": "Добавить вложения?",
+    "attachFromMailDesc": "Выберите, какие вложения скопировать в новую задачу.",
+    "attachInline": "Встроенное",
+    "attachSelectAll": "Выбрать все",
+    "attachSelectNone": "Снять выделение",
+    "attachSkip": "Без вложений",
+    "attachConfirm": "Создать задачу"
   }
 }

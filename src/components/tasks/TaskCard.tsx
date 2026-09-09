@@ -8,11 +8,11 @@ import { useAppStore } from "../../stores/appStore";
 import { SpringCard } from "../motion/SpringCard";
 import { GlowRing } from "../motion/GlowRing";
 import { DueChip } from "./DueChip";
-import { SPRING_SNAPPY } from "../motion/tokens";
+import { SPRING_BOUNCY, SPRING_SNAPPY } from "../motion/tokens";
 
-// Copied from HoverLift's intensity-3 shadow — the drag ghost wants that exact
-// weight without pulling BoardColumn/TaskCard into HoverLift's hover-only API.
-const OVERLAY_SHADOW = "0 14px 40px rgba(15,23,42,.18)";
+// One step heavier than HoverLift's intensity-3 shadow: the dragged clone has to
+// read as lifted off the board, not merely hovered.
+const OVERLAY_SHADOW = "0 18px 48px rgba(15,23,42,.26)";
 
 function TaskCardBody({ task }: { task: Task }) {
   return (
@@ -67,16 +67,38 @@ function CheckmarkOverlay({ reduce }: { reduce: boolean }) {
   );
 }
 
+const LANDED_RING: Record<TaskStatus, string> = {
+  open: "ring-accent",
+  in_progress: "ring-warning",
+  done: "ring-success",
+};
+
+/** One-shot ring in the destination's colour, so a card that lands in a new
+ *  column is visibly the one that just moved. */
+function LandingPulse({ status, reduce }: { status: TaskStatus; reduce: boolean }) {
+  return (
+    <motion.span
+      aria-hidden
+      className={`pointer-events-none absolute inset-0 rounded-xl ring-2 ring-inset ${LANDED_RING[status]}`}
+      initial={{ opacity: reduce ? 0 : 0.9 }}
+      animate={{ opacity: 0 }}
+      transition={reduce ? { duration: 0 } : { duration: 0.45, ease: "easeOut" }}
+    />
+  );
+}
+
 interface TaskCardProps {
   task: Task;
   status: TaskStatus;
   showCheckmark: boolean;
+  /** True for one beat after this card was dropped into a different column. */
+  justLanded: boolean;
   /** True while any card on the board is being dragged — suppresses FLIP layout
    *  animation on every card so it can't compound with dnd-kit's own transform. */
   boardDragging: boolean;
 }
 
-export function TaskCard({ task, status, showCheckmark, boardDragging }: TaskCardProps) {
+export function TaskCard({ task, status, showCheckmark, justLanded, boardDragging }: TaskCardProps) {
   const reduce = useReducedMotion();
   const setOpenTaskId = useAppStore((s) => s.setOpenTaskId);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -87,7 +109,6 @@ export function TaskCard({ task, status, showCheckmark, boardDragging }: TaskCar
   const style: CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition: transition ?? undefined,
-    opacity: isDragging ? 0.4 : 1,
   };
 
   // Space stays dnd-kit's drag activator (TaskBoard's keyboardCodes); Enter opens
@@ -104,10 +125,22 @@ export function TaskCard({ task, status, showCheckmark, boardDragging }: TaskCar
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners} onKeyDown={handleKeyDown}>
       <motion.div layout={!reduce && !boardDragging} transition={SPRING_SNAPPY} className="mb-2">
-        <SpringCard lift={4} glow={false} onClick={() => setOpenTaskId(task.id)} className="relative overflow-hidden">
-          <TaskCardBody task={task} />
-          {showCheckmark && <CheckmarkOverlay reduce={!!reduce} />}
-        </SpringCard>
+        {isDragging ? (
+          // The row the card came from stays as a dashed gap of the exact same
+          // height (hidden body, not a guessed size), so the board never reflows
+          // under the cursor mid-drag.
+          <div className="rounded-xl border-2 border-dashed border-accent/50 bg-accent/5">
+            <div className="invisible">
+              <TaskCardBody task={task} />
+            </div>
+          </div>
+        ) : (
+          <SpringCard lift={4} glow={false} onClick={() => setOpenTaskId(task.id)} className="relative overflow-hidden">
+            <TaskCardBody task={task} />
+            {justLanded && <LandingPulse status={status} reduce={!!reduce} />}
+            {showCheckmark && <CheckmarkOverlay reduce={!!reduce} />}
+          </SpringCard>
+        )}
       </motion.div>
     </div>
   );
@@ -119,10 +152,11 @@ export function TaskCardOverlay({ task }: { task: Task }) {
   const reduce = useReducedMotion();
   return (
     <motion.div
-      initial={false}
-      animate={reduce ? {} : { scale: 1.03, rotate: 1.5 }}
+      initial={reduce ? false : { scale: 1, rotate: 0 }}
+      animate={reduce ? {} : { scale: 1.05, rotate: 2 }}
+      transition={SPRING_BOUNCY}
       style={{ boxShadow: OVERLAY_SHADOW }}
-      className="rounded-xl bg-surface border border-accent/40 cursor-grabbing overflow-hidden"
+      className="rounded-xl bg-surface ring-2 ring-accent/60 cursor-grabbing overflow-hidden"
     >
       <TaskCardBody task={task} />
     </motion.div>

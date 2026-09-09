@@ -32,12 +32,14 @@ import { AiReplyButton, AiReplySuggestionsPanel } from "../ai/AiReplySuggestions
 import { useDialog } from "../ui/DialogProvider";
 import { ContextMenu } from "../ui/ContextMenu";
 import type { MenuEntry } from "../../lib/menuModel";
-import { useMailTasks, useCreateTaskFromMail, useLinkMailToTask } from "../../hooks/useTasks";
+import { useMailTasks, useLinkMailToTask } from "../../hooks/useTasks";
 import { LinkedTaskChip } from "../tasks/MailTaskChip";
 import { TaskPickerDialog } from "../tasks/TaskPickerDialog";
+import { CreateTaskFromMail } from "../tasks/CreateTaskFromMail";
 import type { Mail, Attachment, MailAddress } from "../../types";
 import { useTranslation } from "react-i18next";
 import { ImageLightbox, type ImageLightboxItem } from "./ImageLightbox";
+import { formatFileSize } from "../../lib/fileSize";
 
 function getFileIcon(mimeType: string | null) {
   if (!mimeType) return File;
@@ -46,13 +48,6 @@ function getFileIcon(mimeType: string | null) {
   if (mimeType.startsWith("audio/")) return Music;
   if (mimeType.includes("pdf") || mimeType.includes("document") || mimeType.includes("text")) return FileText;
   return File;
-}
-
-function formatFileSize(bytes: number | null): string {
-  if (!bytes) return "";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function formatRecipient(a: MailAddress): string {
@@ -1155,7 +1150,7 @@ export function ThreadView({ mail }: ThreadViewProps) {
   const openCompose = useAppStore((s) => s.openCompose);
   const setMails = useAppStore((s) => s.setMails);
   const setSelectedMailId = useAppStore((s) => s.setSelectedMailId);
-  const setPendingRemoveId = useAppStore((s) => s.setPendingRemoveId);
+  const setPendingRemoveIds = useAppStore((s) => s.setPendingRemoveIds);
   const folders = useAppStore((s) => s.folders);
   const selectedFolderId = useAppStore((s) => s.selectedFolderId);
   const addToast = useAppStore((s) => s.addToast);
@@ -1168,11 +1163,11 @@ export function ThreadView({ mail }: ThreadViewProps) {
   const [taskMenu, setTaskMenu] = useState<{ x: number; y: number } | null>(null);
   const [taskPickerOpen, setTaskPickerOpen] = useState(false);
   const linkedTasks = useMailTasks(mail.id);
-  const createTaskFromMailMutation = useCreateTaskFromMail();
+  const [taskFromMailOpen, setTaskFromMailOpen] = useState(false);
   const linkMailToTaskMutation = useLinkMailToTask();
 
   const taskMenuEntries: MenuEntry[] = [
-    { kind: "item", id: "createTask", label: t("tasks.createFromMail"), icon: <ClipboardList className="w-4 h-4" />, onSelect: () => createTaskFromMailMutation.mutate(mail.id) },
+    { kind: "item", id: "createTask", label: t("tasks.createFromMail"), icon: <ClipboardList className="w-4 h-4" />, onSelect: () => setTaskFromMailOpen(true) },
     { kind: "item", id: "addToTask", label: t("tasks.addToTask"), icon: <ClipboardPlus className="w-4 h-4" />, onSelect: () => setTaskPickerOpen(true) },
   ];
 
@@ -1245,23 +1240,23 @@ export function ThreadView({ mail }: ThreadViewProps) {
       if (!confirmed) return;
     }
     // Same exit path as archive: the list plays the row sweep and picks the next mail.
-    setPendingRemoveId(mail.id);
+    setPendingRemoveIds([mail.id]);
     trashMail(mail.id)
       .then(() => queryClient.invalidateQueries({ queryKey: ["folders"] }))
       .catch((e) => {
-        setPendingRemoveId(null);
+        setPendingRemoveIds([]);
         dialog.alert({ type: "danger", title: t("common.error"), message: causeMessage(e) });
       });
-  }, [mail.id, mail.subject, isInTrash, setPendingRemoveId, dialog, t, queryClient]);
+  }, [mail.id, mail.subject, isInTrash, setPendingRemoveIds, dialog, t, queryClient]);
 
   const handleArchive = useCallback(async () => {
-    setPendingRemoveId(mail.id);
+    setPendingRemoveIds([mail.id]);
     archiveMail(mail.id)
       .then(() => queryClient.invalidateQueries({ queryKey: ["folders"] }))
       .catch((e) => {
         dialog.alert({ type: "danger", title: t("common.error"), message: causeMessage(e) });
       });
-  }, [mail.id, setPendingRemoveId, dialog, t, queryClient]);
+  }, [mail.id, setPendingRemoveIds, dialog, t, queryClient]);
 
   const handleUpdateThreadMail = useCallback((mailId: string, updates: Partial<Mail>) => {
     setThreadMails((prev) => prev.map((m) => (m.id === mailId ? { ...m, ...updates } : m)));
@@ -1509,6 +1504,10 @@ export function ThreadView({ mail }: ThreadViewProps) {
           onPick={(taskId) => linkMailToTaskMutation.mutate({ taskId, mailId: mail.id })}
           excludeTaskIds={linkedTasks.data?.map((task) => task.id)}
         />
+      )}
+
+      {taskFromMailOpen && (
+        <CreateTaskFromMail mailId={mail.id} onDone={() => setTaskFromMailOpen(false)} />
       )}
     </div>
   );

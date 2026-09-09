@@ -641,10 +641,26 @@ struct CopyOutcome {
     failed: Vec<String>,
 }
 
-/// Copies picked files into `data_dir/task_files/{task_id}/`, one
-/// `task_attachments` row per successful copy. Only an unknown task id (checked
-/// before any directory is created) fails the whole call.
+/// Copies picked files into the task, naming each after the file on disk.
 fn copy_files_into_task(db: &Database, task_id: &str, paths: Vec<PathBuf>) -> Result<CopyOutcome, String> {
+    let named = paths
+        .into_iter()
+        .map(|p| {
+            let name = p.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_else(|| "file".to_string());
+            (p, name)
+        })
+        .collect();
+    copy_named_files_into_task(db, task_id, named)
+}
+
+/// Copies files into `data_dir/task_files/{task_id}/` under a caller-chosen
+/// name, one `task_attachments` row per successful copy. Only an unknown task id
+/// (checked before any directory is created) fails the whole call.
+///
+/// Names are reduced to their last path component: a mail attachment's filename
+/// comes from the sender, so it must not be able to steer the copy out of the
+/// task's own directory.
+fn copy_named_files_into_task(db: &Database, task_id: &str, files: Vec<(PathBuf, String)>) -> Result<CopyOutcome, String> {
     {
         // The copies below can run for minutes; holding the guard across them
         // would stall every other DB caller (sync, list, count).
@@ -657,8 +673,12 @@ fn copy_files_into_task(db: &Database, task_id: &str, paths: Vec<PathBuf>) -> Re
 
     let mut added = Vec::new();
     let mut failed = Vec::new();
-    for src in paths {
-        let filename = src.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_else(|| "file".to_string());
+    for (src, requested_name) in files {
+        let filename = Path::new(&requested_name)
+            .file_name()
+            .map(|f| f.to_string_lossy().to_string())
+            .filter(|f| !f.is_empty() && f != "." && f != "..")
+            .unwrap_or_else(|| "file".to_string());
         let dest = unique_dest_path(&dest_dir, &filename);
         if let Err(e) = std::fs::copy(&src, &dest) {
             log::warn!("Failed to copy \"{}\" into task {}: {}", filename, task_id, e);
@@ -692,6 +712,47 @@ fn copy_files_into_task(db: &Database, task_id: &str, paths: Vec<PathBuf>) -> Re
     }
 
     Ok(CopyOutcome { added, failed })
+}
+
+/// Copies the picked attachments of a mail into a task's file store, keeping the
+/// names they carry in the mail rather than the sanitized ones on disk.
+///
+/// An attachment the sync has not downloaded yet has no `local_path`; those are
+/// logged and skipped instead of failing the call, so one pending file cannot
+/// cost the user the rest of the copy.
+fn copy_mail_attachments_to_task_impl(
+    db: &Database,
+    task_id: &str,
+    attachment_ids: Vec<String>,
+) -> Result<Vec<TaskAttachment>, String> {
+    let sources: Vec<(PathBuf, String)> = {
+        let conn = db.lock_db();
+        fetch_task(&conn, task_id).map_err(|_| "Task not found".to_string())?;
+
+        attachment_ids
+            .iter()
+            .filter_map(|id| {
+                let row: rusqlite::Result<(String, Option<String>)> = conn.query_row(
+                    "SELECT filename, local_path FROM attachments WHERE id = ?1",
+                    params![id],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                );
+                match row {
+                    Ok((filename, Some(path))) if !path.is_empty() => Some((PathBuf::from(path), filename)),
+                    Ok((filename, _)) => {
+                        log::warn!("Attachment \"{}\" is not downloaded yet; skipped for task {}", filename, task_id);
+                        None
+                    }
+                    Err(e) => {
+                        log::warn!("Attachment {} not found for task {}: {}", id, task_id, e);
+                        None
+                    }
+                }
+            })
+            .collect()
+    };
+
+    Ok(copy_named_files_into_task(db, task_id, sources)?.added)
 }
 
 /// Decodes a dropped file's base64 payload to a scratch file (named after the drop's
@@ -823,6 +884,20 @@ pub fn create_task_from_mail(app: AppHandle, db: State<'_, Database>, mail_id: S
         let task = create_task_from_mail_impl(&db, &mail_id)?;
         let _ = app.emit("tasks-changed", ());
         Ok(task)
+    })
+}
+
+#[tauri::command(async)]
+pub fn copy_mail_attachments_to_task(
+    app: AppHandle,
+    db: State<'_, Database>,
+    task_id: String,
+    attachment_ids: Vec<String>,
+) -> Result<Vec<TaskAttachment>, String> {
+    super::catch_panic(|| {
+        let added = copy_mail_attachments_to_task_impl(&db, &task_id, attachment_ids)?;
+        let _ = app.emit("tasks-changed", ());
+        Ok(added)
     })
 }
 
@@ -1082,6 +1157,89 @@ mod tests {
             params![mail_id, subject, snippet],
         )
         .unwrap();
+    }
+
+    /// Writes an `attachments` row plus, unless `downloaded` is false, the file
+    /// it points at. Returns the attachment id.
+    fn insert_attachment_row(db: &Database, mail_id: &str, filename: &str, body: &[u8], downloaded: bool) -> String {
+        let id = uuid::Uuid::new_v4().to_string();
+        let local_path = if downloaded {
+            let dir = db.data_dir.join("attachments").join(mail_id);
+            std::fs::create_dir_all(&dir).unwrap();
+            let path = dir.join(filename);
+            std::fs::write(&path, body).unwrap();
+            Some(path.to_string_lossy().to_string())
+        } else {
+            None
+        };
+        let conn = db.lock_db();
+        conn.execute(
+            "INSERT INTO attachments (id, mail_id, filename, mime_type, size_bytes, content_id, is_inline, local_path) VALUES (?1,?2,?3,?4,?5,NULL,0,?6)",
+            params![id, mail_id, filename, "application/pdf", body.len() as i64, local_path],
+        )
+        .unwrap();
+        id
+    }
+
+    #[test]
+    fn copies_picked_mail_attachments_into_the_task() {
+        let db = temp_db();
+        insert_mail_row(&db, "mail10", "With files", "preview");
+        let wanted = insert_attachment_row(&db, "mail10", "invoice.pdf", b"invoice bytes", true);
+        let skipped = insert_attachment_row(&db, "mail10", "logo.png", b"logo bytes", true);
+
+        let task = create_task_from_mail_impl(&db, "mail10").unwrap();
+        let added = copy_mail_attachments_to_task_impl(&db, &task.id, vec![wanted]).unwrap();
+
+        assert_eq!(added.len(), 1);
+        assert_eq!(added[0].filename, "invoice.pdf");
+        assert_eq!(std::fs::read(&added[0].local_path).unwrap(), b"invoice bytes");
+
+        let detail = get_task_impl(&db, &task.id).unwrap();
+        assert_eq!(detail.attachments.len(), 1, "only the picked attachment is copied");
+        assert_eq!(detail.task.attachment_count, 1);
+        let _ = skipped;
+    }
+
+    #[test]
+    fn skips_attachments_the_sync_has_not_downloaded_yet() {
+        let db = temp_db();
+        insert_mail_row(&db, "mail11", "Half here", "preview");
+        let here = insert_attachment_row(&db, "mail11", "here.pdf", b"here", true);
+        let pending = insert_attachment_row(&db, "mail11", "pending.pdf", b"", false);
+
+        let task = create_task_from_mail_impl(&db, "mail11").unwrap();
+        let added = copy_mail_attachments_to_task_impl(&db, &task.id, vec![here, pending]).unwrap();
+
+        // The undownloaded one is dropped rather than failing the whole call.
+        assert_eq!(added.len(), 1);
+        assert_eq!(added[0].filename, "here.pdf");
+    }
+
+    #[test]
+    fn keeps_the_mail_display_name_and_strips_any_path_in_it() {
+        let db = temp_db();
+        insert_mail_row(&db, "mail12", "Odd name", "preview");
+        let id = insert_attachment_row(&db, "mail12", "report.pdf", b"bytes", true);
+        {
+            // A sender-controlled filename may carry separators; the copy must not
+            // let one escape the task's own directory.
+            let conn = db.lock_db();
+            conn.execute("UPDATE attachments SET filename = ?1 WHERE id = ?2", params!["../../evil.pdf", id]).unwrap();
+        }
+
+        let task = create_task_from_mail_impl(&db, "mail12").unwrap();
+        let added = copy_mail_attachments_to_task_impl(&db, &task.id, vec![id]).unwrap();
+
+        assert_eq!(added[0].filename, "evil.pdf");
+        let expected_dir = db.data_dir.join("task_files").join(&task.id);
+        assert!(std::path::Path::new(&added[0].local_path).starts_with(&expected_dir));
+    }
+
+    #[test]
+    fn rejects_an_unknown_task_id() {
+        let db = temp_db();
+        assert!(copy_mail_attachments_to_task_impl(&db, "nope", vec![]).is_err());
     }
 
     #[test]

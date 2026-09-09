@@ -2,7 +2,6 @@ import { useEffect, useCallback, useState, useRef, useMemo, DragEvent } from "re
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Loader2, Paperclip, X, Star, Archive, Trash2, Mail as MailIcon, MailOpen, Check, Pin, Clock, CalendarClock, Inbox, Send, FileText, ShieldAlert, Folder } from "lucide-react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "motion/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { FlagDots } from "../ui/FlagPicker";
 import { GradientAvatar } from "../motion/GradientAvatar";
@@ -12,13 +11,14 @@ import gsap from "gsap";
 import { useShallow } from "zustand/react/shallow";
 import { useAppStore } from "../../stores/appStore";
 import type { FolderFilter } from "../../stores/appStore";
-import { useTasksForMails, useCreateTaskFromMail, useLinkMailToTask } from "../../hooks/useTasks";
+import { useTasksForMails, useLinkMailToTask } from "../../hooks/useTasks";
 import { MailTaskChip } from "../tasks/MailTaskChip";
 import { TaskPickerDialog } from "../tasks/TaskPickerDialog";
-import { useMails, useFilteredMails, useAllInboxMails, useCombinedFolderMails, useSnoozedMails, useSplitInboxMails, useInboxSplits, useToggleStar, useTogglePin, useFolders } from "../../hooks/useAccounts";
+import { CreateTaskFromMail } from "../tasks/CreateTaskFromMail";
+import { useMails, useFilteredMails, useAllInboxMails, useCombinedFolderMails, useSnoozedMails, useSplitInboxMails, useInboxSplits, useToggleStar, useTogglePin, useToggleMailFlag, useFolders } from "../../hooks/useAccounts";
 import { useSearchMails } from "../../hooks/useSync";
 import { useScroller } from "../../hooks/useScroller";
-import { trashMail, archiveMail, toggleRead, countCombinedFolderMails, emptyAllTrash, emptyAllSpam, batchUpdateMails, snoozeMail, moveMail, listScheduledMails, cancelScheduledSend } from "../../lib/tauri";
+import { trashMail, archiveMail, toggleRead, countCombinedFolderMails, emptyAllTrash, emptyAllSpam, batchUpdateMails, snoozeMail, moveMail, listScheduledMails, cancelScheduledSend, setMailFlags } from "../../lib/tauri";
 import type { ScheduledMail, SearchResult } from "../../types";
 import { useDialog } from "../ui/DialogProvider";
 import { EmptyState, InboxZeroState, NoSearchResultsState } from "../ui/EmptyState";
@@ -31,12 +31,18 @@ import { LoadingCrossfade } from "../motion/LoadingCrossfade";
 import { InboxZeroFlight } from "../motion/InboxZeroFlight";
 import { ENTRANCE, prefersReducedMotion } from "../motion/tokens";
 import { SWEEP_MAILS_EVENT, SWEEP_TWEEN, type SweepDetail } from "../motion/sweepMails";
+import { keepRowsLeaving } from "../../lib/mailListSync";
+import { ContextMenu } from "../ui/ContextMenu";
+import { SNOOZE_PRESETS, toSnoozeStamp } from "../../lib/snooze";
+
+/** Keeps the snooze menu right-aligned with the button that opens it. */
+const SNOOZE_MENU_WIDTH = 176;
 import { formatMailDate, getDateGroup } from "../../lib/dateUtils";
 import { runMailAction, toastError, causeMessage } from "../../lib/errorToast";
 import { accumulate, decide, isHorizontalIntent } from "../../lib/swipe";
 import { isListNavKey, nextCursor, pageSize, spanIds } from "../../lib/listKeys";
 import { MAIL_FLAG_COLORS } from "../../types";
-import type { Mail } from "../../types";
+import type { Mail, MailFlag } from "../../types";
 import { useTranslation } from "react-i18next";
 
 function DragPreview({
@@ -444,8 +450,8 @@ interface VirtualMailListProps {
   multiSelectMode: boolean;
   appSettings: { use_24h_clock: boolean };
   dateGroupLabels: Record<string, string>;
-  snoozeMenuId: string | null;
-  setSnoozeMenuId: (id: string | null) => void;
+  snoozeMenuMailId: string | null;
+  openSnoozeMenu: (e: React.MouseEvent, mail: Mail) => void;
   hasNextPage: boolean | undefined;
   isFetchingNextPage: boolean;
   handleListScroll: (e: React.UIEvent<HTMLDivElement>) => void;
@@ -458,7 +464,7 @@ interface VirtualMailListProps {
   setMails: (updater: Mail[] | ((prev: Mail[]) => Mail[])) => void;
   toggleMailSelection: (id: string) => void;
   toggleStarMutation: { mutate: (id: string, opts?: { onError?: () => void }) => void };
-  setPendingRemoveId: (id: string | null) => void;
+  setPendingRemoveIds: (ids: string[]) => void;
   invalidateMailQueries: () => void;
   archiveMail: (id: string) => Promise<unknown>;
   trashMail: (id: string) => Promise<unknown>;
@@ -477,8 +483,8 @@ function VirtualMailList({
   multiSelectMode,
   appSettings,
   dateGroupLabels,
-  snoozeMenuId,
-  setSnoozeMenuId,
+  snoozeMenuMailId,
+  openSnoozeMenu,
   hasNextPage,
   isFetchingNextPage,
   handleListScroll,
@@ -491,7 +497,7 @@ function VirtualMailList({
   setMails,
   toggleMailSelection,
   toggleStarMutation,
-  setPendingRemoveId,
+  setPendingRemoveIds,
   invalidateMailQueries,
   archiveMail,
   trashMail,
@@ -651,22 +657,22 @@ function VirtualMailList({
   const triggerSwipeAction = useCallback((action: "archive" | "trash", mailId: string) => {
     if (action === "archive") {
       const preActionVisible = filteredMails.length;
-      setPendingRemoveId(mailId);
+      setPendingRemoveIds([mailId]);
       runMailAction(() => archiveMail(mailId), {
         errorKey: "errors.archive",
         invalidate: invalidateMailQueries,
-        onPendingClear: () => setPendingRemoveId(null),
+        onPendingClear: () => setPendingRemoveIds([]),
         onSuccess: () => onArchiveSuccess([mailId], preActionVisible),
       });
     } else {
-      setPendingRemoveId(mailId);
+      setPendingRemoveIds([mailId]);
       runMailAction(() => trashMail(mailId), {
         errorKey: "errors.trash",
         invalidate: invalidateMailQueries,
-        onPendingClear: () => setPendingRemoveId(null),
+        onPendingClear: () => setPendingRemoveIds([]),
       });
     }
-  }, [filteredMails, setPendingRemoveId, invalidateMailQueries, archiveMail, trashMail, onArchiveSuccess]);
+  }, [filteredMails, setPendingRemoveIds, invalidateMailQueries, archiveMail, trashMail, onArchiveSuccess]);
 
   return (
     <div
@@ -936,11 +942,11 @@ function VirtualMailList({
                       onClick={(e) => {
                         e.stopPropagation();
                         const preActionVisible = filteredMails.length;
-                        setPendingRemoveId(mail.id);
+                        setPendingRemoveIds([mail.id]);
                         runMailAction(() => archiveMail(mail.id), {
                           errorKey: "errors.archive",
                           invalidate: invalidateMailQueries,
-                          onPendingClear: () => setPendingRemoveId(null),
+                          onPendingClear: () => setPendingRemoveIds([]),
                           onSuccess: () => onArchiveSuccess([mail.id], preActionVisible),
                         });
                       }}
@@ -977,11 +983,11 @@ function VirtualMailList({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setPendingRemoveId(mail.id);
+                        setPendingRemoveIds([mail.id]);
                         runMailAction(() => trashMail(mail.id), {
                           errorKey: "errors.trash",
                           invalidate: invalidateMailQueries,
-                          onPendingClear: () => setPendingRemoveId(null),
+                          onPendingClear: () => setPendingRemoveIds([]),
                         });
                       }}
                       className="w-7 h-7 rounded-md bg-surface hover:bg-hover border border-border flex items-center justify-center text-danger"
@@ -990,79 +996,23 @@ function VirtualMailList({
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
-                    <div className="relative">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSnoozeMenuId(snoozeMenuId === mail.id ? null : mail.id);
-                        }}
-                        className="w-7 h-7 rounded-md bg-surface hover:bg-hover border border-border flex items-center justify-center text-text-secondary"
-                        title={t("snooze.snooze")}
-                        aria-label={t("snooze.snooze")}
-                      >
-                        <Clock className="w-3.5 h-3.5" />
-                      </button>
-                      <AnimatePresence>
-                        {snoozeMenuId === mail.id && (
-                          <motion.div
-                            initial={{ opacity: 0, y: -6, scale: 0.96 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, y: -6, scale: 0.96 }}
-                            transition={{ duration: 0.14, ease: "easeOut" }}
-                            className="absolute right-0 top-full mt-1 bg-surface border border-border rounded-lg shadow-lg z-50 py-1 min-w-[160px] origin-top-right"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {[
-                              {
-                                label: t("snooze.in1Hour"),
-                                getDate: () => {
-                                  const d = new Date();
-                                  d.setHours(d.getHours() + 1);
-                                  return d;
-                                },
-                              },
-                              {
-                                label: t("snooze.tomorrowMorning"),
-                                getDate: () => {
-                                  const d = new Date();
-                                  d.setDate(d.getDate() + 1);
-                                  d.setHours(9, 0, 0, 0);
-                                  return d;
-                                },
-                              },
-                              {
-                                label: t("snooze.nextMonday"),
-                                getDate: () => {
-                                  const d = new Date();
-                                  d.setDate(d.getDate() + ((8 - d.getDay()) % 7 || 7));
-                                  d.setHours(9, 0, 0, 0);
-                                  return d;
-                                },
-                              },
-                            ].map((preset) => (
-                              <button
-                                key={preset.label}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const until = preset.getDate();
-                                  const formatted = `${until.getFullYear()}-${String(until.getMonth() + 1).padStart(2, "0")}-${String(until.getDate()).padStart(2, "0")} ${String(until.getHours()).padStart(2, "0")}:${String(until.getMinutes()).padStart(2, "0")}:${String(until.getSeconds()).padStart(2, "0")}`;
-                                  setPendingRemoveId(mail.id);
-                                  runMailAction(() => snoozeMail(mail.id, formatted), {
-                                    errorKey: "errors.snooze",
-                                    invalidate: invalidateMailQueries,
-                                    onPendingClear: () => setPendingRemoveId(null),
-                                  });
-                                  setSnoozeMenuId(null);
-                                }}
-                                className="w-full text-left px-3 py-1.5 text-xs text-text hover:bg-hover transition-colors"
-                              >
-                                {preset.label}
-                              </button>
-                            ))}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
+                    <button
+                      // Kept from the document-level mousedown that ContextMenu closes
+                      // on, so a second click on this button toggles instead of
+                      // dismissing and immediately reopening the menu.
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openSnoozeMenu(e, mail);
+                      }}
+                      className={`w-7 h-7 rounded-md hover:bg-hover border border-border flex items-center justify-center text-text-secondary ${
+                        snoozeMenuMailId === mail.id ? "bg-hover" : "bg-surface"
+                      }`}
+                      title={t("snooze.snooze")}
+                      aria-label={t("snooze.snooze")}
+                    >
+                      <Clock className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 )}
               </div>
@@ -1096,8 +1046,8 @@ export function MailList() {
     showSnoozed,
     showScheduled,
     folders,
-    pendingRemoveId,
-    setPendingRemoveId,
+    pendingRemoveIds,
+    setPendingRemoveIds,
     openCompose,
     folderFilter,
     setFolderFilter,
@@ -1129,8 +1079,8 @@ export function MailList() {
     showSnoozed: s.showSnoozed,
     showScheduled: s.showScheduled,
     folders: s.folders,
-    pendingRemoveId: s.pendingRemoveId,
-    setPendingRemoveId: s.setPendingRemoveId,
+    pendingRemoveIds: s.pendingRemoveIds,
+    setPendingRemoveIds: s.setPendingRemoveIds,
     openCompose: s.openCompose,
     folderFilter: s.folderFilter,
     setFolderFilter: s.setFolderFilter,
@@ -1161,7 +1111,7 @@ export function MailList() {
   }, [queryClient]);
   const dialog = useDialog();
   const [contextMenu, setContextMenu] = useState<{ mail: Mail; x: number; y: number; bulk: boolean } | null>(null);
-  const [snoozeMenuId, setSnoozeMenuId] = useState<string | null>(null);
+  const [snoozeMenu, setSnoozeMenu] = useState<{ mail: Mail; x: number; y: number } | null>(null);
   const [inboxZeroFlight, setInboxZeroFlight] = useState(false);
   const [draggingMail, setDraggingMail] = useState<Mail | null>(null);
   // Drag position lives in refs, written straight onto the preview node —
@@ -1317,11 +1267,14 @@ export function MailList() {
   }, [queryData]);
 
 
-  // Keyed on fetchedMails ONLY: extra deps would re-run setMails on every
-  // selection change and revert optimistic removals to the stale query data.
+  // Keyed on fetchedMails and pendingRemoveIds ONLY: further deps would re-run
+  // setMails on every selection change and revert optimistic removals to the
+  // stale query data. pendingRemoveIds belongs here because a delete's refetch
+  // lands mid-sweep — keepRowsLeaving holds those rows until the tween ends,
+  // and clearing the ids re-runs this to apply the settled list.
   useEffect(() => {
-    setMails(fetchedMails);
-  }, [fetchedMails, setMails]);
+    setMails(keepRowsLeaving(useAppStore.getState().mails, fetchedMails, pendingRemoveIds));
+  }, [fetchedMails, setMails, pendingRemoveIds]);
 
   // A restored selection may point at a mail that has since moved out of this
   // folder — validate once data is loaded. Skipped during search (selects
@@ -1390,14 +1343,15 @@ export function MailList() {
   const filteredMails = mails;
 
   const toggleStarMutation = useToggleStar();
+  const toggleFlagMutation = useToggleMailFlag();
   const togglePinMutation = useTogglePin();
 
   // One batched count query for the whole loaded page instead of one per row.
   const mailIdsForTaskCounts = useMemo(() => filteredMails.map((m) => m.id), [filteredMails]);
   const taskCounts = useTasksForMails(mailIdsForTaskCounts);
-  const createTaskFromMailMutation = useCreateTaskFromMail();
   const linkMailToTaskMutation = useLinkMailToTask();
   const [taskPickerMailId, setTaskPickerMailId] = useState<string | null>(null);
+  const [taskFromMailId, setTaskFromMailId] = useState<string | null>(null);
 
   const dateGroupLabels: Record<string, string> = useMemo(() => ({
     today: t("dateGroups.today"),
@@ -1467,6 +1421,22 @@ export function MailList() {
     setContextMenu({ mail, x: e.clientX, y: e.clientY, bulk: false });
   }, []);
 
+  // Anchored to the button rather than the pointer, and rendered at the list
+  // root: every virtualised row sits in its own stacking context (the
+  // virtualizer transforms them), so a menu nested inside one can never paint
+  // over the rows below it however high its z-index.
+  const openSnoozeMenu = useCallback((e: React.MouseEvent, mail: Mail) => {
+    const anchor = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    // Right-aligned under the button, as the old inline dropdown was: the button
+    // sits at the list's right edge, so a left-aligned menu would hang over the
+    // reading pane. clampToViewport only guards the window, not the pane.
+    setSnoozeMenu((prev) =>
+      prev?.mail.id === mail.id
+        ? null
+        : { mail, x: anchor.right - SNOOZE_MENU_WIDTH, y: anchor.bottom + 4 },
+    );
+  }, []);
+
   // Move targets for bulk move: only when all selected mails share one account.
   const selectedMailObjects = useMemo(
     () => mails.filter((m) => selectedMailIds.has(m.id)),
@@ -1489,7 +1459,8 @@ export function MailList() {
     if (ids.length === 0) return;
     const idSet = s.selectedMailIds;
     if (action === "archive" || action === "trash") {
-      setMails((prev) => prev.filter((m) => !idSet.has(m.id)));
+      // The sweep effect owns the removal so the rows cascade out first.
+      s.setPendingRemoveIds(ids);
     } else {
       const patch: Partial<Mail> =
         action === "mark_read" ? { is_read: true }
@@ -1509,8 +1480,7 @@ export function MailList() {
     const s = useAppStore.getState();
     const ids = Array.from(s.selectedMailIds);
     if (ids.length === 0) return;
-    const idSet = s.selectedMailIds;
-    setMails((prev) => prev.filter((m) => !idSet.has(m.id)));
+    s.setPendingRemoveIds(ids);
     s.clearSelection();
     runMailAction(async () => {
       const results = await Promise.allSettled(ids.map(fn));
@@ -1520,7 +1490,7 @@ export function MailList() {
       errorKey,
       invalidate: invalidateMailQueries,
     });
-  }, [setMails, invalidateMailQueries]);
+  }, [invalidateMailQueries]);
 
   const handleBulkSnooze = useCallback((until: string) => {
     runBulkPerMail((id) => snoozeMail(id, until), "errors.snooze");
@@ -1529,6 +1499,51 @@ export function MailList() {
   const handleBulkMove = useCallback((destFolderId: string) => {
     runBulkPerMail((id) => moveMail(id, destFolderId), "errors.move");
   }, [runBulkPerMail]);
+
+  /**
+   * Rewrites the flags of every selected mail. Unlike runBulkPerMail the rows
+   * stay put and the selection survives, so several colours can be applied in a
+   * row. `set_mail_flags` (not the per-mail toggle) keeps a mixed selection from
+   * ending up half-flagged.
+   */
+  const applyBulkFlags = useCallback((nextFlags: (flags: string[]) => string[]) => {
+    const selected = useAppStore.getState().selectedMailIds;
+    const targets = mails.filter((m) => selected.has(m.id));
+    if (targets.length === 0) return;
+    const previous = new Map(targets.map((m) => [m.id, m.flags ?? []] as const));
+    const updates = new Map(targets.map((m) => [m.id, nextFlags(m.flags ?? [])] as const));
+
+    setMails((prev) => prev.map((m) => (updates.has(m.id) ? { ...m, flags: updates.get(m.id)! } : m)));
+    runMailAction(async () => {
+      const results = await Promise.allSettled(targets.map((m) => setMailFlags(m.id, updates.get(m.id)!)));
+      const firstFailure = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
+      if (firstFailure) throw firstFailure.reason;
+    }, {
+      errorKey: "errors.batchUpdate",
+      invalidate: invalidateMailQueries,
+      onPendingClear: () => setMails((prev) => prev.map((m) => (previous.has(m.id) ? { ...m, flags: previous.get(m.id)! } : m))),
+    });
+  }, [mails, setMails, invalidateMailQueries]);
+
+  const handleToggleFlag = useCallback((mail: Mail, flag: MailFlag) => {
+    const previous = mail.flags ?? [];
+    const next = previous.includes(flag) ? previous.filter((f) => f !== flag) : [...previous, flag];
+    setMails((prev) => prev.map((m) => (m.id === mail.id ? { ...m, flags: next } : m)));
+    toggleFlagMutation.mutate({ mailId: mail.id, flag }, {
+      onError: () => setMails((prev) => prev.map((m) => (m.id === mail.id ? { ...m, flags: previous } : m))),
+    });
+  }, [setMails, toggleFlagMutation]);
+
+  const handleClearFlags = useCallback((mail: Mail) => {
+    const previous = mail.flags ?? [];
+    if (previous.length === 0) return;
+    setMails((prev) => prev.map((m) => (m.id === mail.id ? { ...m, flags: [] } : m)));
+    runMailAction(() => setMailFlags(mail.id, []), {
+      errorKey: "errors.batchUpdate",
+      invalidate: invalidateMailQueries,
+      onPendingClear: () => setMails((prev) => prev.map((m) => (m.id === mail.id ? { ...m, flags: previous } : m))),
+    });
+  }, [setMails, invalidateMailQueries]);
 
   /**
    * Call after each successful archive action.
@@ -1657,7 +1672,7 @@ export function MailList() {
         if (contextMenu) return;
         e.preventDefault();
         const ids = Array.from(selectedMailIds);
-        setMails(mails.filter((m) => !selectedMailIds.has(m.id)));
+        setPendingRemoveIds(ids);
         clearSelection();
         runMailAction(() => batchUpdateMails(ids, "trash"), {
           errorKey: "errors.batchUpdate",
@@ -1674,7 +1689,7 @@ export function MailList() {
         if (multiSelectMode && selectedMailIds.size > 0) {
           e.preventDefault();
           const ids = Array.from(selectedMailIds);
-          setMails(mails.filter((m) => !selectedMailIds.has(m.id)));
+          setPendingRemoveIds(ids);
           clearSelection();
           runMailAction(() => batchUpdateMails(ids, "archive"), {
             errorKey: "errors.archive",
@@ -1684,11 +1699,11 @@ export function MailList() {
           e.preventDefault();
           const mail = filteredMails[selectedMailIndex];
           const preActionVisible = filteredMails.length;
-          setPendingRemoveId(mail.id);
+          setPendingRemoveIds([mail.id]);
           runMailAction(() => archiveMail(mail.id), {
             errorKey: "errors.archive",
             invalidate: invalidateMailQueries,
-            onPendingClear: () => setPendingRemoveId(null),
+            onPendingClear: () => setPendingRemoveIds([]),
             onSuccess: () => handleArchiveSuccess([mail.id], preActionVisible),
           });
         }
@@ -1744,7 +1759,7 @@ export function MailList() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [filteredMails, selectedMailIndex, selectMail, setSelectedMailId, multiSelectMode, selectedMailIds, clearSelection, selectAllMails, setMails, mails, isSearchActive, searchResultsData, selectedMailId, contextMenu, invalidateMailQueries, handleArchiveSuccess, setPendingRemoveId, toggleMailSelection, setSelectionSpan, setSelectedMailIndex, rowEstimate]);
+  }, [filteredMails, selectedMailIndex, selectMail, setSelectedMailId, multiSelectMode, selectedMailIds, clearSelection, selectAllMails, setMails, mails, isSearchActive, searchResultsData, selectedMailId, contextMenu, invalidateMailQueries, handleArchiveSuccess, setPendingRemoveIds, toggleMailSelection, setSelectionSpan, setSelectedMailIndex, rowEstimate]);
 
   // Each view starts at the top — without this, the previous folder's scroll
   // offset carried over and landed the new folder mid-list.
@@ -1753,13 +1768,6 @@ export function MailList() {
   }, [selectedFolderId, activeFilter, showAllInboxes, activeCombinedFolder, showSnoozed, activeSplitId]);
 
   // No entrance animation on folder switches (post-paint effects flash).
-  useEffect(() => {
-    if (!snoozeMenuId) return;
-    function handleClick() { setSnoozeMenuId(null); }
-    window.addEventListener("click", handleClick);
-    return () => window.removeEventListener("click", handleClick);
-  }, [snoozeMenuId]);
-
   const selectAfterRemoval = useCallback((remaining: Mail[], index: number) => {
     // Only move the selection if the removed mail was the open one.
     const { selectedMailId: current } = useAppStore.getState();
@@ -1771,31 +1779,42 @@ export function MailList() {
     setSelectedMailId(remaining[Math.min(index, remaining.length - 1)].id);
   }, [setSelectedMailId]);
 
+  // The one exit path for rows leaving the list, single or bulk: the same tween
+  // the folder-empty sweep uses, staggered so a selection cascades away instead
+  // of blinking out all at once.
   useEffect(() => {
-    if (!pendingRemoveId) return;
-    const el = mailItemRefs.current.get(pendingRemoveId);
-    const removeId = pendingRemoveId;
+    if (pendingRemoveIds.length === 0) return;
+    const removeIds = pendingRemoveIds;
+    const removed = new Set(removeIds);
 
-    if (el && !prefersReducedMotion()) {
-      // Fade/slide only — height animation fights the virtualizer's absolute layout.
-      gsap.to(el, {
-        ...SWEEP_TWEEN,
-        onComplete: () => {
-          const { mails: currentMails, selectedMailIndex: idx } = useAppStore.getState();
-          const remaining = currentMails.filter((m) => m.id !== removeId);
-          selectAfterRemoval(remaining, idx);
-          setMails(remaining);
-          setPendingRemoveId(null);
-        },
-      });
-    } else {
-      // Element not found (e.g., already removed), fallback: just remove
-      const remaining = mails.filter((m) => m.id !== removeId);
-      selectAfterRemoval(remaining, selectedMailIndex);
+    const settle = () => {
+      const { mails: currentMails, selectedMailIndex: idx, pendingRemoveIds: stillPending } = useAppStore.getState();
+      const remaining = currentMails.filter((m) => !removed.has(m.id));
+      selectAfterRemoval(remaining, idx);
       setMails(remaining);
-      setPendingRemoveId(null);
+      // A second delete started mid-sweep owns the flag now; clearing it blindly
+      // would let that batch's refetch cut its own rows off.
+      if (stillPending === removeIds) setPendingRemoveIds([]);
+    };
+
+    // Walked in list order, not selection order, so the cascade always reads
+    // top-to-bottom however the mails were picked. Only rows the virtualizer
+    // has mounted can be tweened — a select-all reaches far past the viewport,
+    // and those simply drop out.
+    const rows = useAppStore.getState().mails
+      .filter((m) => removed.has(m.id))
+      .map((m) => mailItemRefs.current.get(m.id))
+      .filter((el): el is HTMLDivElement => Boolean(el));
+
+    if (rows.length === 0 || prefersReducedMotion()) {
+      settle();
+      return;
     }
-  }, [pendingRemoveId]);
+    // Fade/slide only — height animation fights the virtualizer's absolute
+    // layout. stagger.amount caps the cascade so the total stays inside
+    // SWEEP_DURATION_MS however many rows are leaving.
+    gsap.to(rows, { ...SWEEP_TWEEN, stagger: { amount: 0.15 }, onComplete: settle });
+  }, [pendingRemoveIds]);
 
   if (!selectedFolderId && !activeFilter && !showAllInboxes && !activeCombinedFolder && !showSnoozed && !showScheduled) {
     return (
@@ -1890,7 +1909,7 @@ export function MailList() {
             <button
               onClick={() => {
                 const ids = Array.from(selectedMailIds);
-                setMails(mails.filter((m) => !selectedMailIds.has(m.id)));
+                setPendingRemoveIds(ids);
                 clearSelection();
                 runMailAction(() => batchUpdateMails(ids, "archive"), {
                   errorKey: "errors.batchUpdate",
@@ -1906,7 +1925,7 @@ export function MailList() {
             <button
               onClick={() => {
                 const ids = Array.from(selectedMailIds);
-                setMails(mails.filter((m) => !selectedMailIds.has(m.id)));
+                setPendingRemoveIds(ids);
                 clearSelection();
                 runMailAction(() => batchUpdateMails(ids, "trash"), {
                   errorKey: "errors.batchUpdate",
@@ -2087,8 +2106,8 @@ export function MailList() {
               multiSelectMode={multiSelectMode}
               appSettings={appSettings}
               dateGroupLabels={dateGroupLabels}
-              snoozeMenuId={snoozeMenuId}
-              setSnoozeMenuId={setSnoozeMenuId}
+              snoozeMenuMailId={snoozeMenu?.mail.id ?? null}
+              openSnoozeMenu={openSnoozeMenu}
               hasNextPage={hasNextPage}
               isFetchingNextPage={isFetchingNextPage}
               handleListScroll={handleListScroll}
@@ -2101,7 +2120,7 @@ export function MailList() {
               setMails={setMails}
               toggleMailSelection={toggleMailSelection}
               toggleStarMutation={toggleStarMutation}
-              setPendingRemoveId={setPendingRemoveId}
+              setPendingRemoveIds={setPendingRemoveIds}
               invalidateMailQueries={invalidateMailQueries}
               archiveMail={archiveMail}
               trashMail={trashMail}
@@ -2115,6 +2134,31 @@ export function MailList() {
 
       <DragPreview mail={draggingMail} initialPosition={dragStartPosition.current} grabOffset={grabOffset.current} width={dragItemWidth} nodeRef={dragPreviewRef} />
 
+      {snoozeMenu && (
+        <ContextMenu
+          x={snoozeMenu.x}
+          y={snoozeMenu.y}
+          onClose={() => setSnoozeMenu(null)}
+          minWidth={SNOOZE_MENU_WIDTH}
+          ariaLabel={t("snooze.snooze")}
+          entries={SNOOZE_PRESETS.map((preset) => ({
+            kind: "item" as const,
+            id: preset.id,
+            label: t(preset.labelKey),
+            icon: <Clock className="w-4 h-4" />,
+            onSelect: () => {
+              const mailId = snoozeMenu.mail.id;
+              setPendingRemoveIds([mailId]);
+              runMailAction(() => snoozeMail(mailId, toSnoozeStamp(preset.at(new Date()))), {
+                errorKey: "errors.snooze",
+                invalidate: invalidateMailQueries,
+                onPendingClear: () => setPendingRemoveIds([]),
+              });
+            },
+          }))}
+        />
+      )}
+
       {contextMenu && (
         <MailContextMenu
           mail={contextMenu.mail}
@@ -2124,8 +2168,19 @@ export function MailList() {
           onReply={(m) => openCompose("reply", m)}
           onReplyAll={(m) => openCompose("replyAll", m)}
           onForward={(m) => openCompose("forward", m)}
-          onCreateTask={(m) => createTaskFromMailMutation.mutate(m.id)}
+          onCreateTask={(m) => setTaskFromMailId(m.id)}
           onAddToTask={(m) => setTaskPickerMailId(m.id)}
+          onToggleFlag={handleToggleFlag}
+          onClearFlags={handleClearFlags}
+          selectedFlags={selectedMailObjects.map((m) => m.flags ?? [])}
+          onBulkFlag={(flag, action) =>
+            applyBulkFlags((flags) =>
+              action === "set"
+                ? (flags.includes(flag) ? flags : [...flags, flag])
+                : flags.filter((f) => f !== flag)
+            )
+          }
+          onBulkClearFlags={() => applyBulkFlags(() => [])}
           onToggleStar={(m) => {
             const prev = m.is_starred;
             setMails((prev_) => prev_.map((ml) => ml.id === m.id ? { ...ml, is_starred: !prev } : ml));
@@ -2141,19 +2196,19 @@ export function MailList() {
             });
           }}
           onArchive={(m) => {
-            setPendingRemoveId(m.id);
+            setPendingRemoveIds([m.id]);
             runMailAction(() => archiveMail(m.id), {
               errorKey: "errors.archive",
               invalidate: invalidateMailQueries,
-              onPendingClear: () => setPendingRemoveId(null),
+              onPendingClear: () => setPendingRemoveIds([]),
             });
           }}
           onTrash={(m) => {
-            setPendingRemoveId(m.id);
+            setPendingRemoveIds([m.id]);
             runMailAction(() => trashMail(m.id), {
               errorKey: "errors.trash",
               invalidate: invalidateMailQueries,
-              onPendingClear: () => setPendingRemoveId(null),
+              onPendingClear: () => setPendingRemoveIds([]),
             });
           }}
           onTogglePin={(m) => {
@@ -2164,11 +2219,11 @@ export function MailList() {
             });
           }}
           onSnooze={(m, until) => {
-            setPendingRemoveId(m.id);
+            setPendingRemoveIds([m.id]);
             runMailAction(() => snoozeMail(m.id, until), {
               errorKey: "errors.snooze",
               invalidate: invalidateMailQueries,
-              onPendingClear: () => setPendingRemoveId(null),
+              onPendingClear: () => setPendingRemoveIds([]),
             });
           }}
           selectedCount={contextMenu.bulk ? selectedMailIds.size : undefined}
@@ -2185,6 +2240,10 @@ export function MailList() {
           onClose={() => setTaskPickerMailId(null)}
           onPick={(taskId) => linkMailToTaskMutation.mutate({ taskId, mailId: taskPickerMailId })}
         />
+      )}
+
+      {taskFromMailId && (
+        <CreateTaskFromMail mailId={taskFromMailId} onDone={() => setTaskFromMailId(null)} />
       )}
     </div>
   );

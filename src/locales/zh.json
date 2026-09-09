@@ -66,7 +66,9 @@
     "accountMenu": {
       "sync": "立即同步",
       "settings": "账户设置…"
-    }
+    },
+    "collapseAccount": "折叠账户",
+    "expandAccount": "展开账户"
   },
   "attachments": {
     "search": "搜索附件...",
@@ -190,7 +192,9 @@
     "draftSavedAt": "已保存 {{time}}",
     "savedAgo": "已自动保存 {{time}}",
     "attachmentsSize": "合计：{{size}}",
-    "attachmentsSizeWarning": "接近 25 MB 限制"
+    "attachmentsSizeWarning": "接近 25 MB 限制",
+    "tooManyWindowsTitle": "最多同时打开 5 个草稿",
+    "tooManyWindowsMessage": "请先关闭一个写信窗口，再打开新的窗口。"
   },
   "imageLightbox": {
     "close": "关闭",
@@ -996,7 +1000,8 @@
       "server": "服务器错误"
     },
     "bodyLoad": "无法从服务器加载此邮件。",
-    "generic": "出了点问题，请重试。"
+    "generic": "出了点问题，请重试。",
+    "copyMailAttachments": "无法复制附件"
   },
   "privacy": {
     "badge": "隐私",
@@ -1126,6 +1131,13 @@
     "dueNoDate": "无日期",
     "dueDateTime": "日期和时间",
     "addFilesHint": "将文件拖到此处",
-    "createdUpdated": "创建于 {{created}} · 更新于 {{updated}}"
+    "createdUpdated": "创建于 {{created}} · 更新于 {{updated}}",
+    "attachFromMailTitle": "包含附件？",
+    "attachFromMailDesc": "选择要复制到新任务中的附件。",
+    "attachInline": "内嵌",
+    "attachSelectAll": "全选",
+    "attachSelectNone": "取消选择",
+    "attachSkip": "不含附件",
+    "attachConfirm": "创建任务"
   }
 }

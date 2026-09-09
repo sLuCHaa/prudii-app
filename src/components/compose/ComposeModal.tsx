@@ -31,6 +31,7 @@ import { fillEmptyParagraphs, inlineComposeStyles, extractLocalImages, dropImage
 import { HtmlMailFrame } from "../layout/MailDetail";
 import { RecipientInput, type RecipientInputHandle } from "./RecipientInput";
 import type { Mail, SendMailRequest, SendAttachment, Attachment, Account, AppSettings } from "../../types";
+import { formatFileSize } from "../../lib/fileSize";
 
 interface AttachmentFile {
   id: string;
@@ -1064,12 +1065,6 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     const bodyHtml = editorHtml + quotedHtml;
     const bodyText = editorText + (quotedHtml ? "\n\n" + quotedHtml.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim() : "");
     return { bodyHtml, bodyText };
-  }
-
-  function formatFileSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
   async function handleSend(): Promise<boolean> {

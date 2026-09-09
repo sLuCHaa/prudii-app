@@ -1081,6 +1081,7 @@ pub fn run() {
             commands::tasks::delete_checklist_item,
             commands::tasks::reorder_checklist,
             commands::tasks::create_task_from_mail,
+            commands::tasks::copy_mail_attachments_to_task,
             commands::tasks::link_task_mail,
             commands::tasks::unlink_task_mail,
             commands::tasks::tasks_for_mail,

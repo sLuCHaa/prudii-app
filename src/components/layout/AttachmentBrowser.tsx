@@ -16,13 +16,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { revealLabelKey, revealAttachment } from "../../lib/attachmentActions";
 import { isMacOS, isWindows } from "../../lib/platform";
 import type { AttachmentWithContext, AiSearchResultEvent } from "../../types";
-
-function formatFileSize(bytes: number | null): string {
-  if (bytes == null) return "";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
+import { formatFileSize } from "../../lib/fileSize";
 
 function getFileIcon(mimeType: string | null, filename: string) {
   const mime = mimeType?.toLowerCase() || "";

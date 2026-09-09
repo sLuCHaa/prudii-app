@@ -23,10 +23,18 @@ export function TitleBar() {
   const { data: openTaskCount = 0 } = useOpenTaskCount();
   const tasksButtonRef = useRef<HTMLButtonElement>(null);
   const [quickAddAnchor, setQuickAddAnchor] = useState<DOMRect | null>(null);
+  const quickAddFocusRequested = useAppStore((s) => s.quickAddFocusRequested);
 
   function openQuickAdd() {
     setQuickAddAnchor(tasksButtonRef.current?.getBoundingClientRect() ?? null);
   }
+
+  // The command palette's "quick add" entry only raises the flag; the popover
+  // lives here because the title bar is on screen in every view. QuickAdd itself
+  // clears the flag once its input takes focus.
+  useEffect(() => {
+    if (quickAddFocusRequested) openQuickAdd();
+  }, [quickAddFocusRequested]);
 
   // Snap Layouts: the maximize button is reported to the native side and its
   // hover comes back as an event (the button lives in non-client space there).

@@ -66,7 +66,9 @@
     "accountMenu": {
       "sync": "Sincronizar agora",
       "settings": "Definições da conta…"
-    }
+    },
+    "collapseAccount": "Recolher conta",
+    "expandAccount": "Expandir conta"
   },
   "attachments": {
     "search": "Pesquisar anexos...",
@@ -191,7 +193,9 @@
     "draftSavedAt": "Guardado {{time}}",
     "savedAgo": "Salvo automaticamente {{time}}",
     "attachmentsSize": "Total: {{size}}",
-    "attachmentsSizeWarning": "a aproximar o limite de 25 MB"
+    "attachmentsSizeWarning": "a aproximar o limite de 25 MB",
+    "tooManyWindowsTitle": "No máximo 5 rascunhos ao mesmo tempo",
+    "tooManyWindowsMessage": "Feche uma janela de redação aberta para abrir outra."
   },
   "imageLightbox": {
     "close": "Fechar",
@@ -997,7 +1001,8 @@
       "server": "Erro do servidor"
     },
     "bodyLoad": "Não foi possível carregar esta mensagem do servidor.",
-    "generic": "Algo deu errado. Tente novamente."
+    "generic": "Algo deu errado. Tente novamente.",
+    "copyMailAttachments": "Não foi possível copiar os anexos"
   },
   "privacy": {
     "badge": "Privacidade",
@@ -1127,6 +1132,13 @@
     "dueNoDate": "Sem data",
     "dueDateTime": "Data e hora",
     "addFilesHint": "Solte os ficheiros aqui",
-    "createdUpdated": "Criada {{created}} · atualizada {{updated}}"
+    "createdUpdated": "Criada {{created}} · atualizada {{updated}}",
+    "attachFromMailTitle": "Incluir anexos?",
+    "attachFromMailDesc": "Escolha quais anexos copiar para a nova tarefa.",
+    "attachInline": "Incorporado",
+    "attachSelectAll": "Selecionar tudo",
+    "attachSelectNone": "Limpar seleção",
+    "attachSkip": "Sem anexos",
+    "attachConfirm": "Criar tarefa"
   }
 }

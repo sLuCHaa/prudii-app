@@ -39,7 +39,8 @@ import { useAppStore, type MailFilter } from "../../stores/appStore";
 import { useAccounts, useFolders } from "../../hooks/useAccounts";
 import { useSyncAccount, useSyncAll } from "../../hooks/useSync";
 import { useRemoveAccount } from "../../hooks/useRemoveAccount";
-import { useOpenTaskCount, useCreateTaskFromMail } from "../../hooks/useTasks";
+import { useOpenTaskCount } from "../../hooks/useTasks";
+import { CreateTaskFromMail } from "../tasks/CreateTaskFromMail";
 import { ComposeButton } from "../compose/ComposeButton";
 import { ThemeToggle } from "../ui/ThemeToggle";
 import { TrashIcon, StarIcon } from "../icons";
@@ -786,14 +787,24 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
         className="flex items-center gap-2 group px-2 py-1"
         onContextMenu={(e) => { e.preventDefault(); setAccountMenu({ x: e.clientX, y: e.clientY }); }}
       >
-        <span
-          ref={dotRef}
-          className="w-2 h-2 rounded-full shrink-0"
-          style={{ backgroundColor: account.color }}
-        />
-        <span className="flex-1 truncate text-xs font-medium text-text-secondary">
-          {account.display_name}
-        </span>
+        <button
+          onClick={() => toggleAccountExpanded(account.id)}
+          className="flex items-center gap-2 min-w-0 flex-1 rounded-md -mx-1 px-1 py-0.5 hover:bg-hover transition-colors"
+          aria-expanded={expanded}
+          title={expanded ? t("sidebar.collapseAccount") : t("sidebar.expandAccount")}
+        >
+          <ChevronRight
+            className={`w-3 h-3 shrink-0 text-text-tertiary transition-transform duration-200 ${expanded ? "rotate-90" : ""}`}
+          />
+          <span
+            ref={dotRef}
+            className="w-2 h-2 rounded-full shrink-0"
+            style={{ backgroundColor: account.color }}
+          />
+          <span className="flex-1 truncate text-left text-xs font-medium text-text-secondary">
+            {account.display_name}
+          </span>
+        </button>
         {syncProgress?.status === "error" ? (
           <span title={t("sidebar.sync.error")} aria-label={t("sidebar.sync.error")} className="shrink-0">
             <AlertCircle className="w-3 h-3 text-danger" />
@@ -824,9 +835,9 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
         <BackfillProgressIndicator progress={backfillProgress} />
       )}
 
-      {folders && (
+      <Collapse open={!!(expanded && folders)}>
         <div className="mt-0.5 space-y-0.5">
-          {folders.map((folder) => (
+          {(folders ?? []).map((folder) => (
             renamingFolder?.id === folder.id ? (
               <div key={folder.id} className="flex items-center gap-1 px-1">
                 <input
@@ -892,7 +903,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
             )
           ))}
         </div>
-      )}
+      </Collapse>
 
       {contextMenu && (
         <FolderContextMenu
@@ -1119,7 +1130,7 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
   const hasFeature = useAppStore((s) => s.hasFeature);
   const accounts = useAppStore((s) => s.accounts);
   const { data: openTaskCount = 0 } = useOpenTaskCount();
-  const createTaskFromMail = useCreateTaskFromMail();
+  const [taskFromMailId, setTaskFromMailId] = useState<string | null>(null);
 
   const [snoozedCount, setSnoozedCount] = useState(0);
   const [scheduledCount, setScheduledCount] = useState(0);
@@ -1144,7 +1155,7 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
     e.preventDefault();
     setTasksDropActive(false);
     const dragged = readMailDrag(e.dataTransfer);
-    if (dragged) createTaskFromMail.mutate(dragged.mailId);
+    if (dragged) setTaskFromMailId(dragged.mailId);
   }
 
   useEffect(() => {
@@ -1261,6 +1272,10 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
             )}
           </button>
         ))}
+
+        {taskFromMailId && (
+          <CreateTaskFromMail mailId={taskFromMailId} onDone={() => setTaskFromMailId(null)} />
+        )}
       </div>
     );
   }
@@ -1299,6 +1314,10 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
             )}
           </button>
         ))}
+
+        {taskFromMailId && (
+          <CreateTaskFromMail mailId={taskFromMailId} onDone={() => setTaskFromMailId(null)} />
+        )}
       </div>
     </div>
   );

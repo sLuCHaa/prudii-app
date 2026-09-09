@@ -66,7 +66,9 @@
     "accountMenu": {
       "sync": "Sync now",
       "settings": "Account settings…"
-    }
+    },
+    "collapseAccount": "Collapse account",
+    "expandAccount": "Expand account"
   },
   "attachments": {
     "search": "Search attachments...",
@@ -191,7 +193,9 @@
     "draftSavedAt": "Saved {{time}}",
     "savedAgo": "Auto-saved {{time}}",
     "attachmentsSize": "Total: {{size}}",
-    "attachmentsSizeWarning": "approaching 25 MB limit"
+    "attachmentsSizeWarning": "approaching 25 MB limit",
+    "tooManyWindowsTitle": "Maximum of 5 drafts at once",
+    "tooManyWindowsMessage": "Close an open compose window to open a new one."
   },
   "imageLightbox": {
     "close": "Close",
@@ -997,7 +1001,8 @@
       "server": "Server error"
     },
     "bodyLoad": "This message couldn't be loaded from the server.",
-    "generic": "Something went wrong. Please try again."
+    "generic": "Something went wrong. Please try again.",
+    "copyMailAttachments": "Could not copy attachments"
   },
   "privacy": {
     "badge": "Privacy",
@@ -1127,6 +1132,13 @@
     "dueNoDate": "No date",
     "dueDateTime": "Date & time",
     "addFilesHint": "Drop files here",
-    "createdUpdated": "Created {{created}} · updated {{updated}}"
+    "createdUpdated": "Created {{created}} · updated {{updated}}",
+    "attachFromMailTitle": "Include attachments?",
+    "attachFromMailDesc": "Choose which attachments to copy into the new task.",
+    "attachInline": "Inline",
+    "attachSelectAll": "Select all",
+    "attachSelectNone": "Clear selection",
+    "attachSkip": "Without attachments",
+    "attachConfirm": "Create task"
   }
 }

@@ -16,16 +16,32 @@ interface BoardColumnProps {
   status: TaskStatus;
   tasks: Task[];
   checkmarkIds: Set<string>;
+  landedId: string | null;
   dragging: boolean;
+  /** True while the dragged card would land here. Comes from the board's drag
+   *  preview rather than useDroppable's isOver, which stays false whenever the
+   *  pointer is over one of the column's cards instead of its padding. */
+  isDropTarget: boolean;
 }
 
-export function BoardColumn({ status, tasks, checkmarkIds, dragging }: BoardColumnProps) {
+export function BoardColumn({ status, tasks, checkmarkIds, landedId, dragging, isDropTarget }: BoardColumnProps) {
   const { t } = useTranslation();
   const { setNodeRef } = useDroppable({ id: status, data: { type: "column", status } });
 
   return (
-    <div data-status={status} className="flex flex-col min-w-0 flex-1 bg-bg-secondary/40 rounded-xl overflow-hidden">
-      <div className={`h-1 ${STRIP_CLASS[status]}`} />
+    <div
+      data-status={status}
+      data-drop-target={isDropTarget || undefined}
+      className={`flex flex-col min-w-0 flex-1 rounded-xl overflow-hidden transition-colors duration-150 ${
+        isDropTarget ? "bg-accent/10 ring-2 ring-accent/40 ring-inset" : "bg-bg-secondary/40"
+      }`}
+    >
+      {/* Every strip but the target's dims mid-drag, so the destination reads at a glance. */}
+      <div
+        className={`h-1 ${STRIP_CLASS[status]} transition-opacity duration-150 ${
+          dragging && !isDropTarget ? "opacity-30" : "opacity-100"
+        }`}
+      />
       <div className="flex items-center gap-2 px-3 py-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-text-secondary">{t(STATUS_KEY[status])}</span>
         <span className="text-xs text-text-tertiary tabular-nums ml-auto">
@@ -35,7 +51,14 @@ export function BoardColumn({ status, tasks, checkmarkIds, dragging }: BoardColu
       <div ref={setNodeRef} className="flex-1 min-h-[80px] overflow-y-auto px-2 pb-2">
         <SortableContext items={tasks.map((task) => task.id)} strategy={verticalListSortingStrategy}>
           {tasks.map((task) => (
-            <TaskCard key={task.id} task={task} status={status} showCheckmark={checkmarkIds.has(task.id)} boardDragging={dragging} />
+            <TaskCard
+              key={task.id}
+              task={task}
+              status={status}
+              showCheckmark={checkmarkIds.has(task.id)}
+              justLanded={landedId === task.id}
+              boardDragging={dragging}
+            />
           ))}
         </SortableContext>
       </div>

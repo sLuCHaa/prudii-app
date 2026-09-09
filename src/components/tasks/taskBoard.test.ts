@@ -85,6 +85,14 @@ describe("TaskBoard", () => {
     expect(doneColumn.textContent).not.toContain("Alpha");
   });
 
+  it("marks no column as a drop target while nothing is being dragged", () => {
+    renderBoard(TASKS);
+
+    expect(document.querySelectorAll("[data-drop-target]").length).toBe(0);
+    // The dashed placeholder is the dragged card's own gap; at rest every card is real.
+    expect(document.querySelectorAll(".border-dashed").length).toBe(0);
+  });
+
   it("opens the task drawer when a card is clicked", () => {
     renderBoard(TASKS);
 

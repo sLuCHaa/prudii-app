@@ -6,6 +6,7 @@ import { useAppStore } from "../../stores/appStore";
 import { revealLabelKey } from "../../lib/attachmentActions";
 import { isMacOS, isWindows } from "../../lib/platform";
 import { SECTION_ACTION, TaskSectionHead } from "./TaskSectionHead";
+import { formatFileSize } from "../../lib/fileSize";
 
 // Tinted chips, not solid fills: white-on-solid breaks against a re-themed accent
 // and reads far louder than the due chip it sits next to.
@@ -26,13 +27,6 @@ export function fileBadge(filename: string): { label: string; className: string 
     label: (ext || "file").slice(0, 4).toUpperCase(),
     className: family?.className ?? "bg-text-tertiary/12 text-text-tertiary",
   };
-}
-
-function formatFileSize(bytes: number): string {
-  if (!bytes) return "";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 interface TaskFilesProps {

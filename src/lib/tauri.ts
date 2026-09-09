@@ -651,6 +651,13 @@ export async function createTaskFromMail(mailId: string): Promise<Task> {
   return invoke("create_task_from_mail", { mailId });
 }
 
+/// Copies a mail's own attachments into the task's file store. Attachments the
+/// sync hasn't downloaded yet are skipped, so the result can be shorter than the
+/// ids passed in.
+export async function copyMailAttachmentsToTask(taskId: string, attachmentIds: string[]): Promise<TaskAttachment[]> {
+  return invoke("copy_mail_attachments_to_task", { taskId, attachmentIds });
+}
+
 export async function linkTaskMail(taskId: string, mailId: string): Promise<void> {
   return invoke("link_task_mail", { taskId, mailId });
 }

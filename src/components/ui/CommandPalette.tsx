@@ -150,7 +150,7 @@ export function CommandPalette() {
       label: t("tasks.quickAdd"),
       icon: <ClipboardList className="w-4 h-4" />,
       section: groupActions,
-      action: () => { setShowTasks(true); requestQuickAddFocus(); },
+      action: () => requestQuickAddFocus(),
     });
 
     items.push({

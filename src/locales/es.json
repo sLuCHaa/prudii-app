@@ -66,7 +66,9 @@
     "accountMenu": {
       "sync": "Sincronizar ahora",
       "settings": "Ajustes de la cuenta…"
-    }
+    },
+    "collapseAccount": "Contraer cuenta",
+    "expandAccount": "Expandir cuenta"
   },
   "attachments": {
     "search": "Buscar adjuntos...",
@@ -191,7 +193,9 @@
     "draftSavedAt": "Guardado {{time}}",
     "savedAgo": "Guardado automáticamente {{time}}",
     "attachmentsSize": "Total: {{size}}",
-    "attachmentsSizeWarning": "cerca del límite de 25 MB"
+    "attachmentsSizeWarning": "cerca del límite de 25 MB",
+    "tooManyWindowsTitle": "Máximo 5 borradores a la vez",
+    "tooManyWindowsMessage": "Cierra una ventana de redacción abierta para abrir otra."
   },
   "imageLightbox": {
     "close": "Cerrar",
@@ -997,7 +1001,8 @@
       "server": "Error del servidor"
     },
     "bodyLoad": "No se pudo cargar este mensaje desde el servidor.",
-    "generic": "Algo salió mal. Inténtalo de nuevo."
+    "generic": "Algo salió mal. Inténtalo de nuevo.",
+    "copyMailAttachments": "No se pudieron copiar los archivos adjuntos"
   },
   "privacy": {
     "badge": "Privacidad",
@@ -1127,6 +1132,13 @@
     "dueNoDate": "Sin fecha",
     "dueDateTime": "Fecha y hora",
     "addFilesHint": "Arrastra archivos aquí",
-    "createdUpdated": "Creada {{created}} · actualizada {{updated}}"
+    "createdUpdated": "Creada {{created}} · actualizada {{updated}}",
+    "attachFromMailTitle": "¿Incluir archivos adjuntos?",
+    "attachFromMailDesc": "Elige qué archivos adjuntos copiar a la nueva tarea.",
+    "attachInline": "Insertado",
+    "attachSelectAll": "Seleccionar todo",
+    "attachSelectNone": "Borrar selección",
+    "attachSkip": "Sin adjuntos",
+    "attachConfirm": "Crear tarea"
   }
 }

@@ -104,9 +104,10 @@ interface AppState {
   clearSelection: () => void;
   setLastSelectedMailId: (id: string | null) => void;
 
-  // Animation coordination
-  pendingRemoveId: string | null;
-  setPendingRemoveId: (id: string | null) => void;
+  // Animation coordination: rows sweeping out of the mail list. Empty at rest;
+  // one id for a single delete, the whole selection for a bulk one.
+  pendingRemoveIds: string[];
+  setPendingRemoveIds: (ids: string[]) => void;
 
   syncProgress: Record<string, SyncProgress>;
   setSyncProgress: (accountId: string, progress: SyncProgress | null) => void;
@@ -136,8 +137,9 @@ interface AppState {
   setOpenTaskId: (id: string | null) => void;
   // Reminder click ("task-open" event): open the Tasks view and its drawer in one go.
   openTaskById: (id: string) => void;
-  // One-shot flag so a QuickAdd row mounted later (the Tasks view unmounts on close)
-  // still autofocuses exactly once per palette request.
+  // One-shot flag raised by the command palette: the title bar opens the QuickAdd
+  // popover on it and QuickAdd's input clears it, so a later ordinary open of the
+  // same (possibly remounted) row doesn't steal focus again.
   quickAddFocusRequested: boolean;
   requestQuickAddFocus: () => void;
   consumeQuickAddFocus: () => void;
@@ -354,8 +356,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   setLastSelectedMailId: (lastSelectedMailId) => set({ lastSelectedMailId }),
 
   // Animation coordination
-  pendingRemoveId: null,
-  setPendingRemoveId: (pendingRemoveId) => set({ pendingRemoveId }),
+  pendingRemoveIds: [],
+  setPendingRemoveIds: (pendingRemoveIds) => set({ pendingRemoveIds }),
 
   syncProgress: {},
   setSyncProgress: (accountId, progress) =>

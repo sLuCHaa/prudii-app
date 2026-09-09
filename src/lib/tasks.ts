@@ -1,5 +1,30 @@
-import type { Task, TaskStatus } from "../types";
+import type { Attachment, Task, TaskStatus } from "../types";
 import { TASK_STATUSES } from "../types";
+
+/**
+ * Whether turning this mail into a task should stop to ask about its files.
+ *
+ * Only real attachments count. A mail whose sole "attachments" are the cid:
+ * images of a signature is, to the user, a mail without attachments — asking
+ * about it would be noise on nearly every reply.
+ */
+export function shouldAskAboutAttachments(attachments: Attachment[]): boolean {
+  return attachments.some((a) => !a.is_inline);
+}
+
+/**
+ * The attachments the picker offers, real ones first. Inline images stay on the
+ * list — a mail can carry its actual content that way — but are never
+ * pre-selected, so signature logos don't ride along by default.
+ */
+export function attachmentPickOrder(attachments: Attachment[]): Attachment[] {
+  return [...attachments].sort((a, b) => Number(a.is_inline) - Number(b.is_inline));
+}
+
+/** Ids ticked when the picker opens. */
+export function defaultPickedAttachmentIds(attachments: Attachment[]): string[] {
+  return attachments.filter((a) => !a.is_inline).map((a) => a.id);
+}
 
 export function isOverdue(task: Pick<Task, "due_at" | "status">, now: Date): boolean {
   if (!task.due_at || task.status === "done") return false;

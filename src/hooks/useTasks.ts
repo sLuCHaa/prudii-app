@@ -21,6 +21,7 @@ import {
   revealTaskAttachment,
   startTaskAttachmentDrag,
   createTaskFromMail,
+  copyMailAttachmentsToTask,
   tasksForMail,
   tasksForMails,
 } from "../lib/tauri";
@@ -251,10 +252,32 @@ export function useMailTasks(mailId: string | null) {
   });
 }
 
+export interface CreateTaskFromMailInput {
+  mailId: string;
+  /** Mail attachments to copy into the new task; empty or omitted copies none. */
+  attachmentIds?: string[];
+}
+
 export function useCreateTaskFromMail() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (mailId: string) => createTaskFromMail(mailId),
+    mutationFn: async ({ mailId, attachmentIds }: CreateTaskFromMailInput) => {
+      const task = await createTaskFromMail(mailId);
+      if (attachmentIds?.length) {
+        // The task itself already exists, so a failed copy must not roll the
+        // whole action back into an error — say so and keep the task.
+        try {
+          await copyMailAttachmentsToTask(task.id, attachmentIds);
+        } catch (err) {
+          useAppStore.getState().addToast(
+            "error",
+            i18n.t("errors.copyMailAttachments"),
+            err instanceof Error ? err.message : String(err),
+          );
+        }
+      }
+      return task;
+    },
     onSuccess: (task: Task) => {
       invalidateTaskQueries(queryClient);
       const store = useAppStore.getState();

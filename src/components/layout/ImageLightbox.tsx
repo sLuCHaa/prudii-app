@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { X, ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
+import { formatFileSize } from "../../lib/fileSize";
 
 export interface ImageLightboxItem {
   id: string;
@@ -17,13 +18,6 @@ interface ImageLightboxProps {
   initialIndex: number;
   onClose: () => void;
   onDownload: (id: string) => void;
-}
-
-function formatFileSize(bytes: number | null): string {
-  if (bytes == null) return "";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export function ImageLightbox({ images, initialIndex, onClose, onDownload }: ImageLightboxProps) {

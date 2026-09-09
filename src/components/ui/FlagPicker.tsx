@@ -2,14 +2,13 @@ import { useState, useRef, useEffect } from "react";
 import { Flag, Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { MAIL_FLAG_COLORS, type MailFlag } from "../../types";
+import { FLAG_ORDER } from "../../lib/mailFlags";
 
 interface FlagPickerProps {
   flags: string[];
   onToggleFlag: (flag: MailFlag) => void;
   size?: "sm" | "md";
 }
-
-const FLAG_ORDER: MailFlag[] = ["red", "orange", "yellow", "green", "blue", "purple", "gray"];
 
 export function FlagPicker({ flags, onToggleFlag, size = "md" }: FlagPickerProps) {
   const { t } = useTranslation();

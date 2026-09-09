@@ -8,7 +8,6 @@ import { isDueToday, isOverdue } from "../../lib/tasks";
 import { TaskList } from "./TaskList";
 import { TaskBoard } from "./TaskBoard";
 import { TaskDrawer } from "./TaskDrawer";
-import { QuickAdd } from "./QuickAdd";
 import { EmptyState } from "../ui/EmptyState";
 import { LoadingCrossfade } from "../motion/LoadingCrossfade";
 import { Skeleton } from "../ui/Skeleton";
@@ -116,8 +115,6 @@ export function TasksView() {
           </button>
         </div>
       </div>
-
-      <QuickAdd className="mx-6 mt-3" />
 
       <LoadingCrossfade
         className="flex-1 min-h-0 flex flex-col"

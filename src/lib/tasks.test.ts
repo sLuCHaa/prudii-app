@@ -1,5 +1,57 @@
 import { describe, it, expect } from "vitest";
-import { isOverdue, isDueToday, groupByStatus, fullColumnDropIndex, parseQuickAdd, chunkIds, mergeCounts } from "./tasks";
+import {
+  isOverdue,
+  isDueToday,
+  groupByStatus,
+  fullColumnDropIndex,
+  parseQuickAdd,
+  chunkIds,
+  mergeCounts,
+  shouldAskAboutAttachments,
+  attachmentPickOrder,
+  defaultPickedAttachmentIds,
+} from "./tasks";
+import type { Attachment } from "../types";
+
+function att(id: string, is_inline: boolean): Attachment {
+  return {
+    id,
+    mail_id: "m1",
+    filename: `${id}.bin`,
+    mime_type: null,
+    size_bytes: 10,
+    content_id: null,
+    is_inline,
+    local_path: null,
+  };
+}
+
+describe("mail attachments offered for a new task", () => {
+  it("asks only when the mail carries a real attachment", () => {
+    expect(shouldAskAboutAttachments([att("a", false)])).toBe(true);
+    expect(shouldAskAboutAttachments([att("a", false), att("b", true)])).toBe(true);
+  });
+
+  it("stays quiet for a mail whose only files are inline signature images", () => {
+    expect(shouldAskAboutAttachments([att("logo", true)])).toBe(false);
+    expect(shouldAskAboutAttachments([])).toBe(false);
+  });
+
+  it("lists real attachments before inline ones without dropping any", () => {
+    const order = attachmentPickOrder([att("logo", true), att("invoice", false), att("sig", true)]);
+    expect(order.map((a) => a.id)).toEqual(["invoice", "logo", "sig"]);
+  });
+
+  it("does not mutate the list it was given", () => {
+    const input = [att("logo", true), att("invoice", false)];
+    attachmentPickOrder(input);
+    expect(input.map((a) => a.id)).toEqual(["logo", "invoice"]);
+  });
+
+  it("pre-selects the real attachments only", () => {
+    expect(defaultPickedAttachmentIds([att("invoice", false), att("logo", true)])).toEqual(["invoice"]);
+  });
+});
 import type { Task } from "../types";
 
 // Tuesday, Sept 8 2026, 10:00 local.

@@ -67,12 +67,17 @@ export function TaskBoard({ tasks, allTasks }: TaskBoardProps) {
 
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [checkmarkIds, setCheckmarkIds] = useState<Set<string>>(new Set());
+  const [landedId, setLandedId] = useState<string | null>(null);
   const [celebrateTrigger, setCelebrateTrigger] = useState(0);
   const checkmarkTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const landedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const timers = checkmarkTimers.current;
-    return () => timers.forEach((timer) => clearTimeout(timer));
+    return () => {
+      timers.forEach((timer) => clearTimeout(timer));
+      if (landedTimer.current) clearTimeout(landedTimer.current);
+    };
   }, []);
 
   const sensors = useSensors(
@@ -124,6 +129,14 @@ export function TaskBoard({ tasks, allTasks }: TaskBoardProps) {
       checkmarkTimers.current.delete(id);
     }, reduce ? 0 : 300);
     checkmarkTimers.current.set(id, timer);
+  }
+
+  function triggerLanded(id: string) {
+    if (reduce) return;
+    if (landedTimer.current) clearTimeout(landedTimer.current);
+    setLandedId(id);
+    // Outlasts LandingPulse's own fade so the ring is never cut off mid-animation.
+    landedTimer.current = setTimeout(() => setLandedId(null), 600);
   }
 
   function handleDragStart(event: DragStartEvent) {
@@ -184,6 +197,10 @@ export function TaskBoard({ tasks, allTasks }: TaskBoardProps) {
     const originalStatus = statusOf(activeId, tasks);
     if (finalStatus === "done" && originalStatus !== "done") {
       triggerCheckmark(activeId);
+    } else if (finalStatus !== originalStatus) {
+      // Only for a column change: a reorder inside one column already animates,
+      // and a drop into "done" gets the checkmark instead of a second flourish.
+      triggerLanded(activeId);
     }
 
     // Keep the preview on screen: clearing it here would render one frame from the
@@ -196,6 +213,9 @@ export function TaskBoard({ tasks, allTasks }: TaskBoardProps) {
   }
 
   const activeTask = dragState?.activeId ? renderTasks.find((task) => task.id === dragState.activeId) : undefined;
+  // Where the card would land right now — read off the preview, which handleDragOver
+  // keeps in sync whether the pointer is over a column's padding or one of its cards.
+  const dropTargetStatus = activeTask?.status;
   const dropAnimation: DropAnimation = reduce
     ? { duration: 0, easing: "linear", sideEffects: defaultDropAnimationSideEffects({}) }
     : {
@@ -228,11 +248,11 @@ export function TaskBoard({ tasks, allTasks }: TaskBoardProps) {
           </div>
         ) : (
           <>
-            <BoardColumn status="open" tasks={columns.open} checkmarkIds={checkmarkIds} dragging={dragState !== null} />
-            <BoardColumn status="in_progress" tasks={columns.in_progress} checkmarkIds={checkmarkIds} dragging={dragState !== null} />
+            <BoardColumn status="open" tasks={columns.open} checkmarkIds={checkmarkIds} landedId={landedId} dragging={dragState !== null} isDropTarget={dropTargetStatus === "open"} />
+            <BoardColumn status="in_progress" tasks={columns.in_progress} checkmarkIds={checkmarkIds} landedId={landedId} dragging={dragState !== null} isDropTarget={dropTargetStatus === "in_progress"} />
           </>
         )}
-        <BoardColumn status="done" tasks={columns.done} checkmarkIds={checkmarkIds} dragging={dragState !== null} />
+        <BoardColumn status="done" tasks={columns.done} checkmarkIds={checkmarkIds} landedId={landedId} dragging={dragState !== null} isDropTarget={dropTargetStatus === "done"} />
       </div>
       <DragOverlay dropAnimation={dropAnimation}>{activeTask ? <TaskCardOverlay task={activeTask} /> : null}</DragOverlay>
     </DndContext>

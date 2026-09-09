@@ -9,13 +9,7 @@ import { useAppStore } from "../../stores/appStore";
 import { Tooltip } from "../ui/Tooltip";
 import { revealLabelKey, revealAttachment } from "../../lib/attachmentActions";
 import { isMacOS, isWindows } from "../../lib/platform";
-
-function formatFileSize(bytes: number | null): string {
-  if (bytes == null) return "";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
+import { formatFileSize } from "../../lib/fileSize";
 
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tiff"]);
 const PDF_EXTENSIONS = new Set(["pdf"]);
