@@ -3561,7 +3561,7 @@ dependencies = [
 
 [[package]]
 name = "prudii"
-version = "1.6.2"
+version = "1.6.3"
 dependencies = [
  "ammonia",
  "anyhow",
