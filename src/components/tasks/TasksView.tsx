@@ -9,6 +9,7 @@ import { TaskList } from "./TaskList";
 import { TaskBoard } from "./TaskBoard";
 import { TaskDrawer } from "./TaskDrawer";
 import { EmptyState } from "../ui/EmptyState";
+import { NoTasksState } from "./NoTasksState";
 import { LoadingCrossfade } from "../motion/LoadingCrossfade";
 import { Skeleton } from "../ui/Skeleton";
 
@@ -37,6 +38,9 @@ export function TasksView() {
     else if (filter === "overdue") list = list.filter((task) => isOverdue(task, now));
     return list;
   }, [tasks, search, filter]);
+
+  // Empty because of the search box or a pill, not because there is nothing.
+  const narrowed = search.trim().length > 0 || filter !== "all";
 
   const filters: { key: TaskFilter; label: string }[] = [
     { key: "all", label: t("tasks.filterAll") },
@@ -128,11 +132,26 @@ export function TasksView() {
         }
       >
         {filteredTasks.length === 0 ? (
-          <EmptyState
-            icon={<ClipboardList className="w-10 h-10 text-text-tertiary" />}
-            title={t("tasks.empty")}
-            description={t("tasks.emptyDesc")}
-          />
+          // Two different emptinesses: nothing written down yet, or a search that
+          // matched nothing. Telling someone with fifty tasks to create their
+          // first one is the wrong advice.
+          narrowed ? (
+            <EmptyState
+              icon={<Search className="w-10 h-10 text-text-tertiary" />}
+              title={t("tasks.noMatches")}
+              description={t("tasks.noMatchesDesc")}
+              action={
+                <button
+                  onClick={() => { setSearch(""); setFilter("all"); }}
+                  className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-hover"
+                >
+                  {t("tasks.clearFilters")}
+                </button>
+              }
+            />
+          ) : (
+            <NoTasksState />
+          )
         ) : tasksViewMode === "list" ? (
           <TaskList tasks={filteredTasks} />
         ) : (

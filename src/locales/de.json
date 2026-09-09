@@ -306,6 +306,28 @@
         "Alles still. Gute Nacht.",
         "Null offen. Null Sorgen."
       ]
+    },
+    "noTasks": {
+      "dawn": [
+        "Der Tag liegt noch vor dir.",
+        "Nichts offen. Fang an, wo du magst.",
+        "Ein leeres Brett am Morgen."
+      ],
+      "day": [
+        "Nichts offen gerade.",
+        "Alles abgearbeitet.",
+        "Freie Bahn."
+      ],
+      "dusk": [
+        "Feierabend, nichts offen.",
+        "Der Tag ist abgeräumt.",
+        "Nichts mehr für heute."
+      ],
+      "night": [
+        "Alles ruhig.",
+        "Nichts offen. Gute Nacht.",
+        "Das Brett ist leer."
+      ]
     }
   },
   "mailList": {
@@ -1139,6 +1161,9 @@
     "attachSelectAll": "Alle auswählen",
     "attachSelectNone": "Auswahl aufheben",
     "attachSkip": "Ohne Anhänge",
-    "attachConfirm": "Aufgabe erstellen"
+    "attachConfirm": "Aufgabe erstellen",
+    "noMatches": "Nichts gefunden",
+    "noMatchesDesc": "Keine Aufgabe passt zu deiner Suche oder deinem Filter.",
+    "clearFilters": "Filter zurücksetzen"
   }
 }

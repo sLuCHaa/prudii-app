@@ -306,6 +306,28 @@
         "Tout est calme. Bonne nuit.",
         "Zéro en attente. Zéro souci."
       ]
+    },
+    "noTasks": {
+      "dawn": [
+        "La journée est encore devant toi.",
+        "Rien en cours. Commence où tu veux.",
+        "Un tableau vide au matin."
+      ],
+      "day": [
+        "Rien en cours pour le moment.",
+        "Tout est à jour.",
+        "La voie est libre."
+      ],
+      "dusk": [
+        "Journée finie, rien en cours.",
+        "La journée est dégagée.",
+        "Plus rien pour aujourd'hui."
+      ],
+      "night": [
+        "Tout est calme.",
+        "Rien en cours. Bonne nuit.",
+        "Le tableau est vide."
+      ]
     }
   },
   "mailList": {
@@ -1139,6 +1161,9 @@
     "attachSelectAll": "Tout sélectionner",
     "attachSelectNone": "Effacer la sélection",
     "attachSkip": "Sans pièces jointes",
-    "attachConfirm": "Créer la tâche"
+    "attachConfirm": "Créer la tâche",
+    "noMatches": "Aucun résultat",
+    "noMatchesDesc": "Aucune tâche ne correspond à ta recherche ou à ton filtre.",
+    "clearFilters": "Effacer les filtres"
   }
 }

@@ -306,6 +306,28 @@
         "Tudo calmo. Boa noite.",
         "Zero pendências. Zero preocupações."
       ]
+    },
+    "noTasks": {
+      "dawn": [
+        "O dia ainda está à tua frente.",
+        "Nada pendente. Começa por onde quiseres.",
+        "Um quadro vazio de manhã."
+      ],
+      "day": [
+        "Nada pendente agora.",
+        "Tudo em dia.",
+        "Caminho livre."
+      ],
+      "dusk": [
+        "Dia terminado, nada pendente.",
+        "O dia está limpo.",
+        "Nada mais por hoje."
+      ],
+      "night": [
+        "Tudo calmo.",
+        "Nada pendente. Boa noite.",
+        "O quadro está vazio."
+      ]
     }
   },
   "mailList": {
@@ -1139,6 +1161,9 @@
     "attachSelectAll": "Selecionar tudo",
     "attachSelectNone": "Limpar seleção",
     "attachSkip": "Sem anexos",
-    "attachConfirm": "Criar tarefa"
+    "attachConfirm": "Criar tarefa",
+    "noMatches": "Nada encontrado",
+    "noMatchesDesc": "Nenhuma tarefa corresponde à tua pesquisa ou filtro.",
+    "clearFilters": "Limpar filtros"
   }
 }

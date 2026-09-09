@@ -22,7 +22,7 @@ export function getDayPhase(date: Date): DayPhase {
 /** Random time-of-day one-liner for an empty-state context, picked once per
  *  mount. Returns undefined when the locale has no pool (caller falls back
  *  to the existing static description string). */
-export function useAtmosphereLine(context: "selectMail" | "inboxZero"): string | undefined {
+export function useAtmosphereLine(context: "selectMail" | "inboxZero" | "noTasks"): string | undefined {
   const { t } = useTranslation();
   // useState lazy init guarantees the random pick happens exactly once per
   // mount — useMemo is only a performance hint and may legally recompute.

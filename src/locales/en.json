@@ -306,6 +306,28 @@
         "All quiet. Good night.",
         "Zero open. Zero worries."
       ]
+    },
+    "noTasks": {
+      "dawn": [
+        "The day is still ahead of you.",
+        "Nothing open. Start wherever you like.",
+        "An empty board in the morning."
+      ],
+      "day": [
+        "Nothing open right now.",
+        "All caught up.",
+        "A clear run."
+      ],
+      "dusk": [
+        "Done for the day, nothing open.",
+        "The day is cleared.",
+        "Nothing left for today."
+      ],
+      "night": [
+        "All quiet.",
+        "Nothing open. Good night.",
+        "The board is empty."
+      ]
     }
   },
   "mailList": {
@@ -1139,6 +1161,9 @@
     "attachSelectAll": "Select all",
     "attachSelectNone": "Clear selection",
     "attachSkip": "Without attachments",
-    "attachConfirm": "Create task"
+    "attachConfirm": "Create task",
+    "noMatches": "Nothing found",
+    "noMatchesDesc": "No task matches your search or filter.",
+    "clearFilters": "Clear filters"
   }
 }
