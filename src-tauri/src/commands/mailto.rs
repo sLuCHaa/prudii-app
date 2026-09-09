@@ -31,7 +31,7 @@ fn write_registry() -> Result<(), String> {
                 return Err(format!("Failed to create registry key '{}': {:?}", subkey, result));
             }
 
-            let name_pcwstr = name.map(|n| HSTRING::from(n));
+            let name_pcwstr = name.map(HSTRING::from);
             let value_h = HSTRING::from(value);
             let value_bytes = std::slice::from_raw_parts(
                 value_h.as_ptr() as *const u8,

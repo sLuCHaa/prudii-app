@@ -258,7 +258,7 @@ pub fn update_account_sync_interval(
     sync_interval_minutes: i32,
 ) -> Result<(), String> {
     super::catch_panic(|| {
-        if sync_interval_minutes < 0 || sync_interval_minutes > 1440 {
+        if !(0..=1440).contains(&sync_interval_minutes) {
             return Err(format!("Invalid sync interval: {}. Must be 0 (manual) or 1-1440 minutes.", sync_interval_minutes));
         }
         let conn = db.lock_db();

@@ -148,7 +148,7 @@ fn build_lettre_message(config: &SmtpConfig, message: &EmailMessage) -> Result<M
     if let Some(ref refs) = message.references {
         // References header contains space-separated message IDs, each needs brackets
         let bracketed: Vec<String> = refs.split_whitespace()
-            .map(|id| ensure_angle_brackets(id))
+            .map(ensure_angle_brackets)
             .collect();
         email_builder = email_builder.references(bracketed.join(" "));
     }

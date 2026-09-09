@@ -491,11 +491,10 @@ pub async fn sync_mails(
     if server_exists == 0 {
         let removed = {
             let conn = db.lock_db();
-            let n = conn.execute(
+            conn.execute(
                 "DELETE FROM mails WHERE folder_id = ?1 AND uid IS NOT NULL",
                 rusqlite::params![folder.id],
-            ).unwrap_or(0);
-            n
+            ).unwrap_or(0)
         };
         if removed > 0 {
             log::info!(
@@ -1477,10 +1476,9 @@ pub async fn backfill_folder_bodies(
                         true
                     } else if disposition_inline && is_image && content_id.is_some() {
                         true
-                    } else if !disposition_inline && content_id.is_some() && !has_real_filename && is_image {
-                        true
                     } else {
-                        false
+                        // No disposition header, unnamed image with CID — an embedded image.
+                        !disposition_inline && content_id.is_some() && !has_real_filename && is_image
                     };
                     if !is_inline {
                         real_attachment_count += 1;
@@ -1942,11 +1940,13 @@ pub async fn create_folder(
     let entries = session.list(Some(""), Some(folder_name)).await
         .context("Failed to list created folder")?;
 
-    for entry in &entries {
-        return Ok(entry.name.clone());
-    }
-
-    Ok(folder_name.to_string())
+    // The server echoes back the path it actually created, which can differ from
+    // what we asked for (delimiter, personal-namespace prefix) — that is the one
+    // callers must store. A server that lists nothing leaves us the request.
+    Ok(entries
+        .first()
+        .map(|entry| entry.name.clone())
+        .unwrap_or_else(|| folder_name.to_string()))
 }
 
 pub async fn delete_folder(

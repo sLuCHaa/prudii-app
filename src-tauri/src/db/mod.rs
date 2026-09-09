@@ -563,7 +563,7 @@ impl Database {
         );
 
         // Only bump version AFTER all migrations have run
-        conn.pragma_update(None, "user_version", &SCHEMA_VERSION)?;
+        conn.pragma_update(None, "user_version", SCHEMA_VERSION)?;
 
         Ok(())
     }

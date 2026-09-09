@@ -7,6 +7,23 @@ edition = "2021"
 name = "prudii_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+# Silenced so `cargo clippy` stays empty and a genuinely new warning is visible
+# the moment it appears. Each of these is a deliberate shape, not a leftover:
+[lints.clippy]
+# Protocol and provider decisions are written as one arm per case with a comment
+# explaining it; several arms legitimately end in the same value. Collapsing them
+# would delete the reasoning (see imap::store_body_and_attachments).
+if_same_then_else = "allow"
+# Sync and send paths thread account, folder, session, progress and cancellation
+# through by hand. Grouping them into structs is a refactor of its own.
+too_many_arguments = "allow"
+# The scheduled-send queue reads back as a wide SELECT tuple; naming it would
+# hide the column order the query depends on rather than clarify it.
+type_complexity = "allow"
+# ImapPool::new() takes no arguments but a pool is never default-constructed;
+# an unused Default impl is worth less than the missing one costs.
+new_without_default = "allow"
+
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

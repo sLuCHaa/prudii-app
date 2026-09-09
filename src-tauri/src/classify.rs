@@ -1,5 +1,5 @@
-/// Rule-based mail classification using header heuristics.
-/// No AI/Ollama dependency — instant, deterministic, works on any hardware.
+//! Rule-based mail classification using header heuristics.
+//! No AI/Ollama dependency — instant, deterministic, works on any hardware.
 
 const NOTIFICATION_FROM: &[&str] = &[
     "noreply@", "no-reply@", "notifications@", "notification@",
@@ -119,10 +119,11 @@ pub fn classify_mail(
         if !labels.contains(&"newsletter") {
             labels.push("promotion");
         }
-    } else if has_unsubscribe && PROMOTION_KEYWORDS.iter().any(|k| subject_lower.contains(k)) {
-        if !labels.contains(&"newsletter") {
-            labels.push("promotion");
-        }
+    } else if has_unsubscribe
+        && PROMOTION_KEYWORDS.iter().any(|k| subject_lower.contains(k))
+        && !labels.contains(&"newsletter")
+    {
+        labels.push("promotion");
     }
 
     // 5. Transactional

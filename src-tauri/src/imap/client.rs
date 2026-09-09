@@ -305,8 +305,8 @@ impl ImapClient {
                 return Ok(Response { untagged, status });
             }
 
-            if line.starts_with("* ") {
-                untagged.push(line[2..].trim_end().to_string());
+            if let Some(body) = line.strip_prefix("* ") {
+                untagged.push(body.trim_end().to_string());
             }
             // Ignore continuation (+) and unknown lines
         }
@@ -815,20 +815,20 @@ fn parse_list_entry(line: &str) -> Option<ListEntry> {
     let after_attrs = &rest[attr_end + 1..].trim_start();
 
     // Parse delimiter: "/" or NIL
-    let (delimiter, rest_after_delim) = if after_attrs.starts_with("NIL") {
-        (None, after_attrs[3..].trim_start())
-    } else if after_attrs.starts_with('"') {
-        let delim_end = after_attrs[1..].find('"').map(|i| i + 1)?;
-        let delim = after_attrs[1..delim_end].chars().next();
-        (delim, after_attrs[delim_end + 1..].trim_start())
+    let (delimiter, rest_after_delim) = if let Some(after_nil) = after_attrs.strip_prefix("NIL") {
+        (None, after_nil.trim_start())
+    } else if let Some(in_quotes) = after_attrs.strip_prefix('"') {
+        let delim_end = in_quotes.find('"')?;
+        let delim = in_quotes[..delim_end].chars().next();
+        (delim, in_quotes[delim_end + 1..].trim_start())
     } else {
         (None, *after_attrs)
     };
 
     // Parse folder name: "name" or literal (already resolved by command())
-    let name = if rest_after_delim.starts_with('"') {
-        let name_end = rest_after_delim[1..].find('"').map(|i| i + 1)?;
-        rest_after_delim[1..name_end].to_string()
+    let name = if let Some(in_quotes) = rest_after_delim.strip_prefix('"') {
+        let name_end = in_quotes.find('"')?;
+        in_quotes[..name_end].to_string()
     } else {
         rest_after_delim.trim().to_string()
     };
@@ -865,14 +865,8 @@ fn extract_flags(text: &str) -> Vec<String> {
             let flags_str = &after[..end];
             return flags_str
                 .split_whitespace()
-                .map(|f| {
-                    // Strip leading \ for standard flags: \Seen → Seen
-                    if f.starts_with('\\') {
-                        f[1..].to_string()
-                    } else {
-                        f.to_string()
-                    }
-                })
+                // Strip leading \ for standard flags: \Seen → Seen
+                .map(|f| f.strip_prefix('\\').unwrap_or(f).to_string())
                 .collect();
         }
     }
@@ -888,5 +882,71 @@ fn extract_size(text: &str) -> Option<u32> {
         num.parse().ok()
     } else {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Characterisation tests for the two hand-rolled wire parsers: they carry no
+    // coverage of their own, so any rewrite of their prefix handling needs these
+    // to prove the byte offsets still line up.
+
+    #[test]
+    fn parses_a_quoted_delimiter_and_name() {
+        let entry = parse_list_entry(r#"LIST (\HasNoChildren) "/" "INBOX/Sent""#).unwrap();
+        assert_eq!(entry.name, "INBOX/Sent");
+        assert_eq!(entry.delimiter, Some('/'));
+        assert_eq!(entry.attributes, vec![r"\HasNoChildren"]);
+    }
+
+    #[test]
+    fn parses_a_nil_delimiter() {
+        let entry = parse_list_entry(r#"LIST (\Noselect) NIL "Archive""#).unwrap();
+        assert_eq!(entry.name, "Archive");
+        assert_eq!(entry.delimiter, None);
+    }
+
+    #[test]
+    fn parses_an_unquoted_name() {
+        let entry = parse_list_entry(r#"LIST () "." INBOX"#).unwrap();
+        assert_eq!(entry.name, "INBOX");
+        assert_eq!(entry.delimiter, Some('.'));
+        assert!(entry.attributes.is_empty());
+    }
+
+    #[test]
+    fn keeps_a_dot_delimiter_and_multiple_attributes() {
+        let entry = parse_list_entry(r#"LIST (\HasChildren \Drafts) "." "INBOX.Drafts""#).unwrap();
+        assert_eq!(entry.name, "INBOX.Drafts");
+        assert_eq!(entry.delimiter, Some('.'));
+        assert_eq!(entry.attributes, vec![r"\HasChildren", r"\Drafts"]);
+    }
+
+    #[test]
+    fn keeps_non_ascii_folder_names_intact() {
+        let entry = parse_list_entry(r#"LIST (\HasNoChildren) "/" "Entwürfe/Ünïcode""#).unwrap();
+        assert_eq!(entry.name, "Entwürfe/Ünïcode");
+    }
+
+    #[test]
+    fn rejects_a_line_that_is_not_a_list_response() {
+        assert!(parse_list_entry("EXISTS 12").is_none());
+        assert!(parse_list_entry(r#"LIST (\HasNoChildren) "/" """#).is_none());
+    }
+
+    #[test]
+    fn strips_the_backslash_from_standard_flags_only() {
+        assert_eq!(
+            extract_flags(r"1 FETCH (FLAGS (\Seen \Flagged $Forwarded))"),
+            vec!["Seen", "Flagged", "$Forwarded"],
+        );
+    }
+
+    #[test]
+    fn reads_an_empty_flag_list_as_no_flags() {
+        assert!(extract_flags("1 FETCH (FLAGS ())").is_empty());
+        assert!(extract_flags("1 FETCH (UID 5)").is_empty());
     }
 }

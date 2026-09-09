@@ -168,7 +168,7 @@ pub async fn start_oauth_flow(provider: &str) -> Result<OAuthTokens> {
     let auth_url = format!(
         "{}?client_id={}&redirect_uri={}&response_type=code&scope={}&code_challenge={}&code_challenge_method=S256&state={}&access_type=offline&prompt=consent",
         config.auth_url,
-        urlencod(&config.client_id),
+        urlencod(config.client_id),
         urlencod(&redirect_uri),
         urlencod(&scopes),
         urlencod(&challenge),

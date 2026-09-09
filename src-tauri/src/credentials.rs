@@ -53,7 +53,7 @@ pub(crate) mod dpapi {
 
     pub fn encrypt(plaintext: &str) -> Option<String> {
         let data = plaintext.as_bytes();
-        let mut input = CRYPT_INTEGER_BLOB {
+        let input = CRYPT_INTEGER_BLOB {
             cbData: data.len() as u32,
             pbData: data.as_ptr() as *mut u8,
         };
@@ -64,7 +64,7 @@ pub(crate) mod dpapi {
 
         let result = unsafe {
             CryptProtectData(
-                &mut input,
+                &input,
                 None,               // description
                 None,               // optional entropy
                 None,               // reserved
@@ -96,7 +96,7 @@ pub(crate) mod dpapi {
         let b64 = stored.strip_prefix(PREFIX)?;
         let encrypted = base64::engine::general_purpose::STANDARD.decode(b64).ok()?;
 
-        let mut input = CRYPT_INTEGER_BLOB {
+        let input = CRYPT_INTEGER_BLOB {
             cbData: encrypted.len() as u32,
             pbData: encrypted.as_ptr() as *mut u8,
         };
@@ -107,7 +107,7 @@ pub(crate) mod dpapi {
 
         let result = unsafe {
             CryptUnprotectData(
-                &mut input,
+                &input,
                 None,               // description out
                 None,               // optional entropy
                 None,               // reserved
@@ -165,7 +165,7 @@ fn get_password_from_db(account_id: &str) -> Option<String> {
                 Err(e) => log::warn!("[credentials] DPAPI migration write failed: {}", e),
             }
         }
-        return Some(plaintext);
+        Some(plaintext)
     }
 
     #[cfg(not(windows))]

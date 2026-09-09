@@ -657,7 +657,7 @@ pub async fn acquire_delta_link_full(
         }
 
         // Every 100 pages, check if delta_link was already set by another process
-        if page_num > 0 && page_num % 100 == 0 {
+        if page_num > 0 && page_num.is_multiple_of(100) {
             let existing: String = {
                 let conn = db.lock_db();
                 conn.query_row(
@@ -672,7 +672,7 @@ pub async fn acquire_delta_link_full(
             }
         }
 
-        if page_num > 0 && page_num % 50 == 0 {
+        if page_num > 0 && page_num.is_multiple_of(50) {
             log::info!("Background delta-link for '{}': page {} (delay={}ms)", folder_name, page_num, delay_ms);
         }
 

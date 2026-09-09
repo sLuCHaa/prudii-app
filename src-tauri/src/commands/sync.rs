@@ -820,9 +820,11 @@ async fn do_sync_account_inner(app: &AppHandle, account: Account, account_id: &s
 }
 
 /// Gmail REST API sync — uses batch HTTP requests instead of IMAP.
+///
 /// Two-phase approach:
 ///   1. Incremental sync (History API) — picks up recent changes (new mails, label changes, deletes)
 ///   2. Initial sync catch-up — idempotent, only fetches messages not yet in DB
+///
 /// Phase 2 always runs so that interrupted initial syncs are automatically resumed.
 async fn do_gmail_sync(app: &AppHandle, _account: &Account, account_id: &str, credential: &str) {
     emit_progress(app, &SyncProgress {
@@ -1094,9 +1096,11 @@ async fn do_gmail_sync(app: &AppHandle, _account: &Account, account_id: &str, cr
 }
 
 /// Microsoft Graph API sync — uses HTTP requests instead of IMAP.
+///
 /// Two-phase approach (same as Gmail):
 ///   1. Incremental sync (Delta API per folder) — picks up recent changes
 ///   2. Initial sync catch-up — idempotent, only fetches messages not yet in DB
+///
 /// Phase 2 always runs so that interrupted initial syncs are automatically resumed.
 async fn do_outlook_sync(app: &AppHandle, _account: &Account, account_id: &str, credential: &str) {
     emit_progress(app, &SyncProgress {

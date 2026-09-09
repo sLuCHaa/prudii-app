@@ -3564,10 +3564,8 @@ pub async fn unsubscribe_mail(db: State<'_, Database>, mail_id: String) -> Resul
                 if https_url.is_none() {
                     https_url = Some(url);
                 }
-            } else if url.starts_with("mailto:") {
-                if mailto_url.is_none() {
-                    mailto_url = Some(url);
-                }
+            } else if url.starts_with("mailto:") && mailto_url.is_none() {
+                mailto_url = Some(url);
             }
         }
     }
