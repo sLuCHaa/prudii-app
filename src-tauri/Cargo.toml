@@ -1,11 +1,12 @@
 [package]
 name = "prudii"
-version = "1.6.1"
+version = "1.6.2"
 edition = "2021"
 
 [lib]
 name = "prudii_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
