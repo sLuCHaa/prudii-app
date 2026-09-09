@@ -497,7 +497,10 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
             <>
               <Section index={sectionIndex()}>
                 <TaskSectionHead title={t("tasks.description")} />
-                <div className="group overflow-hidden rounded-2xl bg-bg-secondary border border-transparent focus-within:bg-surface focus-within:border-border focus-within:ring-3 focus-within:ring-accent/10 transition-colors">
+                {/* Quiet until edited: the card lifts from the drawer's grey to
+                    a writable surface and takes an accent border, the same focus
+                    language as the due-date field and quick add. */}
+                <div className="group overflow-hidden rounded-2xl bg-bg-secondary border border-transparent focus-within:bg-surface focus-within:border-accent transition-colors">
                   <RichTextEditor
                     key={task.id}
                     content={task.description_html}

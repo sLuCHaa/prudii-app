@@ -371,6 +371,14 @@ button:focus-visible,
   transition: background-color 120ms ease-out;
 }
 
+/* ProseMirror puts a tabindex on its editable, so the rule above would draw a
+   button-style outline inside a text field. Rich text signals focus the way
+   every other input here does — through the wrapper's border. A utility class
+   can't undo this: index.css is unlayered and outranks Tailwind. */
+.tiptap:focus-visible {
+  outline: none;
+}
+
 /* Utility class, same treatment */
 .focus-ring-visible:focus-visible {
   outline: none;
@@ -568,11 +576,6 @@ button:focus-visible,
 .compose-editor .tiptap {
   outline: none;
   min-height: 200px;
-}
-
-/* ProseMirror doesn't use a standard :focus — signal focus via the wrapper */
-.compose-editor .tiptap:focus-visible {
-  outline: none;
 }
 
 .compose-editor .tiptap p {
