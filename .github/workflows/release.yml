@@ -22,7 +22,53 @@ permissions:
   contents: write
 
 jobs:
+  # Legt den Release einmal an. Vorher tat das jeder Matrix-Job selbst: tauri-action
+  # sucht den Release zum Tag und erstellt ihn, wenn er fehlt — bestehen zwei Jobs
+  # diese Pruefung gleichzeitig, entstehen zwei Releases zum selben Tag und die
+  # Installer verteilen sich auf beide (so geschehen bei v1.6.2: der veroeffentlichte
+  # enthielt kein Windows). Ein einzelner Job kann nicht mit sich selbst rennen.
+  create-release:
+    name: Create draft release
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-22.04
+    outputs:
+      release_id: ${{ steps.create.outputs.release_id }}
+    steps:
+      - name: Create or reuse the draft release
+        id: create
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          find_id() {
+            gh api "repos/$GH_REPO/releases" --paginate               --jq "[.[] | select(.tag_name == \"$TAG\")] | first | .id // empty"
+          }
+
+          # Ein erneuter Lauf desselben Tags soll den vorhandenen Release
+          # weiterbefuellen statt einen zweiten anzulegen.
+          id="$(find_id)"
+          if [ -n "$id" ]; then
+            echo "Release fuer $TAG existiert bereits (id $id) — wird wiederverwendet."
+          else
+            cat > notes.md <<'NOTES'
+          Prudii Mail __VERSION__ — privacy-first desktop email client. Install the file for your platform below: Windows (.exe / .msi), macOS (.dmg — Apple Silicon or Intel), Linux (.deb / .rpm / .AppImage). Existing installations update automatically. Release notes below.
+          NOTES
+            sed -i "s/__VERSION__/${TAG}/" notes.md
+            gh release create "$TAG" --draft --title "Prudii Mail ${TAG}" --notes-file notes.md
+            id="$(find_id)"
+          fi
+
+          [ -n "$id" ] || { echo "Release-ID nicht ermittelbar" >&2; exit 1; }
+          echo "release_id=$id" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: create-release
+    # create-release laeuft nur bei Tags; bei einem manuellen Lauf wird es
+    # uebersprungen, und ohne dieses if wuerde build mit uebersprungen.
+    if: ${{ !cancelled() && needs.create-release.result != 'failure' }}
     strategy:
       fail-fast: false
       matrix:
@@ -114,13 +160,9 @@ jobs:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
         with:
-          # Nur bei einem Tag-Push wird ein Release erstellt; bei manuellen
-          # Laeufen bleibt tagName leer -> es wird nur gebaut.
-          tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
-          releaseName: 'Prudii Mail v__VERSION__'
-          releaseBody: 'Prudii Mail v__VERSION__ — privacy-first desktop email client. Install the file for your platform below: Windows (.exe / .msi), macOS (.dmg — Apple Silicon or Intel), Linux (.deb / .rpm / .AppImage). Existing installations update automatically. Release notes below.'
-          releaseDraft: true
-          prerelease: false
+          # Nur hochladen, nie anlegen: den Release besitzt create-release. Bei einem
+          # manuellen Lauf ist die ID leer und es wird ausschliesslich gebaut.
+          releaseId: ${{ needs.create-release.outputs.release_id }}
           updaterJsonPreferNsis: true
           # Auto-retry: Apples Notary-Service / macOS-Runner haben sporadische
           # Netzwerk-Timeouts (actions/runner-images#14167) — dann neu versuchen.
@@ -212,3 +254,50 @@ jobs:
           ' latest.json > latest.json.new
           mv latest.json.new latest.json
           gh release upload "$TAG" latest.json --clobber
+
+  # Der Doppel-Release bei v1.6.2 fiel nur auf, weil jemand die Artefaktliste
+  # durchgezaehlt hat. Ein fehlender Installer sieht sonst aus wie ein gruener Lauf,
+  # bis sich Nutzer melden — deshalb wird hier geprueft statt gehofft.
+  verify-release:
+    name: Verify release is complete
+    needs: [create-release, publish-linux-appimage]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check release count, installers and updater manifest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
+        run: |
+          set -euo pipefail
+          fail=0
+          note() { echo "  $1"; }
+
+          count="$(gh api "repos/$GH_REPO/releases" --paginate             --jq "[.[] | select(.tag_name == \"$TAG\")] | length")"
+          echo "Releases fuer $TAG: $count"
+          [ "$count" = "1" ] || { note "ERWARTET: genau 1 — mehrere Releases teilen sich die Installer"; fail=1; }
+
+          gh api "repos/$GH_REPO/releases/$RELEASE_ID" --jq '.assets[].name' > assets.txt
+          echo "Artefakte:"; sed 's/^/  /' assets.txt
+
+          echo "Installer:"
+          for pattern in '\.exe$' '\.msi$' 'aarch64\.dmg$' 'x64\.dmg$' '\.deb$' '\.rpm$' '\.AppImage$'; do
+            if grep -qE "$pattern" assets.txt; then note "ok      $pattern"
+            else note "FEHLT   $pattern"; fail=1; fi
+          done
+
+          gh api -H "Accept: application/octet-stream"             "repos/$GH_REPO/releases/assets/$(gh api "repos/$GH_REPO/releases/$RELEASE_ID"               --jq '.assets[] | select(.name == "latest.json") | .id')" > latest.json
+
+          echo "Updater-Plattformen:"
+          for key in windows-x86_64 windows-x86_64-msi darwin-aarch64 darwin-x86_64 linux-x86_64; do
+            if jq -e --arg k "$key" '.platforms[$k].url // empty | length > 0' latest.json >/dev/null; then
+              note "ok      $key"
+            else
+              note "FEHLT   $key — diese Plattform bekaeme das Update nicht angeboten"; fail=1
+            fi
+          done
+
+          [ "$fail" = "0" ] || { echo "::error::Release $TAG ist unvollstaendig — nicht veroeffentlichen"; exit 1; }
+          echo "Release $TAG ist vollstaendig."
