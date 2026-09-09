@@ -781,6 +781,32 @@ struct ParsedHeader {
 /// folder. Deliberately *not* fixed by widening `last_uid` across folders: IMAP
 /// UIDs are per-mailbox, so a shared high-water mark would silently skip real new
 /// mail. Mirrors the same filter in gmail::sync and outlook::sync.
+/// The References header is a *list* of message ids by definition. mail-parser
+/// hands back a `TextList` for anything with more than one entry, and `as_text()`
+/// returns None for those — so reading it that way silently dropped the ancestry
+/// of every real thread and left only single-entry chains behind. In-Reply-To
+/// right below already guards for the same mismatch.
+///
+/// Returns the ids space-separated and without angle brackets, matching how
+/// in_reply_to is stored.
+fn parse_references(msg: &mail_parser::Message) -> Option<String> {
+    let header = msg.header("References")?;
+    let joined = match header.as_text_list() {
+        Some(list) => list
+            .iter()
+            .map(|s| s.trim().trim_matches(|c| c == '<' || c == '>'))
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join(" "),
+        None => header
+            .as_text()
+            .map(|s| s.trim().trim_matches(|c| c == '<' || c == '>').to_string())
+            .unwrap_or_default(),
+    };
+    let joined = joined.trim().to_string();
+    if joined.is_empty() { None } else { Some(joined) }
+}
+
 fn process_header_batch(
     batch: &[FetchedMail],
     parser: &MessageParser,
@@ -828,11 +854,7 @@ fn process_header_batch(
                 .map(|s| s.trim_matches(|c| c == '<' || c == '>').to_string())
                 .filter(|s| !s.is_empty());
 
-            // Extract References header for proper thread detection
-            let references = msg.header("References")
-                .and_then(|v| v.as_text())
-                .map(|s| s.to_string())
-                .filter(|s| !s.is_empty());
+            let references = parse_references(&msg);
 
             let thread_id = references.clone()
                 .or_else(|| in_reply_to.clone())
@@ -994,11 +1016,7 @@ pub fn insert_local_sent_mail(
         .map(|s| s.trim_matches(|c| c == '<' || c == '>').to_string())
         .filter(|s| !s.is_empty());
 
-    let references_raw = msg
-        .header("References")
-        .and_then(|v| v.as_text())
-        .map(|s| s.to_string())
-        .filter(|s| !s.is_empty());
+    let references_raw = parse_references(&msg);
     let references_str = references_raw.clone().unwrap_or_default();
 
     let thread_id = references_raw

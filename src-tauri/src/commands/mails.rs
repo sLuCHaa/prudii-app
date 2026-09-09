@@ -2543,6 +2543,68 @@ pub fn get_thread_mails_inner(conn: &rusqlite::Connection, mail_id: &str) -> Res
         return query_single_mail(conn, mail_id).map(|m| vec![m]);
     }
 
+    // Walk the reference graph outward instead of stopping at the ids the opened
+    // mail happens to carry. One hop is enough for a two-message exchange, but a
+    // third message only names its immediate parent unless the sender wrote a
+    // full References chain — so opening the newest mail of a longer thread lost
+    // the one that started it. Bounded on both rounds and width so a malformed
+    // chain cannot spin or build an unbounded IN clause.
+    const MAX_ROUNDS: usize = 6;
+    const MAX_RELATED: usize = 500;
+
+    let mut frontier = related_ids.clone();
+    for _ in 0..MAX_ROUNDS {
+        if frontier.is_empty() || related_ids.len() >= MAX_RELATED {
+            break;
+        }
+        let ph = (1..=frontier.len()).map(|i| format!("?{}", i)).collect::<Vec<_>>().join(", ");
+        let step_sql = format!(
+            "SELECT COALESCE(message_id, ''), COALESCE(in_reply_to, ''), COALESCE(thread_id, ''), COALESCE(\"references\", '')
+               FROM mails
+              WHERE account_id = ?{1}
+                AND (message_id_norm IN ({0}) OR in_reply_to_norm IN ({0}) OR thread_id_norm IN ({0}))",
+            ph,
+            frontier.len() + 1
+        );
+        let mut step = conn.prepare(&step_sql).map_err(|e| e.to_string())?;
+        let mut step_params: Vec<&dyn rusqlite::ToSql> =
+            frontier.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
+        step_params.push(&account_id);
+
+        let rows = step
+            .query_map(step_params.as_slice(), |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                ))
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+
+        let mut next: Vec<String> = Vec::new();
+        for (mid, irt, tid, refs) in rows {
+            // thread_id and references may both hold space-separated chains.
+            for token in [mid.as_str(), irt.as_str()]
+                .into_iter()
+                .chain(tid.split_whitespace())
+                .chain(refs.split_whitespace())
+            {
+                let clean = strip_brackets(token);
+                if clean.is_empty() || related_ids.len() >= MAX_RELATED {
+                    continue;
+                }
+                if related_set.insert(clean.clone()) {
+                    related_ids.push(clean.clone());
+                    next.push(clean);
+                }
+            }
+        }
+        frontier = next;
+    }
+
     let placeholders: Vec<String> = related_ids.iter().enumerate().map(|(i, _)| format!("?{}", i + 1)).collect();
     let placeholder_str = placeholders.join(", ");
 
@@ -4720,5 +4782,122 @@ mod local_move_tests {
     fn an_unknown_mail_does_not_count_as_local() {
         let db = fixture("is-local-missing");
         assert!(!mail_is_in_local_folder(&db, "nope"));
+    }
+}
+
+#[cfg(test)]
+mod thread_tests {
+    use super::*;
+    use crate::db::Database;
+    use rusqlite::params;
+
+    fn temp_db() -> Database {
+        Database::new(std::env::temp_dir().join(format!("prudii-thread-{}", uuid::Uuid::new_v4()))).unwrap()
+    }
+
+    /// One mail. `refs` is the References chain as stored (space-separated, no
+    /// brackets) — empty means the sender wrote none, which is the common case.
+    fn insert(db: &Database, id: &str, msg_id: &str, in_reply_to: &str, refs: &str, subject: &str) {
+        let conn = db.lock_db();
+        conn.execute(
+            "INSERT OR IGNORE INTO accounts (id, email, display_name, provider, imap_host, smtp_host)
+             VALUES ('acc1','a@example.com','A','imap','imap.example.com','smtp.example.com')", []).unwrap();
+        conn.execute(
+            "INSERT OR IGNORE INTO accounts (id, email, display_name, provider, imap_host, smtp_host)
+             VALUES ('acc2','b@example.com','B','imap','imap.example.com','smtp.example.com')", []).unwrap();
+        conn.execute(
+            "INSERT OR IGNORE INTO folders (id, account_id, name, path) VALUES ('f1','acc1','Inbox','INBOX')", []).unwrap();
+        conn.execute(
+            "INSERT OR IGNORE INTO folders (id, account_id, name, path) VALUES ('f2','acc2','Inbox','INBOX')", []).unwrap();
+
+        // thread_id mirrors the sync: References, else In-Reply-To, else own id.
+        let thread_id = if !refs.is_empty() { refs } else if !in_reply_to.is_empty() { in_reply_to } else { msg_id };
+        conn.execute(
+            "INSERT INTO mails (id, account_id, folder_id, message_id, subject, from_name, from_email,
+                                date, thread_id, in_reply_to, \"references\")
+             VALUES (?1, 'acc1', 'f1', ?2, ?3, 'S', 's@example.com', ?4, ?5, ?6, ?7)",
+            params![id, msg_id, subject, format!("2026-01-0{}T00:00:00Z", id.len().min(9)),
+                    thread_id, in_reply_to, refs],
+        ).unwrap();
+    }
+
+    fn thread_ids(db: &Database, open: &str) -> Vec<String> {
+        let conn = db.lock_db();
+        let mut ids: Vec<String> = get_thread_mails_inner(&conn, open).unwrap().into_iter().map(|m| m.id).collect();
+        ids.sort();
+        ids
+    }
+
+    /// The reported bug: a contact-form mail, the reply, and the visitor's answer.
+    /// The last message names only its direct parent, so a one-hop lookup lost the
+    /// mail that started the thread.
+    #[test]
+    fn finds_the_root_from_the_newest_message_without_a_references_chain() {
+        let db = temp_db();
+        insert(&db, "a", "mid-a", "", "", "Kontaktanfrage");
+        insert(&db, "bb", "mid-b", "mid-a", "", "Re: Kontaktanfrage");
+        insert(&db, "ccc", "mid-c", "mid-b", "", "Re: Kontaktanfrage");
+
+        assert_eq!(thread_ids(&db, "ccc"), vec!["a", "bb", "ccc"]);
+    }
+
+    #[test]
+    fn finds_descendants_from_the_root() {
+        let db = temp_db();
+        insert(&db, "a", "mid-a", "", "", "Kontaktanfrage");
+        insert(&db, "bb", "mid-b", "mid-a", "", "Re: Kontaktanfrage");
+        insert(&db, "ccc", "mid-c", "mid-b", "", "Re: Kontaktanfrage");
+
+        assert_eq!(thread_ids(&db, "a"), vec!["a", "bb", "ccc"]);
+    }
+
+    #[test]
+    fn still_works_when_the_sender_did_write_a_references_chain() {
+        let db = temp_db();
+        insert(&db, "a", "mid-a", "", "", "Anfrage");
+        insert(&db, "bb", "mid-b", "mid-a", "mid-a", "Re: Anfrage");
+        insert(&db, "ccc", "mid-c", "mid-b", "mid-a mid-b", "Re: Anfrage");
+
+        assert_eq!(thread_ids(&db, "ccc"), vec!["a", "bb", "ccc"]);
+        assert_eq!(thread_ids(&db, "a"), vec!["a", "bb", "ccc"]);
+    }
+
+    /// The guard that matters for this reporter: every contact-form mail carries
+    /// the same subject and sender. Threading follows headers only, so they must
+    /// stay apart.
+    #[test]
+    fn never_merges_unrelated_mails_that_share_a_subject() {
+        let db = temp_db();
+        insert(&db, "a", "mid-a", "", "", "Kontaktanfrage");
+        insert(&db, "bb", "mid-b", "mid-a", "", "Re: Kontaktanfrage");
+        insert(&db, "ccc", "mid-x", "", "", "Kontaktanfrage");
+
+        assert_eq!(thread_ids(&db, "a"), vec!["a", "bb"]);
+        assert_eq!(thread_ids(&db, "ccc"), vec!["ccc"]);
+    }
+
+    #[test]
+    fn stays_inside_the_account() {
+        let db = temp_db();
+        insert(&db, "a", "mid-a", "", "", "Anfrage");
+        {
+            let conn = db.lock_db();
+            conn.execute(
+                "INSERT INTO mails (id, account_id, folder_id, message_id, subject, from_name, from_email,
+                                    date, thread_id, in_reply_to, \"references\")
+                 VALUES ('other', 'acc2', 'f2', 'mid-other', 'Re: Anfrage', 'S', 's@example.com',
+                         '2026-01-02T00:00:00Z', 'mid-a', 'mid-a', '')", []).unwrap();
+        }
+        assert_eq!(thread_ids(&db, "a"), vec!["a"]);
+    }
+
+    /// A malformed chain that points at itself must not spin the expansion.
+    #[test]
+    fn terminates_on_a_reference_cycle() {
+        let db = temp_db();
+        insert(&db, "a", "mid-a", "mid-b", "", "Schleife");
+        insert(&db, "bb", "mid-b", "mid-a", "", "Schleife");
+
+        assert_eq!(thread_ids(&db, "a"), vec!["a", "bb"]);
     }
 }
