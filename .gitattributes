@@ -1,0 +1,15 @@
+# Line endings are LF, in the repository and in the working tree alike.
+#
+# Without eol=lf a Windows checkout hands every editor CRLF, and anything that
+# rewrites a file whole — the version sync script, a formatter, a codemod —
+# commits it back as a full-file diff containing nothing but carriage returns.
+# Pinning both directions keeps diffs to the lines that actually changed.
+* text=auto eol=lf
+
+# Assets: never converted, never diffed as text.
+*.png   binary
+*.webp  binary
+*.bmp   binary
+*.ico   binary
+*.icns  binary
+*.woff2 binary
