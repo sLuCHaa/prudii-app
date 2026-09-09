@@ -1,4 +1,4 @@
-import type { CSSProperties, KeyboardEvent } from "react";
+import type { CSSProperties, KeyboardEvent, MouseEvent } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { Link2, Paperclip } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
@@ -93,12 +93,14 @@ interface TaskCardProps {
   showCheckmark: boolean;
   /** True for one beat after this card was dropped into a different column. */
   justLanded: boolean;
+  /** Right-click actions; the board owns the menu so it can animate the result. */
+  onContextMenu?: (e: MouseEvent, task: Task) => void;
   /** True while any card on the board is being dragged — suppresses FLIP layout
    *  animation on every card so it can't compound with dnd-kit's own transform. */
   boardDragging: boolean;
 }
 
-export function TaskCard({ task, status, showCheckmark, justLanded, boardDragging }: TaskCardProps) {
+export function TaskCard({ task, status, showCheckmark, justLanded, boardDragging, onContextMenu }: TaskCardProps) {
   const reduce = useReducedMotion();
   const setOpenTaskId = useAppStore((s) => s.setOpenTaskId);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -123,7 +125,14 @@ export function TaskCard({ task, status, showCheckmark, justLanded, boardDraggin
   }
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners} onKeyDown={handleKeyDown}>
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      onKeyDown={handleKeyDown}
+      onContextMenu={onContextMenu && ((e) => onContextMenu(e, task))}
+    >
       <motion.div layout={!reduce && !boardDragging} transition={SPRING_SNAPPY} className="mb-2">
         {isDragging ? (
           // The row the card came from stays as a dashed gap of the exact same

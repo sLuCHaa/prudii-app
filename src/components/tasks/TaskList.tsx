@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useTranslation } from "react-i18next";
@@ -7,7 +7,9 @@ import type { Task, TaskStatus } from "../../types";
 import { TASK_STATUSES } from "../../types";
 import { groupByStatus } from "../../lib/tasks";
 import { useAppStore } from "../../stores/appStore";
-import { useUpdateTask } from "../../hooks/useTasks";
+import { useDeleteTask, useUpdateTask } from "../../hooks/useTasks";
+import { useDialog } from "../ui/DialogProvider";
+import { TaskContextMenu } from "./TaskContextMenu";
 import { TaskStatusBadge, STATUS_KEY } from "./TaskStatusBadge";
 import { DueChip } from "./DueChip";
 import { SPRING_SNAPPY, FADE_FAST } from "../motion/tokens";
@@ -28,8 +30,11 @@ export function TaskList({ tasks }: TaskListProps) {
   const { t } = useTranslation();
   const setOpenTaskId = useAppStore((s) => s.setOpenTaskId);
   const updateTask = useUpdateTask();
+  const deleteTask = useDeleteTask();
+  const dialog = useDialog();
   const reduce = useReducedMotion();
   const listRef = useRef<HTMLDivElement>(null);
+  const [contextMenu, setContextMenu] = useState<{ task: Task; x: number; y: number } | null>(null);
 
   const items = useMemo<ListItem[]>(() => {
     const grouped = groupByStatus(tasks);
@@ -46,6 +51,23 @@ export function TaskList({ tasks }: TaskListProps) {
   const toggleDone = useCallback((task: Task) => {
     updateTask.mutate({ id: task.id, patch: { status: task.status === "done" ? "open" : "done" } });
   }, [updateTask]);
+
+  // The list has no columns to move between, so a plain status patch is enough —
+  // the row re-groups under its new heading on the next render.
+  const handleMenuStatus = useCallback((task: Task, status: TaskStatus) => {
+    setContextMenu(null);
+    if (task.status !== status) updateTask.mutate({ id: task.id, patch: { status } });
+  }, [updateTask]);
+
+  const handleMenuDelete = useCallback(async (task: Task) => {
+    setContextMenu(null);
+    const confirmed = await dialog.danger({
+      title: t("tasks.deleteConfirmTitle"),
+      message: t("tasks.deleteConfirmBody"),
+      confirmLabel: t("tasks.deleteTask"),
+    });
+    if (confirmed) deleteTask.mutate(task.id);
+  }, [dialog, t, deleteTask]);
 
   const virtualize = items.length > VIRTUALIZE_THRESHOLD;
 
@@ -74,6 +96,7 @@ export function TaskList({ tasks }: TaskListProps) {
         role="button"
         tabIndex={0}
         onClick={() => setOpenTaskId(task.id)}
+        onContextMenu={(e) => { e.preventDefault(); setContextMenu({ task, x: e.clientX, y: e.clientY }); }}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
@@ -142,6 +165,20 @@ export function TaskList({ tasks }: TaskListProps) {
     );
   }
 
+  // Portalled, so it is rendered by whichever branch is live without either one
+  // clipping it — the virtualised rows are transformed and would otherwise trap it.
+  const menu = contextMenu && (
+    <TaskContextMenu
+      task={contextMenu.task}
+      x={contextMenu.x}
+      y={contextMenu.y}
+      onClose={() => setContextMenu(null)}
+      onOpen={(task) => { setContextMenu(null); setOpenTaskId(task.id); }}
+      onStatus={handleMenuStatus}
+      onDelete={handleMenuDelete}
+    />
+  );
+
   if (!virtualize) {
     return (
       <div ref={listRef} className="flex-1 overflow-auto">
@@ -157,6 +194,7 @@ export function TaskList({ tasks }: TaskListProps) {
             </motion.div>
           ))}
         </AnimatePresence>
+        {menu}
       </div>
     );
   }
@@ -178,6 +216,7 @@ export function TaskList({ tasks }: TaskListProps) {
           );
         })}
       </div>
+      {menu}
     </div>
   );
 }

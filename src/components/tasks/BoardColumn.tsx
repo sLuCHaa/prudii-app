@@ -18,13 +18,14 @@ interface BoardColumnProps {
   checkmarkIds: Set<string>;
   landedId: string | null;
   dragging: boolean;
+  onContextMenu: (e: React.MouseEvent, task: Task) => void;
   /** True while the dragged card would land here. Comes from the board's drag
    *  preview rather than useDroppable's isOver, which stays false whenever the
    *  pointer is over one of the column's cards instead of its padding. */
   isDropTarget: boolean;
 }
 
-export function BoardColumn({ status, tasks, checkmarkIds, landedId, dragging, isDropTarget }: BoardColumnProps) {
+export function BoardColumn({ status, tasks, checkmarkIds, landedId, dragging, isDropTarget, onContextMenu }: BoardColumnProps) {
   const { t } = useTranslation();
   const { setNodeRef } = useDroppable({ id: status, data: { type: "column", status } });
 
@@ -58,6 +59,7 @@ export function BoardColumn({ status, tasks, checkmarkIds, landedId, dragging, i
               showCheckmark={checkmarkIds.has(task.id)}
               justLanded={landedId === task.id}
               boardDragging={dragging}
+              onContextMenu={onContextMenu}
             />
           ))}
         </SortableContext>

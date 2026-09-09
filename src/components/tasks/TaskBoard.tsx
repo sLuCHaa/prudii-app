@@ -21,7 +21,10 @@ import { useReducedMotion } from "motion/react";
 import type { Task, TaskStatus } from "../../types";
 import { TASK_STATUSES } from "../../types";
 import { fullColumnDropIndex, groupByStatus } from "../../lib/tasks";
-import { useMoveTask } from "../../hooks/useTasks";
+import { useDeleteTask, useMoveTask } from "../../hooks/useTasks";
+import { useAppStore } from "../../stores/appStore";
+import { useDialog } from "../ui/DialogProvider";
+import { TaskContextMenu } from "./TaskContextMenu";
 import { BoardColumn } from "./BoardColumn";
 import { TaskCardOverlay } from "./TaskCard";
 import { EmptyState } from "../ui/EmptyState";
@@ -64,6 +67,10 @@ export function TaskBoard({ tasks, allTasks }: TaskBoardProps) {
   const { t } = useTranslation();
   const reduce = useReducedMotion();
   const moveTask = useMoveTask();
+  const deleteTask = useDeleteTask();
+  const dialog = useDialog();
+  const setOpenTaskId = useAppStore((s) => s.setOpenTaskId);
+  const [contextMenu, setContextMenu] = useState<{ task: Task; x: number; y: number } | null>(null);
 
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [checkmarkIds, setCheckmarkIds] = useState<Set<string>>(new Set());
@@ -212,6 +219,33 @@ export function TaskBoard({ tasks, allTasks }: TaskBoardProps) {
     setDragState(null);
   }
 
+  function openContextMenu(e: React.MouseEvent, task: Task) {
+    e.preventDefault();
+    setContextMenu({ task, x: e.clientX, y: e.clientY });
+  }
+
+  // A status picked from the menu is the same move a drag performs, so it runs
+  // through moveTask (optimistic, renumbers the column) and replays the same
+  // landing feedback. Index 0: the card surfaces at the top of its new column
+  // instead of disappearing somewhere down the list.
+  function handleMenuStatus(task: Task, status: TaskStatus) {
+    setContextMenu(null);
+    if (task.status === status) return;
+    moveTask.mutate({ id: task.id, status, index: 0 });
+    if (status === "done") triggerCheckmark(task.id);
+    else triggerLanded(task.id);
+  }
+
+  async function handleMenuDelete(task: Task) {
+    setContextMenu(null);
+    const confirmed = await dialog.danger({
+      title: t("tasks.deleteConfirmTitle"),
+      message: t("tasks.deleteConfirmBody"),
+      confirmLabel: t("tasks.deleteTask"),
+    });
+    if (confirmed) deleteTask.mutate(task.id);
+  }
+
   const activeTask = dragState?.activeId ? renderTasks.find((task) => task.id === dragState.activeId) : undefined;
   // Where the card would land right now — read off the preview, which handleDragOver
   // keeps in sync whether the pointer is over a column's padding or one of its cards.
@@ -248,13 +282,25 @@ export function TaskBoard({ tasks, allTasks }: TaskBoardProps) {
           </div>
         ) : (
           <>
-            <BoardColumn status="open" tasks={columns.open} checkmarkIds={checkmarkIds} landedId={landedId} dragging={dragState !== null} isDropTarget={dropTargetStatus === "open"} />
-            <BoardColumn status="in_progress" tasks={columns.in_progress} checkmarkIds={checkmarkIds} landedId={landedId} dragging={dragState !== null} isDropTarget={dropTargetStatus === "in_progress"} />
+            <BoardColumn status="open" tasks={columns.open} checkmarkIds={checkmarkIds} landedId={landedId} dragging={dragState !== null} onContextMenu={openContextMenu} isDropTarget={dropTargetStatus === "open"} />
+            <BoardColumn status="in_progress" tasks={columns.in_progress} checkmarkIds={checkmarkIds} landedId={landedId} dragging={dragState !== null} onContextMenu={openContextMenu} isDropTarget={dropTargetStatus === "in_progress"} />
           </>
         )}
-        <BoardColumn status="done" tasks={columns.done} checkmarkIds={checkmarkIds} landedId={landedId} dragging={dragState !== null} isDropTarget={dropTargetStatus === "done"} />
+        <BoardColumn status="done" tasks={columns.done} checkmarkIds={checkmarkIds} landedId={landedId} dragging={dragState !== null} onContextMenu={openContextMenu} isDropTarget={dropTargetStatus === "done"} />
       </div>
       <DragOverlay dropAnimation={dropAnimation}>{activeTask ? <TaskCardOverlay task={activeTask} /> : null}</DragOverlay>
+
+      {contextMenu && (
+        <TaskContextMenu
+          task={contextMenu.task}
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+          onOpen={(task) => { setContextMenu(null); setOpenTaskId(task.id); }}
+          onStatus={handleMenuStatus}
+          onDelete={handleMenuDelete}
+        />
+      )}
     </DndContext>
   );
 }

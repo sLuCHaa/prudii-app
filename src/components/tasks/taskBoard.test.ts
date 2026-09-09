@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "../../lib/i18n";
 import { useAppStore } from "../../stores/appStore";
+import { DialogProvider } from "../ui/DialogProvider";
 import { TaskBoard } from "./TaskBoard";
 import type { Task } from "../../types";
 
@@ -52,7 +53,13 @@ afterEach(() => {
 function renderBoard(tasks: Task[], allTasks: Task[] = tasks) {
   act(() => {
     root.render(
-      createElement(QueryClientProvider, { client: queryClient }, createElement(TaskBoard, { tasks, allTasks })),
+      // The board's context menu confirms deletes through useDialog, so it needs
+      // the provider the app wraps everything in.
+      createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        createElement(DialogProvider, null, createElement(TaskBoard, { tasks, allTasks })),
+      ),
     );
   });
 }
