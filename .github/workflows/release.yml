@@ -44,7 +44,7 @@ jobs:
           set -euo pipefail
 
           find_id() {
-            gh api "repos/$GH_REPO/releases" --paginate               --jq "[.[] | select(.tag_name == \"$TAG\")] | first | .id // empty"
+            gh api "repos/$GH_REPO/releases" --paginate --jq "[.[] | select(.tag_name == \"$TAG\")] | first | .id // empty"
           }
 
           # Ein erneuter Lauf desselben Tags soll den vorhandenen Release
@@ -57,8 +57,10 @@ jobs:
           Prudii Mail __VERSION__ — privacy-first desktop email client. Install the file for your platform below: Windows (.exe / .msi), macOS (.dmg — Apple Silicon or Intel), Linux (.deb / .rpm / .AppImage). Existing installations update automatically. Release notes below.
           NOTES
             sed -i "s/__VERSION__/${TAG}/" notes.md
-            gh release create "$TAG" --draft --title "Prudii Mail ${TAG}" --notes-file notes.md
-            id="$(find_id)"
+            # Die ID kommt aus der Antwort des Anlegens, nicht aus einer zweiten
+            # Abfrage: die Release-Liste ist erst verzoegert konsistent, und ein
+            # Nachschlagen unmittelbar danach lieferte leer (v1.6.3, 1. Versuch).
+            id="$(gh api "repos/$GH_REPO/releases" -f tag_name="$TAG" -f name="Prudii Mail $TAG" -f body="$(cat notes.md)" -F draft=true --jq '.id')"
           fi
 
           [ -n "$id" ] || { echo "Release-ID nicht ermittelbar" >&2; exit 1; }
@@ -275,7 +277,7 @@ jobs:
           fail=0
           note() { echo "  $1"; }
 
-          count="$(gh api "repos/$GH_REPO/releases" --paginate             --jq "[.[] | select(.tag_name == \"$TAG\")] | length")"
+          count="$(gh api "repos/$GH_REPO/releases" --paginate --jq "[.[] | select(.tag_name == \"$TAG\")] | length")"
           echo "Releases fuer $TAG: $count"
           [ "$count" = "1" ] || { note "ERWARTET: genau 1 — mehrere Releases teilen sich die Installer"; fail=1; }
 
@@ -288,7 +290,7 @@ jobs:
             else note "FEHLT   $pattern"; fail=1; fi
           done
 
-          gh api -H "Accept: application/octet-stream"             "repos/$GH_REPO/releases/assets/$(gh api "repos/$GH_REPO/releases/$RELEASE_ID"               --jq '.assets[] | select(.name == "latest.json") | .id')" > latest.json
+          gh api -H "Accept: application/octet-stream" "repos/$GH_REPO/releases/assets/$(gh api "repos/$GH_REPO/releases/$RELEASE_ID" --jq '.assets[] | select(.name == "latest.json") | .id')" > latest.json
 
           echo "Updater-Plattformen:"
           for key in windows-x86_64 windows-x86_64-msi darwin-aarch64 darwin-x86_64 linux-x86_64; do
