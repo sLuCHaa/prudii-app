@@ -37,8 +37,13 @@ interface MailContextMenuProps {
   onBulkSnooze?: (until: string) => void;
   /** Move all selected mails to a folder; only offered when moveFolders is non-empty. */
   onBulkMove?: (destFolderId: string) => void;
-  /** Move targets (folders of the selection's common account). */
+  /** Move this mail to a folder; only offered when moveFolders is non-empty. */
+  onMove?: (mail: Mail, destFolderId: string) => void;
+  /** Move targets: the folders of the target's own account, never the open one —
+   *  a combined view lists mails from several accounts side by side. */
   moveFolders?: Folder[];
+  /** Named above the move targets, so it is never a guess which account they belong to. */
+  moveAccountLabel?: string;
 }
 
 export function MailContextMenu({
@@ -66,7 +71,9 @@ export function MailContextMenu({
   onBulkClearFlags,
   onBulkSnooze,
   onBulkMove,
+  onMove,
   moveFolders,
+  moveAccountLabel,
 }: MailContextMenuProps) {
   const { t } = useTranslation();
   const hasFeature = useAppStore((s) => s.hasFeature);
@@ -99,6 +106,22 @@ export function MailContextMenu({
       : []),
   ];
 
+  // Standard folders read as they do in the sidebar; a custom folder keeps its own name.
+  const folderLabel = (f: Folder) => t(`folder.types.${f.folder_type}`, { defaultValue: f.name });
+
+  const moveSubmenu = (apply: (destFolderId: string) => void): MenuEntry[] => [
+    ...(moveAccountLabel ? [{ kind: "header" as const, label: moveAccountLabel }] : []),
+    ...(moveFolders ?? []).map((f): MenuEntry => ({
+      kind: "item",
+      id: `move-${f.id}`,
+      label: folderLabel(f),
+      icon: <FolderInput className="w-4 h-4" />,
+      onSelect: () => apply(f.id),
+    })),
+  ];
+
+  const hasMoveTargets = !!moveFolders && moveFolders.length > 0;
+
   const singleFlags = commonFlags([mail.flags ?? []]);
   const bulkFlags = commonFlags(selectedFlags ?? []);
 
@@ -128,6 +151,15 @@ export function MailContextMenu({
     { kind: "item", id: "read", label: mail.is_read ? t("mailDetail.markUnread") : t("mailDetail.markRead"), icon: mail.is_read ? <MailIcon className="w-4 h-4" /> : <MailOpen className="w-4 h-4" />, onSelect: () => onToggleRead(mail) },
     ...(onSnooze && hasFeature("snooze") ? [{ kind: "item" as const, id: "snooze", label: t("snooze.snooze"), icon: <Clock className="w-4 h-4" />, submenu: snooze((until) => onSnooze(mail, until)) }] : []),
     { kind: "separator" },
+    ...(onMove && hasMoveTargets
+      ? [{
+          kind: "item" as const,
+          id: "move",
+          label: t("rules.moveToFolder"),
+          icon: <FolderInput className="w-4 h-4" />,
+          submenu: moveSubmenu((destFolderId) => onMove(mail, destFolderId)),
+        }]
+      : []),
     { kind: "item", id: "archive", label: t("mailDetail.archive"), icon: <Archive className="w-4 h-4" />, onSelect: () => onArchive(mail) },
     { kind: "item", id: "trash", label: t("mailDetail.trash"), icon: <Trash2 className="w-4 h-4" />, danger: true, onSelect: () => onTrash(mail) },
   ];
@@ -154,7 +186,15 @@ export function MailContextMenu({
         }]
       : []),
     ...(onBulkSnooze && hasFeature("snooze") ? [{ kind: "item" as const, id: "snooze", label: t("snooze.snooze"), icon: <Clock className="w-4 h-4" />, submenu: snooze(onBulkSnooze) }] : []),
-    ...(onBulkMove && moveFolders && moveFolders.length > 0 ? [{ kind: "item" as const, id: "move", label: t("rules.moveToFolder"), icon: <FolderInput className="w-4 h-4" />, submenu: moveFolders.map((f) => ({ kind: "item" as const, id: `move-${f.id}`, label: f.name, icon: <FolderInput className="w-4 h-4" />, onSelect: () => onBulkMove(f.id) })) }] : []),
+    ...(onBulkMove && hasMoveTargets
+      ? [{
+          kind: "item" as const,
+          id: "move",
+          label: t("rules.moveToFolder"),
+          icon: <FolderInput className="w-4 h-4" />,
+          submenu: moveSubmenu(onBulkMove),
+        }]
+      : []),
     { kind: "separator" },
     { kind: "item", id: "archive", label: t("mailDetail.archive"), icon: <Archive className="w-4 h-4" />, onSelect: () => onBulkAction!("archive") },
     { kind: "item", id: "trash", label: t("mailDetail.trash"), icon: <Trash2 className="w-4 h-4" />, danger: true, onSelect: () => onBulkAction!("trash") },

@@ -32,6 +32,7 @@ import { InboxZeroFlight } from "../motion/InboxZeroFlight";
 import { ENTRANCE, prefersReducedMotion } from "../motion/tokens";
 import { SWEEP_MAILS_EVENT, SWEEP_TWEEN, type SweepDetail } from "../motion/sweepMails";
 import { keepRowsLeaving } from "../../lib/mailListSync";
+import { moveTargets } from "../../lib/moveTargets";
 import { ContextMenu } from "../ui/ContextMenu";
 import { SNOOZE_PRESETS, toSnoozeStamp } from "../../lib/snooze";
 
@@ -1447,11 +1448,41 @@ export function MailList() {
     const first = selectedMailObjects[0].account_id;
     return selectedMailObjects.every((m) => m.account_id === first) ? first : null;
   }, [selectedMailObjects]);
+  // Hiding the source folder needs the mails' own folder, not the open one: under a
+  // filter or a combined view selectedFolderId is null and the selection can span
+  // folders, which used to leave the folder they came from on the list of targets.
+  const bulkFolderId = useMemo(() => {
+    if (selectedMailObjects.length < 2) return null;
+    const first = selectedMailObjects[0].folder_id;
+    return selectedMailObjects.every((m) => m.folder_id === first) ? first : null;
+  }, [selectedMailObjects]);
   const bulkFoldersQuery = useFolders(bulkAccountId);
   const bulkMoveFolders = useMemo(
-    () => (bulkFoldersQuery.data ?? []).filter((f) => f.id !== selectedFolderId && f.folder_type !== "drafts"),
-    [bulkFoldersQuery.data, selectedFolderId]
+    () => moveTargets(bulkFoldersQuery.data ?? [], bulkFolderId),
+    [bulkFoldersQuery.data, bulkFolderId]
   );
+
+  // Targets for a single mail come from the account that mail belongs to — in an
+  // all-inboxes or combined view every row can be a different account.
+  const menuMail = contextMenu && !contextMenu.bulk ? contextMenu.mail : null;
+  const menuFoldersQuery = useFolders(menuMail?.account_id ?? null);
+  const menuMoveFolders = useMemo(
+    () => moveTargets(menuFoldersQuery.data ?? [], menuMail?.folder_id ?? null),
+    [menuFoldersQuery.data, menuMail?.folder_id]
+  );
+  const menuAccountLabel = useAppStore(
+    (st) => st.accounts.find((a) => a.id === menuMail?.account_id)?.email,
+  );
+
+  const handleMove = useCallback((mail: Mail, destFolderId: string) => {
+    // Same exit as archive and delete: the row sweeps out before the refetch.
+    setPendingRemoveIds([mail.id]);
+    runMailAction(() => moveMail(mail.id, destFolderId), {
+      errorKey: "errors.move",
+      invalidate: invalidateMailQueries,
+      onPendingClear: () => setPendingRemoveIds([]),
+    });
+  }, [setPendingRemoveIds, invalidateMailQueries]);
 
   const runBulkAction = useCallback((action: BulkMailAction) => {
     const s = useAppStore.getState();
@@ -2230,7 +2261,9 @@ export function MailList() {
           onBulkAction={contextMenu.bulk ? runBulkAction : undefined}
           onBulkSnooze={contextMenu.bulk ? handleBulkSnooze : undefined}
           onBulkMove={contextMenu.bulk ? handleBulkMove : undefined}
-          moveFolders={contextMenu.bulk ? bulkMoveFolders : undefined}
+          onMove={contextMenu.bulk ? undefined : handleMove}
+          moveFolders={contextMenu.bulk ? bulkMoveFolders : menuMoveFolders}
+          moveAccountLabel={contextMenu.bulk ? undefined : menuAccountLabel}
         />
       )}
 

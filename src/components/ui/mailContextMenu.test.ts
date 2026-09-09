@@ -4,7 +4,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { createElement, act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import i18n from "../../lib/i18n";
-import { MAIL_FLAG_COLORS, type Mail, type MailFlag } from "../../types";
+import { MAIL_FLAG_COLORS, type Folder, type Mail, type MailFlag } from "../../types";
 import { FLAG_ORDER } from "../../lib/mailFlags";
 import { MailContextMenu } from "./MailContextMenu";
 
@@ -74,6 +74,26 @@ function flagItem(flag: MailFlag): HTMLElement | undefined {
   return item(MAIL_FLAG_COLORS[flag].nameKey);
 }
 
+function folder(id: string, name: string, folder_type = "custom"): Folder {
+  return {
+    id,
+    account_id: "a1",
+    name,
+    folder_type: folder_type as Folder["folder_type"],
+    path: name,
+    unread_count: 0,
+    total_count: 0,
+    is_local: false,
+    color: "",
+  };
+}
+
+function openSubmenu(key: string) {
+  const trigger = item(key);
+  expect(trigger, `submenu trigger "${key}" missing`).toBeTruthy();
+  act(() => trigger!.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })));
+}
+
 function openFlagSubmenu() {
   const trigger = item("flags.title");
   expect(trigger, "flag submenu trigger missing").toBeTruthy();
@@ -124,5 +144,55 @@ describe("MailContextMenu flags", () => {
     act(() => flagItem("red")!.click());
     act(() => flagItem("blue")!.click());
     expect(calls).toEqual([["red", "clear"], ["blue", "set"]]);
+  });
+});
+
+describe("MailContextMenu move to folder", () => {
+  const FOLDERS = [folder("f-sent", "Sent", "sent"), folder("f-proj", "Projekte")];
+
+  it("has no move entry without targets, so an account still loading shows nothing", () => {
+    render({ onMove: noop, moveFolders: [] });
+    expect(item("rules.moveToFolder")).toBeUndefined();
+  });
+
+  it("names the account the folders belong to", () => {
+    render({ onMove: noop, moveFolders: FOLDERS, moveAccountLabel: "max@firma.de" });
+    openSubmenu("rules.moveToFolder");
+    expect(document.body.textContent).toContain("max@firma.de");
+  });
+
+  it("labels a standard folder the way the sidebar does and keeps custom names", () => {
+    render({ onMove: noop, moveFolders: FOLDERS, moveAccountLabel: "max@firma.de" });
+    openSubmenu("rules.moveToFolder");
+    // "sent" resolves through folder.types.*; "Projekte" has no type and stays put.
+    expect(item("folder.types.sent")).toBeTruthy();
+    expect(Array.from(document.querySelectorAll("button")).some((b) => b.textContent?.trim() === "Projekte")).toBe(true);
+  });
+
+  it("reports the picked folder together with the mail it belongs to", () => {
+    const moved: [string, string][] = [];
+    render({
+      mail: makeMail({ id: "m9", account_id: "a2" }),
+      onMove: (m, dest) => moved.push([m.id, dest]),
+      moveFolders: FOLDERS,
+    });
+    openSubmenu("rules.moveToFolder");
+    act(() => item("folder.types.sent")!.click());
+    expect(moved).toEqual([["m9", "f-sent"]]);
+  });
+
+  it("offers the same submenu for a selection", () => {
+    const moved: string[] = [];
+    render({
+      selectedCount: 2,
+      onBulkAction: noop,
+      onBulkMove: (dest: string) => moved.push(dest),
+      moveFolders: FOLDERS,
+      moveAccountLabel: "max@firma.de",
+    });
+    openSubmenu("rules.moveToFolder");
+    expect(document.body.textContent).toContain("max@firma.de");
+    act(() => item("folder.types.sent")!.click());
+    expect(moved).toEqual(["f-sent"]);
   });
 });
