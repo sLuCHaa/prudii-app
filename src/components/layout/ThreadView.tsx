@@ -834,28 +834,28 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, sing
               onClick={handleReply}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-text-secondary hover:bg-hover transition-colors"
             >
-              <Reply className="w-3.5 h-3.5" />
+              <Reply className="w-4 h-4" />
               {t("mailDetail.reply")}
             </button>
             <button
               onClick={handleReplyAll}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-text-secondary hover:bg-hover transition-colors"
             >
-              <ReplyAll className="w-3.5 h-3.5" />
+              <ReplyAll className="w-4 h-4" />
               {t("mailDetail.replyAll")}
             </button>
             <button
               onClick={handleForward}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-text-secondary hover:bg-hover transition-colors"
             >
-              <Forward className="w-3.5 h-3.5" />
+              <Forward className="w-4 h-4" />
               {t("mailDetail.forward")}
             </button>
             <button
               onClick={handlePrint}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-text-secondary hover:bg-hover transition-colors"
             >
-              <Printer className="w-3.5 h-3.5" />
+              <Printer className="w-4 h-4" />
               {t("mailDetail.print")}
             </button>
           </div>
@@ -1386,32 +1386,32 @@ export function ThreadView({ mail }: ThreadViewProps) {
 
       {!isSingleMail && <ThreadAttachments threadMails={threadMails} loading={loading} onLocate={scrollToMessage} />}
 
-      <div className="flex items-center gap-0.5 px-4 py-1.5 border-b border-border bg-surface shrink-0">
+      <div className="flex items-center gap-1 px-4 py-1.5 border-b border-border bg-surface shrink-0">
         <Tooltip label={t("mailDetail.reply")}>
           <button
             aria-label={t("mailDetail.reply")}
             onClick={() => openCompose("reply", mail)}
-            className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
+            className="p-2 rounded-lg hover:bg-hover transition-colors text-text-secondary"
           >
-            <Reply className="w-4 h-4" />
+            <Reply className="w-5 h-5" />
           </button>
         </Tooltip>
         <Tooltip label={t("mailDetail.replyAll")}>
           <button
             aria-label={t("mailDetail.replyAll")}
             onClick={() => openCompose("replyAll", mail)}
-            className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
+            className="p-2 rounded-lg hover:bg-hover transition-colors text-text-secondary"
           >
-            <ReplyAll className="w-4 h-4" />
+            <ReplyAll className="w-5 h-5" />
           </button>
         </Tooltip>
         <Tooltip label={t("mailDetail.forward")}>
           <button
             aria-label={t("mailDetail.forward")}
             onClick={() => openCompose("forward", mail)}
-            className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
+            className="p-2 rounded-lg hover:bg-hover transition-colors text-text-secondary"
           >
-            <Forward className="w-4 h-4" />
+            <Forward className="w-5 h-5" />
           </button>
         </Tooltip>
         <Tooltip label={t("tasks.title")}>
@@ -1426,36 +1426,36 @@ export function ThreadView({ mail }: ThreadViewProps) {
               const r = e.currentTarget.getBoundingClientRect();
               setTaskMenu((open) => (open ? null : { x: r.left, y: r.bottom + 4 }));
             }}
-            className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
+            className="p-2 rounded-lg hover:bg-hover transition-colors text-text-secondary"
           >
-            <ClipboardList className="w-4 h-4" />
+            <ClipboardList className="w-5 h-5" />
           </button>
         </Tooltip>
         <Tooltip label={t("mailDetail.print")}>
           <button
             aria-label={t("mailDetail.print")}
             onClick={handlePrint}
-            className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
+            className="p-2 rounded-lg hover:bg-hover transition-colors text-text-secondary"
           >
-            <Printer className="w-4 h-4" />
+            <Printer className="w-5 h-5" />
           </button>
         </Tooltip>
         <Tooltip label={t("mailDetail.archiveConversation")}>
           <button
             aria-label={t("mailDetail.archiveConversation")}
             onClick={handleArchive}
-            className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
+            className="p-2 rounded-lg hover:bg-hover transition-colors text-text-secondary"
           >
-            <Archive className="w-4 h-4" />
+            <Archive className="w-5 h-5" />
           </button>
         </Tooltip>
         <Tooltip label={t("mailDetail.deleteConversation")}>
           <button
             aria-label={t("mailDetail.deleteConversation")}
             onClick={handleTrash}
-            className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
+            className="p-2 rounded-lg hover:bg-hover transition-colors text-text-secondary"
           >
-            <TrashIcon size={16} strokeWidth={2} dangerHover />
+            <TrashIcon size={20} strokeWidth={2} dangerHover />
           </button>
         </Tooltip>
         <div className="w-px h-4 bg-border mx-0.5" />
@@ -1466,9 +1466,9 @@ export function ThreadView({ mail }: ThreadViewProps) {
           <button
             aria-label={t("unsubscribe.title")}
             onClick={handleUnsubscribe}
-            className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
+            className="p-2 rounded-lg hover:bg-hover transition-colors text-text-secondary"
           >
-            <MailMinus className="w-4 h-4" />
+            <MailMinus className="w-5 h-5" />
           </button>
           </Tooltip>
         )}
