@@ -854,7 +854,7 @@ fn process_header_batch(
                 .map(|s| s.trim_matches(|c| c == '<' || c == '>').to_string())
                 .filter(|s| !s.is_empty());
 
-            let references = parse_references(&msg);
+            let references = parse_references(msg);
 
             let thread_id = references.clone()
                 .or_else(|| in_reply_to.clone())
