@@ -99,13 +99,24 @@ fn dedup_mails(mails: Vec<Mail>) -> Vec<Mail> {
     // Skip dedup for mails with empty/placeholder subject OR empty from â€” these are
     // likely incomplete (e.g. Outlook delta sync returned only IDs) and would falsely
     // collapse multiple distinct mails into one.
-    let mut seen_content = HashSet::new();
+    // Copies inside one account are kept on purpose. A server can genuinely hold
+    // the same mail twice (Gmail Sent folders from the SMTP-plus-IMAP-append era
+    // do); collapsing those hid the twin, so deleting the visible one revealed
+    // the other and the delete looked like it had not worked. Only the same
+    // mail seen through two accounts is folded.
+    let mut first_account_for: HashMap<String, String> = HashMap::new();
     let result: Vec<Mail> = pass1.into_iter().filter(|m| {
         if m.subject.is_empty() || m.subject == "(No Subject)" || m.from.email.is_empty() {
             return true; // never dedup mails with missing/incomplete metadata
         }
         let content_key = format!("{}|{}|{}", m.subject.to_lowercase().trim(), m.date, m.from.email.to_lowercase());
-        seen_content.insert(content_key)
+        match first_account_for.get(&content_key) {
+            Some(owner) => owner == &m.account_id,
+            None => {
+                first_account_for.insert(content_key, m.account_id.clone());
+                true
+            }
+        }
     }).collect();
 
     if result.len() < original_count {
@@ -119,6 +130,17 @@ enum ApiType {
     Gmail,
     Outlook,
     Imap,
+}
+
+/// WHERE clause of the starred view. Spam and trash stay out, as in Gmail's
+/// Starred and Outlook's Flagged views: a flag set before the junk filter moved
+/// the mail is no reason to surface it there.
+fn starred_where(account_scoped: bool, extra: &str) -> String {
+    let scope = if account_scoped { " AND account_id = ?1" } else { "" };
+    format!(
+        " WHERE is_starred = 1{} AND folder_id NOT IN (SELECT id FROM folders WHERE folder_type IN ('spam', 'trash')){}",
+        scope, extra
+    )
 }
 
 /// Delete a pending operation from a background task using an ad-hoc DB connection.
@@ -428,7 +450,7 @@ pub fn list_filtered_mails(
     // All queries use parameterized placeholders â€” no string interpolation
     let mails = match (filter_type.as_str(), &account_id) {
         ("starred", Some(acc_id)) => {
-            let sql = format!("{} WHERE is_starred = 1 AND account_id = ?1{} ORDER BY date DESC LIMIT ?2 OFFSET ?3", BASE_SELECT, extra);
+            let sql = format!("{}{} ORDER BY date DESC LIMIT ?2 OFFSET ?3", BASE_SELECT, starred_where(true, &extra));
             let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
             let rows = stmt.query_map(rusqlite::params![acc_id, limit, offset], row_mapper)
                 .map_err(|e| e.to_string())?
@@ -437,7 +459,7 @@ pub fn list_filtered_mails(
             rows
         }
         ("starred", None) => {
-            let sql = format!("{} WHERE is_starred = 1{} ORDER BY date DESC LIMIT ?1 OFFSET ?2", BASE_SELECT, extra);
+            let sql = format!("{}{} ORDER BY date DESC LIMIT ?1 OFFSET ?2", BASE_SELECT, starred_where(false, &extra));
             let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
             let rows = stmt.query_map(rusqlite::params![limit, offset], row_mapper)
                 .map_err(|e| e.to_string())?
@@ -4584,13 +4606,14 @@ mod dedup_mails_tests {
 
     #[test]
     fn content_pass_collapses_cross_account_copy() {
-        // Same subject+date+sender under different message ids (e.g. the same
-        // mail fetched through two accounts) collapses in pass 2
-        let mails = vec![
-            mail("1", "<a@x>", "Same", "2026-01-01T10:00:00Z", "a@x.de"),
-            mail("2", "<b@y>", "Same", "2026-01-01T10:00:00Z", "a@x.de"),
-        ];
-        assert_eq!(dedup_mails(mails).len(), 1);
+        // Same subject+date+sender under different message ids, fetched through
+        // two accounts, collapses in pass 2. The accounts have to differ: the same
+        // content inside one account is a real server-side twin and is kept.
+        let mut a = mail("1", "<a@x>", "Same", "2026-01-01T10:00:00Z", "a@x.de");
+        a.account_id = "acc1".into();
+        let mut b = mail("2", "<b@y>", "Same", "2026-01-01T10:00:00Z", "a@x.de");
+        b.account_id = "acc2".into();
+        assert_eq!(dedup_mails(vec![a, b]).len(), 1);
     }
 
     #[test]
@@ -4899,5 +4922,160 @@ mod thread_tests {
         insert(&db, "bb", "mid-b", "mid-a", "", "Schleife");
 
         assert_eq!(thread_ids(&db, "a"), vec!["a", "bb"]);
+    }
+}
+
+#[cfg(test)]
+mod list_tests {
+    use super::*;
+    use crate::db::Database;
+    use crate::models::MailAddress;
+    use rusqlite::params;
+
+    fn mail(id: &str, account: &str, subject: &str, date: &str, from: &str) -> Mail {
+        Mail {
+            id: id.into(),
+            account_id: account.into(),
+            folder_id: "f".into(),
+            // Distinct per row, like Gmail ids are: pass 1 must not be what merges them.
+            message_id: id.into(),
+            uid: None,
+            subject: subject.into(),
+            from: MailAddress { name: String::new(), email: from.into() },
+            to: vec![],
+            cc: vec![],
+            bcc: vec![],
+            date: date.into(),
+            snippet: String::new(),
+            body_text: String::new(),
+            body_html: String::new(),
+            is_read: false,
+            is_starred: false,
+            is_flagged: false,
+            is_replied: false,
+            is_forwarded: false,
+            has_attachments: false,
+            thread_id: None,
+            in_reply_to: None,
+            references: String::new(),
+            size_bytes: None,
+            flags: vec![],
+            list_unsubscribe: None,
+            reply_to: vec![],
+            is_pinned: false,
+            snoozed_until: None,
+        }
+    }
+
+    const D: &str = "2018-03-02T10:58:41Z";
+
+    /// The reported bug: a Sent folder holding the same mail twice showed one row;
+    /// deleting it revealed the other and the delete looked like it had failed.
+    #[test]
+    fn keeps_twins_that_live_in_the_same_account() {
+        let out = dedup_mails(vec![
+            mail("a1", "acc1", "Rechnung", D, "me@example.com"),
+            mail("a2", "acc1", "Rechnung", D, "me@example.com"),
+        ]);
+        assert_eq!(out.len(), 2);
+    }
+
+    #[test]
+    fn still_folds_the_same_mail_seen_through_two_accounts() {
+        let out = dedup_mails(vec![
+            mail("a1", "acc1", "Rechnung", D, "me@example.com"),
+            mail("b1", "acc2", "Rechnung", D, "me@example.com"),
+        ]);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].id, "a1", "the first copy wins");
+    }
+
+    #[test]
+    fn keeps_every_copy_of_the_owning_account_even_after_a_foreign_one() {
+        let out = dedup_mails(vec![
+            mail("a1", "acc1", "Rechnung", D, "me@example.com"),
+            mail("b1", "acc2", "Rechnung", D, "me@example.com"),
+            mail("a2", "acc1", "Rechnung", D, "me@example.com"),
+        ]);
+        assert_eq!(out.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(), vec!["a1", "a2"]);
+    }
+
+    #[test]
+    fn pass_one_still_folds_identical_message_ids() {
+        let mut twin = mail("a2", "acc1", "Rechnung", D, "me@example.com");
+        twin.message_id = "a1".into();
+        let out = dedup_mails(vec![mail("a1", "acc1", "Rechnung", D, "me@example.com"), twin]);
+        assert_eq!(out.len(), 1);
+    }
+
+    #[test]
+    fn never_folds_mails_whose_metadata_is_incomplete() {
+        let out = dedup_mails(vec![
+            mail("a1", "acc1", "(No Subject)", D, "me@example.com"),
+            mail("b1", "acc2", "(No Subject)", D, "me@example.com"),
+        ]);
+        assert_eq!(out.len(), 2);
+    }
+
+    fn temp_db() -> Database {
+        Database::new(std::env::temp_dir().join(format!("prudii-list-{}", uuid::Uuid::new_v4()))).unwrap()
+    }
+
+    fn seed(db: &Database, account: &str, folders: &[(&str, &str)]) {
+        let conn = db.lock_db();
+        conn.execute(
+            "INSERT OR IGNORE INTO accounts (id, email, display_name, provider, imap_host, smtp_host)
+             VALUES (?1, ?1 || '@example.com', ?1, 'imap', 'imap.example.com', 'smtp.example.com')",
+            params![account],
+        ).unwrap();
+        for (ftype, name) in folders {
+            let fid = format!("{}-{}", account, ftype);
+            conn.execute(
+                "INSERT INTO folders (id, account_id, name, path, folder_type) VALUES (?1, ?2, ?3, ?3, ?4)",
+                params![fid, account, name, ftype],
+            ).unwrap();
+            conn.execute(
+                "INSERT INTO mails (id, account_id, folder_id, subject, from_email, date, is_starred)
+                 VALUES (?1 || '-mail', ?2, ?1, 'x', 'x@example.com', '2026-01-01T00:00:00Z', 1)",
+                params![fid, account],
+            ).unwrap();
+        }
+    }
+
+    fn count(db: &Database, where_clause: &str, ps: &[&dyn rusqlite::ToSql]) -> i64 {
+        let conn = db.lock_db();
+        conn.query_row(&format!("SELECT COUNT(*) FROM mails{}", where_clause), ps, |r| r.get(0)).unwrap()
+    }
+
+    /// The reported bug: junk mail carrying a flag turned up in the starred view.
+    #[test]
+    fn starred_view_leaves_spam_and_trash_out() {
+        let db = temp_db();
+        seed(&db, "acc1", &[("inbox", "Inbox"), ("spam", "Junk"), ("trash", "Trash"), ("archive", "Archive")]);
+
+        assert_eq!(count(&db, &starred_where(false, ""), &[]), 2, "inbox and archive only");
+    }
+
+    #[test]
+    fn starred_view_scopes_to_the_account_when_asked() {
+        let db = temp_db();
+        seed(&db, "acc1", &[("inbox", "Inbox"), ("spam", "Junk")]);
+        seed(&db, "acc2", &[("inbox", "Inbox")]);
+
+        assert_eq!(count(&db, &starred_where(false, ""), &[]), 2);
+        assert_eq!(count(&db, &starred_where(true, ""), &[&"acc1"]), 1);
+        assert_eq!(count(&db, &starred_where(true, ""), &[&"acc2"]), 1);
+    }
+
+    #[test]
+    fn starred_view_still_takes_the_pill_filter() {
+        let db = temp_db();
+        seed(&db, "acc1", &[("inbox", "Inbox"), ("archive", "Archive")]);
+        {
+            let conn = db.lock_db();
+            conn.execute("UPDATE mails SET is_read = 1 WHERE folder_id = 'acc1-archive'", []).unwrap();
+        }
+        // filter_clause("unread") appends this shape; the exclusion must compose with it.
+        assert_eq!(count(&db, &starred_where(false, " AND is_read = 0"), &[]), 1);
     }
 }
