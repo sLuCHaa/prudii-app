@@ -84,6 +84,23 @@ pub struct ImapClient {
     account_id: String,
 }
 
+/// Shared TLS client config. Built once — cloning ~150 roots and rebuilding
+/// the config on every connect (IDLE reconnects, pool refills) is measurable
+/// waste — and reused by every TLS client in the app (IMAP, ManageSieve).
+pub(crate) fn tls_connector() -> tokio_rustls::TlsConnector {
+    static TLS_CONFIG: std::sync::LazyLock<std::sync::Arc<rustls::ClientConfig>> =
+        std::sync::LazyLock::new(|| {
+            let mut root_store = rustls::RootCertStore::empty();
+            root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+            std::sync::Arc::new(
+                rustls::ClientConfig::builder()
+                    .with_root_certificates(root_store)
+                    .with_no_client_auth(),
+            )
+        });
+    tokio_rustls::TlsConnector::from(TLS_CONFIG.clone())
+}
+
 impl ImapClient {
     /// Establish TLS connection and read server greeting (shared by connect + connect_oauth).
     async fn establish_tls(host: &str, port: u16) -> Result<Self> {
@@ -121,19 +138,7 @@ impl ImapClient {
 
         let t1 = std::time::Instant::now();
 
-        // Built once — cloning ~150 roots and rebuilding the config on every
-        // connect (IDLE reconnects, pool refills) is measurable waste.
-        static TLS_CONFIG: std::sync::LazyLock<std::sync::Arc<rustls::ClientConfig>> =
-            std::sync::LazyLock::new(|| {
-                let mut root_store = rustls::RootCertStore::empty();
-                root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-                std::sync::Arc::new(
-                    rustls::ClientConfig::builder()
-                        .with_root_certificates(root_store)
-                        .with_no_client_auth(),
-                )
-            });
-        let connector = tokio_rustls::TlsConnector::from(TLS_CONFIG.clone());
+        let connector = tls_connector();
         let server_name = rustls::pki_types::ServerName::try_from(host.to_string())
             .context("Invalid server name")?;
         let tls_stream = tokio::time::timeout(
