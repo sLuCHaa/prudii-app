@@ -12,6 +12,7 @@ pub mod native;
 pub mod rules;
 pub mod send;
 pub mod settings;
+pub mod sieve;
 pub mod sync;
 pub mod tasks;
 pub mod templates;
