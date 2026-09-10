@@ -17,6 +17,7 @@ pub mod oauth;
 pub mod outlook;
 pub mod pool;
 pub mod rules;
+pub mod sieve;
 pub mod smtp;
 pub mod system_accent;
 pub mod task_registry;
