@@ -19,6 +19,7 @@ import { PrivacySettings } from "./PrivacySettings";
 import { LicenseSettings } from "./LicenseSettings";
 import { TemplatesPanel } from "./TemplatesPanel";
 import { UpdatePanel } from "./UpdatePanel";
+import { VacationSection } from "./VacationSection";
 import { PremiumBadge } from "../ui/PremiumBadge";
 import { getVersion } from "@tauri-apps/api/app";
 import { Button, IconButton } from "../ui/Button";
@@ -318,6 +319,10 @@ function AccountSettings({
             </p>
           )}
         </div>
+
+        {!isOAuth && account.auth_type === "password" && (
+          <VacationSection accountId={account.id} />
+        )}
 
         <div>
           <div className="flex items-center gap-2 mb-1">
