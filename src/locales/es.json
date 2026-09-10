@@ -466,7 +466,31 @@
       "passwordPlaceholder": "Introducir nueva contraseña...",
       "oauthHint": "Esta cuenta usa inicio de sesión OAuth (Google/Microsoft). Para restaurarla después de un backup, elimina la cuenta y vuelve a añadirla con el flujo de inicio de sesión.",
       "saveFailed": "Error al guardar la configuración",
-      "syncWarning1Min": "Algunos proveedores pueden limitar o bloquear temporalmente tu cuenta con esta frecuencia."
+      "syncWarning1Min": "Algunos proveedores pueden limitar o bloquear temporalmente tu cuenta con esta frecuencia.",
+      "vacation": {
+        "title": "Fuera de la oficina",
+        "desc": "El servidor de correo responde automáticamente a los mensajes entrantes, incluso cuando Prudii no está abierto.",
+        "checking": "Comprobando si tu proveedor lo admite …",
+        "unsupported": "Tu proveedor no permite configurarlo desde Prudii.",
+        "unreachable": "Con este proveedor la respuesta automática solo se puede configurar en el webmail.",
+        "loadFailed": "No se pudo leer la respuesta automática del servidor.",
+        "locked": "La respuesta automática de esta cuenta está configurada en el webmail y se cambia allí.",
+        "foreign": "Tomada del webmail. Al guardar, Prudii reescribe el aviso en su propio formato.",
+        "foreignAddresses": "Las direcciones adicionales guardadas en el webmail no se conservan.",
+        "on": "Activada",
+        "off": "Desactivada",
+        "from": "Desde",
+        "until": "Hasta",
+        "serverTime": "El periodo sigue la hora del servidor de correo.",
+        "subject": "Asunto (opcional)",
+        "subjectPlaceholder": "Déjalo vacío para «Re: asunto original»",
+        "text": "Mensaje",
+        "textPlaceholder": "Estaré ausente hasta … y responderé a mi regreso.",
+        "panelWarning": "Si ya hay una respuesta automática activa en el panel de tu proveedor (p. ej. Plesk), desactívala allí; de lo contrario los remitentes recibirán dos respuestas.",
+        "save": "Guardar",
+        "saved": "Respuesta automática guardada",
+        "saveFailed": "No se pudo guardar la respuesta automática"
+      }
     },
     "license": {
       "title": "Licencia",

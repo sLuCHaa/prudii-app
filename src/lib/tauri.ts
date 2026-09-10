@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Account, AiResponse, Attachment, AttachmentWithContext, AppConfig, AppSettings, BackupOptions, BulkSaveResult, ChecklistItem, Contact, CreateAccountRequest, CreateRuleRequest, CreateTaskInput, EmailTemplate, Folder, InboxSplit, LicenseInfo, Mail, MailRule, OAuthResult, OllamaStatus, RestorePreview, ScheduledMail, SearchResult, SendMailRequest, Task, TaskAttachment, TaskDetail, TaskStatus, UnsubscribeResult, UpdateTaskPatch } from "../types";
+import type { Account, AiResponse, Attachment, AttachmentWithContext, AppConfig, AppSettings, BackupOptions, BulkSaveResult, ChecklistItem, Contact, CreateAccountRequest, CreateRuleRequest, CreateTaskInput, EmailTemplate, Folder, InboxSplit, LicenseInfo, Mail, MailRule, OAuthResult, OllamaStatus, RestorePreview, ScheduledMail, SearchResult, SendMailRequest, SieveSupport, Task, TaskAttachment, TaskDetail, TaskStatus, UnsubscribeResult, UpdateTaskPatch, VacationSettings, VacationState } from "../types";
 import { prefers24HourClock } from "./localeDefaults";
 
 export async function listAccounts(): Promise<Account[]> {
@@ -699,4 +699,16 @@ export async function revealTaskAttachment(id: string): Promise<void> {
 
 export async function startTaskAttachmentDrag(id: string): Promise<void> {
   return invoke("start_task_attachment_drag", { id });
+}
+
+export async function checkSieveSupport(accountId: string): Promise<SieveSupport> {
+  return invoke("check_sieve_support", { accountId });
+}
+
+export async function getVacation(accountId: string): Promise<VacationState> {
+  return invoke("get_vacation", { accountId });
+}
+
+export async function setVacation(accountId: string, settings: VacationSettings): Promise<void> {
+  return invoke("set_vacation", { accountId, settings });
 }

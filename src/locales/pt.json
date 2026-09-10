@@ -469,7 +469,31 @@
       "passwordPlaceholder": "Inserir nova senha...",
       "oauthHint": "Esta conta usa login OAuth (Google/Microsoft). Para restaurá-la após um backup, remova a conta e adicione-a novamente pelo fluxo de login.",
       "saveFailed": "Falha ao salvar configurações",
-      "syncWarning1Min": "Alguns provedores podem limitar ou bloquear temporariamente sua conta com esta frequência."
+      "syncWarning1Min": "Alguns provedores podem limitar ou bloquear temporariamente sua conta com esta frequência.",
+      "vacation": {
+        "title": "Ausência",
+        "desc": "O servidor de e-mail responde automaticamente às mensagens recebidas, mesmo quando o Prudii não está aberto.",
+        "checking": "A verificar se o seu fornecedor suporta isto …",
+        "unsupported": "O seu fornecedor não permite configurar isto a partir do Prudii.",
+        "unreachable": "Neste fornecedor, a resposta de ausência só pode ser configurada no webmail.",
+        "loadFailed": "Não foi possível ler a resposta de ausência do servidor.",
+        "locked": "A resposta de ausência desta conta está configurada no webmail e altera-se lá.",
+        "foreign": "Importada do webmail. Ao guardar, o Prudii reescreve a mensagem no seu próprio formato.",
+        "foreignAddresses": "Os endereços adicionais guardados no webmail não são mantidos.",
+        "on": "Ligada",
+        "off": "Desligada",
+        "from": "De",
+        "until": "Até",
+        "serverTime": "O período segue a hora do servidor de e-mail.",
+        "subject": "Assunto (opcional)",
+        "subjectPlaceholder": "Deixe vazio para «Re: assunto original»",
+        "text": "Mensagem",
+        "textPlaceholder": "Estou ausente até … e responderei quando regressar.",
+        "panelWarning": "Se já existir uma resposta automática ativa no painel do seu fornecedor (p. ex. Plesk), desative-a lá; caso contrário, os remetentes recebem duas respostas.",
+        "save": "Guardar",
+        "saved": "Resposta de ausência guardada",
+        "saveFailed": "Não foi possível guardar a resposta de ausência"
+      }
     },
     "license": {
       "title": "Licença",

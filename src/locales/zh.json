@@ -468,7 +468,31 @@
       "passwordPlaceholder": "输入新密码...",
       "oauthHint": "此账户使用 OAuth 登录（Google/Microsoft）。要在备份后恢复，请删除该账户并通过登录流程重新添加。",
       "saveFailed": "保存设置失败",
-      "syncWarning1Min": "某些提供商可能会限制或暂时封禁使用此频率的账户。"
+      "syncWarning1Min": "某些提供商可能会限制或暂时封禁使用此频率的账户。",
+      "vacation": {
+        "title": "外出自动回复",
+        "desc": "邮件服务器会自动回复收到的邮件，即使 Prudii 未运行。",
+        "checking": "正在检查你的服务商是否支持……",
+        "unsupported": "你的服务商不支持在 Prudii 中设置此功能。",
+        "unreachable": "该服务商只能在网页邮箱中设置外出回复。",
+        "loadFailed": "无法从服务器读取外出回复。",
+        "locked": "此账户的外出回复是在网页邮箱中设置的，请在那里修改。",
+        "foreign": "已从网页邮箱接管。保存时 Prudii 会以自己的格式重写该回复。",
+        "foreignAddresses": "网页邮箱中保存的附加地址不会被保留。",
+        "on": "开启",
+        "off": "关闭",
+        "from": "开始",
+        "until": "结束",
+        "serverTime": "时间段以邮件服务器的时钟为准。",
+        "subject": "主题（可选）",
+        "subjectPlaceholder": "留空则使用“Re: 原主题”",
+        "text": "内容",
+        "textPlaceholder": "我将外出至……，返回后会回复。",
+        "panelWarning": "如果服务商面板（如 Plesk）中已启用自动回复，请在那里关闭，否则发件人会收到两封回复。",
+        "save": "保存",
+        "saved": "外出回复已保存",
+        "saveFailed": "无法保存外出回复"
+      }
     },
     "license": {
       "title": "许可证",

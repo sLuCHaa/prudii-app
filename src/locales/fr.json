@@ -466,7 +466,31 @@
       "passwordPlaceholder": "Saisir le nouveau mot de passe...",
       "oauthHint": "Ce compte utilise la connexion OAuth (Google/Microsoft). Pour le restaurer après une sauvegarde, supprimez le compte et ajoutez-le à nouveau via le processus de connexion.",
       "saveFailed": "Échec de l'enregistrement des paramètres",
-      "syncWarning1Min": "Certains fournisseurs peuvent limiter ou bloquer temporairement ton compte avec cette fréquence."
+      "syncWarning1Min": "Certains fournisseurs peuvent limiter ou bloquer temporairement ton compte avec cette fréquence.",
+      "vacation": {
+        "title": "Absence",
+        "desc": "Le serveur de messagerie répond automatiquement aux messages entrants, même lorsque Prudii n'est pas lancé.",
+        "checking": "Vérification de la prise en charge par votre fournisseur …",
+        "unsupported": "Votre fournisseur ne permet pas de configurer cela depuis Prudii.",
+        "unreachable": "Chez ce fournisseur, le message d'absence ne peut être configuré que dans le webmail.",
+        "loadFailed": "Le message d'absence n'a pas pu être lu depuis le serveur.",
+        "locked": "Le message d'absence de ce compte est configuré dans le webmail et se modifie là-bas.",
+        "foreign": "Repris depuis le webmail. À l'enregistrement, Prudii réécrit le message dans son propre format.",
+        "foreignAddresses": "Les adresses supplémentaires enregistrées dans le webmail ne sont pas reprises.",
+        "on": "Activé",
+        "off": "Désactivé",
+        "from": "Du",
+        "until": "Au",
+        "serverTime": "La période suit l'heure du serveur de messagerie.",
+        "subject": "Objet (facultatif)",
+        "subjectPlaceholder": "Laisser vide pour « Re : objet d'origine »",
+        "text": "Message",
+        "textPlaceholder": "Je suis absent jusqu'au … et répondrai à mon retour.",
+        "panelWarning": "Si une réponse automatique est déjà active dans le panneau de votre fournisseur (p. ex. Plesk), désactivez-la là-bas, sinon les expéditeurs recevront deux réponses.",
+        "save": "Enregistrer",
+        "saved": "Message d'absence enregistré",
+        "saveFailed": "Le message d'absence n'a pas pu être enregistré"
+      }
     },
     "license": {
       "title": "Licence",

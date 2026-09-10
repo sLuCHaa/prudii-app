@@ -461,3 +461,23 @@ export interface UpdateTaskPatch {
   due_at?: string;
   clear_due_at?: boolean;
 }
+
+export type SieveSupport =
+  | { status: "supported" }
+  | { status: "unsupported"; reason: string }
+  | { status: "unreachable" };
+
+export type VacationSource = "prudii" | "foreign" | "none" | "locked";
+
+export interface VacationSettings {
+  enabled: boolean;
+  from: string | null;
+  until: string | null;
+  subject: string | null;
+  text: string;
+}
+
+export interface VacationState extends VacationSettings {
+  source: VacationSource;
+  had_addresses: boolean;
+}

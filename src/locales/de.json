@@ -466,7 +466,31 @@
       "passwordPlaceholder": "Neues Passwort eingeben...",
       "oauthHint": "Dieses Konto verwendet OAuth-Anmeldung (Google/Microsoft). Um es nach einem Backup wiederherzustellen, entferne das Konto und füge es über die Anmeldung erneut hinzu.",
       "saveFailed": "Einstellungen konnten nicht gespeichert werden",
-      "syncWarning1Min": "Manche Anbieter können dein Konto bei dieser Häufigkeit drosseln oder vorübergehend sperren."
+      "syncWarning1Min": "Manche Anbieter können dein Konto bei dieser Häufigkeit drosseln oder vorübergehend sperren.",
+      "vacation": {
+        "title": "Abwesenheit",
+        "desc": "Der Mailserver antwortet automatisch auf eingehende Mails, auch wenn Prudii nicht läuft.",
+        "checking": "Prüfe, ob dein Anbieter das unterstützt …",
+        "unsupported": "Dein Anbieter unterstützt das Setzen aus Prudii nicht.",
+        "unreachable": "Bei diesem Anbieter lässt sich die Abwesenheit nur im Webmail einstellen.",
+        "loadFailed": "Die Abwesenheit konnte nicht vom Server gelesen werden.",
+        "locked": "Die Abwesenheit dieses Kontos ist im Webmail eingerichtet und lässt sich dort ändern.",
+        "foreign": "Aus dem Webmail übernommen. Beim Speichern schreibt Prudii die Notiz in seinem eigenen Format.",
+        "foreignAddresses": "Die im Webmail hinterlegten zusätzlichen Adressen werden dabei nicht übernommen.",
+        "on": "An",
+        "off": "Aus",
+        "from": "Von",
+        "until": "Bis",
+        "serverTime": "Der Zeitraum gilt nach der Uhrzeit des Mailservers.",
+        "subject": "Betreff (optional)",
+        "subjectPlaceholder": "Leer lassen für „Re: Originalbetreff“",
+        "text": "Nachricht",
+        "textPlaceholder": "Ich bin bis … nicht erreichbar.",
+        "panelWarning": "Ist im Anbieter-Panel (z. B. Plesk) bereits eine automatische Antwort aktiv, dort ausschalten — sonst erhalten Absender zwei Antworten.",
+        "save": "Speichern",
+        "saved": "Abwesenheit gespeichert",
+        "saveFailed": "Abwesenheit konnte nicht gespeichert werden"
+      }
     },
     "license": {
       "title": "Lizenz",

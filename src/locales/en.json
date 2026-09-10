@@ -469,7 +469,31 @@
       "passwordPlaceholder": "Enter new password...",
       "oauthHint": "This account uses OAuth sign-in (Google/Microsoft). To restore it after a backup, remove the account and re-add it using the sign-in flow.",
       "saveFailed": "Failed to save settings",
-      "syncWarning1Min": "Some providers may throttle or temporarily block your account with this frequency."
+      "syncWarning1Min": "Some providers may throttle or temporarily block your account with this frequency.",
+      "vacation": {
+        "title": "Out of office",
+        "desc": "The mail server replies to incoming mail automatically, even while Prudii is not running.",
+        "checking": "Checking whether your provider supports this …",
+        "unsupported": "Your provider does not support setting this from Prudii.",
+        "unreachable": "With this provider the out-of-office reply can only be set in webmail.",
+        "loadFailed": "The out-of-office reply could not be read from the server.",
+        "locked": "This account's out-of-office reply is set up in webmail and can be changed there.",
+        "foreign": "Taken over from webmail. On save, Prudii rewrites the notice in its own format.",
+        "foreignAddresses": "The additional addresses stored in webmail are not carried over.",
+        "on": "On",
+        "off": "Off",
+        "from": "From",
+        "until": "Until",
+        "serverTime": "The period follows the mail server's clock.",
+        "subject": "Subject (optional)",
+        "subjectPlaceholder": "Leave empty for “Re: original subject”",
+        "text": "Message",
+        "textPlaceholder": "I am away until … and will reply on my return.",
+        "panelWarning": "If an automatic reply is already active in your provider's panel (e.g. Plesk), switch it off there — otherwise senders receive two replies.",
+        "save": "Save",
+        "saved": "Out-of-office reply saved",
+        "saveFailed": "Out-of-office reply could not be saved"
+      }
     },
     "license": {
       "title": "License",
