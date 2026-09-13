@@ -10,6 +10,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "../../stores/appStore";
 import { ReadingAmbient } from "./ReadingAmbient";
+import { resolveInlineImages, removeUnresolvableImages } from "../../lib/inlineImages";
 import { useAttachments, useToggleStar, useToggleMailFlag } from "../../hooks/useAccounts";
 import { useScroller } from "../../hooks/useScroller";
 import { openAttachment, startAttachmentDrag, quickLookAttachment, saveAttachment, fetchMailBody, trashMail, archiveMail, getThreadMails, markAsRead, unsubscribeMail } from "../../lib/tauri";
@@ -333,7 +334,7 @@ const DARK_STYLES = `
   ::-webkit-scrollbar-thumb:hover { background: #64748b; }
 `;
 
-const HtmlMailFrame = memo(function HtmlMailFrame({ html, allowExternalImages = true, onIframeRef, onTrackersDetected, onLinkClick, onImageClick }: { html: string; allowExternalImages?: boolean; onIframeRef?: (el: HTMLIFrameElement | null) => void; onTrackersDetected?: (trackers: TrackerInfo[]) => void; onLinkClick?: (href: string) => void; onImageClick?: (src: string) => void }) {
+const HtmlMailFrame = memo(function HtmlMailFrame({ mailId, html, allowExternalImages = true, onIframeRef, onTrackersDetected, onLinkClick, onImageClick }: { mailId: string; html: string; allowExternalImages?: boolean; onIframeRef?: (el: HTMLIFrameElement | null) => void; onTrackersDetected?: (trackers: TrackerInfo[]) => void; onLinkClick?: (href: string) => void; onImageClick?: (src: string) => void }) {
   const darkMode = useAppStore((s) => s.darkMode);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(300);
@@ -342,18 +343,23 @@ const HtmlMailFrame = memo(function HtmlMailFrame({ html, allowExternalImages = 
 
   const themeStyles = darkMode ? DARK_STYLES : LIGHT_STYLES;
 
+  const { data: attachments } = useAttachments(mailId);
   const { html: cleanHtml, trackers } = useMemo(() => {
     const res = sanitizeEmailHtml(html, allowExternalImages);
-    if (!res.html.includes("file://")) return res;
-    // Locally stored inline images are referenced as file:// by the backend;
-    // only convertFileSrc knows the platform's asset origin.
+    if (!/file:\/\/|cid:|blob:|Attachment\//.test(res.html)) return res;
     const d = document.createElement("div");
     d.innerHTML = res.html;
+    // Fetch-time rewriting only knows plain cid: references; the rest resolves
+    // here. Unresolved images are dropped only once the attachments are known.
+    resolveInlineImages(d, attachments ?? []);
+    if (attachments) removeUnresolvableImages(d);
+    // Locally stored inline images are referenced as file:// by the backend;
+    // only convertFileSrc knows the platform's asset origin.
     d.querySelectorAll('img[src^="file://"]').forEach((img) => {
       img.setAttribute("src", convertFileSrc(decodeFileUrl(img.getAttribute("src") ?? "")));
     });
     return { html: d.innerHTML, trackers: res.trackers };
-  }, [html, allowExternalImages]);
+  }, [html, allowExternalImages, attachments]);
 
   useEffect(() => {
     if (onTrackersDetected && trackers.length > 0) {
@@ -810,7 +816,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, sing
                 </div>
               )}
               {displayMail.body_html && !viewPlainText ? (
-                <HtmlMailFrame html={displayMail.body_html} allowExternalImages={allowExternalImages} onIframeRef={(el) => { messageIframeRef.current = el; onIframeRef?.(el); }} onTrackersDetected={handleTrackersDetected} onLinkClick={onLinkClick} onImageClick={handleInlineImageClick} />
+                <HtmlMailFrame mailId={displayMail.id} html={displayMail.body_html} allowExternalImages={allowExternalImages} onIframeRef={(el) => { messageIframeRef.current = el; onIframeRef?.(el); }} onTrackersDetected={handleTrackersDetected} onLinkClick={onLinkClick} onImageClick={handleInlineImageClick} />
               ) : (
                 <pre className="text-sm text-text-secondary whitespace-pre-wrap font-sans leading-relaxed select-text">
                   {displayMail.body_text}

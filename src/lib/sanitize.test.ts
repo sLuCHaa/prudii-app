@@ -10,6 +10,12 @@ describe("escapeHtml", () => {
 });
 
 describe("sanitizeEmailHtml", () => {
+  it("keeps cid: and blob: image sources so the inline resolver can map them", () => {
+    const { html } = sanitizeEmailHtml('<img src="cid:logo@x"><img src="blob:null/1" alt="image001.png">');
+    expect(html).toContain('src="cid:logo@x"');
+    expect(html).toContain('src="blob:null/1"');
+  });
+
   it("strips scripts and inline event handlers but keeps formatting", () => {
     const { html } = sanitizeEmailHtml(
       `<p onclick="alert(1)">Hi <b>there</b></p><script>alert(2)</script>`

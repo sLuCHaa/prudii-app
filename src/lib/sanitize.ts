@@ -131,7 +131,8 @@ export function sanitizeEmailHtml(html: string, allowExternalImages = true): San
       "srcset", "sizes", "media", "type",
     ],
     // file:/asset: carry locally stored inline images (rewritten to asset URLs before display)
-    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel|data|file|asset):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
+    // cid:/blob: load nothing here; kept so the inline-image resolver can map or drop them
+    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel|data|file|asset|cid|blob):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
     FORCE_BODY: true,
     // Extra: strip JS event handlers (onclick, onerror, etc.) — DOMPurify does this by default
   });

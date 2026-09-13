@@ -28,6 +28,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AiRepliesEvent, EmailTemplate, ReplySuggestion } from "../../types";
 import { escapeHtml } from "../../lib/sanitize";
 import { fillEmptyParagraphs, inlineComposeStyles, extractLocalImages, dropImagesByCid } from "../../lib/outgoingHtml";
+import { resolveInlineImagesInHtml } from "../../lib/inlineImages";
 import { HtmlMailFrame } from "../layout/MailDetail";
 import { RecipientInput, type RecipientInputHandle } from "./RecipientInput";
 import type { Mail, SendMailRequest, SendAttachment, Attachment, Account, AppSettings } from "../../types";
@@ -261,6 +262,16 @@ async function resolveQuotedInlineImages(
   // A reference we cannot back with a file must not go out at all — a dangling
   // cid: renders as a broken image, a file:// path leaks the local disk.
   return { html: dropImagesByCid(html, unresolved), inlineAttachments };
+}
+
+/** Inline-image references the fetcher could not rewrite, resolved against the
+ *  stored attachments or dropped. Null when the body needs no work. */
+async function withResolvedInlineImages(mail: Mail): Promise<Mail | null> {
+  const html = mail.body_html ?? "";
+  if (!/cid:|blob:|Attachment\//.test(html)) return null;
+  const stored = await listAttachments(mail.id).catch(() => [] as Attachment[]);
+  const body_html = resolveInlineImagesInHtml(html, stored);
+  return body_html === html ? null : { ...mail, body_html };
 }
 
 function generateReplyBodyHtml(mail: Mail): string {
@@ -716,6 +727,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         setCc([]);
         setSubject(generateReplySubject(originalMail.subject));
         setQuotedHtml(generateReplyBodyHtml(originalMail));
+        void withResolvedInlineImages(originalMail).then((m) => { if (m && !cancelled) setQuotedHtml(generateReplyBodyHtml(m)); });
         if (composeAiReplyText) {
           const aiHtml = `<p>${composeAiReplyText.replace(/\n/g, '<br>')}</p>`;
           content = `${aiHtml}${signature}`;
@@ -739,6 +751,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         setShowCc(ccFormatted.length > 0);
         setSubject(generateReplySubject(originalMail.subject));
         setQuotedHtml(generateReplyBodyHtml(originalMail));
+        void withResolvedInlineImages(originalMail).then((m) => { if (m && !cancelled) setQuotedHtml(generateReplyBodyHtml(m)); });
         if (composeAiReplyText) {
           const aiHtml = `<p>${composeAiReplyText.replace(/\n/g, '<br>')}</p>`;
           content = `${aiHtml}${signature}`;
@@ -750,6 +763,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         setCc([]);
         setSubject(generateForwardSubject(originalMail.subject));
         setQuotedHtml(generateForwardBodyHtml(originalMail));
+        void withResolvedInlineImages(originalMail).then((m) => { if (m && !cancelled) setQuotedHtml(generateForwardBodyHtml(m)); });
         content = `<p></p>${signature}`;
 
         if (originalMail.has_attachments) {
@@ -768,16 +782,13 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
           if (!editor || !(updated.body_html || updated.body_text)) return;
           const isReply = mode === "reply" || mode === "replyAll";
           const sig = getSignatureHtml(defaultAccountId, true);
-          if (isReply) {
-            setQuotedHtml(generateReplyBodyHtml(updated));
-            if (composeAiReplyText) {
-              const aiHtml = `<p>${composeAiReplyText.replace(/\n/g, '<br>')}</p>`;
-              editor.commands.setContent(`${aiHtml}${sig}`);
-            } else {
-              editor.commands.setContent(`<p></p>${sig}`);
-            }
+          const quoteOf = (m: Mail) => (isReply ? generateReplyBodyHtml(m) : generateForwardBodyHtml(m));
+          setQuotedHtml(quoteOf(updated));
+          void withResolvedInlineImages(updated).then((m) => { if (m && !cancelled) setQuotedHtml(quoteOf(m)); });
+          if (isReply && composeAiReplyText) {
+            const aiHtml = `<p>${composeAiReplyText.replace(/\n/g, '<br>')}</p>`;
+            editor.commands.setContent(`${aiHtml}${sig}`);
           } else {
-            setQuotedHtml(generateForwardBodyHtml(updated));
             editor.commands.setContent(`<p></p>${sig}`);
           }
         })

@@ -10,6 +10,8 @@ import { EmptyState } from "../ui/EmptyState";
 import { DaylightSky, useAtmosphereLine } from "../motion/DaylightSky";
 import { ThreadView } from "./ThreadView";
 import { sanitizeEmailHtml, type TrackerInfo } from "../../lib/sanitize";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { decodeFileUrl } from "../../lib/outgoingHtml";
 import { useTranslation } from "react-i18next";
 import type { Mail } from "../../types";
 
@@ -73,10 +75,18 @@ export function HtmlMailFrame({ html, allowExternalImages = true, onIframeRef, o
 
   // Dark mode overrides go AFTER the email content so they win over
   // any !important rules in the email's own <style> blocks (e.g. Apple Mail)
-  const { html: cleanHtml, trackers } = useMemo(
-    () => sanitizeEmailHtml(html, allowExternalImages),
-    [html, allowExternalImages]
-  );
+  const { html: cleanHtml, trackers } = useMemo(() => {
+    const res = sanitizeEmailHtml(html, allowExternalImages);
+    if (!res.html.includes("file://")) return res;
+    // Locally stored inline images are referenced as file://; only
+    // convertFileSrc knows the platform's asset origin.
+    const d = document.createElement("div");
+    d.innerHTML = res.html;
+    d.querySelectorAll('img[src^="file://"]').forEach((img) => {
+      img.setAttribute("src", convertFileSrc(decodeFileUrl(img.getAttribute("src") ?? "")));
+    });
+    return { html: d.innerHTML, trackers: res.trackers };
+  }, [html, allowExternalImages]);
 
   useEffect(() => {
     onTrackersDetected?.(trackers);
