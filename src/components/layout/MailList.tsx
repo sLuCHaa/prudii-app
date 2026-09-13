@@ -1335,7 +1335,7 @@ export function MailList() {
     }
     if (selectedFolderId) {
       const selectedFolder = folders.find((f) => f.id === selectedFolderId);
-      if (selectedFolder) return selectedFolder.name;
+      if (selectedFolder) return t(`folder.types.${selectedFolder.folder_type}`, { defaultValue: selectedFolder.name });
     }
     return t("mailList.inbox");
   }, [activeFilter, showAllInboxes, showSnoozed, showScheduled, activeCombinedFolder, selectedFolderId, folders, t, combinedFolderLabels]);
