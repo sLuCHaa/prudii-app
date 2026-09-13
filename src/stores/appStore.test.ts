@@ -1,4 +1,12 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+
+vi.mock("../lib/tauri", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/tauri")>()),
+  updateAppSettings: vi.fn().mockResolvedValue(undefined),
+  setWindowTheme: vi.fn().mockResolvedValue(undefined),
+}));
+
+import { updateAppSettings } from "../lib/tauri";
 import { useAppStore } from "./appStore";
 
 describe("appStore — pinned mail selection", () => {
@@ -29,5 +37,27 @@ describe("appStore — pinned mail selection", () => {
     useAppStore.getState().openMailById("acc1", "mail3", "folder1");
     useAppStore.getState().setSelectedMailId(null);
     expect(useAppStore.getState().pinnedMailId).toBeNull();
+  });
+});
+
+describe("appStore — choosing a theme", () => {
+  beforeEach(() => {
+    vi.mocked(updateAppSettings).mockClear();
+    useAppStore.setState({ appSettingsLoaded: false });
+  });
+
+  it("does not write settings before they were loaded from the database", () => {
+    useAppStore.getState().chooseThemeMode("dark");
+    expect(useAppStore.getState().themeMode).toBe("dark");
+    expect(updateAppSettings).not.toHaveBeenCalled();
+  });
+
+  it("persists the chosen mode with the loaded settings", async () => {
+    const loaded = { ...useAppStore.getState().appSettings, theme_mode: "system" };
+    useAppStore.getState().setAppSettings(loaded);
+    useAppStore.getState().chooseThemeMode("light");
+    await Promise.resolve();
+    expect(updateAppSettings).toHaveBeenCalledWith({ ...loaded, theme_mode: "light" });
+    expect(useAppStore.getState().appSettings.theme_mode).toBe("light");
   });
 });

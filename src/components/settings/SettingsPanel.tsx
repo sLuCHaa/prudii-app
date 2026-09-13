@@ -564,12 +564,12 @@ export function SettingsPanel() {
   const trapRef = useFocusTrap<HTMLDivElement>(true);
   // useShallow-scoped: an unselected useAppStore() re-renders the whole
   // settings panel on every store write (sync ticks, toasts, selection).
-  const { setShowSettings, setShowAccountWizard, themeMode, setThemeMode, settingsAccountId, settingsTargetTab, appSettings, setAppSettings, hasFeature, systemAccentHex } = useAppStore(
+  const { setShowSettings, setShowAccountWizard, themeMode, chooseThemeMode, settingsAccountId, settingsTargetTab, appSettings, setAppSettings, hasFeature, systemAccentHex } = useAppStore(
     useShallow((s) => ({
       setShowSettings: s.setShowSettings,
       setShowAccountWizard: s.setShowAccountWizard,
       themeMode: s.themeMode,
-      setThemeMode: s.setThemeMode,
+      chooseThemeMode: s.chooseThemeMode,
       settingsAccountId: s.settingsAccountId,
       settingsTargetTab: s.settingsTargetTab,
       appSettings: s.appSettings,
@@ -698,15 +698,9 @@ export function SettingsPanel() {
   }
 
   function handleThemeChange(mode: ThemeMode) {
-    setThemeMode(mode);
-    // Persist against the last-committed baseline (appSettings), NOT the
-    // localSettings working copy — pending unsaved edits must stay
-    // discardable. Deliberately does not touch settingsSaved: the theme is
-    // already saved the moment it is clicked.
-    const persisted = { ...appSettings, theme_mode: mode };
-    updateAppSettings(persisted)
-      .then(() => setAppSettings(persisted))
-      .catch(() => { /* localStorage still holds the value; next save catches up */ });
+    // The store persists against the committed settings, not the working
+    // copy, so pending edits stay discardable; the copy only mirrors the mode.
+    chooseThemeMode(mode);
     setLocalSettings((prev) => ({ ...prev, theme_mode: mode }));
   }
 

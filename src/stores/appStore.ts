@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { setWindowTheme } from "../lib/tauri";
+import { setWindowTheme, updateAppSettings } from "../lib/tauri";
 import type { Account, AppSettings, BackfillProgress, Folder, LicenseInfo, Mail, MailFlag, SendMailRequest, SyncProgress } from "../types";
 import type { ComposeMode } from "../components/compose/ComposeModal";
 import { parseMailtoUrl, type MailtoParams } from "../lib/mailtoParser";
@@ -183,11 +183,16 @@ interface AppState {
   themeMode: ThemeMode;
   darkMode: boolean;
   setThemeMode: (mode: ThemeMode) => void;
+  /** A user's choice: applies it and stores it in the app settings, unlike
+   *  setThemeMode, which the boot path and the settings sync call. */
+  chooseThemeMode: (mode: ThemeMode) => void;
 
   updateAvailable: Update | null;
   setUpdateAvailable: (update: Update | null) => void;
 
   appSettings: AppSettings;
+  /** False until the database values replaced the defaults below. */
+  appSettingsLoaded: boolean;
   setAppSettings: (settings: AppSettings) => void;
 
   systemAccentHex: string | null;
@@ -496,6 +501,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     applyTheme(mode, dark);
     set({ themeMode: mode, darkMode: dark });
   },
+  chooseThemeMode: (mode) => {
+    get().setThemeMode(mode);
+    // Before the settings are loaded, persisting would overwrite the database
+    // with the defaults; the next start would then still win with its value.
+    if (!get().appSettingsLoaded) return;
+    const persisted = { ...get().appSettings, theme_mode: mode };
+    updateAppSettings(persisted)
+      .then(() => set({ appSettings: persisted }))
+      .catch(() => { /* localStorage keeps the value; the next settings save catches up */ });
+  },
 
   updateAvailable: null,
   setUpdateAvailable: (update) => {
@@ -523,7 +538,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     strip_tracking_params: true,
     use_system_font: false,
   },
-  setAppSettings: (appSettings) => set({ appSettings }),
+  appSettingsLoaded: false,
+  setAppSettings: (appSettings) => set({ appSettings, appSettingsLoaded: true }),
 
   systemAccentHex: null,
   setSystemAccentHex: (hex) => set({ systemAccentHex: hex }),

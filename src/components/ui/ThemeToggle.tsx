@@ -7,11 +7,11 @@ export function ThemeToggle() {
   // Selector-scoped: an unselected useAppStore() re-renders the sidebar
   // subtree on every store write.
   const themeMode = useAppStore((s) => s.themeMode);
-  const setThemeMode = useAppStore((s) => s.setThemeMode);
+  const chooseThemeMode = useAppStore((s) => s.chooseThemeMode);
 
   function cycleTheme() {
     const idx = MODES.indexOf(themeMode);
-    setThemeMode(MODES[(idx + 1) % MODES.length]);
+    chooseThemeMode(MODES[(idx + 1) % MODES.length]);
   }
 
   const Icon = themeMode === "dark" ? Moon : themeMode === "light" ? Sun : Monitor;

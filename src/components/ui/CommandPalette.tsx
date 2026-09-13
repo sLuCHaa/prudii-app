@@ -53,7 +53,7 @@ export function CommandPalette() {
     openCompose,
     setSearchOpen,
     themeMode,
-    setThemeMode,
+    chooseThemeMode,
     appSettings,
     setAppSettings,
     toggleSidebar,
@@ -73,7 +73,7 @@ export function CommandPalette() {
       openCompose: s.openCompose,
       setSearchOpen: s.setSearchOpen,
       themeMode: s.themeMode,
-      setThemeMode: s.setThemeMode,
+      chooseThemeMode: s.chooseThemeMode,
       appSettings: s.appSettings,
       setAppSettings: s.setAppSettings,
       toggleSidebar: s.toggleSidebar,
@@ -177,7 +177,7 @@ export function CommandPalette() {
       label: isDark ? t("commandPalette.themeLightLabel") : t("commandPalette.themeDarkLabel"),
       icon: isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />,
       section: groupActions,
-      action: () => setThemeMode(isDark ? "light" : "dark"),
+      action: () => chooseThemeMode(isDark ? "light" : "dark"),
     });
 
     const accentColors: { value: AccentColor; label: string }[] = ACCENT_OPTIONS.map((o) => ({ value: o.id, label: t(o.labelKey) }));
