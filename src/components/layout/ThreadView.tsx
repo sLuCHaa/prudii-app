@@ -10,7 +10,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "../../stores/appStore";
 import { ReadingAmbient } from "./ReadingAmbient";
-import { resolveInlineImages, removeUnresolvableImages } from "../../lib/inlineImages";
+import { resolveInlineImages, removeUnresolvableImages, listedAttachments } from "../../lib/inlineImages";
 import { useAttachments, useToggleStar, useToggleMailFlag } from "../../hooks/useAccounts";
 import { useScroller } from "../../hooks/useScroller";
 import { openAttachment, startAttachmentDrag, quickLookAttachment, saveAttachment, fetchMailBody, trashMail, archiveMail, getThreadMails, markAsRead, unsubscribeMail } from "../../lib/tauri";
@@ -152,12 +152,12 @@ const AttachmentItem = memo(function AttachmentItem({
   );
 });
 
-const AttachmentList = memo(function AttachmentList({ mailId, className = "mt-3 pt-3 border-t border-border-light" }: { mailId: string; className?: string }) {
+const AttachmentList = memo(function AttachmentList({ mailId, bodyHtml, className = "mt-3 pt-3 border-t border-border-light" }: { mailId: string; bodyHtml: string; className?: string }) {
   const { t } = useTranslation();
   const addToast = useAppStore((s) => s.addToast);
   const { data: attachments } = useAttachments(mailId);
 
-  const visible = useMemo(() => attachments?.filter((a) => !a.is_inline) ?? [], [attachments]);
+  const visible = useMemo(() => listedAttachments(bodyHtml, attachments ?? []), [attachments, bodyHtml]);
   const imageItems = useMemo<ImageLightboxItem[]>(
     () =>
       visible
@@ -746,7 +746,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, sing
               all of it. Shown when the flag is set OR the body is loaded
               (header-sync flags can be inaccurate). */}
           {(displayMail.has_attachments || displayMail.body_html || displayMail.body_text) && (
-            <AttachmentList mailId={displayMail.id} className="mb-3 pb-3 border-b border-border-light" />
+            <AttachmentList mailId={displayMail.id} bodyHtml={displayMail.body_html} className="mb-3 pb-3 border-b border-border-light" />
           )}
 
           {loading ? (
@@ -1067,7 +1067,7 @@ const ThreadAttachmentsContent = memo(function ThreadAttachmentsContent({
 const MailAttachmentGroup = memo(function MailAttachmentGroup({ mail, onLocate }: { mail: Mail; onLocate: (mailId: string) => void }) {
   const { data: attachments } = useAttachments(mail.id);
   const use24h = useAppStore((s) => s.appSettings.use_24h_clock);
-  const visible = useMemo(() => attachments?.filter((a) => !a.is_inline) ?? [], [attachments]);
+  const visible = useMemo(() => listedAttachments(mail.body_html, attachments ?? []), [attachments, mail.body_html]);
   const senderName = mail.from.name || mail.from.email;
   // Date included: with two mails from the same sender the name alone
   // doesn't say which message an attachment belongs to.

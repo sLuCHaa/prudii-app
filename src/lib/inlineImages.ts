@@ -7,6 +7,7 @@
 // - Images declared application/octet-stream fail the fetcher's image check.
 
 import type { Attachment } from "../types";
+import { decodeFileUrl } from "./outgoingHtml";
 
 export type InlineSource = Pick<Attachment, "filename" | "content_id" | "local_path" | "mime_type">;
 
@@ -89,4 +90,36 @@ export function resolveInlineImagesInHtml(html: string, attachments: readonly In
   resolveInlineImages(doc.body, attachments);
   removeUnresolvableImages(doc.body);
   return doc.body.innerHTML;
+}
+
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, "/").toLowerCase();
+}
+
+/** Local paths of the attachments the body displays, in any of the reference forms above. */
+function displayedPaths(html: string, attachments: readonly InlineSource[]): Set<string> {
+  const paths = new Set<string>();
+  if (!/<img/i.test(html)) return paths;
+  const doc = document.implementation.createHTMLDocument("");
+  doc.body.innerHTML = html;
+  resolveInlineImages(doc.body, attachments);
+  doc.body.querySelectorAll("img[src]").forEach((img) => {
+    const src = img.getAttribute("src") ?? "";
+    if (/^file:\/\//i.test(src)) paths.add(normalizePath(decodeFileUrl(src)));
+  });
+  return paths;
+}
+
+/** What the attachment list shows: everything not inline, plus inline images
+ *  the body never displays. Gmail flags every image with a Content-ID inline
+ *  whether the HTML uses it or not, which hid real photos. Non-image inline
+ *  parts (S/MIME signatures) stay hidden. */
+export function listedAttachments<T extends InlineSource & { is_inline: boolean }>(html: string, attachments: readonly T[]): T[] {
+  const inlineImages = attachments.filter((a) => a.is_inline && looksLikeImage(a));
+  const displayed = inlineImages.length > 0 ? displayedPaths(html, inlineImages) : new Set<string>();
+  return attachments.filter((a) => {
+    if (!a.is_inline) return true;
+    if (!looksLikeImage(a)) return false;
+    return !(a.local_path && displayed.has(normalizePath(a.local_path)));
+  });
 }

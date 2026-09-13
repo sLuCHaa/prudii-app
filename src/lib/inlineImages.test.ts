@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveInlineImages, removeUnresolvableImages, resolveInlineImagesInHtml } from "./inlineImages";
+import { resolveInlineImages, removeUnresolvableImages, resolveInlineImagesInHtml, listedAttachments } from "./inlineImages";
 
 function render(html: string): HTMLDivElement {
   const div = document.createElement("div");
@@ -90,5 +90,30 @@ describe("resolveInlineImagesInHtml", () => {
   it("returns the input untouched when no image needs resolving", () => {
     const html = '<p>x</p><img src="https://example.com/a.png">';
     expect(resolveInlineImagesInHtml(html, [att({ content_id: "x@y" })])).toBe(html);
+  });
+});
+
+describe("listedAttachments", () => {
+  const base = { id: "a1", mail_id: "m1", size_bytes: 10 };
+  const logo = { ...base, filename: "logo.png", mime_type: "image/png", content_id: "<logo@x>", is_inline: true, local_path: "C:\\att\\logo.png" };
+  const pdf = { ...base, id: "a2", filename: "offer.pdf", mime_type: "application/pdf", content_id: null, is_inline: false, local_path: "C:\\att\\offer.pdf" };
+  const sig = { ...base, id: "a3", filename: "smime.p7s", mime_type: "application/pkcs7-signature", content_id: null, is_inline: true, local_path: "C:\\att\\smime.p7s" };
+
+  it("keeps regular attachments and hides signature parts", () => {
+    expect(listedAttachments("<p>x</p>", [pdf, sig]).map((a) => a.id)).toEqual(["a2"]);
+  });
+
+  it("hides an inline image the body shows through its stored file", () => {
+    const html = '<img src="file:///C:/att/logo.png">';
+    expect(listedAttachments(html, [logo, pdf]).map((a) => a.id)).toEqual(["a2"]);
+  });
+
+  it("hides an inline image the body references by cid or GMX wrapper", () => {
+    expect(listedAttachments('<img src="cid:logo@x">', [logo]).map((a) => a.id)).toEqual([]);
+    expect(listedAttachments(`<img src="Attachment/${btoa("cid:logo@x").replace(/=+$/, "")}">`, [logo]).map((a) => a.id)).toEqual([]);
+  });
+
+  it("lists an inline image the body never shows", () => {
+    expect(listedAttachments("<p>no images</p>", [logo, pdf]).map((a) => a.id)).toEqual(["a1", "a2"]);
   });
 });
