@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useReducedMotion } from "motion/react";
 import { useTranslation } from "react-i18next";
+import { useAppStore } from "../../stores/appStore";
 
 export type DayPhase = "dawn" | "day" | "dusk" | "night";
 
@@ -37,7 +38,7 @@ export function useAtmosphereLine(context: "selectMail" | "inboxZero" | "noTasks
   return line;
 }
 
-type Rgb = [number, number, number];
+export type Rgb = [number, number, number];
 
 // Palette anchors on the 24h clock (minute-of-day). The rendered gradient is
 // a linear interpolation between the two surrounding anchors, so the sky
@@ -78,8 +79,40 @@ function lerpRgb(a: Rgb, b: Rgb, t: number): Rgb {
   return [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
 }
 
-function rgba([r, g, b]: Rgb, alpha: number): string {
+export function rgba([r, g, b]: Rgb, alpha: number): string {
   return `rgba(${Math.round(r)},${Math.round(g)},${Math.round(b)},${alpha})`;
+}
+
+/** Light-theme variant of a sky color: same hue, lifted to the given lightness
+ *  with saturation kept; the dark palette at low alpha over white only grays. */
+export function pastel([r, g, b]: Rgb, lightness: number): Rgb {
+  const rn = r / 255;
+  const gn = g / 255;
+  const bn = b / 255;
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
+  const d = max - min;
+  let h = 0;
+  if (d > 0) {
+    if (max === rn) h = ((gn - bn) / d) % 6;
+    else if (max === gn) h = (bn - rn) / d + 2;
+    else h = (rn - gn) / d + 4;
+    h = (h * 60 + 360) % 360;
+  }
+  const l0 = (max + min) / 2;
+  const s0 = d === 0 ? 0 : d / (1 - Math.abs(2 * l0 - 1));
+  const s = Math.max(s0, 0.5);
+  const c = (1 - Math.abs(2 * lightness - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = lightness - c / 2;
+  const sector: Rgb =
+    h < 60 ? [c, x, 0] :
+    h < 120 ? [x, c, 0] :
+    h < 180 ? [0, c, x] :
+    h < 240 ? [0, x, c] :
+    h < 300 ? [x, 0, c] :
+    [c, 0, x];
+  return [(sector[0] + m) * 255, (sector[1] + m) * 255, (sector[2] + m) * 255];
 }
 
 interface SkyState {
@@ -103,10 +136,39 @@ function computeSkyColors(date: Date): { top: Rgb; bottom: Rgb } {
   };
 }
 
-/** Time-of-day sky gradient (top/bottom rgba strings) at the given alpha.
- *  Ticks once per minute — same cadence as DaylightSky. Used by the
- *  ambient sidebar tint on Windows/Linux. */
-export function useSkyGradient(alpha: number): { top: string; bottom: string } {
+/** Sun (06:00-20:00) or moon (20:00-06:00) on its arc; shared so the orb and
+ *  the ambient glow stand in the same place. */
+function computeOrbArc(m: number): { x: number; y: number; fade: number; isSun: boolean; rgb: Rgb } {
+  const isSun = m >= 360 && m < 1200;
+  const winStart = isSun ? 360 : 1200;
+  const winLen = isSun ? 840 : 600;
+  const p = (((m - winStart + 1440) % 1440)) / winLen;
+  const x = 8 + 84 * p;
+  const y = 78 - 58 * Math.sin(Math.PI * p);
+  // Fade in/out near the horizon edges of the window.
+  const edge = Math.min(p, 1 - p);
+  const fade = Math.max(0, Math.min(1, edge / 0.08));
+  return { x, y, fade, isSun, rgb: isSun ? [240, 180, 95] : [185, 195, 232] };
+}
+
+export interface SkyGlow {
+  /** Percent position on the arc; opacity fades to 0 at the horizon edges. */
+  x: number;
+  y: number;
+  opacity: number;
+  rgb: Rgb;
+}
+
+/** Time-of-day sky gradient at the given alpha plus the sun/moon glow, for the
+ *  ambient sidebar and reading-pane tints. Ticks once per minute like DaylightSky. */
+export function useSkyGradient(alpha: number): {
+  top: string;
+  bottom: string;
+  /** Unformatted, for consumers that derive their own tone. */
+  topRgb: Rgb;
+  bottomRgb: Rgb;
+  glow: SkyGlow;
+} {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60_000);
@@ -114,35 +176,35 @@ export function useSkyGradient(alpha: number): { top: string; bottom: string } {
   }, []);
   return useMemo(() => {
     const { top, bottom } = computeSkyColors(now);
-    return { top: rgba(top, alpha), bottom: rgba(bottom, alpha) };
+    const arc = computeOrbArc(now.getHours() * 60 + now.getMinutes());
+    return {
+      top: rgba(top, alpha),
+      bottom: rgba(bottom, alpha),
+      topRgb: top,
+      bottomRgb: bottom,
+      glow: { x: arc.x, y: arc.y, opacity: arc.fade, rgb: arc.rgb },
+    };
   }, [now, alpha]);
 }
 
-function computeSky(date: Date): SkyState {
+/** Light theme: the sky tells the time through pastel color alone; a moon and
+ *  stars read as darkness on a bright surface, so only the sun stays. */
+export function computeSky(date: Date, light = false): SkyState {
   const m = date.getHours() * 60 + date.getMinutes();
 
   const { top, bottom } = computeSkyColors(date);
 
-  // Orb: sun 06:00–20:00, moon 20:00–06:00 (window crosses midnight).
-  const isSun = m >= 360 && m < 1200;
-  const winStart = isSun ? 360 : 1200;
-  const winLen = isSun ? 840 : 600;
-  const p = (((m - winStart + 1440) % 1440)) / winLen;
-  const x = 8 + 84 * p;
-  const y = 78 - 58 * Math.sin(Math.PI * p);
-  // Fade the orb in/out near the horizon edges of its window.
-  const edge = Math.min(p, 1 - p);
-  const opacity = Math.max(0, Math.min(1, edge / 0.08)) * (isSun ? 0.65 : 0.8);
+  const arc = computeOrbArc(m);
   const orb = {
-    x,
-    y,
-    opacity,
-    bg: isSun
+    x: arc.x,
+    y: arc.y,
+    opacity: light && !arc.isSun ? 0 : arc.fade * (arc.isSun ? 0.65 : 0.8),
+    bg: arc.isSun
       ? "radial-gradient(circle at 35% 35%, #fff3cf, #f0b45f)"
       : "radial-gradient(circle at 35% 35%, #f4f6ff, #b9c3e8)",
-    glow: isSun
-      ? "0 0 34px 12px rgba(240,180,95,.30)"
-      : "0 0 26px 10px rgba(185,195,232,.25)",
+    glow: arc.isSun
+      ? `0 0 34px 12px ${rgba(arc.rgb, 0.3)}`
+      : `0 0 26px 10px ${rgba(arc.rgb, 0.25)}`,
   };
 
   // Stars: fully visible 21:30–04:30, fading over 60 min at each edge.
@@ -152,15 +214,16 @@ function computeSky(date: Date): SkyState {
   else if (m >= 270 && m < 330) starOn = 1 - (m - 270) / 60;
 
   return {
-    top: rgba(top, TINT_ALPHA),
-    bottom: rgba(bottom, TINT_ALPHA),
+    top: light ? rgba(pastel(top, 0.9), 0.85) : rgba(top, TINT_ALPHA),
+    bottom: light ? rgba(pastel(bottom, 0.94), 0.85) : rgba(bottom, TINT_ALPHA),
     orb,
-    starOpacity: starOn * 0.8,
+    starOpacity: light ? 0 : starOn * 0.8,
   };
 }
 
 export function DaylightSky({ className = "" }: { className?: string }) {
   const reducedMotion = useReducedMotion();
+  const darkMode = useAppStore((s) => s.darkMode);
   const [now, setNow] = useState(() => new Date());
 
   // Palette/orb deltas per minute are sub-pixel — a 60 s tick is plenty and
@@ -170,7 +233,7 @@ export function DaylightSky({ className = "" }: { className?: string }) {
     return () => clearInterval(id);
   }, []);
 
-  const sky = useMemo(() => computeSky(now), [now]);
+  const sky = useMemo(() => computeSky(now, !darkMode), [now, darkMode]);
 
   return (
     <div

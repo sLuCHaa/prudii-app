@@ -9,6 +9,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "../../stores/appStore";
+import { ReadingAmbient } from "./ReadingAmbient";
 import { useAttachments, useToggleStar, useToggleMailFlag } from "../../hooks/useAccounts";
 import { useScroller } from "../../hooks/useScroller";
 import { openAttachment, startAttachmentDrag, quickLookAttachment, saveAttachment, fetchMailBody, trashMail, archiveMail, getThreadMails, markAsRead, unsubscribeMail } from "../../lib/tauri";
@@ -1361,7 +1362,8 @@ export function ThreadView({ mail }: ThreadViewProps) {
   const isSingleMail = !loading && threadCount <= 1;
 
   return (
-    <div className="flex flex-col h-full bg-bg-secondary">
+    <div className="relative isolate flex flex-col h-full bg-bg-secondary">
+      <ReadingAmbient />
       <div className="px-6 py-4 bg-surface border-b border-border">
         <h2 className="text-lg font-semibold text-text truncate select-text">{mail.subject}</h2>
         {!isSingleMail && (

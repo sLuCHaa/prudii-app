@@ -392,8 +392,8 @@
       "system": "System",
       "transparentSidebar": "Transluzente Seitenleiste",
       "transparentSidebarDesc": "Der Desktop scheint hinter der Seitenleiste durch",
-      "ambientSidebar": "Ambiente Seitenleiste",
-      "ambientSidebarDesc": "Färbt die Seitenleiste dezent passend zur Tageszeit",
+      "ambientSidebar": "Ambiente",
+      "ambientSidebarDesc": "Färbt Seitenleiste und Lesebereich dezent passend zur Tageszeit",
       "systemFont": "Systemschrift verwenden",
       "systemFontDesc": "Oberfläche mit der Schrift deines Systems darstellen"
     },

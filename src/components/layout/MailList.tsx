@@ -22,6 +22,7 @@ import { trashMail, archiveMail, toggleRead, countCombinedFolderMails, emptyAllT
 import type { ScheduledMail, SearchResult } from "../../types";
 import { useDialog } from "../ui/DialogProvider";
 import { EmptyState, InboxZeroState, NoSearchResultsState } from "../ui/EmptyState";
+import { DaylightSky } from "../motion/DaylightSky";
 import { incrementArchivedToday, recordInboxZeroDay } from "../../lib/achievements";
 import { SearchBar } from "./SearchBar";
 import { MagnifierIcon, StarIcon } from "../icons";
@@ -474,6 +475,8 @@ interface VirtualMailListProps {
   t: (key: string, options?: { count: number }) => string;
 }
 
+const SKY_FADE = "linear-gradient(to bottom, transparent, black 72px)";
+
 function VirtualMailList({
   listRef,
   filteredMails,
@@ -678,11 +681,12 @@ function VirtualMailList({
   return (
     <div
       ref={listRef}
-      className="flex-1 overflow-y-auto overscroll-contain"
+      className="flex-1 overflow-y-auto overscroll-contain flex flex-col"
       style={{ contain: "strict" }}
       onScroll={handleListScroll}
     >
       <div
+        className="shrink-0"
         style={{
           height: rowVirtualizer.getTotalSize(),
           width: "100%",
@@ -1020,6 +1024,14 @@ function VirtualMailList({
             </div>
           );
         })}
+      </div>
+      {/* A short list ends in the empty state's sky instead of a blank column. */}
+      <div
+        aria-hidden
+        className="relative flex-1 min-h-0 overflow-hidden"
+        style={{ maskImage: SKY_FADE, WebkitMaskImage: SKY_FADE }}
+      >
+        <DaylightSky />
       </div>
     </div>
   );
@@ -1849,7 +1861,7 @@ export function MailList() {
 
   if (!selectedFolderId && !activeFilter && !showAllInboxes && !activeCombinedFolder && !showSnoozed && !showScheduled) {
     return (
-      <EmptyState title={t("mailList.selectFolder")} description={t("mailList.selectFolderDesc")} />
+      <EmptyState title={t("mailList.selectFolder")} description={t("mailList.selectFolderDesc")} atmosphere />
     );
   }
 
@@ -2123,6 +2135,7 @@ export function MailList() {
                   icon={getEmptyIcon(currentFolder?.folder_type, activeCombinedFolder, activeFilter, showAllInboxes)}
                   title={t([`empty.${emptyKey}`, "empty.default"])}
                   description={t([`emptyDesc.${emptyKey}`, "emptyDesc.default"])}
+                  atmosphere
                 />
               );
             })()

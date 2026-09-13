@@ -16,9 +16,11 @@ interface EmptyStateProps {
   description?: string;
   action?: React.ReactNode;
   className?: string;
+  /** Time-of-day sky behind the text, like the inbox-zero state. */
+  atmosphere?: boolean;
 }
 
-export function EmptyState({ icon, title, description, action, className = "" }: EmptyStateProps) {
+export function EmptyState({ icon, title, description, action, className = "", atmosphere = false }: EmptyStateProps) {
   const iconRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const descRef = useRef<HTMLParagraphElement>(null);
@@ -40,7 +42,7 @@ export function EmptyState({ icon, title, description, action, className = "" }:
     };
   }, []);
 
-  return (
+  const content = (
     <div className={`flex flex-col items-center justify-center h-full text-center px-6 py-12 max-w-sm mx-auto ${className}`}>
       <div ref={iconRef} className="mb-4 w-12 h-12 rounded-full bg-bg-secondary/70 backdrop-blur-sm flex items-center justify-center text-text-tertiary" style={{ opacity: 0 }}>
         {icon || <Inbox className="w-6 h-6" />}
@@ -50,6 +52,14 @@ export function EmptyState({ icon, title, description, action, className = "" }:
         <p ref={descRef} className="text-sm text-text-secondary leading-relaxed mb-4" style={{ opacity: 0 }}>{description}</p>
       )}
       {action && <div className="mt-2">{action}</div>}
+    </div>
+  );
+
+  if (!atmosphere) return content;
+  return (
+    <div className="relative flex-1 min-h-[320px] overflow-hidden">
+      <DaylightSky />
+      <div className="relative z-10 h-full">{content}</div>
     </div>
   );
 }

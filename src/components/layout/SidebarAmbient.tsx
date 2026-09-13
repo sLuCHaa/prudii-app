@@ -6,16 +6,20 @@
 
 import { useAppStore } from "../../stores/appStore";
 import { isMacOS } from "../../lib/platform";
-import { useSkyGradient } from "../motion/DaylightSky";
+import { pastel, rgba, useSkyGradient } from "../motion/DaylightSky";
 
 export function SidebarAmbient() {
   const enabled = useAppStore((s) => s.appSettings.transparent_sidebar);
   const darkMode = useAppStore((s) => s.darkMode);
   // Hooks must run unconditionally (rules of hooks); the cost when the
   // layer is inactive is one state tick per minute.
-  const { top, bottom } = useSkyGradient(darkMode ? 0.08 : 0.05);
+  const sky = useSkyGradient(0.08);
 
   if (isMacOS || !enabled) return null;
+
+  // Light theme: pastel hues; the dark palette at low alpha over the light surface only grays it.
+  const top = darkMode ? sky.top : rgba(pastel(sky.topRgb, 0.9), 0.45);
+  const bottom = darkMode ? sky.bottom : rgba(pastel(sky.bottomRgb, 0.94), 0.45);
 
   return (
     <div

@@ -394,8 +394,8 @@
       "system": "系统",
       "transparentSidebar": "半透明侧边栏",
       "transparentSidebarDesc": "桌面透过侧边栏显示",
-      "ambientSidebar": "氛围侧边栏",
-      "ambientSidebarDesc": "根据一天中的时间为侧边栏添加淡淡的色调",
+      "ambientSidebar": "氛围",
+      "ambientSidebarDesc": "根据一天中的时间为侧边栏和阅读区域添加淡淡的色调",
       "systemFont": "使用系统字体",
       "systemFontDesc": "使用系统界面字体显示"
     },
