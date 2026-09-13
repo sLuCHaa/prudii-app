@@ -63,6 +63,11 @@ interface TaskBoardProps {
   allTasks: Task[];
 }
 
+/** Hairline between the lanes; without it they read as one surface below the cards. */
+function ColumnDivider() {
+  return <div aria-hidden className="w-px shrink-0 self-stretch bg-border" />;
+}
+
 export function TaskBoard({ tasks, allTasks }: TaskBoardProps) {
   const { t } = useTranslation();
   const reduce = useReducedMotion();
@@ -283,9 +288,11 @@ export function TaskBoard({ tasks, allTasks }: TaskBoardProps) {
         ) : (
           <>
             <BoardColumn status="open" tasks={columns.open} checkmarkIds={checkmarkIds} landedId={landedId} dragging={dragState !== null} onContextMenu={openContextMenu} isDropTarget={dropTargetStatus === "open"} />
+            <ColumnDivider />
             <BoardColumn status="in_progress" tasks={columns.in_progress} checkmarkIds={checkmarkIds} landedId={landedId} dragging={dragState !== null} onContextMenu={openContextMenu} isDropTarget={dropTargetStatus === "in_progress"} />
           </>
         )}
+        <ColumnDivider />
         <BoardColumn status="done" tasks={columns.done} checkmarkIds={checkmarkIds} landedId={landedId} dragging={dragState !== null} onContextMenu={openContextMenu} isDropTarget={dropTargetStatus === "done"} />
       </div>
       <DragOverlay dropAnimation={dropAnimation}>{activeTask ? <TaskCardOverlay task={activeTask} /> : null}</DragOverlay>
