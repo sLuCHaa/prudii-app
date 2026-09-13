@@ -588,6 +588,12 @@ export async function getSystemAccentColor(): Promise<string | null> {
   return invoke("get_system_accent_color");
 }
 
+// titleBarVar names the CSS variable behind the caller's title bar (Win 11 caption strip).
+export async function setWindowTheme(dark: boolean, followsSystem: boolean, titleBarVar: string): Promise<void> {
+  const titleBarColor = getComputedStyle(document.documentElement).getPropertyValue(titleBarVar).trim() || null;
+  return invoke("set_window_theme", { dark, followsSystem, titleBarColor });
+}
+
 export interface BootstrapState {
   accounts: Account[];
   folders: Folder[]; // all accounts, flat

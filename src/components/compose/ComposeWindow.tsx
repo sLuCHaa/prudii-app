@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { DialogProvider } from "../ui/DialogProvider";
 import { ToastContainer } from "../ui/Toast";
-import { deleteComposeAutosave, getSystemAccentColor } from "../../lib/tauri";
+import { deleteComposeAutosave, getSystemAccentColor, setWindowTheme } from "../../lib/tauri";
 import { ComposeForm } from "./ComposeModal";
 import type { ComposeInitData, ComposeMode, ComposeFormHandle } from "./ComposeModal";
 import { isMacOS } from "../../lib/platform";
@@ -27,6 +27,8 @@ export function ComposeWindow() {
     if (!initData) return;
     const { appSettings, darkMode } = initData;
     document.documentElement.classList.toggle("dark", darkMode);
+    // AppInner does this on mount for the main window; compose windows render without it.
+    setWindowTheme(darkMode, appSettings.theme_mode === "system", "--c-bg-secondary").catch(() => {});
     document.documentElement.setAttribute("data-accent", appSettings.accent_color);
     document.documentElement.setAttribute("data-density", appSettings.density);
     document.documentElement.toggleAttribute("data-system-font", appSettings.use_system_font);

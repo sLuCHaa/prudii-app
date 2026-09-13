@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { invoke } from "@tauri-apps/api/core";
+import { setWindowTheme } from "../lib/tauri";
 import type { Account, AppSettings, BackfillProgress, Folder, LicenseInfo, Mail, MailFlag, SendMailRequest, SyncProgress } from "../types";
 import type { ComposeMode } from "../components/compose/ComposeModal";
 import { parseMailtoUrl, type MailtoParams } from "../lib/mailtoParser";
@@ -55,7 +55,7 @@ function applyTheme(mode: ThemeMode, dark: boolean) {
   // followsSystem: in system mode the native appearance must stay unpinned —
   // pinning feeds back into prefers-color-scheme and would freeze "System"
   // on the pinned value (real OS theme only re-detected after restart).
-  invoke("set_window_theme", { dark, followsSystem: mode === "system" }).catch(() => {});
+  setWindowTheme(dark, mode === "system", "--c-sidebar").catch(() => {});
 }
 
 interface AppState {

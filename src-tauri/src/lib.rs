@@ -126,6 +126,36 @@ fn set_dwm_dark_mode(hwnd: *mut std::ffi::c_void, dark: bool) {
     }
 }
 
+/// Win 11 paints the 1px caption strip above a frameless window in the
+/// system caption color, a bright line over our title bar while focused.
+/// `rgb` is 0xRRGGBB; no-op on Win 10, which has no strip.
+#[cfg(windows)]
+fn set_dwm_caption_color(hwnd: *mut std::ffi::c_void, rgb: u32) {
+    use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_CAPTION_COLOR};
+    use windows::Win32::Foundation::HWND;
+
+    let hwnd = HWND(hwnd as *mut _);
+    // COLORREF is 0x00BBGGRR.
+    let colorref: u32 = ((rgb & 0xFF) << 16) | (rgb & 0xFF00) | ((rgb >> 16) & 0xFF);
+    unsafe {
+        let _ = DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_CAPTION_COLOR,
+            &colorref as *const u32 as *const std::ffi::c_void,
+            std::mem::size_of::<u32>() as u32,
+        );
+    }
+}
+
+#[cfg(windows)]
+fn parse_hex_rgb(s: &str) -> Option<u32> {
+    let hex = s.trim().strip_prefix('#')?;
+    if hex.len() != 6 {
+        return None;
+    }
+    u32::from_str_radix(hex, 16).ok()
+}
+
 /// Win 11: round the corners of a frameless window like native decorated
 /// windows. No-op on Win 10 (attribute unsupported) and when DWM refuses.
 #[cfg(windows)]
@@ -149,7 +179,13 @@ fn set_dwm_rounded_corners(hwnd: *mut std::ffi::c_void) {
 }
 
 #[tauri::command]
-fn set_window_theme(app: tauri::AppHandle, dark: bool, follows_system: bool) -> Result<(), String> {
+fn set_window_theme(
+    app: tauri::AppHandle,
+    caller: tauri::WebviewWindow,
+    dark: bool,
+    follows_system: bool,
+    title_bar_color: Option<String>,
+) -> Result<(), String> {
     #[cfg(windows)]
     {
         for (_label, window) in app.webview_windows() {
@@ -157,7 +193,15 @@ fn set_window_theme(app: tauri::AppHandle, dark: bool, follows_system: bool) -> 
                 set_dwm_dark_mode(hwnd.0, dark);
             }
         }
+        // Title bars differ per window (sidebar vs. compose), so the caller reports its own.
+        if let Some(rgb) = title_bar_color.as_deref().and_then(parse_hex_rgb) {
+            if let Ok(hwnd) = caller.hwnd() {
+                set_dwm_caption_color(hwnd.0, rgb);
+            }
+        }
     }
+    #[cfg(not(windows))]
+    let _ = (&caller, &title_bar_color);
     // macOS: keep the native window appearance in sync with the app theme so
     // the vibrancy material follows the app, not the OS. In system mode the
     // appearance must be UNPINNED (None): pinning feeds back into the
@@ -672,6 +716,10 @@ pub fn run() {
             #[cfg(windows)]
             if let Ok(hwnd) = window.hwnd() {
                 set_dwm_dark_mode(hwnd.0, dark);
+                // --c-sidebar until the frontend reports its title bar color.
+                if !export_backup {
+                    set_dwm_caption_color(hwnd.0, if dark { 0x0F172A } else { 0xF8FAFC });
+                }
             }
             let _ = window.show();
             app.manage(database);
