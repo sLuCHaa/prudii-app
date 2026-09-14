@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use tauri::State;
 
-const PB_URL: &str = "https://api.prudii.com";
+pub(super) const PB_URL: &str = "https://api.prudii.com";
 
 /// Ed25519 public key (hex) used to verify server-signed license responses.
 /// The matching PRIVATE key lives only on the license server and is never
@@ -270,7 +270,7 @@ fn get_raw_machine_id() -> String {
     }
 }
 
-fn get_device_name() -> String {
+pub(super) fn get_device_name() -> String {
     if let Ok(name) = std::env::var("COMPUTERNAME") {
         return name;
     }
@@ -288,7 +288,7 @@ fn get_device_name() -> String {
 }
 
 /// Store PB auth token in license_cache (DPAPI encrypted on Windows).
-fn store_token(conn: &rusqlite::Connection, token: &str) {
+pub(super) fn store_token(conn: &rusqlite::Connection, token: &str) {
     let value: String;
     #[cfg(windows)]
     {
@@ -309,7 +309,7 @@ fn store_token(conn: &rusqlite::Connection, token: &str) {
 }
 
 /// Read PB auth token from license_cache (DPAPI decrypted on Windows).
-fn read_token(conn: &rusqlite::Connection) -> Option<String> {
+pub(super) fn read_token(conn: &rusqlite::Connection) -> Option<String> {
     let stored: String = conn
         .query_row(
             "SELECT pb_auth_token FROM license_cache WHERE id = 1",
@@ -347,7 +347,7 @@ fn read_token(conn: &rusqlite::Connection) -> Option<String> {
 /// Works when the token is merely expired but the signing key is unchanged.
 /// Fails (returns None) when the server's JWT secret was rotated (e.g. fresh PB install),
 /// in which case re-login is the only option.
-async fn try_refresh_token(client: &reqwest::Client, old_token: &str) -> Option<String> {
+pub(super) async fn try_refresh_token(client: &reqwest::Client, old_token: &str) -> Option<String> {
     let resp = client
         .post(format!(
             "{}/api/collections/users/auth-refresh",
@@ -387,6 +387,67 @@ async fn call_verify(
         }))
         .send()
         .await
+}
+
+/// Authenticated JSON call to the license server. `Ok(None)` when nobody is
+/// logged in; a 401 gets one token refresh, a second 401 clears the token so
+/// the UI shows the re-login hint (same rule as `verify_license`).
+pub(super) async fn pb_request(
+    db: &State<'_, Database>,
+    method: reqwest::Method,
+    path: &str,
+    body: Option<serde_json::Value>,
+) -> Result<Option<serde_json::Value>, String> {
+    let token = {
+        let conn = db.lock_db();
+        read_token(&conn)
+    };
+    let Some(token) = token else {
+        return Ok(None);
+    };
+
+    let client = reqwest::Client::new();
+    let send = |tok: String| {
+        let mut req = client
+            .request(method.clone(), format!("{}{}", PB_URL, path))
+            .header("Authorization", format!("Bearer {}", tok))
+            .timeout(std::time::Duration::from_secs(15));
+        if let Some(ref b) = body {
+            req = req.json(b);
+        }
+        req.send()
+    };
+
+    let mut resp = send(token.clone())
+        .await
+        .map_err(|e| format!("Connection failed: {}", e))?;
+    if resp.status().as_u16() == 401 {
+        if let Some(new_token) = try_refresh_token(&client, &token).await {
+            {
+                let conn = db.lock_db();
+                store_token(&conn, &new_token);
+            }
+            resp = send(new_token)
+                .await
+                .map_err(|e| format!("Connection failed: {}", e))?;
+        }
+    }
+
+    let status = resp.status();
+    if status.as_u16() == 401 {
+        let conn = db.lock_db();
+        let _ = conn.execute("UPDATE license_cache SET pb_auth_token = '' WHERE id = 1", []);
+        return Err("Session expired. Please log in again.".to_string());
+    }
+    let value: serde_json::Value = resp.json().await.unwrap_or(serde_json::Value::Null);
+    if !status.is_success() {
+        let msg = value
+            .get("error")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Request failed");
+        return Err(format!("{} ({})", msg, status.as_u16()));
+    }
+    Ok(Some(value))
 }
 
 fn read_cache(conn: &rusqlite::Connection) -> LicenseInfo {

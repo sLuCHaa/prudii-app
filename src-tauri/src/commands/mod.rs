@@ -15,6 +15,7 @@ pub mod settings;
 pub mod sieve;
 pub mod sync;
 pub mod tasks;
+pub mod team;
 pub mod templates;
 
 /// Wraps a command body in catch_unwind to prevent panics from crashing the app.

@@ -4162,6 +4162,34 @@ fn map_mail_row(row: &rusqlite::Row) -> rusqlite::Result<Mail> {
     })
 }
 
+/// Resolves team assignments (keyed by Message-ID) to local mails. Gmail keeps a
+/// copy per label, so the inbox copy wins and each message appears once.
+#[tauri::command(async)]
+pub fn list_mails_by_message_ids(db: State<'_, Database>, message_ids: Vec<String>) -> Result<Vec<Mail>, String> {
+    super::catch_panic(|| {
+        let ids: Vec<String> = message_ids.into_iter().filter(|m| !m.is_empty()).collect();
+        if ids.is_empty() {
+            return Ok(vec![]);
+        }
+        let conn = db.lock_db();
+        let placeholders = (1..=ids.len()).map(|i| format!("?{}", i)).collect::<Vec<_>>().join(", ");
+        let sql = format!(
+            "SELECT {} FROM mails WHERE message_id IN ({}) AND folder_id NOT IN (SELECT id FROM folders WHERE folder_type IN ('trash', 'spam')) ORDER BY (folder_id IN (SELECT id FROM folders WHERE folder_type = 'inbox')) DESC, date DESC",
+            MAIL_LIST_COLUMNS, placeholders
+        );
+        let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+        let params: Vec<&dyn rusqlite::types::ToSql> = ids.iter().map(|s| s as &dyn rusqlite::types::ToSql).collect();
+        let mut seen = std::collections::HashSet::new();
+        let mails = stmt
+            .query_map(params.as_slice(), map_mail_row)
+            .map_err(|e| e.to_string())?
+            .filter_map(|r| r.ok())
+            .filter(|m| seen.insert(m.message_id.clone()))
+            .collect();
+        Ok(mails)
+    })
+}
+
 fn build_split_where(cond: &SplitConditions, params: &mut Vec<Box<dyn rusqlite::types::ToSql>>) -> String {
     let mut parts: Vec<String> = Vec::new();
 
