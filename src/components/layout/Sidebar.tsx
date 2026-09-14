@@ -32,6 +32,7 @@ import {
   RotateCcw,
   Settings,
   ClipboardList,
+  UserCheck,
 } from "lucide-react";
 import gsap from "gsap";
 import { prefersReducedMotion } from "../motion/tokens";
@@ -40,6 +41,9 @@ import { useAccounts, useFolders } from "../../hooks/useAccounts";
 import { useSyncAccount, useSyncAll } from "../../hooks/useSync";
 import { useRemoveAccount } from "../../hooks/useRemoveAccount";
 import { useOpenTaskCount } from "../../hooks/useTasks";
+import { useTeamSnapshot, useTeamAssignments } from "../../hooks/useTeam";
+import { openAssignedTo } from "../../lib/team";
+import { TeamSection } from "./TeamSection";
 import { CreateTaskFromMail } from "../tasks/CreateTaskFromMail";
 import { ComposeButton } from "../compose/ComposeButton";
 import { ThemeToggle } from "../ui/ThemeToggle";
@@ -1130,6 +1134,11 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
   const hasFeature = useAppStore((s) => s.hasFeature);
   const accounts = useAppStore((s) => s.accounts);
   const { data: openTaskCount = 0 } = useOpenTaskCount();
+  const showAssigned = useAppStore((s) => s.showAssigned);
+  const setShowAssigned = useAppStore((s) => s.setShowAssigned);
+  const { snapshot } = useTeamSnapshot();
+  const assignments = useTeamAssignments(!!snapshot);
+  const assignedCount = snapshot ? openAssignedTo(assignments, snapshot.team.me).length : 0;
   const [taskFromMailId, setTaskFromMailId] = useState<string | null>(null);
 
   const [snoozedCount, setSnoozedCount] = useState(0);
@@ -1217,6 +1226,15 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
       isActive: showScheduled,
       count: scheduledCount,
       show: hasFeature("send_later") || scheduledCount > 0,
+    },
+    {
+      id: "assigned",
+      label: t("sidebar.assigned"),
+      icon: <UserCheck className="w-4 h-4" />,
+      onClick: () => setShowAssigned(!showAssigned),
+      isActive: showAssigned,
+      count: assignedCount,
+      show: !!snapshot,
     },
     {
       id: "tasks",
@@ -1399,6 +1417,7 @@ export function Sidebar() {
 
         <Scroller className="flex-1 px-1.5 py-1">
           <ViewsSection collapsed />
+          <TeamSection collapsed />
 
           {accounts.length > 0 && (
             <div className="h-px bg-border my-2" />
@@ -1455,6 +1474,7 @@ export function Sidebar() {
 
       <Scroller className="flex-1 px-2 py-1">
         <ViewsSection collapsed={false} />
+        <TeamSection collapsed={false} />
 
         {accounts.length > 0 && (
           <>
