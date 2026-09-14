@@ -16,10 +16,13 @@ import { MailTaskChip } from "../tasks/MailTaskChip";
 import { TaskPickerDialog } from "../tasks/TaskPickerDialog";
 import { CreateTaskFromMail } from "../tasks/CreateTaskFromMail";
 import { useMails, useFilteredMails, useAllInboxMails, useCombinedFolderMails, useSnoozedMails, useSplitInboxMails, useInboxSplits, useToggleStar, useTogglePin, useToggleMailFlag, useFolders } from "../../hooks/useAccounts";
+import { useTeamSnapshot, useTeamAssignments, useAssignedMails, useAssignMail, useSetAssignmentStatus, useUnassignMail } from "../../hooks/useTeam";
+import { indexAssignments, openAssignedTo } from "../../lib/team";
+import { AssigneeChip } from "../ui/AssigneeChip";
 import { useSearchMails } from "../../hooks/useSync";
 import { useScroller } from "../../hooks/useScroller";
 import { trashMail, archiveMail, toggleRead, countCombinedFolderMails, emptyAllTrash, emptyAllSpam, batchUpdateMails, snoozeMail, moveMail, listScheduledMails, cancelScheduledSend, setMailFlags } from "../../lib/tauri";
-import type { ScheduledMail, SearchResult } from "../../types";
+import type { Assignment, ScheduledMail, SearchResult, TeamMember } from "../../types";
 import { useDialog } from "../ui/DialogProvider";
 import { EmptyState, InboxZeroState, NoSearchResultsState } from "../ui/EmptyState";
 import { DaylightSky } from "../motion/DaylightSky";
@@ -446,6 +449,8 @@ interface VirtualMailListProps {
   listRef: React.RefObject<HTMLDivElement | null>;
   filteredMails: Mail[];
   taskCounts: Record<string, number>;
+  assignments: Map<string, Assignment>;
+  members: Map<string, TeamMember>;
   selectedMailIndex: number;
   selectedMailId: string | null;
   selectedMailIds: Set<string>;
@@ -481,6 +486,8 @@ function VirtualMailList({
   listRef,
   filteredMails,
   taskCounts,
+  assignments,
+  members,
   selectedMailIndex,
   selectedMailId,
   selectedMailIds,
@@ -923,12 +930,18 @@ function VirtualMailList({
                       >
                         {mail.subject || t("compose.noSubject")}
                       </span>
-                      {(mail.is_pinned || mail.is_starred || (mail.flags && mail.flags.length > 0) || mail.has_attachments || taskCounts[mail.id] > 0) && (
+                      {(mail.is_pinned || mail.is_starred || (mail.flags && mail.flags.length > 0) || mail.has_attachments || taskCounts[mail.id] > 0 || assignments.has(mail.message_id)) && (
                         <span className="flex shrink-0 items-center gap-1.5 text-text-tertiary">
                           {mail.is_pinned && <Pin className="w-3 h-3 text-accent" />}
                           {mail.is_starred && <StarIcon size={12} color="var(--c-warning)" />}
                           {mail.flags && mail.flags.length > 0 && <FlagDots flags={mail.flags} size={9} />}
                           {mail.has_attachments && <Paperclip className="w-3 h-3" />}
+                          {assignments.has(mail.message_id) && (
+                            <AssigneeChip
+                              member={members.get(assignments.get(mail.message_id)!.assigned_to)}
+                              done={assignments.get(mail.message_id)!.status === "done"}
+                            />
+                          )}
                           {taskCounts[mail.id] > 0 && <MailTaskChip count={taskCounts[mail.id]} t={t} />}
                         </span>
                       )}
@@ -1058,6 +1071,7 @@ export function MailList() {
     setActiveSplitId,
     showSnoozed,
     showScheduled,
+    showAssigned,
     folders,
     pendingRemoveIds,
     setPendingRemoveIds,
@@ -1091,6 +1105,7 @@ export function MailList() {
     setActiveSplitId: s.setActiveSplitId,
     showSnoozed: s.showSnoozed,
     showScheduled: s.showScheduled,
+    showAssigned: s.showAssigned,
     folders: s.folders,
     pendingRemoveIds: s.pendingRemoveIds,
     setPendingRemoveIds: s.setPendingRemoveIds,
@@ -1250,11 +1265,28 @@ export function MailList() {
   const allInboxQuery = useAllInboxMails(showAllInboxes && !activeSplitId, activeFilterKey);
   const combinedQuery = useCombinedFolderMails(activeCombinedFolder, activeFilterKey);
   const snoozedQuery = useSnoozedMails(showSnoozed);
+  const accounts = useAppStore((s) => s.accounts);
+  const { snapshot: teamSnapshot } = useTeamSnapshot();
+  const assignments = useTeamAssignments(!!teamSnapshot);
+  const assignmentsByMessageId = useMemo(() => indexAssignments(assignments), [assignments]);
+  const teamMembersById = useMemo(
+    () => new Map<string, TeamMember>((teamSnapshot?.members ?? []).map((m) => [m.user_id, m])),
+    [teamSnapshot],
+  );
+  const myOpenMessageIds = useMemo(
+    () => (teamSnapshot ? openAssignedTo(assignments, teamSnapshot.team.me).map((a) => a.message_id) : []),
+    [assignments, teamSnapshot],
+  );
+  const assignedQuery = useAssignedMails(myOpenMessageIds, showAssigned);
+  const assignMail = useAssignMail();
+  const setAssignmentStatus = useSetAssignmentStatus();
+  const unassignMail = useUnassignMail();
+  const accountEmailOf = (accountId: string) => accounts.find((a) => a.id === accountId)?.email ?? "";
   const splitQuery = useSplitInboxMails(showAllInboxes ? activeSplitId : null);
   const splitsQuery = useInboxSplits();
   const inboxSplits = splitsQuery.data ?? [];
 
-  const activeQuery = showSnoozed ? snoozedQuery : activeCombinedFolder ? combinedQuery : (showAllInboxes && activeSplitId) ? splitQuery : showAllInboxes ? allInboxQuery : activeFilter ? filterQuery : folderQuery;
+  const activeQuery = showAssigned ? assignedQuery : showSnoozed ? snoozedQuery : activeCombinedFolder ? combinedQuery : (showAllInboxes && activeSplitId) ? splitQuery : showAllInboxes ? allInboxQuery : activeFilter ? filterQuery : folderQuery;
   const isLoading = activeQuery.isLoading;
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = activeQuery;
 
@@ -1325,6 +1357,7 @@ export function MailList() {
   }), [t]);
 
   const viewTitle = useMemo(() => {
+    if (showAssigned) return t("sidebar.assigned");
     if (showScheduled) return t("scheduled.scheduled");
     if (showSnoozed) return t("snooze.snoozed");
     if (activeCombinedFolder) return combinedFolderLabels[activeCombinedFolder] || activeCombinedFolder;
@@ -1338,7 +1371,7 @@ export function MailList() {
       if (selectedFolder) return t(`folder.types.${selectedFolder.folder_type}`, { defaultValue: selectedFolder.name });
     }
     return t("mailList.inbox");
-  }, [activeFilter, showAllInboxes, showSnoozed, showScheduled, activeCombinedFolder, selectedFolderId, folders, t, combinedFolderLabels]);
+  }, [activeFilter, showAllInboxes, showSnoozed, showScheduled, showAssigned, activeCombinedFolder, selectedFolderId, folders, t, combinedFolderLabels]);
 
   // Total count: use folder.total_count for folder view, loaded count otherwise.
   // Fallback to mails.length if total_count is 0 but mails are visible (stale count during sync).
@@ -1808,7 +1841,7 @@ export function MailList() {
   // offset carried over and landed the new folder mid-list.
   useEffect(() => {
     listRef.current?.scrollTo({ top: 0 });
-  }, [selectedFolderId, activeFilter, showAllInboxes, activeCombinedFolder, showSnoozed, activeSplitId]);
+  }, [selectedFolderId, activeFilter, showAllInboxes, activeCombinedFolder, showSnoozed, showAssigned, activeSplitId]);
 
   // No entrance animation on folder switches (post-paint effects flash).
   const selectAfterRemoval = useCallback((remaining: Mail[], index: number) => {
@@ -1859,7 +1892,7 @@ export function MailList() {
     gsap.to(rows, { ...SWEEP_TWEEN, stagger: { amount: 0.15 }, onComplete: settle });
   }, [pendingRemoveIds]);
 
-  if (!selectedFolderId && !activeFilter && !showAllInboxes && !activeCombinedFolder && !showSnoozed && !showScheduled) {
+  if (!selectedFolderId && !activeFilter && !showAllInboxes && !activeCombinedFolder && !showSnoozed && !showScheduled && !showAssigned) {
     return (
       <EmptyState title={t("mailList.selectFolder")} description={t("mailList.selectFolderDesc")} atmosphere />
     );
@@ -2003,7 +2036,7 @@ export function MailList() {
                     <h2 className="text-sm font-semibold text-text">
                       {viewTitle}
                     </h2>
-                    {(activeFilter || showAllInboxes || activeCombinedFolder || showSnoozed || showScheduled) && (
+                    {(activeFilter || showAllInboxes || activeCombinedFolder || showSnoozed || showScheduled || showAssigned) && (
                       <button
                         onClick={() => {
                           setActiveFilter(null);
@@ -2011,6 +2044,7 @@ export function MailList() {
                           setActiveCombinedFolder(null);
                           if (showSnoozed) useAppStore.getState().setShowSnoozed(false);
                           if (showScheduled) useAppStore.getState().setShowScheduled(false);
+                          if (showAssigned) useAppStore.getState().setShowAssigned(false);
                         }}
                         className="p-0.5 rounded hover:bg-hover transition-colors text-text-tertiary"
                         title={t("mailList.clear")}
@@ -2115,6 +2149,9 @@ export function MailList() {
               filter may legitimately empty the list with data present. */}
           {filteredMails.length === 0 && !searchOpen && !isLoading && (fetchedMails.length === 0 || folderFilter !== "all") ? (
             (() => {
+              if (showAssigned) {
+                return <EmptyState title={t("team.emptyTitle")} description={t("team.emptyDesc")} atmosphere />;
+              }
               const isInboxView = (currentFolder?.folder_type === "inbox" || showAllInboxes)
                 && !activeFilter
                 && folderFilter === "all";
@@ -2144,6 +2181,8 @@ export function MailList() {
               listRef={listRef}
               filteredMails={filteredMails}
               taskCounts={taskCounts}
+              assignments={assignmentsByMessageId}
+              members={teamMembersById}
               selectedMailIndex={selectedMailIndex}
               selectedMailId={selectedMailId}
               selectedMailIds={selectedMailIds}
@@ -2277,6 +2316,20 @@ export function MailList() {
           onMove={contextMenu.bulk ? undefined : handleMove}
           moveFolders={contextMenu.bulk ? bulkMoveFolders : menuMoveFolders}
           moveAccountLabel={contextMenu.bulk ? undefined : menuAccountLabel}
+          teamMembers={contextMenu.bulk || !contextMenu.mail.message_id ? undefined : teamSnapshot?.members}
+          meId={teamSnapshot?.team.me}
+          assignment={assignmentsByMessageId.get(contextMenu.mail.message_id) ?? null}
+          onAssign={(m, userId) =>
+            assignMail.mutate({ messageId: m.message_id, accountEmail: accountEmailOf(m.account_id), assignedTo: userId, subject: m.subject })
+          }
+          onUnassign={(m) => {
+            const a = assignmentsByMessageId.get(m.message_id);
+            if (a) unassignMail.mutate(a.id);
+          }}
+          onToggleAssignmentDone={(m) => {
+            const a = assignmentsByMessageId.get(m.message_id);
+            if (a) setAssignmentStatus.mutate({ id: a.id, status: a.status === "done" ? "open" : "done" });
+          }}
         />
       )}
 
