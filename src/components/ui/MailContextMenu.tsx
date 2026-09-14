@@ -1,11 +1,12 @@
-import { Reply, ReplyAll, Forward, Star, StarOff, Mail as MailIcon, MailOpen, Archive, Trash2, Pin, PinOff, Clock, FolderInput, ClipboardList, ClipboardPlus, Flag, FlagOff } from "lucide-react";
+import { Reply, ReplyAll, Forward, Star, StarOff, Mail as MailIcon, MailOpen, Archive, Trash2, Pin, PinOff, Clock, FolderInput, ClipboardList, ClipboardPlus, Flag, FlagOff, Users, UserMinus, CheckCircle2, RotateCcw } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { MAIL_FLAG_COLORS, type Mail, type Folder, type MailFlag } from "../../types";
+import { MAIL_FLAG_COLORS, type Mail, type Folder, type MailFlag, type Assignment, type TeamMember } from "../../types";
 import { useAppStore } from "../../stores/appStore";
 import { ContextMenu } from "./ContextMenu";
 import type { MenuEntry } from "../../lib/menuModel";
 import { FLAG_ORDER, bulkFlagAction, commonFlags } from "../../lib/mailFlags";
 import { SNOOZE_PRESETS, toSnoozeStamp } from "../../lib/snooze";
+import { memberLabel, sortRoster } from "../../lib/team";
 
 export type BulkMailAction = "mark_read" | "mark_unread" | "star" | "unstar" | "archive" | "trash";
 
@@ -44,6 +45,13 @@ interface MailContextMenuProps {
   moveFolders?: Folder[];
   /** Named above the move targets, so it is never a guess which account they belong to. */
   moveAccountLabel?: string;
+  /** Team assignment (shared mailbox); the entries appear only with members and onAssign. */
+  teamMembers?: TeamMember[];
+  meId?: string;
+  assignment?: Assignment | null;
+  onAssign?: (mail: Mail, userId: string) => void;
+  onUnassign?: (mail: Mail) => void;
+  onToggleAssignmentDone?: (mail: Mail) => void;
 }
 
 export function MailContextMenu({
@@ -74,6 +82,12 @@ export function MailContextMenu({
   onMove,
   moveFolders,
   moveAccountLabel,
+  teamMembers,
+  meId,
+  assignment,
+  onAssign,
+  onUnassign,
+  onToggleAssignmentDone,
 }: MailContextMenuProps) {
   const { t } = useTranslation();
   const hasFeature = useAppStore((s) => s.hasFeature);
@@ -122,6 +136,34 @@ export function MailContextMenu({
 
   const hasMoveTargets = !!moveFolders && moveFolders.length > 0;
 
+  const assignees = sortRoster((teamMembers ?? []).filter((m) => m.status === "active" && m.user_id), meId ?? "");
+  const assignSubmenu = (): MenuEntry[] =>
+    assignees.map((m) => ({
+      kind: "item",
+      id: `assign-${m.user_id}`,
+      label: m.user_id === meId ? `${memberLabel(m)} · ${t("team.you")}` : memberLabel(m),
+      icon: <span className={`w-2 h-2 rounded-full ${m.online ? "bg-success" : "bg-border"}`} />,
+      selected: assignment?.assigned_to === m.user_id,
+      onSelect: () => onAssign?.(mail, m.user_id),
+    }));
+  const assignEntries: MenuEntry[] = onAssign && assignees.length > 0
+    ? [
+        { kind: "item", id: "assign", label: t("team.assignTo"), icon: <Users className="w-4 h-4" />, submenu: assignSubmenu() },
+        ...(assignment && onToggleAssignmentDone
+          ? [{
+              kind: "item" as const,
+              id: "assignDone",
+              label: t(assignment.status === "done" ? "team.reopen" : "team.markDone"),
+              icon: assignment.status === "done" ? <RotateCcw className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />,
+              onSelect: () => onToggleAssignmentDone(mail),
+            }]
+          : []),
+        ...(assignment && onUnassign
+          ? [{ kind: "item" as const, id: "unassign", label: t("team.unassign"), icon: <UserMinus className="w-4 h-4" />, onSelect: () => onUnassign(mail) }]
+          : []),
+      ]
+    : [];
+
   const singleFlags = commonFlags([mail.flags ?? []]);
   const bulkFlags = commonFlags(selectedFlags ?? []);
 
@@ -150,6 +192,7 @@ export function MailContextMenu({
     ...(onTogglePin ? [{ kind: "item" as const, id: "pin", label: mail.is_pinned ? t("mailDetail.unpin") : t("mailDetail.pin"), icon: mail.is_pinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />, onSelect: () => onTogglePin(mail) }] : []),
     { kind: "item", id: "read", label: mail.is_read ? t("mailDetail.markUnread") : t("mailDetail.markRead"), icon: mail.is_read ? <MailIcon className="w-4 h-4" /> : <MailOpen className="w-4 h-4" />, onSelect: () => onToggleRead(mail) },
     ...(onSnooze && hasFeature("snooze") ? [{ kind: "item" as const, id: "snooze", label: t("snooze.snooze"), icon: <Clock className="w-4 h-4" />, submenu: snooze((until) => onSnooze(mail, until)) }] : []),
+    ...(assignEntries.length > 0 ? [{ kind: "separator" as const }, ...assignEntries] : []),
     { kind: "separator" },
     ...(onMove && hasMoveTargets
       ? [{

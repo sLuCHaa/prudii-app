@@ -4,7 +4,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { createElement, act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import i18n from "../../lib/i18n";
-import { MAIL_FLAG_COLORS, type Folder, type Mail, type MailFlag } from "../../types";
+import { MAIL_FLAG_COLORS, type Assignment, type Folder, type Mail, type MailFlag, type TeamMember } from "../../types";
 import { FLAG_ORDER } from "../../lib/mailFlags";
 import { MailContextMenu } from "./MailContextMenu";
 
@@ -194,5 +194,61 @@ describe("MailContextMenu move to folder", () => {
     expect(document.body.textContent).toContain("max@firma.de");
     act(() => item("folder.types.sent")!.click());
     expect(moved).toEqual(["f-sent"]);
+  });
+});
+
+describe("MailContextMenu team assignment", () => {
+  const member = (user_id: string, email: string, online = false): TeamMember => ({
+    id: user_id, user_id, email, name: "", role: "member", status: "active", online, last_seen: "",
+  });
+  const MEMBERS = [member("u1", "me@firma.de"), member("u2", "anna@firma.de", true)];
+  const assignment = (assigned_to: string, status: "open" | "done" = "open"): Assignment => ({
+    id: "as1", message_id: "<m1>", account_email: "shared@firma.de", subject: "Hi", assigned_by: "u1", assigned_to, status, note: "", created: "", updated: "",
+  });
+  const byText = (text: string) => Array.from(document.querySelectorAll<HTMLElement>("button")).find((b) => b.textContent?.trim() === text);
+
+  it("offers assignment only with team members and a handler", () => {
+    render();
+    expect(item("team.assignTo")).toBeUndefined();
+    render({ teamMembers: MEMBERS, meId: "u1", onAssign: noop });
+    expect(item("team.assignTo")).toBeTruthy();
+  });
+
+  it("lists members with me marked and reports the picked user with the mail", () => {
+    const picked: [string, string][] = [];
+    render({ mail: makeMail({ id: "m7" }), teamMembers: MEMBERS, meId: "u1", onAssign: (m, userId) => picked.push([m.id, userId]) });
+    openSubmenu("team.assignTo");
+    expect(byText(`me · ${i18n.t("team.you")}`)).toBeTruthy();
+    act(() => byText("anna")!.click());
+    expect(picked).toEqual([["m7", "u2"]]);
+  });
+
+  it("marks the current assignee in the submenu", () => {
+    render({ teamMembers: MEMBERS, meId: "u1", assignment: assignment("u2"), onAssign: noop });
+    openSubmenu("team.assignTo");
+    expect(byText("anna")!.querySelector("svg.lucide-check")).toBeTruthy();
+    expect(byText(`me · ${i18n.t("team.you")}`)!.querySelector("svg.lucide-check")).toBeNull();
+  });
+
+  it("offers done and remove only for an assigned mail", () => {
+    render({ teamMembers: MEMBERS, meId: "u1", onAssign: noop, onUnassign: noop, onToggleAssignmentDone: noop });
+    expect(item("team.markDone")).toBeUndefined();
+    expect(item("team.unassign")).toBeUndefined();
+
+    const removed: string[] = [];
+    render({
+      mail: makeMail({ id: "m8" }),
+      teamMembers: MEMBERS, meId: "u1", assignment: assignment("u2"),
+      onAssign: noop, onUnassign: (m) => removed.push(m.id), onToggleAssignmentDone: noop,
+    });
+    expect(item("team.markDone")).toBeTruthy();
+    act(() => item("team.unassign")!.click());
+    expect(removed).toEqual(["m8"]);
+  });
+
+  it("offers reopen instead of done once the assignment is done", () => {
+    render({ teamMembers: MEMBERS, meId: "u1", assignment: assignment("u2", "done"), onAssign: noop, onToggleAssignmentDone: noop });
+    expect(item("team.reopen")).toBeTruthy();
+    expect(item("team.markDone")).toBeUndefined();
   });
 });
