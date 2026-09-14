@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Account, AiResponse, Attachment, AttachmentWithContext, AppConfig, AppSettings, BackupOptions, BulkSaveResult, ChecklistItem, Contact, CreateAccountRequest, CreateRuleRequest, CreateTaskInput, EmailTemplate, Folder, InboxSplit, LicenseInfo, Mail, MailRule, OAuthResult, OllamaStatus, RestorePreview, ScheduledMail, SearchResult, SendMailRequest, SieveSupport, Task, TaskAttachment, TaskDetail, TaskStatus, UnsubscribeResult, UpdateTaskPatch, VacationSettings, VacationState } from "../types";
+import type { Account, AiResponse, Assignment, Attachment, AttachmentWithContext, AppConfig, AppSettings, BackupOptions, BulkSaveResult, ChecklistItem, Contact, CreateAccountRequest, CreateRuleRequest, CreateTaskInput, EmailTemplate, Folder, InboxSplit, LicenseInfo, Mail, MailRule, OAuthResult, OllamaStatus, RestorePreview, ScheduledMail, SearchResult, SendMailRequest, SieveSupport, Task, TaskAttachment, TaskDetail, TaskStatus, TeamSnapshot, UnsubscribeResult, UpdateTaskPatch, VacationSettings, VacationState } from "../types";
 import { prefers24HourClock } from "./localeDefaults";
 
 export async function listAccounts(): Promise<Account[]> {
@@ -526,6 +526,30 @@ export async function getDeviceId(): Promise<string> {
 
 export async function checkLicenseStartup(): Promise<LicenseInfo> {
   return invoke("check_license_startup");
+}
+
+export async function teamHeartbeat(): Promise<TeamSnapshot | null> {
+  return invoke("team_heartbeat");
+}
+
+export async function teamListAssignments(): Promise<Assignment[]> {
+  return invoke("team_list_assignments");
+}
+
+export async function teamAssignMail(messageId: string, accountEmail: string, assignedTo: string, subject: string): Promise<Assignment> {
+  return invoke("team_assign_mail", { messageId, accountEmail, assignedTo, subject });
+}
+
+export async function teamSetAssignmentStatus(id: string, status: "open" | "done"): Promise<Assignment> {
+  return invoke("team_set_assignment_status", { id, status });
+}
+
+export async function teamUnassign(id: string): Promise<void> {
+  return invoke("team_unassign", { id });
+}
+
+export async function listMailsByMessageIds(messageIds: string[]): Promise<Mail[]> {
+  return invoke("list_mails_by_message_ids", { messageIds });
 }
 
 export async function searchAttachments(params: {

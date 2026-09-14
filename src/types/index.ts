@@ -307,6 +307,47 @@ export interface LicenseInfo {
   session_expired?: boolean;
 }
 
+export interface TeamMember {
+  /** "owner" for the owner row, otherwise the team_members record id. */
+  id: string;
+  /** Empty while an invitation is still pending. */
+  user_id: string;
+  email: string;
+  name: string;
+  role: "owner" | "admin" | "member";
+  status: "active" | "invited";
+  online: boolean;
+  last_seen: string;
+}
+
+export interface TeamInfo {
+  id: string;
+  name: string;
+  is_owner: boolean;
+  /** The signed-in user's PocketBase id. */
+  me: string;
+  seats_used: number;
+  seats_total: number;
+}
+
+export interface TeamSnapshot {
+  team: TeamInfo;
+  members: TeamMember[];
+}
+
+export interface Assignment {
+  id: string;
+  message_id: string;
+  account_email: string;
+  subject: string;
+  assigned_by: string;
+  assigned_to: string;
+  status: "open" | "done";
+  note: string;
+  created: string;
+  updated: string;
+}
+
 export interface InboxSplit {
   id: string;
   name: string;
