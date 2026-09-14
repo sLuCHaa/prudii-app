@@ -58,6 +58,7 @@
     "snoozed": "En attente",
     "tasks": "Tâches",
     "attachments": "Pièces jointes",
+    "assigned": "Attribués à moi",
     "sync": {
       "idle": "Inactif",
       "syncing": "Synchronisation…",
@@ -1048,7 +1049,8 @@
     },
     "bodyLoad": "Impossible de charger ce message depuis le serveur.",
     "generic": "Une erreur s'est produite. Veuillez réessayer.",
-    "copyMailAttachments": "Impossible de copier les pièces jointes"
+    "copyMailAttachments": "Impossible de copier les pièces jointes",
+    "assign": "Impossible d'enregistrer l'attribution"
   },
   "privacy": {
     "badge": "Confidentialité",
@@ -1108,6 +1110,23 @@
     "streakDays": "{{days}} jours d'affilée",
     "firstHundredTitle": "100+ e-mails synchronisés !",
     "firstHundredDesc": "Votre boîte est prête."
+  },
+  "team": {
+    "title": "Équipe",
+    "online": "{{count}} en ligne",
+    "you": "vous",
+    "invited": "invité",
+    "manage": "Gérer l'équipe",
+    "assignTo": "Attribuer à",
+    "unassign": "Retirer l'attribution",
+    "markDone": "Marquer comme terminé",
+    "reopen": "Rouvrir",
+    "assignedTo": "Attribué à {{name}}",
+    "assignedDone": "Terminé · {{name}}",
+    "assignedToast": "{{name}} vous a attribué « {{subject}} »",
+    "emptyTitle": "Rien ne vous est attribué",
+    "emptyDesc": "Vos collègues peuvent vous attribuer des e-mails d'une boîte que vous avez tous deux configurée dans Prudii.",
+    "members": "{{count}} membres"
   },
   "tasks": {
     "createFromMail": "Créer une tâche depuis l'e-mail",

@@ -3,6 +3,7 @@ import { Key, LogOut, Monitor, Crown, Users, ExternalLink, Copy, Check, Shield, 
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { licenseLogin, licenseLogout, getLicenseInfo, verifyLicense, activateLicenseKey, getDeviceId } from "../../lib/tauri";
+import { useTeamSnapshot } from "../../hooks/useTeam";
 import { useAppStore } from "../../stores/appStore";
 import { Button } from "../ui/Button";
 import type { LicenseInfo } from "../../types";
@@ -48,6 +49,7 @@ export function LicenseSettings() {
     retry: false,
   });
   const loading = licenseQuery.isLoading;
+  const { snapshot: teamSnapshot } = useTeamSnapshot();
 
   useEffect(() => {
     const info = licenseQuery.data;
@@ -394,6 +396,14 @@ export function LicenseSettings() {
                     <span className="text-xs text-text">{new Date(license.valid_until).toLocaleDateString()}</span>
                   </div>
                 )}
+                {teamSnapshot && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-text-tertiary">{t("team.title")}</span>
+                    <span className="text-xs text-text">
+                      {t("team.members", { count: teamSnapshot.members.length })} · {t("team.online", { count: teamSnapshot.members.filter((m) => m.online).length })}
+                    </span>
+                  </div>
+                )}
                 <div className="pt-2">
                     <a
                       href="https://prudii.com/dashboard/billing"
@@ -404,6 +414,17 @@ export function LicenseSettings() {
                       {t("settings.license.manageBilling")}
                       <ExternalLink className="w-3 h-3" />
                     </a>
+                    {teamSnapshot?.team.is_owner && (
+                      <a
+                        href="https://prudii.com/dashboard/team"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-1 text-xs text-accent hover:underline flex items-center gap-1"
+                      >
+                        {t("team.manage")}
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
                   </div>
               </div>
             )}

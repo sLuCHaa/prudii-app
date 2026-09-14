@@ -31,6 +31,7 @@ import { useAutoSync } from "./hooks/useAutoSync";
 import { useFocusSync } from "./hooks/useFocusSync";
 import { useConnectivity } from "./hooks/useConnectivity";
 import { backfillBodies, bootstrapState, getAppSettings, checkLicenseStartup, getStartupMailto, getStartupCompose, checkSnoozedMails, classifyUnclassifiedMails, listComposeAutosaves, deleteComposeAutosave, getSystemAccentColor } from "./lib/tauri";
+import { useTeamNotifier } from "./hooks/useTeam";
 import { isAccentHex, effectiveAccentHex } from "./lib/accents";
 import { checkForUpdate } from "./lib/updater";
 import { installGlobalTooltips } from "./lib/globalTooltips";
@@ -121,6 +122,7 @@ function AppInner() {
   }, []);
 
   const setLicenseInfo = useAppStore((s) => s.setLicenseInfo);
+  useTeamNotifier();
   useEffect(() => {
     checkLicenseStartup().then((info) => setLicenseInfo(info)).catch(console.error);
     const interval = setInterval(() => {

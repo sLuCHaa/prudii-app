@@ -58,6 +58,7 @@
     "snoozed": "Snoozed",
     "tasks": "Tasks",
     "attachments": "Attachments",
+    "assigned": "Assigned to me",
     "sync": {
       "idle": "Idle",
       "syncing": "Syncing…",
@@ -1048,7 +1049,8 @@
     },
     "bodyLoad": "This message couldn't be loaded from the server.",
     "generic": "Something went wrong. Please try again.",
-    "copyMailAttachments": "Could not copy attachments"
+    "copyMailAttachments": "Could not copy attachments",
+    "assign": "Could not update the assignment"
   },
   "privacy": {
     "badge": "Privacy",
@@ -1108,6 +1110,23 @@
     "streakDays": "{{days}} days in a row",
     "firstHundredTitle": "100+ mails synced!",
     "firstHundredDesc": "Your inbox is ready to roll."
+  },
+  "team": {
+    "title": "Team",
+    "online": "{{count}} online",
+    "you": "you",
+    "invited": "invited",
+    "manage": "Manage team",
+    "assignTo": "Assign to",
+    "unassign": "Remove assignment",
+    "markDone": "Mark as done",
+    "reopen": "Reopen",
+    "assignedTo": "Assigned to {{name}}",
+    "assignedDone": "Done · {{name}}",
+    "assignedToast": "{{name}} assigned you \"{{subject}}\"",
+    "emptyTitle": "Nothing assigned to you",
+    "emptyDesc": "Teammates can assign you emails from a mailbox you both have set up in Prudii.",
+    "members": "{{count}} members"
   },
   "tasks": {
     "createFromMail": "Create task from email",

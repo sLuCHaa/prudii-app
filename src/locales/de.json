@@ -58,6 +58,7 @@
     "snoozed": "Zurückgestellt",
     "tasks": "Aufgaben",
     "attachments": "Anhänge",
+    "assigned": "Mir zugewiesen",
     "sync": {
       "idle": "Bereit",
       "syncing": "Synchronisiere…",
@@ -1048,7 +1049,8 @@
     },
     "bodyLoad": "Diese Nachricht konnte nicht vom Server geladen werden.",
     "generic": "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
-    "copyMailAttachments": "Anhänge konnten nicht übernommen werden"
+    "copyMailAttachments": "Anhänge konnten nicht übernommen werden",
+    "assign": "Zuweisung konnte nicht gespeichert werden"
   },
   "privacy": {
     "badge": "Datenschutz",
@@ -1108,6 +1110,23 @@
     "streakDays": "{{days}} Tage in Folge",
     "firstHundredTitle": "100+ Mails synchronisiert!",
     "firstHundredDesc": "Dein Posteingang ist startklar."
+  },
+  "team": {
+    "title": "Team",
+    "online": "{{count}} online",
+    "you": "du",
+    "invited": "eingeladen",
+    "manage": "Team verwalten",
+    "assignTo": "Zuweisen an",
+    "unassign": "Zuweisung entfernen",
+    "markDone": "Als erledigt markieren",
+    "reopen": "Wieder öffnen",
+    "assignedTo": "Zugewiesen an {{name}}",
+    "assignedDone": "Erledigt · {{name}}",
+    "assignedToast": "{{name}} hat dir „{{subject}}“ zugewiesen",
+    "emptyTitle": "Dir ist nichts zugewiesen",
+    "emptyDesc": "Kollegen können dir E-Mails aus einem Postfach zuweisen, das ihr beide in Prudii eingerichtet habt.",
+    "members": "{{count}} Mitglieder"
   },
   "tasks": {
     "createFromMail": "Aufgabe aus E-Mail erstellen",

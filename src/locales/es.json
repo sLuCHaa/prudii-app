@@ -58,6 +58,7 @@
     "snoozed": "Pospuestos",
     "tasks": "Tareas",
     "attachments": "Adjuntos",
+    "assigned": "Asignados a mí",
     "sync": {
       "idle": "Inactivo",
       "syncing": "Sincronizando…",
@@ -1048,7 +1049,8 @@
     },
     "bodyLoad": "No se pudo cargar este mensaje desde el servidor.",
     "generic": "Algo salió mal. Inténtalo de nuevo.",
-    "copyMailAttachments": "No se pudieron copiar los archivos adjuntos"
+    "copyMailAttachments": "No se pudieron copiar los archivos adjuntos",
+    "assign": "No se pudo guardar la asignación"
   },
   "privacy": {
     "badge": "Privacidad",
@@ -1108,6 +1110,23 @@
     "streakDays": "{{days}} días seguidos",
     "firstHundredTitle": "¡100+ correos sincronizados!",
     "firstHundredDesc": "Tu bandeja está lista."
+  },
+  "team": {
+    "title": "Equipo",
+    "online": "{{count}} en línea",
+    "you": "tú",
+    "invited": "invitado",
+    "manage": "Gestionar equipo",
+    "assignTo": "Asignar a",
+    "unassign": "Quitar asignación",
+    "markDone": "Marcar como hecho",
+    "reopen": "Reabrir",
+    "assignedTo": "Asignado a {{name}}",
+    "assignedDone": "Hecho · {{name}}",
+    "assignedToast": "{{name}} te ha asignado «{{subject}}»",
+    "emptyTitle": "No tienes nada asignado",
+    "emptyDesc": "Tus compañeros pueden asignarte correos de un buzón que ambos tengáis configurado en Prudii.",
+    "members": "{{count}} miembros"
   },
   "tasks": {
     "createFromMail": "Crear tarea desde el correo",

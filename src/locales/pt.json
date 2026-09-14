@@ -58,6 +58,7 @@
     "snoozed": "Adiados",
     "tasks": "Tarefas",
     "attachments": "Anexos",
+    "assigned": "Atribuídos a mim",
     "sync": {
       "idle": "Ocioso",
       "syncing": "Sincronizando…",
@@ -1048,7 +1049,8 @@
     },
     "bodyLoad": "Não foi possível carregar esta mensagem do servidor.",
     "generic": "Algo deu errado. Tente novamente.",
-    "copyMailAttachments": "Não foi possível copiar os anexos"
+    "copyMailAttachments": "Não foi possível copiar os anexos",
+    "assign": "Não foi possível salvar a atribuição"
   },
   "privacy": {
     "badge": "Privacidade",
@@ -1108,6 +1110,23 @@
     "streakDays": "{{days}} dias seguidos",
     "firstHundredTitle": "100+ e-mails sincronizados!",
     "firstHundredDesc": "Sua caixa está pronta."
+  },
+  "team": {
+    "title": "Equipe",
+    "online": "{{count}} online",
+    "you": "você",
+    "invited": "convidado",
+    "manage": "Gerenciar equipe",
+    "assignTo": "Atribuir a",
+    "unassign": "Remover atribuição",
+    "markDone": "Marcar como concluído",
+    "reopen": "Reabrir",
+    "assignedTo": "Atribuído a {{name}}",
+    "assignedDone": "Concluído · {{name}}",
+    "assignedToast": "{{name}} atribuiu a você \"{{subject}}\"",
+    "emptyTitle": "Nada atribuído a você",
+    "emptyDesc": "Colegas podem atribuir a você e-mails de uma caixa que ambos configuraram no Prudii.",
+    "members": "{{count}} membros"
   },
   "tasks": {
     "createFromMail": "Criar tarefa a partir do e-mail",

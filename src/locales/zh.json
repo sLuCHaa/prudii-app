@@ -58,6 +58,7 @@
     "snoozed": "已延后",
     "tasks": "任务",
     "attachments": "附件",
+    "assigned": "分配给我的",
     "sync": {
       "idle": "空闲",
       "syncing": "正在同步…",
@@ -1047,7 +1048,8 @@
     },
     "bodyLoad": "无法从服务器加载此邮件。",
     "generic": "出了点问题，请重试。",
-    "copyMailAttachments": "无法复制附件"
+    "copyMailAttachments": "无法复制附件",
+    "assign": "无法保存分配"
   },
   "privacy": {
     "badge": "隐私",
@@ -1107,6 +1109,23 @@
     "streakDays": "连续 {{days}} 天",
     "firstHundredTitle": "100+ 邮件已同步！",
     "firstHundredDesc": "收件箱准备就绪。"
+  },
+  "team": {
+    "title": "团队",
+    "online": "{{count}} 人在线",
+    "you": "我",
+    "invited": "已邀请",
+    "manage": "管理团队",
+    "assignTo": "分配给",
+    "unassign": "取消分配",
+    "markDone": "标记为完成",
+    "reopen": "重新打开",
+    "assignedTo": "已分配给 {{name}}",
+    "assignedDone": "已完成 · {{name}}",
+    "assignedToast": "{{name}} 给你分配了“{{subject}}”",
+    "emptyTitle": "没有分配给你的邮件",
+    "emptyDesc": "同事可以从你们都在 Prudii 中设置的邮箱里给你分配邮件。",
+    "members": "{{count}} 位成员"
   },
   "tasks": {
     "createFromMail": "根据邮件创建任务",
