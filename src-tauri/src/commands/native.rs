@@ -43,6 +43,10 @@ pub fn show_system_menu(window: tauri::WebviewWindow, x: f64, y: f64) -> Result<
 
 /// Parse a `#rrggbb` hex colour into its RGB bytes; anything else (missing
 /// `#`, wrong length, short forms like `#fff`) is rejected rather than guessed at.
+/// Only the Windows taskbar overlay draws its own badge and calls this; it stays
+/// compiled everywhere rather than being cfg'd out along with its tests, which
+/// cover a panic this used to hit on non-ASCII input.
+#[cfg_attr(not(windows), allow(dead_code))]
 fn parse_hex_rgb(s: &str) -> Option<[u8; 3]> {
     let hex = s.strip_prefix('#')?;
     // Byte-length check alone isn't enough: a non-ASCII string can be 6 bytes
@@ -68,7 +72,7 @@ pub fn set_dock_badge(app: tauri::AppHandle, count: Option<i64>, accent: Option<
 
     #[cfg(windows)]
     {
-        let rgb = accent.as_deref().and_then(parse_hex_rgb).unwrap_or([0x3b, 0x82, 0xf6]);
+        let rgb = accent.as_deref().and_then(parse_hex_rgb).unwrap_or([0xB4, 0x52, 0x2E]);
         if let Some(window) = app.get_webview_window("main") {
             if let Ok(hwnd) = window.hwnd() {
                 crate::win_badge::set_taskbar_badge(hwnd.0 as isize, count.filter(|n| *n > 0), rgb);
