@@ -726,10 +726,22 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, sing
               <span className="select-text">&lt;{mail.from.email}&gt;</span>
               <CopyEmailButton email={mail.from.email} />
             </div>
-            <span className="select-text">{t("mailDetail.toLabel")}: {recipients}</span>
-            {ccRecipients && (
-              <span className="ml-2 select-text">{t("mailDetail.ccLabel")}: {ccRecipients}</span>
-            )}
+            {/* Empfaenger aufklappbar: zugeklappt eine Zeile, aufgeklappt
+                bricht dieselbe Zeile um und Cc kommt dazu — nichts wird
+                doppelt gezeigt und nichts dauerhaft versteckt. */}
+            <details className="group">
+              <summary className="flex items-start gap-1 cursor-pointer list-none [&::-webkit-details-marker]:hidden hover:text-text-secondary">
+                <ChevronRight className="w-3 h-3 mt-0.5 shrink-0 transition-transform group-open:rotate-90" />
+                <span className="truncate group-open:whitespace-normal select-text">
+                  {t("mailDetail.toLabel")}: {recipients}
+                </span>
+              </summary>
+              {ccRecipients && (
+                <div className="ml-4 mt-0.5 select-text">
+                  {t("mailDetail.ccLabel")}: {ccRecipients}
+                </div>
+              )}
+            </details>
           </div>
 
           {/* Attachments live ABOVE the body: a forwarded conversation can
@@ -963,13 +975,15 @@ interface ThreadAttachmentsProps {
 
 const ThreadAttachments = memo(function ThreadAttachments({ threadMails, loading, onLocate }: ThreadAttachmentsProps) {
   const { t } = useTranslation();
-  // Open by default — the whole point of the strip is seeing every attachment
-  // in the conversation without scrolling. Collapsing is remembered.
+  // Collapsed by default: the strip only renders for conversations whose
+  // attachments are spread over several messages, and even then the header
+  // space matters more than the overview. "0" is the explicit opt-in written
+  // by toggleExpanded, so anyone who opened it before keeps it open.
   const [expanded, setExpanded] = useState(() => {
     try {
-      return localStorage.getItem("thread-attachments-collapsed") !== "1";
+      return localStorage.getItem("thread-attachments-collapsed") === "0";
     } catch {
-      return true;
+      return false;
     }
   });
   const toggleExpanded = () => {
@@ -988,7 +1002,10 @@ const ThreadAttachments = memo(function ThreadAttachments({ threadMails, loading
   );
 
   const totalCount = mailsWithAttachments.length;
-  if (totalCount === 0) return null;
+  // Unter zwei Nachrichten ist die Leiste eine woertliche Wiederholung der
+  // Anhangsliste in der Nachricht darunter — und kostet oben ~120px, die auf
+  // einem 13-Zoll-Display fehlen.
+  if (totalCount < 2) return null;
 
   const pendingBodies = mailsWithAttachments.filter(
     (m) => !m.body_html && !m.body_text
@@ -1361,16 +1378,112 @@ export function ThreadView({ mail }: ThreadViewProps) {
   return (
     <div className="relative isolate flex flex-col h-full bg-bg-secondary">
       <ReadingAmbient />
-      <div className="px-6 py-4 bg-surface border-b border-border">
-        <h2 className="text-lg font-semibold text-text truncate select-text">{mail.subject}</h2>
-        {!isSingleMail && (
-          <div className="flex items-center gap-2 mt-1">
-            <MessageSquare className="w-4 h-4 text-text-tertiary" />
-            <span className="text-sm text-text-secondary">
-              {t("mailDetail.message", { count: threadCount })}
-            </span>
+      <div className="px-5 py-3 bg-surface border-b border-border">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            {/* Zweizeilig statt einzeilig abgeschnitten: ein langer Betreff
+                endet sonst mitten im Wort, und dies ist die einzige Stelle, an
+                der er ueberhaupt vollstaendig steht. title zeigt ihn ganz. */}
+            <h2 title={mail.subject} className="text-base font-semibold text-text leading-snug line-clamp-2 select-text">{mail.subject}</h2>
+            {!isSingleMail && (
+              <span className="inline-flex items-center gap-1.5 mt-1 text-xs text-text-tertiary">
+                <MessageSquare className="w-3.5 h-3.5" />
+                {t("mailDetail.message", { count: threadCount })}
+              </span>
+            )}
           </div>
-        )}
+
+          {/* Aktionen teilen sich die Kopfzeile, statt eine eigene zu belegen —
+              shrink-0, damit ein langer Betreff sie nie zusammendrueckt. */}
+          <div className="flex items-center gap-0.5 shrink-0">
+            <Tooltip label={t("mailDetail.reply")}>
+              <button
+                aria-label={t("mailDetail.reply")}
+                onClick={() => openCompose("reply", mail)}
+                className="p-2 rounded-lg hover:bg-hover transition-colors text-text-secondary"
+              >
+                <Reply className="w-5 h-5" />
+              </button>
+            </Tooltip>
+            <Tooltip label={t("mailDetail.replyAll")}>
+              <button
+                aria-label={t("mailDetail.replyAll")}
+                onClick={() => openCompose("replyAll", mail)}
+                className="p-2 rounded-lg hover:bg-hover transition-colors text-text-secondary"
+              >
+                <ReplyAll className="w-5 h-5" />
+              </button>
+            </Tooltip>
+            <Tooltip label={t("mailDetail.forward")}>
+              <button
+                aria-label={t("mailDetail.forward")}
+                onClick={() => openCompose("forward", mail)}
+                className="p-2 rounded-lg hover:bg-hover transition-colors text-text-secondary"
+              >
+                <Forward className="w-5 h-5" />
+              </button>
+            </Tooltip>
+            <Tooltip label={t("tasks.title")}>
+              <button
+                aria-label={t("tasks.title")}
+                aria-haspopup="menu"
+                aria-expanded={taskMenu !== null}
+                // While the menu is open its outside-mousedown handler would close it
+                // right before this click could toggle it back open.
+                onMouseDown={(e) => { if (taskMenu) e.stopPropagation(); }}
+                onClick={(e) => {
+                  const r = e.currentTarget.getBoundingClientRect();
+                  setTaskMenu((open) => (open ? null : { x: r.left, y: r.bottom + 4 }));
+                }}
+                className="p-2 rounded-lg hover:bg-hover transition-colors text-text-secondary"
+              >
+                <ClipboardList className="w-5 h-5" />
+              </button>
+            </Tooltip>
+            <Tooltip label={t("mailDetail.print")}>
+              <button
+                aria-label={t("mailDetail.print")}
+                onClick={handlePrint}
+                className="p-2 rounded-lg hover:bg-hover transition-colors text-text-secondary"
+              >
+                <Printer className="w-5 h-5" />
+              </button>
+            </Tooltip>
+            <Tooltip label={t("mailDetail.archiveConversation")}>
+              <button
+                aria-label={t("mailDetail.archiveConversation")}
+                onClick={handleArchive}
+                className="p-2 rounded-lg hover:bg-hover transition-colors text-text-secondary"
+              >
+                <Archive className="w-5 h-5" />
+              </button>
+            </Tooltip>
+            <Tooltip label={t("mailDetail.deleteConversation")}>
+              <button
+                aria-label={t("mailDetail.deleteConversation")}
+                onClick={handleTrash}
+                className="p-2 rounded-lg hover:bg-hover transition-colors text-text-secondary"
+              >
+                <TrashIcon size={20} strokeWidth={2} dangerHover />
+              </button>
+            </Tooltip>
+            <div className="w-px h-4 bg-border mx-0.5" />
+            <AiSummaryButton mailId={mail.id} threadMode={!isSingleMail} onToggle={() => setShowAiSummary((v) => !v)} active={showAiSummary} />
+            <AiReplyButton mailId={latestMail.id} onToggle={() => setShowAiReplies((v) => !v)} active={showAiReplies} />
+            {mail.list_unsubscribe && (
+              <Tooltip label={t("unsubscribe.title")}>
+              <button
+                aria-label={t("unsubscribe.title")}
+                onClick={handleUnsubscribe}
+                className="p-2 rounded-lg hover:bg-hover transition-colors text-text-secondary"
+              >
+                <MailMinus className="w-5 h-5" />
+              </button>
+              </Tooltip>
+            )}
+          </div>
+        </div>
+
         {linkedTasks.data && linkedTasks.data.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5 mt-2">
             {linkedTasks.data.map((task) => (
@@ -1384,94 +1497,6 @@ export function ThreadView({ mail }: ThreadViewProps) {
       {showAiReplies && <AiReplySuggestionsPanel mailId={latestMail.id} threadMode={!isSingleMail} />}
 
       {!isSingleMail && <ThreadAttachments threadMails={threadMails} loading={loading} onLocate={scrollToMessage} />}
-
-      <div className="flex items-center gap-1 px-4 py-1.5 border-b border-border bg-surface shrink-0">
-        <Tooltip label={t("mailDetail.reply")}>
-          <button
-            aria-label={t("mailDetail.reply")}
-            onClick={() => openCompose("reply", mail)}
-            className="p-2 rounded-lg hover:bg-hover transition-colors text-text-secondary"
-          >
-            <Reply className="w-5 h-5" />
-          </button>
-        </Tooltip>
-        <Tooltip label={t("mailDetail.replyAll")}>
-          <button
-            aria-label={t("mailDetail.replyAll")}
-            onClick={() => openCompose("replyAll", mail)}
-            className="p-2 rounded-lg hover:bg-hover transition-colors text-text-secondary"
-          >
-            <ReplyAll className="w-5 h-5" />
-          </button>
-        </Tooltip>
-        <Tooltip label={t("mailDetail.forward")}>
-          <button
-            aria-label={t("mailDetail.forward")}
-            onClick={() => openCompose("forward", mail)}
-            className="p-2 rounded-lg hover:bg-hover transition-colors text-text-secondary"
-          >
-            <Forward className="w-5 h-5" />
-          </button>
-        </Tooltip>
-        <Tooltip label={t("tasks.title")}>
-          <button
-            aria-label={t("tasks.title")}
-            aria-haspopup="menu"
-            aria-expanded={taskMenu !== null}
-            // While the menu is open its outside-mousedown handler would close it
-            // right before this click could toggle it back open.
-            onMouseDown={(e) => { if (taskMenu) e.stopPropagation(); }}
-            onClick={(e) => {
-              const r = e.currentTarget.getBoundingClientRect();
-              setTaskMenu((open) => (open ? null : { x: r.left, y: r.bottom + 4 }));
-            }}
-            className="p-2 rounded-lg hover:bg-hover transition-colors text-text-secondary"
-          >
-            <ClipboardList className="w-5 h-5" />
-          </button>
-        </Tooltip>
-        <Tooltip label={t("mailDetail.print")}>
-          <button
-            aria-label={t("mailDetail.print")}
-            onClick={handlePrint}
-            className="p-2 rounded-lg hover:bg-hover transition-colors text-text-secondary"
-          >
-            <Printer className="w-5 h-5" />
-          </button>
-        </Tooltip>
-        <Tooltip label={t("mailDetail.archiveConversation")}>
-          <button
-            aria-label={t("mailDetail.archiveConversation")}
-            onClick={handleArchive}
-            className="p-2 rounded-lg hover:bg-hover transition-colors text-text-secondary"
-          >
-            <Archive className="w-5 h-5" />
-          </button>
-        </Tooltip>
-        <Tooltip label={t("mailDetail.deleteConversation")}>
-          <button
-            aria-label={t("mailDetail.deleteConversation")}
-            onClick={handleTrash}
-            className="p-2 rounded-lg hover:bg-hover transition-colors text-text-secondary"
-          >
-            <TrashIcon size={20} strokeWidth={2} dangerHover />
-          </button>
-        </Tooltip>
-        <div className="w-px h-4 bg-border mx-0.5" />
-        <AiSummaryButton mailId={mail.id} threadMode={!isSingleMail} onToggle={() => setShowAiSummary((v) => !v)} active={showAiSummary} />
-        <AiReplyButton mailId={latestMail.id} onToggle={() => setShowAiReplies((v) => !v)} active={showAiReplies} />
-        {mail.list_unsubscribe && (
-          <Tooltip label={t("unsubscribe.title")}>
-          <button
-            aria-label={t("unsubscribe.title")}
-            onClick={handleUnsubscribe}
-            className="p-2 rounded-lg hover:bg-hover transition-colors text-text-secondary"
-          >
-            <MailMinus className="w-5 h-5" />
-          </button>
-          </Tooltip>
-        )}
-      </div>
 
       <div ref={messagesScrollRef} className="relative flex-1 overflow-y-auto overscroll-contain px-4 pt-1 pb-4">
         {/* Reading measure: on a maximized window plain-text mails otherwise
