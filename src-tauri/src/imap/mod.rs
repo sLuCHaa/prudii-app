@@ -329,6 +329,31 @@ pub fn is_signature_part(filename: &str, mime_type: Option<&str>) -> bool {
     )
 }
 
+/// Give a part a name no other part of the same message has taken.
+///
+/// Senders may leave every inline image nameless: a booking.com confirmation
+/// carries nine, each with nothing but a Content-ID. They would all be written
+/// to one file and overwrite each other, and since the cid: references in the
+/// body are rewritten to that path, every image in the message would end up
+/// showing whichever part happened to be stored last.
+pub fn unique_filename(name: &str, taken: &mut std::collections::HashSet<String>) -> String {
+    if taken.insert(name.to_string()) {
+        return name.to_string();
+    }
+    let (stem, ext) = match name.rfind('.') {
+        Some(pos) => (&name[..pos], &name[pos..]),
+        None => (name, ""),
+    };
+    let mut counter = 2;
+    loop {
+        let candidate = format!("{}_{}{}", stem, counter, ext);
+        if taken.insert(candidate.clone()) {
+            return candidate;
+        }
+        counter += 1;
+    }
+}
+
 /// Whether a part belongs to the message body rather than being a file the
 /// sender attached. The one classifier all three sync paths share.
 ///
@@ -1317,19 +1342,7 @@ pub async fn store_body_and_attachments(db: &Database, mail_id: &str, body_bytes
 
         for part in msg.attachments() {
             let raw_filename = part.attachment_name().unwrap_or("unnamed").to_string();
-            let filename = if processed_filenames.contains(&raw_filename) {
-                let stem = raw_filename.rfind('.').map(|i| &raw_filename[..i]).unwrap_or(&raw_filename);
-                let ext = raw_filename.rfind('.').map(|i| &raw_filename[i..]).unwrap_or("");
-                let mut counter = 2;
-                loop {
-                    let candidate = format!("{}_{}{}", stem, counter, ext);
-                    if !processed_filenames.contains(&candidate) { break candidate; }
-                    counter += 1;
-                }
-            } else {
-                raw_filename.clone()
-            };
-            processed_filenames.insert(filename.clone());
+            let filename = unique_filename(&raw_filename, &mut processed_filenames);
 
             let safe_name = sanitize_filename(&filename);
             let mime_type = part.content_type().map(|ct: &mail_parser::ContentType| {
@@ -1536,24 +1549,10 @@ pub async fn backfill_folder_bodies(
                 let mut real_attachment_count: u32 = 0;
 
                 for part in msg.attachments() {
-                    let original_name = part.attachment_name().unwrap_or("unnamed").to_string();
-                    let filename = if processed_filenames.contains(&original_name) {
-                        let mut counter = 2;
-                        let mut unique_name = original_name.clone();
-                        while processed_filenames.contains(&unique_name) {
-                            let dot_pos = original_name.rfind('.');
-                            unique_name = if let Some(pos) = dot_pos {
-                                format!("{}_{}{}", &original_name[..pos], counter, &original_name[pos..])
-                            } else {
-                                format!("{}_{}", original_name, counter)
-                            };
-                            counter += 1;
-                        }
-                        unique_name
-                    } else {
-                        original_name
-                    };
-                    processed_filenames.insert(filename.clone());
+                    let filename = unique_filename(
+                        part.attachment_name().unwrap_or("unnamed"),
+                        &mut processed_filenames,
+                    );
 
                     let safe_name = sanitize_filename(&filename);
                     let mime_type = part.content_type().map(|ct: &mail_parser::ContentType| {
@@ -2099,6 +2098,47 @@ pub async fn append_to_folder(
         .context(format!("Failed to append message to {}", folder_path))?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod unique_filename_tests {
+    use super::unique_filename;
+    use std::collections::HashSet;
+
+    // A booking.com confirmation: nine inline images, not one of them named.
+    #[test]
+    fn nameless_parts_never_share_a_file() {
+        let mut taken = HashSet::new();
+        let names: Vec<String> = (0..9).map(|_| unique_filename("attachment", &mut taken)).collect();
+        assert_eq!(names[0], "attachment");
+        assert_eq!(names[1], "attachment_2");
+        assert_eq!(names[8], "attachment_9");
+        assert_eq!(names.iter().collect::<HashSet<_>>().len(), 9);
+    }
+
+    #[test]
+    fn the_extension_survives_the_counter() {
+        let mut taken = HashSet::new();
+        assert_eq!(unique_filename("logo.png", &mut taken), "logo.png");
+        assert_eq!(unique_filename("logo.png", &mut taken), "logo_2.png");
+        assert_eq!(unique_filename("logo.png", &mut taken), "logo_3.png");
+    }
+
+    #[test]
+    fn distinct_names_are_left_alone() {
+        let mut taken = HashSet::new();
+        assert_eq!(unique_filename("a.pdf", &mut taken), "a.pdf");
+        assert_eq!(unique_filename("b.pdf", &mut taken), "b.pdf");
+    }
+
+    // A sender may already have named a part the way the counter would.
+    #[test]
+    fn steps_past_a_name_the_sender_already_used() {
+        let mut taken = HashSet::new();
+        assert_eq!(unique_filename("logo.png", &mut taken), "logo.png");
+        assert_eq!(unique_filename("logo_2.png", &mut taken), "logo_2.png");
+        assert_eq!(unique_filename("logo.png", &mut taken), "logo_3.png");
+    }
 }
 
 #[cfg(test)]

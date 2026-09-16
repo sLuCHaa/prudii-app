@@ -3,7 +3,7 @@ use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
-pub(crate) const SCHEMA_VERSION: u32 = 41;
+pub(crate) const SCHEMA_VERSION: u32 = 42;
 
 pub struct Database {
     pub conn: Mutex<Connection>,
@@ -410,6 +410,33 @@ impl Database {
             ).unwrap_or(0);
             if cleared > 0 {
                 log::info!("DB v41: cleared {} bodies whose inline images need reclassifying", cleared);
+            }
+        }
+
+        // v42: parts the sender left nameless all fell back to the same name on
+        // the Gmail and Graph paths, so they were written to one file and
+        // overwrote each other — every cid: in the body then resolved to whichever
+        // was stored last. The tell is one stored image whose path the body uses
+        // for more than one reference; clear those bodies so they fetch again with
+        // the parts kept apart.
+        if prev_version < 42 {
+            let cleared: usize = conn.execute(
+                "UPDATE mails SET body_html = '', body_text = ''
+                 WHERE (body_html != '' OR body_text != '')
+                   AND id IN (
+                     SELECT a.mail_id FROM attachments a
+                     JOIN mails m ON m.id = a.mail_id
+                     WHERE a.is_inline = 1
+                       AND a.filename = 'attachment'
+                       AND COALESCE(a.local_path, '') != ''
+                       AND length(m.body_html)
+                           - length(replace(m.body_html, replace(a.local_path, char(92), '/'), ''))
+                           > length(a.local_path)
+                   )",
+                [],
+            ).unwrap_or(0);
+            if cleared > 0 {
+                log::info!("DB v42: cleared {} bodies whose inline images shared one file", cleared);
             }
         }
 

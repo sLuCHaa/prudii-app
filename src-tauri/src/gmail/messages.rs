@@ -98,6 +98,7 @@ pub async fn fetch_message_body(
         }
 
         let mut downloaded: Vec<DownloadedAttachment> = Vec::new();
+        let mut used_names = std::collections::HashSet::new();
 
         for att in &attachments {
             let data = if let Some(ref inline_data) = att.data {
@@ -121,7 +122,7 @@ pub async fn fetch_message_body(
             };
 
             downloaded.push(DownloadedAttachment {
-                filename: sanitize_filename(&att.filename),
+                filename: crate::imap::unique_filename(&sanitize_filename(&att.filename), &mut used_names),
                 mime_type: att.mime_type.clone(),
                 data,
                 content_id: att.content_id.clone(),

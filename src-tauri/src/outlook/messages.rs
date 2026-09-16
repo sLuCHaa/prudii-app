@@ -185,9 +185,13 @@ pub async fn fetch_message_body(
             }
 
             let mut downloaded: Vec<DownloadedAttachment> = Vec::new();
+            let mut used_names = std::collections::HashSet::new();
 
             for att in &attachments {
-                let filename = sanitize_filename(att.name.as_deref().unwrap_or("attachment"));
+                let filename = crate::imap::unique_filename(
+                    &sanitize_filename(att.name.as_deref().unwrap_or("attachment")),
+                    &mut used_names,
+                );
                 let data = if let Some(ref content_bytes) = att.content_bytes {
                     base64::engine::general_purpose::STANDARD
                         .decode(content_bytes)
