@@ -2,11 +2,11 @@ import { describe, it, expect } from "vitest";
 import { ACCENT_OPTIONS, DEFAULT_ACCENT_HEX, effectiveAccentHex, isAccentHex } from "./accents";
 
 describe("ACCENT_OPTIONS", () => {
-  it("lists the eight palette colours plus system, each with an i18n key", () => {
-    expect(ACCENT_OPTIONS.map((o) => o.id)).toEqual(["blue", "purple", "green", "teal", "orange", "pink", "red", "amber", "system"]);
+  it("lists the nine palette colours plus system, each with an i18n key", () => {
+    expect(ACCENT_OPTIONS.map((o) => o.id)).toEqual(["terracotta", "blue", "purple", "green", "teal", "orange", "pink", "red", "amber", "system"]);
     for (const o of ACCENT_OPTIONS) expect(o.labelKey.startsWith("commandPalette.accent")).toBe(true);
     expect(ACCENT_OPTIONS.find((o) => o.id === "system")?.hex).toBeNull();
-    expect(ACCENT_OPTIONS.find((o) => o.id === "blue")?.hex).toBe(DEFAULT_ACCENT_HEX);
+    expect(ACCENT_OPTIONS.find((o) => o.id === "terracotta")?.hex).toBe(DEFAULT_ACCENT_HEX);
   });
 });
 

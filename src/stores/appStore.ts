@@ -535,7 +535,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     notification_sound: true,
     language: "system",
     density: "comfortable",
-    accent_color: "blue",
+    accent_color: "terracotta",
     ai_enabled: false,
     ollama_url: "http://localhost:11434",
     ai_model: "",

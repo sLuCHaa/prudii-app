@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useState, useRef, useMemo, DragEvent } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Loader2, Paperclip, X, Star, Archive, Trash2, Mail as MailIcon, MailOpen, Check, Pin, Clock, CalendarClock, Inbox, Send, FileText, ShieldAlert, Folder } from "lucide-react";
+import { Loader2, X, Mail as MailIcon, MailOpen, Check, Pin, Clock, CalendarClock, FileText, ShieldAlert, Folder } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { FlagDots } from "../ui/FlagPicker";
@@ -28,7 +28,7 @@ import { EmptyState, InboxZeroState, NoSearchResultsState } from "../ui/EmptySta
 import { DaylightSky } from "../motion/DaylightSky";
 import { incrementArchivedToday, recordInboxZeroDay } from "../../lib/achievements";
 import { SearchBar } from "./SearchBar";
-import { MagnifierIcon, StarIcon } from "../icons";
+import { Archive, Attach as Paperclip, Inbox, MagnifierIcon, Send, Star, StarIcon, Trash as Trash2 } from "../icons";
 import { MailListSkeleton } from "../ui/MailListSkeleton";
 import { Skeleton } from "../ui/Skeleton";
 import { LoadingCrossfade } from "../motion/LoadingCrossfade";

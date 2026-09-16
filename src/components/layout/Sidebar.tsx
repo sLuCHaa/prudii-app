@@ -1,39 +1,6 @@
 import { useEffect, useState, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
-import {
-  Inbox,
-  Send,
-  FileText,
-  AlertOctagon,
-  Archive,
-  Folder,
-  Plus,
-  ChevronDown,
-  ChevronRight,
-  FolderPlus,
-  Pencil,
-  Trash2,
-  HardDrive,
-  Cloud,
-  X,
-  Check,
-  Star,
-  Flag,
-  Crown,
-  Clock,
-  CalendarClock,
-  Paperclip,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Loader2,
-  AlertCircle,
-  Palette,
-  RefreshCw,
-  RotateCcw,
-  Settings,
-  ClipboardList,
-  UserCheck,
-} from "lucide-react";
+import { FileText, AlertOctagon, Folder, Plus, ChevronDown, ChevronRight, FolderPlus, Pencil, HardDrive, Cloud, X, Check, Crown, Clock, CalendarClock, PanelLeftClose, PanelLeftOpen, Loader2, AlertCircle, Palette, RefreshCw, RotateCcw, Settings, ClipboardList, UserCheck } from "lucide-react";
 import gsap from "gsap";
 import { prefersReducedMotion } from "../motion/tokens";
 import { useAppStore, type MailFilter } from "../../stores/appStore";
@@ -47,7 +14,7 @@ import { TeamSection } from "./TeamSection";
 import { CreateTaskFromMail } from "../tasks/CreateTaskFromMail";
 import { ComposeButton } from "../compose/ComposeButton";
 import { ThemeToggle } from "../ui/ThemeToggle";
-import { TrashIcon, StarIcon } from "../icons";
+import { Archive, Attach as Paperclip, Flag, Inbox, Send, Star, StarIcon, Trash as Trash2, TrashIcon } from "../icons";
 import { AnimatedSyncButton } from "../ui/AnimatedSyncButton";
 import { Scroller } from "../ui/Scroller";
 import { Button, IconButton } from "../ui/Button";

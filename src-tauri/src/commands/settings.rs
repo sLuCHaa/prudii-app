@@ -40,7 +40,7 @@ pub fn get_app_settings(db: State<'_, Database>) -> Result<AppSettings, String> 
             notification_sound: get_bool("notification_sound", true),
             language: get_string("language", "system"),
             density: get_string("density", "comfortable"),
-            accent_color: get_string("accent_color", "blue"),
+            accent_color: get_string("accent_color", "terracotta"),
             ai_enabled: get_bool("ai_enabled", false),
             ollama_url: get_string("ollama_url", "http://localhost:11434"),
             ai_model: get_string("ai_model", ""),

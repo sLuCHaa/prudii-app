@@ -16,17 +16,17 @@
 /* ─── Design Tokens ─── */
 :root {
   /* Colors */
-  --c-bg:          #ffffff;
-  --c-bg-secondary:#f8fafc;
-  --c-bg-tertiary: #f1f5f9;
-  --c-surface:     #ffffff;
-  --c-sidebar:     #f8fafc;
-  --c-border:      #e2e8f0;
-  --c-border-light:#eff2f5;
+  --c-bg:          #FAF8F4;
+  --c-bg-secondary:#F5F1EA;
+  --c-bg-tertiary: #EDE7DE;
+  --c-surface:     #FFFEFC;
+  --c-sidebar:     #F2EDE5;
+  --c-border:      #E2DACE;
+  --c-border-light:#EDE7DE;
 
-  --c-text:        #0f172a;
-  --c-text-secondary: #475569;
-  --c-text-tertiary:  #64748b;
+  --c-text:        #221E19;
+  --c-text-secondary: #5A5145;
+  --c-text-tertiary:  #6F6456;
   --c-text-inverse:   #ffffff;
 
   --c-accent:      #3b82f6;
@@ -34,10 +34,17 @@
   --c-accent-soft: rgba(59, 130, 246, 0.1);
   --c-accent-soft-bg: rgba(59, 130, 246, 0.05);
   --c-accent-ring: rgba(59, 130, 246, 0.35);
+  --c-on-accent:   #ffffff;
 
   --c-success:     #10b981;
   --c-warning:     #f59e0b;
   --c-danger:      #ef4444;
+
+  /* Sicherheits-Signal (verschlüsselt, verifiziert, versiegelt). Bewusst NICHT
+     über [data-accent] einstellbar: bei accent=green/teal wäre es sonst nicht
+     mehr von der Primäraktion zu unterscheiden. Die Siegel-Form trägt dort. */
+  --c-signal:      #19795A;
+  --c-signal-soft: rgba(25, 121, 90, 0.12);
 
   /* Signature Gradients (Revolut-style) */
   --gradient-vip:     linear-gradient(135deg, #f59e0b, #ef4444);
@@ -45,14 +52,14 @@
   --gradient-cool:    linear-gradient(135deg, #3b82f6, #8b5cf6);
   --gradient-success: linear-gradient(135deg, #10b981, #3b82f6);
 
-  --c-hover:       #f1f5f9;
-  --c-active:      #e2e8f0;
+  --c-hover:       #F1EBE2;
+  --c-active:      #E6DED2;
   --c-selected:    rgba(59, 130, 246, 0.1);
 
-  --c-scrollbar:       #cbd5e1;
-  --c-scrollbar-hover: #94a3b8;
+  --c-scrollbar:       #D2C8B8;
+  --c-scrollbar-hover: #B0A290;
   --c-overlay:         rgba(0, 0, 0, 0.6);
-  --c-drawer-backdrop: rgba(15, 23, 42, 0.28);
+  --c-drawer-backdrop: rgba(34, 30, 25, 0.28);
 
   /* Spacing: Tailwind's 4px-grid utilities (p-*, gap-*) ARE the spacing
      system — no parallel token set. Typography sizes live in @theme
@@ -84,28 +91,32 @@
 
 .dark {
   /* Colors */
-  --c-bg:          #0f172a;
-  --c-bg-secondary:#1e293b;
-  --c-bg-tertiary: #334155;
-  --c-surface:     #1e293b;
-  --c-sidebar:     #0f172a;
-  --c-border:      #334155;
-  --c-border-light:#273447;
+  --c-bg:          #16130F;
+  --c-bg-secondary:#1F1A15;
+  --c-bg-tertiary: #332C24;
+  --c-surface:     #1F1A15;
+  --c-sidebar:     #110E0B;
+  --c-border:      #332C24;
+  --c-border-light:#29231C;
 
-  --c-text:        #f1f5f9;
-  --c-text-secondary: #94a3b8;
-  --c-text-tertiary:  #64748b;
-  --c-text-inverse:   #0f172a;
+  --c-text:        #F0EAE1;
+  --c-text-secondary: #B0A294;
+  --c-text-tertiary:  #9A8D7D;
+  --c-text-inverse:   #1A1410;
 
   --c-accent:      #3b82f6;
   --c-accent-hover:#60a5fa;
   --c-accent-soft: rgba(59, 130, 246, 0.2);
   --c-accent-soft-bg: rgba(59, 130, 246, 0.08);
   --c-accent-ring: rgba(59, 130, 246, 0.45);
+  --c-on-accent:   #ffffff;
 
   --c-success:     #34d399;
   --c-warning:     #fbbf24;
   --c-danger:      #f87171;
+
+  --c-signal:      #3DDC97;
+  --c-signal-soft: rgba(61, 220, 151, 0.14);
 
   /* Signature Gradients (Revolut-style) */
   --gradient-vip:     linear-gradient(135deg, #f59e0b, #ef4444);
@@ -113,14 +124,14 @@
   --gradient-cool:    linear-gradient(135deg, #3b82f6, #8b5cf6);
   --gradient-success: linear-gradient(135deg, #10b981, #3b82f6);
 
-  --c-hover:       #334155;
-  --c-active:      #475569;
+  --c-hover:       #2C251E;
+  --c-active:      #3A3129;
   --c-selected:    rgba(59, 130, 246, 0.2);
 
-  --c-scrollbar:       #475569;
-  --c-scrollbar-hover: #64748b;
+  --c-scrollbar:       #3E362C;
+  --c-scrollbar-hover: #574C3E;
   --c-overlay:         rgba(0, 0, 0, 0.6);
-  --c-drawer-backdrop: rgba(2, 6, 23, 0.55);
+  --c-drawer-backdrop: rgba(10, 8, 6, 0.55);
 
   /* Shadows (Dark Mode): stronger values for direct var(--shadow-*)
      consumers (modal panels, scrollbar chrome). shadow-* utilities keep the
@@ -149,10 +160,13 @@
   --color-accent:       var(--c-accent);
   --color-accent-hover: var(--c-accent-hover);
   --color-accent-soft:  var(--c-accent-soft);
+  --color-on-accent:    var(--c-on-accent);
 
   --color-success:      var(--c-success);
   --color-warning:      var(--c-warning);
   --color-danger:       var(--c-danger);
+  --color-signal:       var(--c-signal);
+  --color-signal-soft:  var(--c-signal-soft);
 
   --color-hover:        var(--c-hover);
   --color-active:       var(--c-active);
@@ -704,11 +718,11 @@ button:focus-visible,
 
 /* ─── Sidebar base (opaque; ambient tint layers on top, see SidebarAmbient) ─── */
 .glass-sidebar {
-  background: #f8fafc;
+  background: #F2EDE5;
 }
 
 .dark .glass-sidebar {
-  background: #0f172a;
+  background: #110E0B;
 }
 
 /* ─── Vibrancy (translucent sidebar, macOS only) ───
@@ -723,16 +737,34 @@ html[data-vibrancy] .app-shell {
 }
 
 html[data-vibrancy] .glass-sidebar {
-  background: rgba(248, 250, 252, 0.55);
+  background: rgba(242, 237, 229, 0.62);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }
 
 html[data-vibrancy].dark .glass-sidebar {
-  background: rgba(15, 23, 42, 0.5);
+  background: rgba(17, 14, 11, 0.55);
 }
 
 /* ─── Accent Color Themes ─── */
+[data-accent="terracotta"] {
+  --c-accent: #B4522E;
+  --c-accent-hover: #9A4426;
+  --c-accent-soft: rgba(180, 82, 46, 0.11);
+  --c-accent-soft-bg: rgba(180, 82, 46, 0.05);
+  --c-accent-ring: rgba(180, 82, 46, 0.35);
+  --c-on-accent: #ffffff;
+}
+
+.dark [data-accent="terracotta"], [data-accent="terracotta"].dark {
+  --c-accent: #E0764C;
+  --c-accent-hover: #EC8A63;
+  --c-accent-soft: rgba(224, 118, 76, 0.18);
+  --c-accent-soft-bg: rgba(224, 118, 76, 0.08);
+  --c-accent-ring: rgba(224, 118, 76, 0.45);
+  --c-on-accent: #1A1410;
+}
+
 [data-accent="blue"] {
   --c-accent: #3b82f6;
   --c-accent-hover: #2563eb;

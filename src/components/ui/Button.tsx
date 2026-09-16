@@ -1,9 +1,7 @@
-import { useRef, useEffect, cloneElement, isValidElement } from "react";
+import { cloneElement, isValidElement } from "react";
 import { Loader2 } from "lucide-react";
-import gsap from "gsap";
-import { prefersReducedMotion } from "../motion/tokens";
 
-export type ButtonVariant = "primary" | "danger" | "secondary" | "ghost" | "success";
+export type ButtonVariant = "primary" | "danger" | "secondary" | "ghost" | "success" | "signal";
 export type ButtonSize = "sm" | "md" | "lg";
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -13,21 +11,25 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: React.ReactNode;
   iconPosition?: "left" | "right";
   fullWidth?: boolean;
+  /** Press feedback (1px sink). Off for controls that must not move, e.g. inside a drag handle. */
   animated?: boolean;
 }
 
+// Filled variants carry a real drop shadow that collapses on press — native
+// controls signal depth, not a Material ripple and not a scale transform.
 const VARIANT_STYLES: Record<ButtonVariant, string> = {
-  primary: "bg-accent text-white hover:bg-accent-hover border-transparent",
-  danger: "bg-danger text-white hover:bg-danger/90 border-transparent",
-  secondary: "bg-transparent text-text border-border hover:bg-hover hover:border-border-light",
+  primary: "bg-accent text-on-accent border-transparent hover:bg-accent-hover shadow-[0_1px_2px_rgba(0,0,0,0.18)]",
+  danger: "bg-danger text-white border-transparent hover:bg-danger/90 shadow-[0_1px_2px_rgba(0,0,0,0.18)]",
+  success: "bg-success text-white border-transparent hover:bg-success/90 shadow-[0_1px_2px_rgba(0,0,0,0.18)]",
+  signal: "bg-signal text-bg border-transparent hover:brightness-95 shadow-[0_1px_2px_rgba(0,0,0,0.18)]",
+  secondary: "bg-surface text-text border-border hover:bg-hover hover:border-border-light",
   ghost: "bg-transparent text-text-secondary border-transparent hover:bg-hover hover:text-text",
-  success: "bg-success text-white hover:bg-success/90 border-transparent",
 };
 
 const SIZE_STYLES: Record<ButtonSize, { padding: string; text: string; gap: string }> = {
-  sm: { padding: "px-3 py-1.5", text: "text-sm", gap: "gap-1.5" },
-  md: { padding: "px-4 py-2", text: "text-sm", gap: "gap-2" },
-  lg: { padding: "px-5 py-2.5", text: "text-base", gap: "gap-2.5" },
+  sm: { padding: "px-4 py-1.5", text: "text-sm", gap: "gap-1.5" },
+  md: { padding: "px-5 py-2", text: "text-sm", gap: "gap-2" },
+  lg: { padding: "px-6 py-2.5", text: "text-base", gap: "gap-2.5" },
 };
 
 const ICON_SIZES: Record<ButtonSize, number> = {
@@ -35,6 +37,12 @@ const ICON_SIZES: Record<ButtonSize, number> = {
   md: 16,
   lg: 20,
 };
+
+// Press feedback: the control sinks 1px and its shadow collapses. No scale —
+// native controls never grow or shrink, which was the biggest "web page" tell.
+const PRESS = "active:translate-y-px active:shadow-none motion-reduce:active:translate-y-0";
+
+const TRANSITION = "transition-[color,background-color,border-color,box-shadow,transform] duration-150 ease-out";
 
 // Helper to clone icon with proper size using inline styles (Tailwind can't process dynamic classes)
 function sizeIcon(icon: React.ReactNode, size: number): React.ReactNode {
@@ -60,128 +68,30 @@ export function Button({
   disabled,
   className = "",
   children,
-  onMouseEnter,
-  onMouseLeave,
-  onClick,
   ...props
 }: ButtonProps) {
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const glowRef = useRef<HTMLDivElement>(null);
-
   const sizeStyles = SIZE_STYLES[size];
   const iconSize = ICON_SIZES[size];
-
-  // Set initial glow state (no continuous animation to save CPU/GPU)
-  useEffect(() => {
-    if (!animated || !glowRef.current) return;
-    if (variant === "secondary" || variant === "ghost") return;
-    gsap.set(glowRef.current, { opacity: 0.3, scale: 1 });
-  }, [animated, variant]);
-
-  // Hover is fill/glow only — native controls never grow on hover, and the
-  // 1.02 scale on every button was the single biggest "web page" tell.
-  function handleMouseEnter(e: React.MouseEvent<HTMLButtonElement>) {
-    if (animated && !prefersReducedMotion() && !disabled && !loading) {
-      if (glowRef.current && variant !== "secondary" && variant !== "ghost") {
-        gsap.to(glowRef.current, {
-          opacity: 0.7,
-          scale: 1.15,
-          duration: 0.2,
-        });
-      }
-    }
-    onMouseEnter?.(e);
-  }
-
-  function handleMouseLeave(e: React.MouseEvent<HTMLButtonElement>) {
-    if (animated && !prefersReducedMotion()) {
-      if (glowRef.current && variant !== "secondary" && variant !== "ghost") {
-        gsap.to(glowRef.current, {
-          opacity: 0.3,
-          scale: 1,
-          duration: 0.3,
-        });
-      }
-    }
-    onMouseLeave?.(e);
-  }
-
-  function handleClick(e: React.MouseEvent<HTMLButtonElement>) {
-    if (animated && buttonRef.current && !disabled && !loading) {
-      gsap.timeline()
-        .to(buttonRef.current, {
-          scale: 0.96,
-          duration: 0.1,
-          ease: "power2.in",
-        })
-        .to(buttonRef.current, {
-          scale: 1,
-          duration: 0.3,
-          ease: "elastic.out(1, 0.5)",
-        });
-
-      const rect = buttonRef.current.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-
-      const ripple = document.createElement("div");
-      ripple.style.position = "absolute";
-      ripple.style.left = `${x}px`;
-      ripple.style.top = `${y}px`;
-      ripple.style.width = "10px";
-      ripple.style.height = "10px";
-      ripple.style.borderRadius = "50%";
-      ripple.style.backgroundColor = "rgba(255, 255, 255, 0.4)";
-      ripple.style.transform = "translate(-50%, -50%)";
-      ripple.style.pointerEvents = "none";
-
-      buttonRef.current.appendChild(ripple);
-
-      gsap.to(ripple, {
-        scale: Math.max(rect.width, rect.height) / 5,
-        opacity: 0,
-        duration: 0.5,
-        ease: "power2.out",
-        onComplete: () => ripple.remove(),
-      });
-    }
-    onClick?.(e);
-  }
-
   const isDisabled = disabled || loading;
   const sizedIcon = icon ? sizeIcon(icon, iconSize) : null;
 
   return (
     <button
-      ref={buttonRef}
       disabled={isDisabled}
       className={`
-        relative inline-flex items-center justify-center font-medium rounded-xl border
-        transition-colors overflow-hidden
+        relative inline-flex items-center justify-center font-medium rounded-full border
+        ${TRANSITION}
         ${VARIANT_STYLES[variant]}
         ${sizeStyles.padding}
         ${sizeStyles.text}
         ${sizeStyles.gap}
         ${fullWidth ? "w-full" : ""}
+        ${animated && !isDisabled ? PRESS : ""}
         ${isDisabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
         ${className}
       `}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      onClick={handleClick}
       {...props}
     >
-      {animated && variant !== "secondary" && variant !== "ghost" && (
-        <div
-          ref={glowRef}
-          className={`absolute inset-0 blur-xl opacity-40 -z-10 ${
-            variant === "primary" ? "bg-accent" :
-            variant === "danger" ? "bg-danger" :
-            variant === "success" ? "bg-success" : ""
-          }`}
-        />
-      )}
-
       {loading ? (
         <>
           <Loader2 className="animate-spin" style={{ width: iconSize, height: iconSize }} />
@@ -210,11 +120,11 @@ export function IconButton({
   icon,
   disabled,
   loading,
-  onClick,
+  animated = true,
   ...props
 }: IconButtonProps) {
-  const buttonRef = useRef<HTMLButtonElement>(null);
   const iconSize = ICON_SIZES[size];
+  const isDisabled = disabled || loading;
 
   const SIZE_MAP: Record<ButtonSize, string> = {
     sm: "p-1.5",
@@ -222,59 +132,20 @@ export function IconButton({
     lg: "p-2.5",
   };
 
-  function handleMouseEnter() {
-    if (buttonRef.current && !disabled && !loading) {
-      gsap.to(buttonRef.current, {
-        scale: 1.1,
-        duration: 0.2,
-        ease: "power2.out",
-      });
-    }
-  }
-
-  function handleMouseLeave() {
-    if (buttonRef.current) {
-      gsap.to(buttonRef.current, {
-        scale: 1,
-        duration: 0.2,
-        ease: "power2.out",
-      });
-    }
-  }
-
-  function handleClick(e: React.MouseEvent<HTMLButtonElement>) {
-    if (buttonRef.current && !disabled && !loading) {
-      gsap.timeline()
-        .to(buttonRef.current, {
-          scale: 0.85,
-          duration: 0.1,
-          ease: "power2.in",
-        })
-        .to(buttonRef.current, {
-          scale: 1,
-          duration: 0.25,
-          ease: "back.out(2)",
-        });
-    }
-    onClick?.(e);
-  }
-
   const sizedIcon = sizeIcon(icon, iconSize);
 
   return (
     <button
-      ref={buttonRef}
-      disabled={disabled || loading}
+      disabled={isDisabled}
       className={`
-        inline-flex items-center justify-center rounded-lg transition-colors
+        inline-flex items-center justify-center rounded-full border border-transparent
+        ${TRANSITION}
         ${variant === "ghost" ? "text-text-tertiary hover:text-text hover:bg-hover" : VARIANT_STYLES[variant]}
         ${SIZE_MAP[size]}
-        ${disabled || loading ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
+        ${animated && !isDisabled ? PRESS : ""}
+        ${isDisabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
         ${className}
       `}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      onClick={handleClick}
       {...props}
     >
       {loading ? (

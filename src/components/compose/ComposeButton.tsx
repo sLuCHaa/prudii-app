@@ -1,5 +1,6 @@
 import { useRef, useEffect } from "react";
-import { Pencil, Send } from "lucide-react";
+import { Compose as Pencil, Send } from "../icons";
+
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";
 import gsap from "gsap";

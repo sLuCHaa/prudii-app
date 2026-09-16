@@ -7,4 +7,7 @@ export { default as SendIcon } from "./SendIcon";
 export { default as RefreshIcon } from "./RefreshIcon";
 export { default as HomeIcon } from "./HomeIcon";
 
+// Prudiis eigenes Duotone-Hero-Set (siehe duotone.tsx).
+export * from "./duotone";
+
 export type { AnimatedIconProps, AnimatedIconHandle } from "./types";

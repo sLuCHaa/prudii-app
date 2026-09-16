@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import { ShieldCheck } from "lucide-react";
+import { Seal as ShieldCheck } from "../icons";
+
 import { useTranslation } from "react-i18next";
 import type { TrackerInfo } from "../../lib/sanitize";
 

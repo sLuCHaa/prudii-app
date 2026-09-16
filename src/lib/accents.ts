@@ -6,10 +6,11 @@ export interface AccentOption {
   labelKey: string;
 }
 
-export const DEFAULT_ACCENT_HEX = "#3b82f6";
+export const DEFAULT_ACCENT_HEX = "#B4522E";
 
 // Single source for the settings swatches, the command palette and the badge.
 export const ACCENT_OPTIONS: readonly AccentOption[] = [
+  { id: "terracotta", hex: "#B4522E", labelKey: "commandPalette.accentTerracotta" },
   { id: "blue", hex: "#3b82f6", labelKey: "commandPalette.accentBlue" },
   { id: "purple", hex: "#8b5cf6", labelKey: "commandPalette.accentPurple" },
   { id: "green", hex: "#10b981", labelKey: "commandPalette.accentGreen" },

@@ -40,12 +40,12 @@ const LIGHT_STYLES = `
   html { background: #ffffff; }
   body { background: #ffffff; color: #1a1a1a; }
   a { color: #2563eb; }
-  ::-webkit-scrollbar-thumb { background: #cbd5e1; }
-  ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  ::-webkit-scrollbar-thumb { background: #D2C8B8; }
+  ::-webkit-scrollbar-thumb:hover { background: #B0A290; }
 `;
 
 const DARK_STYLES = `
-  html { background: #1e293b; color-scheme: dark; }
+  html { background: #1F1A15; color-scheme: dark; }
   body {
     color: #1a1a1a;
     filter: invert(0.88) hue-rotate(180deg);
@@ -60,8 +60,8 @@ const DARK_STYLES = `
   }
   hr { opacity: 0.4; }
   blockquote { border-left-color: #888 !important; }
-  ::-webkit-scrollbar-thumb { background: #475569; }
-  ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+  ::-webkit-scrollbar-thumb { background: #3E362C; }
+  ::-webkit-scrollbar-thumb:hover { background: #574C3E; }
 `;
 
 export function HtmlMailFrame({ html, allowExternalImages = true, onIframeRef, onTrackersDetected, onLinkClick, onImageClick }: { html: string; allowExternalImages?: boolean; onIframeRef?: (el: HTMLIFrameElement | null) => void; onTrackersDetected?: (trackers: TrackerInfo[]) => void; onLinkClick?: (href: string) => void; onImageClick?: (src: string) => void }) {
@@ -191,7 +191,7 @@ ${BASE_STYLES}
         className="w-full border-0"
         style={{
           height: `${height}px`,
-          background: darkMode ? "#1e293b" : "#ffffff",
+          background: darkMode ? "#1F1A15" : "#ffffff",
         }}
         title={t("mailDetail.emailContent")}
       />

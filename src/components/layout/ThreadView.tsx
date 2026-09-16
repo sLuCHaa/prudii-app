@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback, memo, useMemo } from "react";
 import { Tooltip } from "../ui/Tooltip";
 import { parseISO } from "date-fns";
-import { Reply, ReplyAll, Forward, Archive, Paperclip, FileText, Image, Film, Music, File, Loader2, Download, ChevronDown, ChevronRight, MessageSquare, Copy, Check, Code, Eye, FileType, Printer, MailMinus, ImageOff, FolderOpen, ClipboardList, ClipboardPlus } from "lucide-react";
+import { FileText, Image, Film, Music, File, Loader2, Download, ChevronDown, ChevronRight, MessageSquare, Copy, Check, Code, Eye, FileType, Printer, MailMinus, ImageOff, FolderOpen, ClipboardList, ClipboardPlus } from "lucide-react";
 import { SkeletonText } from "../ui/Skeleton";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -24,7 +24,7 @@ import { cleanMailUrl, openMailUrl } from "../../lib/trackingParams";
 import { ContactAvatar } from "../ui/ContactAvatar";
 import { FlagPicker } from "../ui/FlagPicker";
 import type { MailFlag } from "../../types";
-import { StarIcon, TrashIcon } from "../icons";
+import { Archive, Attach as Paperclip, Forward, Reply, ReplyAll, StarIcon, TrashIcon } from "../icons";
 import { formatDateTime, formatMailDate } from "../../lib/dateUtils";
 import { sanitizeEmailHtml, escapeHtml, type TrackerInfo } from "../../lib/sanitize";
 import { decodeFileUrl } from "../../lib/outgoingHtml";
@@ -314,8 +314,8 @@ const LIGHT_STYLES = `
   html { background: transparent; }
   body { background: transparent; color: #1a1a1a; }
   a { color: #2563eb; }
-  ::-webkit-scrollbar-thumb { background: #cbd5e1; }
-  ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  ::-webkit-scrollbar-thumb { background: #D2C8B8; }
+  ::-webkit-scrollbar-thumb:hover { background: #B0A290; }
 `;
 
 const DARK_STYLES = `
@@ -330,8 +330,8 @@ const DARK_STYLES = `
   }
   hr { opacity: 0.4; }
   blockquote { border-left-color: #888 !important; }
-  ::-webkit-scrollbar-thumb { background: #475569; }
-  ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+  ::-webkit-scrollbar-thumb { background: #3E362C; }
+  ::-webkit-scrollbar-thumb:hover { background: #574C3E; }
 `;
 
 const HtmlMailFrame = memo(function HtmlMailFrame({ mailId, html, allowExternalImages = true, onIframeRef, onTrackersDetected, onLinkClick, onImageClick }: { mailId: string; html: string; allowExternalImages?: boolean; onIframeRef?: (el: HTMLIFrameElement | null) => void; onTrackersDetected?: (trackers: TrackerInfo[]) => void; onLinkClick?: (href: string) => void; onImageClick?: (src: string) => void }) {
