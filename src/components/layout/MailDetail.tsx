@@ -14,6 +14,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { decodeFileUrl } from "../../lib/outgoingHtml";
 import { useTranslation } from "react-i18next";
 import type { Mail } from "../../types";
+import { useMailFrameFit } from "../../hooks/useMailFrameFit";
 
 
 const BASE_STYLES = `
@@ -67,7 +68,7 @@ const DARK_STYLES = `
 export function HtmlMailFrame({ html, allowExternalImages = true, onIframeRef, onTrackersDetected, onLinkClick, onImageClick }: { html: string; allowExternalImages?: boolean; onIframeRef?: (el: HTMLIFrameElement | null) => void; onTrackersDetected?: (trackers: TrackerInfo[]) => void; onLinkClick?: (href: string) => void; onImageClick?: (src: string) => void }) {
   const darkMode = useAppStore((s) => s.darkMode);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [height, setHeight] = useState(300);
+  const { height, refit } = useMailFrameFit(iframeRef);
   const [bodyMenu, setBodyMenu] = useState<{ target: BridgeContextMenu; x: number; y: number; seq: number } | null>(null);
   const { t } = useTranslation();
 
@@ -101,19 +102,9 @@ export function HtmlMailFrame({ html, allowExternalImages = true, onIframeRef, o
 ${BASE_STYLES}
 </style></head><body>${cleanHtml}<style>${themeStyles}</style><script>${MAIL_LINK_BRIDGE}</script></body></html>`;
 
-  const resizeIframe = useCallback(() => {
-    try {
-      const doc = iframeRef.current?.contentDocument;
-      if (doc?.body) {
-        const h = doc.body.scrollHeight;
-        if (h > 0) setHeight(h);
-      }
-    } catch {}
-  }, []);
-
   useEffect(() => {
-    resizeIframe();
-  }, [html, darkMode, resizeIframe]);
+    refit();
+  }, [html, darkMode, refit]);
 
   const openHref = useCallback(
     (rawHref: string) => {
@@ -187,7 +178,7 @@ ${BASE_STYLES}
         ref={setRef}
         srcDoc={srcDoc}
         sandbox="allow-same-origin allow-scripts"
-        onLoad={resizeIframe}
+        onLoad={refit}
         className="w-full border-0"
         style={{
           height: `${height}px`,

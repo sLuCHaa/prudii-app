@@ -42,6 +42,7 @@ import type { Mail, Attachment, MailAddress } from "../../types";
 import { useTranslation } from "react-i18next";
 import { ImageLightbox, type ImageLightboxItem } from "./ImageLightbox";
 import { formatFileSize } from "../../lib/fileSize";
+import { useMailFrameFit } from "../../hooks/useMailFrameFit";
 
 function getFileIcon(mimeType: string | null) {
   if (!mimeType) return File;
@@ -337,7 +338,7 @@ const DARK_STYLES = `
 const HtmlMailFrame = memo(function HtmlMailFrame({ mailId, html, allowExternalImages = true, onIframeRef, onTrackersDetected, onLinkClick, onImageClick }: { mailId: string; html: string; allowExternalImages?: boolean; onIframeRef?: (el: HTMLIFrameElement | null) => void; onTrackersDetected?: (trackers: TrackerInfo[]) => void; onLinkClick?: (href: string) => void; onImageClick?: (src: string) => void }) {
   const darkMode = useAppStore((s) => s.darkMode);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [height, setHeight] = useState(300);
+  const { height, refit } = useMailFrameFit(iframeRef);
   const [bodyMenu, setBodyMenu] = useState<{ target: BridgeContextMenu; x: number; y: number; seq: number } | null>(null);
   const { t } = useTranslation();
 
@@ -380,19 +381,9 @@ ${BASE_STYLES}
     [cleanHtml, themeStyles]
   );
 
-  const resizeIframe = useCallback(() => {
-    try {
-      const doc = iframeRef.current?.contentDocument;
-      if (doc?.body) {
-        const h = doc.body.scrollHeight;
-        if (h > 0) setHeight(h);
-      }
-    } catch {}
-  }, []);
-
   useEffect(() => {
-    resizeIframe();
-  }, [html, darkMode, resizeIframe]);
+    refit();
+  }, [html, darkMode, refit]);
 
   const openHref = useCallback(
     (rawHref: string) => {
@@ -463,7 +454,7 @@ ${BASE_STYLES}
         srcDoc={srcDoc}
         sandbox="allow-same-origin allow-scripts"
         style={{ width: "100%", height, border: "none", overflow: "hidden", background: "transparent" }}
-        onLoad={resizeIframe}
+        onLoad={refit}
         aria-label={t("mailDetail.emailContent")}
       />
       {bodyMenu && (
