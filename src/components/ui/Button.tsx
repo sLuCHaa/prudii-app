@@ -11,7 +11,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: React.ReactNode;
   iconPosition?: "left" | "right";
   fullWidth?: boolean;
-  /** Press feedback (1px sink). Off for controls that must not move, e.g. inside a drag handle. */
+  /** Press feedback (fill step plus 1px sink). Off for controls that must not move, e.g. inside a drag handle. */
   animated?: boolean;
 }
 
@@ -38,11 +38,33 @@ const ICON_SIZES: Record<ButtonSize, number> = {
   lg: 20,
 };
 
-// Press feedback: the control sinks 1px and its shadow collapses. No scale —
-// native controls never grow or shrink, which was the biggest "web page" tell.
-const PRESS = "active:translate-y-px active:shadow-none motion-reduce:active:translate-y-0";
+// Press feedback. A macOS push button answers a press by darkening its fill
+// immediately and easing back on release — that colour step IS the signal, and
+// the 1px sink only supports it. Without it a press reads as nothing at all,
+// because the pointer already sits in the hover state when the click lands.
+// duration-0 on :active keeps the press instant while the release still eases.
+// Still no scale: native controls never grow or shrink.
+const PRESS_FILLED =
+  "active:brightness-90 active:translate-y-px active:duration-0 " +
+  "active:shadow-[inset_0_1px_3px_rgba(0,0,0,0.28)] motion-reduce:active:translate-y-0";
 
-const TRANSITION = "transition-[color,background-color,border-color,box-shadow,transform] duration-150 ease-out";
+// A brightness filter barely shows on the near-black surfaces of the dark
+// theme, so the quiet variants step to --c-active instead, which is defined
+// per theme. Tailwind's `dark:` cannot help here: no @custom-variant is
+// registered, so it would follow the OS setting rather than the .dark class.
+const PRESS_QUIET =
+  "active:bg-active active:translate-y-px active:duration-0 motion-reduce:active:translate-y-0";
+
+const PRESS: Record<ButtonVariant, string> = {
+  primary: PRESS_FILLED,
+  danger: PRESS_FILLED,
+  success: PRESS_FILLED,
+  signal: PRESS_FILLED,
+  secondary: PRESS_QUIET,
+  ghost: PRESS_QUIET,
+};
+
+const TRANSITION = "transition-[color,background-color,border-color,box-shadow,transform,filter] duration-150 ease-out";
 
 // Helper to clone icon with proper size using inline styles (Tailwind can't process dynamic classes)
 function sizeIcon(icon: React.ReactNode, size: number): React.ReactNode {
@@ -86,7 +108,7 @@ export function Button({
         ${sizeStyles.text}
         ${sizeStyles.gap}
         ${fullWidth ? "w-full" : ""}
-        ${animated && !isDisabled ? PRESS : ""}
+        ${animated && !isDisabled ? PRESS[variant] : ""}
         ${isDisabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
         ${className}
       `}
@@ -142,7 +164,7 @@ export function IconButton({
         ${TRANSITION}
         ${variant === "ghost" ? "text-text-tertiary hover:text-text hover:bg-hover" : VARIANT_STYLES[variant]}
         ${SIZE_MAP[size]}
-        ${animated && !isDisabled ? PRESS : ""}
+        ${animated && !isDisabled ? PRESS[variant] : ""}
         ${isDisabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
         ${className}
       `}
