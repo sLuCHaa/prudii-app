@@ -116,6 +116,9 @@ export function decodeFileUrl(src: string): string {
   // passed through the editor may come back percent-encoded and with the
   // three-slash form ("file:///C:/...").
   let path = src.slice("file://".length);
+  // Bodies stored before the backend built these properly carry a fourth slash
+  // ("file:////Users/..."), which must not survive into the path.
+  if (path.startsWith("//")) path = path.replace(/^\/+/, "/");
   if (/^\/[A-Za-z]:/.test(path)) path = path.slice(1);
   try {
     return decodeURIComponent(path);

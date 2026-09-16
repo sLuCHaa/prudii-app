@@ -136,6 +136,22 @@ describe("listedAttachments", () => {
     expect(listedAttachments(body, [appleSig, pdf]).map((a) => a.id)).toEqual(["a2"]);
   });
 
+  it("hides an inline image the body shows through the backend's own file URL", () => {
+    // booking.com's inline images declare no disposition at all, so the body
+    // check is all there is — and the backend used to write a fourth slash.
+    const embedded = {
+      ...base,
+      id: "a5",
+      filename: "attachment",
+      mime_type: "image/png",
+      content_id: "c0b2d6a9@MIME-Lite-HTML-1.25",
+      is_inline: true,
+      local_path: "/Users/p/att/attachment",
+    };
+    const body = '<img src="file:////Users/p/att/attachment">';
+    expect(listedAttachments(body, [embedded]).map((a) => a.id)).toEqual([]);
+  });
+
   it("still demands proof from rows stored before the declaration was known", () => {
     // declared_inline is absent, so the body check applies exactly as it used to.
     expect(listedAttachments("<p>no images</p>", [logo]).map((a) => a.id)).toEqual(["a1"]);

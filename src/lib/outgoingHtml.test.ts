@@ -40,6 +40,12 @@ describe("decodeFileUrl", () => {
   it("keeps the leading slash on POSIX paths", () => {
     expect(decodeFileUrl("file:///Users/x/logo.png")).toBe("/Users/x/logo.png");
   });
+
+  it("collapses the fourth slash older bodies carry", () => {
+    // The backend used to join "file:///" to a path that already began with a
+    // slash; those bodies are still in the database.
+    expect(decodeFileUrl("file:////Users/x/logo.png")).toBe("/Users/x/logo.png");
+  });
 });
 
 describe("extractLocalImages", () => {

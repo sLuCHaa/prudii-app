@@ -162,7 +162,7 @@ pub async fn fetch_message_body(
             if att.is_inline {
                 if let Some(ref cid) = &att.content_id {
                     let cid_clean = cid.trim_matches(|c| c == '<' || c == '>');
-                    let local_url = format!("file:///{}", file_path.to_string_lossy().replace('\\', "/"));
+                    let local_url = crate::imap::local_file_url(&file_path);
                     body_html = body_html.replace(&format!("cid:{}", cid_clean), &local_url);
                 }
             }

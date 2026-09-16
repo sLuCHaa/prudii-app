@@ -329,6 +329,18 @@ pub fn is_signature_part(filename: &str, mime_type: Option<&str>) -> bool {
     )
 }
 
+/// A `file://` URL for a stored attachment, in the three-slash form.
+///
+/// Worth a function because the obvious `format!("file:///{}", path)` is wrong
+/// on every platform whose paths already start with a slash: it yields
+/// `file:////Users/...`, and that fourth slash survives decoding, so the reading
+/// pane can no longer match the URL against the path it has on file and lists
+/// the image as an attachment instead of recognising the body shows it.
+pub fn local_file_url(path: &std::path::Path) -> String {
+    let posix = path.to_string_lossy().replace('\\', "/");
+    format!("file:///{}", posix.trim_start_matches('/'))
+}
+
 /// Give a part a name no other part of the same message has taken.
 ///
 /// Senders may leave every inline image nameless: a booking.com confirmation
@@ -2098,6 +2110,25 @@ pub async fn append_to_folder(
         .context(format!("Failed to append message to {}", folder_path))?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod local_file_url_tests {
+    use super::local_file_url;
+    use std::path::Path;
+
+    // Three slashes, not four: the path already carries the leading one.
+    #[test]
+    fn a_posix_path_gets_exactly_three_slashes() {
+        let url = local_file_url(Path::new("/Users/p/att/logo.png"));
+        assert_eq!(url, "file:///Users/p/att/logo.png");
+    }
+
+    #[test]
+    fn a_windows_path_keeps_its_drive_letter() {
+        let url = local_file_url(Path::new("C:\\att\\logo.png"));
+        assert_eq!(url, "file:///C:/att/logo.png");
+    }
 }
 
 #[cfg(test)]
