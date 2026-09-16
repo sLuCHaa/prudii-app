@@ -235,6 +235,16 @@
     "goToMessage": "Ir al mensaje",
     "htmlView": "HTML",
     "plainText": "Texto plano",
+    "sourceView": "Código fuente",
+    "source": {
+      "loading": "Cargando el código fuente…",
+      "error": "No se pudo cargar el código fuente",
+      "copy": "Copiar",
+      "copied": "Copiado",
+      "showAll": "Mostrar todo ({{size}})",
+      "collapseAll": "Plegar base64",
+      "folded": "{{lines}} líneas de base64 · {{size}}"
+    },
     "noContent": "Sin contenido",
     "emailContent": "Contenido del correo",
     "replyToLatest": "Responder al último",

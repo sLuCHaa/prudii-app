@@ -1043,6 +1043,7 @@ pub fn run() {
             commands::mails::list_all_inbox_mails,
             commands::mails::get_mail,
             commands::mails::fetch_mail_body,
+            commands::mails::fetch_mail_source,
             commands::mails::list_attachments,
             commands::mails::get_attachment_preview,
             commands::mails::get_attachment_data,

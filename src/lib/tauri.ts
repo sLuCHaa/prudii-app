@@ -103,6 +103,11 @@ export async function fetchMailBody(mailId: string): Promise<Mail> {
   return invoke("fetch_mail_body", { mailId });
 }
 
+/** Raw RFC822 source, fetched from the server on demand — never cached locally. */
+export async function fetchMailSource(mailId: string): Promise<string> {
+  return invoke("fetch_mail_source", { mailId });
+}
+
 export async function prefetchFolder(folderId: string): Promise<void> {
   return invoke("prefetch_folder", { folderId });
 }

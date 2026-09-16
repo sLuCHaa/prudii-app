@@ -235,6 +235,16 @@
     "goToMessage": "Zur Nachricht springen",
     "htmlView": "HTML",
     "plainText": "Nur Text",
+    "sourceView": "Quelltext",
+    "source": {
+      "loading": "Quelltext wird geladen …",
+      "error": "Quelltext konnte nicht geladen werden",
+      "copy": "Kopieren",
+      "copied": "Kopiert",
+      "showAll": "Alles anzeigen ({{size}})",
+      "collapseAll": "Base64 einklappen",
+      "folded": "{{lines}} Zeilen Base64 · {{size}}"
+    },
     "noContent": "Kein Inhalt",
     "emailContent": "E-Mail-Inhalt",
     "replyToLatest": "Auf neueste antworten",

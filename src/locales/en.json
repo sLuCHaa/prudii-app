@@ -237,6 +237,16 @@
     "noContent": "No content",
     "emailContent": "Email content",
     "plainText": "Plain text",
+    "sourceView": "Source",
+    "source": {
+      "loading": "Loading source…",
+      "error": "Could not load the source",
+      "copy": "Copy",
+      "copied": "Copied",
+      "showAll": "Show everything ({{size}})",
+      "collapseAll": "Fold base64",
+      "folded": "{{lines}} lines of base64 · {{size}}"
+    },
     "replyToLatest": "Reply to latest",
     "archiveConversation": "Archive conversation",
     "deleteConversation": "Delete conversation",

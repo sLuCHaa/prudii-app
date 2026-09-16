@@ -240,6 +240,38 @@ impl OutlookClient {
     }
 
     /// Get a single message with full body.
+    /// Raw MIME of one message. Graph serves it from /$value as text rather
+    /// than JSON, so this cannot reuse get_message.
+    pub async fn get_message_raw(&self, id: &str) -> Result<String> {
+        let url = format!("{}/messages/{}/$value", BASE_URL, id);
+
+        let mut attempt = 0u32;
+        loop {
+            let resp = self.http
+                .get(&url)
+                .header("Authorization", self.auth_header())
+                .send()
+                .await
+                .context("get_message_raw request failed")?;
+
+            let status = resp.status();
+            if status.is_success() {
+                return resp.text().await.context("get_message_raw read failed");
+            }
+
+            attempt += 1;
+            if Self::is_retryable(status) && attempt <= 3 {
+                let delay = std::time::Duration::from_millis(1000 * 2u64.pow(attempt - 1));
+                log::warn!("get_message_raw {}: {} on attempt {}, retrying in {:?}", id, status, attempt, delay);
+                tokio::time::sleep(delay).await;
+                continue;
+            }
+
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("get_message_raw failed: {} {}", status, body);
+        }
+    }
+
     pub async fn get_message(&self, id: &str) -> Result<GraphMessage> {
         let url = format!("{}/messages/{}?$select=subject,from,toRecipients,ccRecipients,bccRecipients,receivedDateTime,isRead,flag,hasAttachments,internetMessageId,conversationId,body,bodyPreview,importance,parentFolderId", BASE_URL, id);
 

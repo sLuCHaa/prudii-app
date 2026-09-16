@@ -653,6 +653,8 @@ pub struct GmailMessage {
     pub internal_date: Option<String>,
     pub payload: Option<GmailPayload>,
     pub size_estimate: Option<i64>,
+    /// Only populated by get_message(id, "raw") — base64url of the whole RFC822 message.
+    pub raw: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

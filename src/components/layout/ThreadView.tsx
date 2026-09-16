@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback, memo, useMemo } from "react";
 import { Tooltip } from "../ui/Tooltip";
 import { parseISO } from "date-fns";
-import { FileText, Image, Film, Music, File, Loader2, Download, ChevronDown, ChevronRight, MessageSquare, Copy, Check, Code, Eye, FileType, Printer, MailMinus, ImageOff, FolderOpen, ClipboardList, ClipboardPlus } from "lucide-react";
+import { FileText, Image, Film, Music, File, Loader2, Download, ChevronDown, ChevronRight, MessageSquare, Copy, Check, Code, Eye, FileCode, FileType, Printer, MailMinus, ImageOff, FolderOpen, ClipboardList, ClipboardPlus } from "lucide-react";
 import { SkeletonText } from "../ui/Skeleton";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -29,6 +29,7 @@ import { formatDateTime, formatMailDate } from "../../lib/dateUtils";
 import { sanitizeEmailHtml, escapeHtml, type TrackerInfo } from "../../lib/sanitize";
 import { decodeFileUrl } from "../../lib/outgoingHtml";
 import { TrackingIndicator } from "./TrackingIndicator";
+import { MailSourceView } from "./MailSourceView";
 import { AiSummaryButton, AiSummaryPanel } from "../ai/AiSummary";
 import { AiReplyButton, AiReplySuggestionsPanel } from "../ai/AiReplySuggestions";
 import { useDialog } from "../ui/DialogProvider";
@@ -604,6 +605,10 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, sing
   }, [displayMail]);
 
   const [viewPlainText, setViewPlainText] = useState(false);
+  // Separate from viewPlainText and taking precedence: the source is a third
+  // view, not a variant of the body, and it exists even for mails that have
+  // only a text part.
+  const [viewSource, setViewSource] = useState(false);
   const [trackers, setTrackers] = useState<TrackerInfo[]>([]);
   const [allowImagesOverride, setAllowImagesOverride] = useState(false);
   const hasBody = displayMail.body_html || displayMail.body_text;
@@ -771,8 +776,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, sing
             </div>
           ) : hasBody ? (
             <div className="prose-sm">
-              {(hasBothFormats || !!displayMail.body_html) && (
-                <div className="flex items-center gap-1 mb-2">
+              <div className="flex items-center gap-1 mb-2">
                   {hasBothFormats && (
                     <>
                       <button
@@ -799,10 +803,20 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, sing
                       </button>
                     </>
                   )}
+                  <button
+                    onClick={() => setViewSource((v) => !v)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                      viewSource
+                        ? "bg-accent-soft text-accent"
+                        : "text-text-tertiary hover:text-text-secondary hover:bg-hover"
+                    }`}
+                  >
+                    <FileCode className="w-3.5 h-3.5" />
+                    {t("mailDetail.sourceView")}
+                  </button>
                   <div className="flex-1" />
-                  <TrackingIndicator trackers={trackers} />
-                </div>
-              )}
+                <TrackingIndicator trackers={trackers} />
+              </div>
               {hasExternalImages && !allowExternalImages && (
                 <div className="flex items-center justify-between gap-3 px-4 py-2 mb-2 bg-bg-secondary border border-border rounded-lg text-xs text-text-secondary">
                   <div className="flex items-center gap-2">
@@ -818,7 +832,9 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, sing
                   </button>
                 </div>
               )}
-              {displayMail.body_html && !viewPlainText ? (
+              {viewSource ? (
+                <MailSourceView mailId={displayMail.id} />
+              ) : displayMail.body_html && !viewPlainText ? (
                 <HtmlMailFrame mailId={displayMail.id} html={displayMail.body_html} allowExternalImages={allowExternalImages} onIframeRef={(el) => { messageIframeRef.current = el; onIframeRef?.(el); }} onTrackersDetected={handleTrackersDetected} onLinkClick={onLinkClick} onImageClick={handleInlineImageClick} />
               ) : (
                 <pre className="text-sm text-text-secondary whitespace-pre-wrap font-sans leading-relaxed select-text">

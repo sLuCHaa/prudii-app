@@ -235,6 +235,16 @@
     "goToMessage": "Ir para a mensagem",
     "htmlView": "HTML",
     "plainText": "Texto Simples",
+    "sourceView": "Código-fonte",
+    "source": {
+      "loading": "Carregando o código-fonte…",
+      "error": "Não foi possível carregar o código-fonte",
+      "copy": "Copiar",
+      "copied": "Copiado",
+      "showAll": "Mostrar tudo ({{size}})",
+      "collapseAll": "Recolher base64",
+      "folded": "{{lines}} linhas de base64 · {{size}}"
+    },
     "noContent": "Sem conteúdo",
     "emailContent": "Conteúdo do e-mail",
     "replyToLatest": "Responder à última",

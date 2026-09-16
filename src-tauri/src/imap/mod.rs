@@ -1082,6 +1082,43 @@ pub fn insert_local_sent_mail(
 }
 
 /// Fetch the full body of a single mail from IMAP and update the DB.
+/// Full RFC822 source of one message, exactly as the server holds it.
+///
+/// BODY.PEEK[] rather than BODY[]: looking at the source must never mark an
+/// unread mail as seen. Nothing is stored — the source is several times the
+/// size of the parsed body once attachments are counted, and it is only ever
+/// wanted for the message currently on screen.
+pub async fn fetch_mail_source(
+    session: &mut ImapSession,
+    folder_path: &str,
+    uid: u32,
+    skip_examine: bool,
+) -> Result<Vec<u8>> {
+    if !skip_examine {
+        tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            session.examine(folder_path),
+        )
+        .await
+        .map_err(|_| anyhow::anyhow!("Folder examine timed out"))?
+        .context("Failed to examine folder")?;
+    }
+
+    let items = tokio::time::timeout(
+        std::time::Duration::from_secs(120),
+        session.uid_fetch(&uid.to_string(), "(UID BODY.PEEK[])"),
+    )
+    .await
+    .map_err(|_| anyhow::anyhow!("Source fetch timed out after 120s"))?
+    .context("Failed to fetch mail source")?;
+
+    items
+        .into_iter()
+        .find(|f| f.uid == Some(uid) || f.uid.is_none())
+        .and_then(|f| f.data)
+        .ok_or_else(|| anyhow::anyhow!("Server returned no source for UID {}", uid))
+}
+
 pub async fn fetch_mail_body(
     session: &mut ImapSession,
     folder_path: &str,

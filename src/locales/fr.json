@@ -235,6 +235,16 @@
     "goToMessage": "Aller au message",
     "htmlView": "HTML",
     "plainText": "Texte brut",
+    "sourceView": "Source",
+    "source": {
+      "loading": "Chargement de la source…",
+      "error": "Impossible de charger la source",
+      "copy": "Copier",
+      "copied": "Copié",
+      "showAll": "Tout afficher ({{size}})",
+      "collapseAll": "Replier le base64",
+      "folded": "{{lines}} lignes de base64 · {{size}}"
+    },
     "noContent": "Aucun contenu",
     "emailContent": "Contenu du courrier",
     "replyToLatest": "Répondre au dernier",

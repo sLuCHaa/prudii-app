@@ -239,6 +239,16 @@
     "goToMessage": "Перейти к письму",
     "htmlView": "HTML",
     "plainText": "Обычный текст",
+    "sourceView": "Исходный код",
+    "source": {
+      "loading": "Загрузка исходного кода…",
+      "error": "Не удалось загрузить исходный код",
+      "copy": "Копировать",
+      "copied": "Скопировано",
+      "showAll": "Показать всё ({{size}})",
+      "collapseAll": "Свернуть base64",
+      "folded": "{{lines}} строк base64 · {{size}}"
+    },
     "noContent": "Нет содержимого",
     "emailContent": "Содержимое письма",
     "replyToLatest": "Ответить на последнее",
