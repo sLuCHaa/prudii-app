@@ -98,7 +98,7 @@ export function HtmlMailFrame({ html, allowExternalImages = true, onIframeRef, o
   // parent's CSP, which the production build enforces. Email scripts carry no
   // matching hash, so `allow-scripts` on the sandbox cannot run them.
   const srcDoc = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="script-src '${MAIL_LINK_BRIDGE_CSP_HASH}'; object-src 'none';"><style>
+<html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="script-src '${MAIL_LINK_BRIDGE_CSP_HASH}'; object-src 'none';"><style>
 ${BASE_STYLES}
 </style></head><body>${cleanHtml}<style>${themeStyles}</style><script>${MAIL_LINK_BRIDGE}</script></body></html>`;
 

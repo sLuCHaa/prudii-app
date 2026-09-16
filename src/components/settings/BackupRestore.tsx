@@ -193,7 +193,7 @@ export function BackupRestore() {
             )}
 
             {passwordHintEmails.length > 0 && (
-              <div className="flex items-start gap-2 p-2 rounded-lg bg-yellow-500/10 text-xs text-yellow-600 dark:text-yellow-400">
+              <div className="flex items-start gap-2 p-2 rounded-lg bg-yellow-500/10 text-xs text-warning-fg">
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                 <div>
                   <div className="font-medium">{t("backup.passwordsNeeded")}</div>
@@ -261,7 +261,7 @@ export function BackupRestore() {
             </div>
 
             {preview.existing_account_emails.length > 0 && (
-              <div className="flex items-start gap-2 p-2 rounded-lg bg-yellow-500/10 text-xs text-yellow-600 dark:text-yellow-400">
+              <div className="flex items-start gap-2 p-2 rounded-lg bg-yellow-500/10 text-xs text-warning-fg">
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                 <div>
                   <div className="font-medium">{t("backup.existingAccounts")}</div>
