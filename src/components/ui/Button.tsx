@@ -15,13 +15,19 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   animated?: boolean;
 }
 
-// Filled variants carry a real drop shadow that collapses on press — native
-// controls signal depth, not a Material ripple and not a scale transform.
+// Hover lifts a little, press drops hard, and the two move in opposite
+// directions — the click has to be the larger of the two events. Measured on
+// the terracotta default: hover shifts 0.029 luminance, press shifts 0.084, so
+// the press is ~2.9x the hover. It used to be 0.046 against 0.022, which meant
+// merely moving the pointer over a button changed more than clicking it did.
+// Brightness rather than a named hover token, so all nine accents behave alike.
+const HOVER_FILLED = "hover:brightness-[1.08]";
+
 const VARIANT_STYLES: Record<ButtonVariant, string> = {
-  primary: "bg-accent text-on-accent border-transparent hover:bg-accent-hover shadow-[0_1px_2px_rgba(0,0,0,0.18)]",
-  danger: "bg-danger text-white border-transparent hover:bg-danger/90 shadow-[0_1px_2px_rgba(0,0,0,0.18)]",
-  success: "bg-success text-white border-transparent hover:bg-success/90 shadow-[0_1px_2px_rgba(0,0,0,0.18)]",
-  signal: "bg-signal text-bg border-transparent hover:brightness-95 shadow-[0_1px_2px_rgba(0,0,0,0.18)]",
+  primary: `bg-accent text-on-accent border-transparent ${HOVER_FILLED} shadow-[0_1px_2px_rgba(0,0,0,0.18)]`,
+  danger: `bg-danger text-white border-transparent ${HOVER_FILLED} shadow-[0_1px_2px_rgba(0,0,0,0.18)]`,
+  success: `bg-success text-white border-transparent ${HOVER_FILLED} shadow-[0_1px_2px_rgba(0,0,0,0.18)]`,
+  signal: `bg-signal text-bg border-transparent ${HOVER_FILLED} shadow-[0_1px_2px_rgba(0,0,0,0.18)]`,
   secondary: "bg-surface text-text border-border hover:bg-hover hover:border-border-light",
   ghost: "bg-transparent text-text-secondary border-transparent hover:bg-hover hover:text-text",
 };
@@ -45,15 +51,16 @@ const ICON_SIZES: Record<ButtonSize, number> = {
 // duration-0 on :active keeps the press instant while the release still eases.
 // Still no scale: native controls never grow or shrink.
 const PRESS_FILLED =
-  "active:brightness-90 active:translate-y-px active:duration-0 " +
-  "active:shadow-[inset_0_1px_3px_rgba(0,0,0,0.28)] motion-reduce:active:translate-y-0";
+  "active:brightness-[0.82] active:translate-y-px active:duration-0 " +
+  "active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.32)] motion-reduce:active:translate-y-0";
 
 // A brightness filter barely shows on the near-black surfaces of the dark
 // theme, so the quiet variants step to --c-active instead, which is defined
 // per theme. Tailwind's `dark:` cannot help here: no @custom-variant is
 // registered, so it would follow the OS setting rather than the .dark class.
 const PRESS_QUIET =
-  "active:bg-active active:translate-y-px active:duration-0 motion-reduce:active:translate-y-0";
+  "active:bg-active active:translate-y-px active:duration-0 " +
+  "active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.20)] motion-reduce:active:translate-y-0";
 
 const PRESS: Record<ButtonVariant, string> = {
   primary: PRESS_FILLED,
