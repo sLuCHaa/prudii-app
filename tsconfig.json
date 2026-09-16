@@ -12,6 +12,10 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
+    // Explicit since TypeScript 7 — it no longer auto-includes every
+    // @types package, and mailLinkBridge.test.ts imports node:crypto/node:fs.
+    // React's types come in through module resolution, not this list.
+    "types": ["node"],
     "paths": {
       "@/*": ["./src/*"]
     }
