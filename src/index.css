@@ -132,8 +132,12 @@
   --gradient-cool:    linear-gradient(135deg, #3b82f6, #8b5cf6);
   --gradient-success: linear-gradient(135deg, #10b981, #3b82f6);
 
-  --c-hover:       #2C251E;
-  --c-active:      #3A3129;
+  /* Die Stufen folgen den Verhaeltnissen der urspruenglichen Slate-Palette
+     (surface->hover 1.41, hover->active 1.37). Der erste warme Entwurf lag bei
+     1.14 und damit deutlich flacher — auf dunklem Grund faellt ein zu kleiner
+     Schritt sofort als fehlende Rueckmeldung auf. */
+  --c-hover:       #3D342A;
+  --c-active:      #55483A;
   --c-selected:    rgba(59, 130, 246, 0.2);
 
   --c-scrollbar:       #3E362C;
