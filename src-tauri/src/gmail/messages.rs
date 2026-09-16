@@ -23,6 +23,19 @@ pub async fn fetch_message_body(
 
     extract_body_parts(payload, &mut body_text, &mut body_html, &mut attachments);
 
+    // Classified only now: an attachment part can sit ahead of the text/html part
+    // in the payload tree, so the body is not complete until the walk has ended.
+    for att in &mut attachments {
+        att.is_inline = crate::imap::is_body_part(
+            &att.filename,
+            att.mime_type.as_deref(),
+            att.content_id.as_deref(),
+            att.declared_inline,
+            att.has_real_filename,
+            &body_html,
+        );
+    }
+
     log::info!(
         "fetch_message_body {}: text={} chars, html={} chars, attachments={}",
         gmail_id, body_text.len(), body_html.len(), attachments.len()
@@ -81,6 +94,7 @@ pub async fn fetch_message_body(
             data: Vec<u8>,
             content_id: Option<String>,
             is_inline: bool,
+            declared_inline: bool,
         }
 
         let mut downloaded: Vec<DownloadedAttachment> = Vec::new();
@@ -111,8 +125,8 @@ pub async fn fetch_message_body(
                 mime_type: att.mime_type.clone(),
                 data,
                 content_id: att.content_id.clone(),
-                is_inline: att.is_inline
-                    || crate::imap::is_signature_part(&att.filename, att.mime_type.as_deref()),
+                is_inline: att.is_inline,
+                declared_inline: att.declared_inline == Some(true),
             });
         }
 
@@ -132,12 +146,13 @@ pub async fn fetch_message_body(
             ).ok();
             let att_db_id = existing_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
             if let Err(e) = conn.execute(
-                "INSERT OR REPLACE INTO attachments (id, mail_id, filename, mime_type, size_bytes, content_id, is_inline, local_path) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                "INSERT OR REPLACE INTO attachments (id, mail_id, filename, mime_type, size_bytes, content_id, is_inline, local_path, declared_inline) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                 rusqlite::params![
                     att_db_id, mail_id, att.filename, att.mime_type,
                     att.data.len() as i64, att.content_id,
                     att.is_inline as i32,
                     file_path.to_string_lossy().to_string(),
+                    att.declared_inline as i32,
                 ],
             ) {
                 log::error!("Failed to insert attachment '{}' for mail {}: {}", att.filename, mail_id, e);
@@ -312,6 +327,9 @@ struct AttachmentInfo {
     attachment_id: Option<String>,
     data: Option<String>, // base64url-encoded inline data
     content_id: Option<String>,
+    declared_inline: Option<bool>,
+    has_real_filename: bool,
+    /// Filled in after the walk — see fetch_message_body.
     is_inline: bool,
 }
 
@@ -331,10 +349,9 @@ fn extract_body_parts(
     if !filename.is_empty() || payload.body.as_ref().and_then(|b| b.attachment_id.as_ref()).is_some() {
         let body = payload.body.as_ref();
         let content_id = api::get_header(payload, "Content-ID").map(|s| s.to_string());
-        // Only images with Content-ID are truly inline (embedded in HTML).
-        // Many clients mark PDFs and other files as Content-Disposition: inline.
-        let is_image = mime.starts_with("image/");
-        let is_inline = is_image && content_id.is_some();
+        // Tri-state, as on the IMAP path: no header is not the same as "attachment".
+        let declared_inline = api::get_header(payload, "Content-Disposition")
+            .map(|d| d.trim_start().to_ascii_lowercase().starts_with("inline"));
 
         attachments.push(AttachmentInfo {
             filename: if filename.is_empty() { "attachment".to_string() } else { filename.to_string() },
@@ -343,7 +360,9 @@ fn extract_body_parts(
             attachment_id: body.and_then(|b| b.attachment_id.clone()),
             data: body.and_then(|b| b.data.clone()),
             content_id,
-            is_inline,
+            declared_inline,
+            has_real_filename: !filename.is_empty(),
+            is_inline: false,
         });
         return;
     }

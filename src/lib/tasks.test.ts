@@ -22,6 +22,7 @@ function att(id: string, is_inline: boolean): Attachment {
     size_bytes: 10,
     content_id: null,
     is_inline,
+    declared_inline: false,
     local_path: null,
   };
 }

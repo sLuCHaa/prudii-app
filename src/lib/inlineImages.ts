@@ -110,16 +110,26 @@ function displayedPaths(html: string, attachments: readonly InlineSource[]): Set
   return paths;
 }
 
-/** What the attachment list shows: everything not inline, plus inline images
- *  the body never displays. Gmail flags every image with a Content-ID inline
- *  whether the HTML uses it or not, which hid real photos. Non-image inline
- *  parts (S/MIME signatures) stay hidden. */
-export function listedAttachments<T extends InlineSource & { is_inline: boolean }>(html: string, attachments: readonly T[]): T[] {
+/** What the attachment list shows: everything not inline, plus inline images we
+ *  only *inferred* were inline and the body never displays. Non-image inline
+ *  parts (S/MIME signatures) stay hidden.
+ *
+ *  The body check exists because inline-ness used to be inferred from a
+ *  Content-ID, which Exchange stamps on genuine attachments too — real photos
+ *  went missing. Where the sender declared `Content-Disposition: inline` there
+ *  is nothing to second-guess, and demanding proof from the body actively hurts:
+ *  Apple Mail points its signature images at a blob: URL of the sender's own
+ *  session, so they can never be matched and were listed as attachments.
+ *
+ *  `declared_inline` is absent on rows stored before the column existed; those
+ *  keep the body check until the mail is synced again. */
+export function listedAttachments<T extends InlineSource & { is_inline: boolean; declared_inline?: boolean }>(html: string, attachments: readonly T[]): T[] {
   const inlineImages = attachments.filter((a) => a.is_inline && looksLikeImage(a));
   const displayed = inlineImages.length > 0 ? displayedPaths(html, inlineImages) : new Set<string>();
   return attachments.filter((a) => {
     if (!a.is_inline) return true;
     if (!looksLikeImage(a)) return false;
+    if (a.declared_inline) return false;
     return !(a.local_path && displayed.has(normalizePath(a.local_path)));
   });
 }

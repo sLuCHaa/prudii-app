@@ -68,6 +68,9 @@ CREATE TABLE IF NOT EXISTS attachments (
     size_bytes INTEGER,
     content_id TEXT,
     is_inline INTEGER NOT NULL DEFAULT 0,
+    -- The sender's own Content-Disposition, kept apart from is_inline so the
+    -- reading pane can tell "the sender said inline" from "we inferred it".
+    declared_inline INTEGER NOT NULL DEFAULT 0,
     local_path TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (mail_id) REFERENCES mails(id) ON DELETE CASCADE

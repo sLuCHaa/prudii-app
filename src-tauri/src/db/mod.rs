@@ -3,7 +3,7 @@ use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
-pub(crate) const SCHEMA_VERSION: u32 = 40;
+pub(crate) const SCHEMA_VERSION: u32 = 41;
 
 pub struct Database {
     pub conn: Mutex<Connection>,
@@ -53,6 +53,7 @@ impl Database {
 
         // Run all ALTER TABLE migrations (silently ignore "duplicate column" errors)
         // Legacy: stored_password column kept for schema compat but no longer used (keyring only)
+        let _ = conn.execute_batch("ALTER TABLE attachments ADD COLUMN declared_inline INTEGER NOT NULL DEFAULT 0;");
         let _ = conn.execute_batch("ALTER TABLE accounts ADD COLUMN stored_password TEXT DEFAULT '';");
         let _ = conn.execute_batch("ALTER TABLE accounts ADD COLUMN signature_html TEXT DEFAULT '';");
         let _ = conn.execute_batch("ALTER TABLE accounts ADD COLUMN signature_text TEXT DEFAULT '';");
@@ -386,6 +387,29 @@ impl Database {
             ).unwrap_or(0);
             if reclassified > 0 || flags > 0 {
                 log::info!("DB v39: {} embedded images reclassified as inline, {} attachment flags cleared", reclassified, flags);
+            }
+        }
+
+        // v41: inline-ness used to be inferred from a Content-ID, which senders
+        // stamp on genuine attachments too (an Exchange invoice arrives with one
+        // beside Content-Disposition: attachment). The sender's own declaration
+        // is now stored and believed — but only a fresh fetch can learn it, and
+        // the header is long gone from what is cached here. Clear the bodies this
+        // actually affects: a mail showing an image reference nothing in the
+        // database resolves, while an image sits in its attachment list. All
+        // three account types refetch a cleared body on next open.
+        if prev_version < 41 {
+            let cleared: usize = conn.execute(
+                "UPDATE mails SET body_html = '', body_text = ''
+                 WHERE (body_html != '' OR body_text != '')
+                   AND (instr(body_html, 'blob:') > 0 OR instr(body_html, 'cid:') > 0)
+                   AND id IN (SELECT mail_id FROM attachments
+                              WHERE is_inline = 0
+                                AND LOWER(COALESCE(mime_type, '')) LIKE 'image/%')",
+                [],
+            ).unwrap_or(0);
+            if cleared > 0 {
+                log::info!("DB v41: cleared {} bodies whose inline images need reclassifying", cleared);
             }
         }
 

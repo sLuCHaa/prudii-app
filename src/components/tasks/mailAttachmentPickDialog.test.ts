@@ -30,6 +30,7 @@ function att(id: string, filename: string, is_inline = false): Attachment {
     size_bytes: 2048,
     content_id: null,
     is_inline,
+    declared_inline: false,
     local_path: null,
   };
 }

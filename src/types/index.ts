@@ -171,6 +171,8 @@ export interface Attachment {
   size_bytes: number | null;
   content_id: string | null;
   is_inline: boolean;
+  /** The sender's own Content-Disposition, as opposed to inline-ness we inferred. */
+  declared_inline: boolean;
   local_path: string | null;
 }
 

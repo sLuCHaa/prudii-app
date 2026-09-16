@@ -181,6 +181,7 @@ pub async fn fetch_message_body(
                 data: Vec<u8>,
                 content_id: Option<String>,
                 is_inline: bool,
+                declared_inline: bool,
             }
 
             let mut downloaded: Vec<DownloadedAttachment> = Vec::new();
@@ -199,19 +200,25 @@ pub async fn fetch_message_body(
                     continue;
                 }
 
-                // Only images with Content-ID are truly inline (embedded in HTML).
-                // Outlook Graph API marks PDFs and other files as isInline too —
-                // and, inversely, declares embedded signature images isInline=false.
-                // Image + Content-ID is the reliable signal (same rule as Gmail).
-                let is_inline = (att.content_type.as_deref().map(|m| m.starts_with("image/")).unwrap_or(false)
-                    && att.content_id.is_some())
-                    || crate::imap::is_signature_part(&filename, att.content_type.as_deref());
+                // Graph's isInline is one input, not the verdict: it calls PDFs
+                // inline and, inversely, calls embedded signature images
+                // isInline=false. A cid: reference in the body outranks it, which
+                // is how genuinely embedded images are caught here.
+                let is_inline = crate::imap::is_body_part(
+                    &filename,
+                    att.content_type.as_deref(),
+                    att.content_id.as_deref(),
+                    att.is_inline,
+                    att.name.is_some(),
+                    &body_html,
+                );
                 downloaded.push(DownloadedAttachment {
                     filename,
                     mime_type: att.content_type.clone(),
                     data,
                     content_id: att.content_id.clone(),
                     is_inline,
+                    declared_inline: att.is_inline == Some(true),
                 });
             }
 
@@ -230,12 +237,13 @@ pub async fn fetch_message_body(
                 ).ok();
                 let att_db_id = existing_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
                 if let Err(e) = conn.execute(
-                    "INSERT OR REPLACE INTO attachments (id, mail_id, filename, mime_type, size_bytes, content_id, is_inline, local_path) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                    "INSERT OR REPLACE INTO attachments (id, mail_id, filename, mime_type, size_bytes, content_id, is_inline, local_path, declared_inline) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                     rusqlite::params![
                         att_db_id, mail_id, att.filename, att.mime_type,
                         att.data.len() as i64, att.content_id,
                         att.is_inline as i32,
                         file_path.to_string_lossy().to_string(),
+                        att.declared_inline as i32,
                     ],
                 ) {
                     log::error!("Failed to insert attachment '{}' for mail {}: {}", att.filename, mail_id, e);

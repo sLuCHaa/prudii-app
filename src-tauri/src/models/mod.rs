@@ -144,6 +144,9 @@ pub struct Attachment {
     pub size_bytes: Option<i64>,
     pub content_id: Option<String>,
     pub is_inline: bool,
+    /// The sender's own Content-Disposition, kept apart from `is_inline` so the
+    /// reading pane can tell a declaration from an inference.
+    pub declared_inline: bool,
     pub local_path: Option<String>,
 }
 

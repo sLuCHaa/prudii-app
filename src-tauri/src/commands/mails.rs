@@ -571,7 +571,7 @@ pub fn list_attachments(
     let conn = db.lock_db();
     let mut stmt = conn
         .prepare(
-            "SELECT id, mail_id, filename, mime_type, size_bytes, content_id, is_inline, local_path FROM attachments WHERE mail_id = ?1 ORDER BY filename ASC",
+            "SELECT id, mail_id, filename, mime_type, size_bytes, content_id, is_inline, local_path, declared_inline FROM attachments WHERE mail_id = ?1 ORDER BY filename ASC",
         )
         .map_err(|e| e.to_string())?;
 
@@ -586,6 +586,7 @@ pub fn list_attachments(
                 content_id: row.get(5)?,
                 is_inline: row.get::<_, i32>(6)? != 0,
                 local_path: row.get(7)?,
+                declared_inline: row.get::<_, i32>(8)? != 0,
             })
         })
         .map_err(|e| e.to_string())?

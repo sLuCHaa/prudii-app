@@ -329,6 +329,63 @@ pub fn is_signature_part(filename: &str, mime_type: Option<&str>) -> bool {
     )
 }
 
+/// Whether a part belongs to the message body rather than being a file the
+/// sender attached. The one classifier all three sync paths share.
+///
+/// A Content-ID is *not* evidence of this, which is what the three paths used
+/// to assume independently. Exchange stamps one on every part, genuine
+/// attachments included — an invoice arrives as
+/// `Content-Disposition: attachment` with a Content-ID beside it — so the rule
+/// hid real photos, and the reading pane compensated by re-listing inline
+/// images the body never displayed. That compensation in turn re-listed
+/// signature images whose reference we cannot resolve, which is the bug this
+/// replaces.
+///
+/// `disposition_inline` carries the declared Content-Disposition: `Some(true)`
+/// for `inline`, `Some(false)` for `attachment`, `None` when the part has no
+/// such header.
+pub fn is_body_part(
+    filename: &str,
+    mime_type: Option<&str>,
+    content_id: Option<&str>,
+    disposition_inline: Option<bool>,
+    has_real_filename: bool,
+    body_html: &str,
+) -> bool {
+    // S/MIME and PGP signatures are message metadata, never a visible file.
+    if is_signature_part(filename, mime_type) {
+        return true;
+    }
+    // Only images are ever drawn into a body. Everything else a sender calls
+    // inline — PDFs above all — is still a file the user wants to see listed.
+    if !mime_type.map(|m| m.starts_with("image/")).unwrap_or(false) {
+        return false;
+    }
+    // A cid: reference in the HTML outranks the declared disposition, because
+    // Outlook-style senders declare signature images "attachment" and render
+    // them inline anyway.
+    // Gmail hands the Content-ID back with its angle brackets, the IMAP path
+    // strips them; trim here so every caller can pass the header as it found it.
+    let cid = content_id
+        .map(|c| c.trim_matches(|ch| ch == '<' || ch == '>'))
+        .filter(|c| !c.is_empty());
+    if let Some(cid) = cid {
+        if body_html.contains(&format!("cid:{}", cid)) {
+            return true;
+        }
+    }
+    match disposition_inline {
+        // Taken at face value. Apple Mail declares signature images inline
+        // without a Content-ID and points at a blob: URL only the sender's own
+        // session could load, so no amount of scanning the body confirms it.
+        Some(true) => true,
+        Some(false) => false,
+        // No disposition header at all: an unnamed image carrying a Content-ID
+        // is an embedded image whose reference we failed to match.
+        None => cid.is_some() && !has_real_filename,
+    }
+}
+
 /// Server-rejected commands are logged and swallowed (the session is still
 /// usable), but timeouts are returned as errors: a timed-out command was
 /// dropped mid-read and leaves the response half-consumed in the stream
@@ -1281,30 +1338,19 @@ pub async fn store_body_and_attachments(db: &Database, mail_id: &str, body_bytes
             });
             let raw_cid = part.content_id().map(|s| s.to_string());
             let content_id = raw_cid.map(|s| s.trim_matches(|c| c == '<' || c == '>').to_string());
-            // Determine inline status — only images embedded in HTML are truly inline.
-            // Many clients (Outlook, Gmail) set Content-Disposition: inline for regular
-            // file attachments like PDFs, so we can't trust the header alone.
-            let is_image = mime_type.as_deref().map(|m| m.starts_with("image/")).unwrap_or(false);
             let has_real_filename = part.attachment_name().is_some() && raw_filename != "unnamed";
-            let disposition_inline = part.content_disposition()
-                .map(|cd| cd.ctype() == "inline")
-                .unwrap_or(false);
-            // Embedded via cid: in the HTML body — Outlook-style senders declare
-            // signature images "attachment" (with filename) while rendering them
-            // inline; the HTML reference is the ground truth.
-            let cid_in_html = is_image && content_id.as_deref()
-                .is_some_and(|cid| !cid.is_empty() && body_html.contains(&format!("cid:{}", cid)));
-            let is_inline = if is_signature_part(&filename, mime_type.as_deref()) {
-                true // S/MIME/PGP signature — mail metadata, never a visible attachment
-            } else if cid_in_html {
-                true // rendered inside the message body — not a real attachment
-            } else if disposition_inline && is_image && content_id.is_some() {
-                true // image with CID referenced in HTML — genuinely inline
-            } else if !disposition_inline && content_id.is_some() && !has_real_filename && is_image {
-                true // no disposition header, unnamed image with CID — embedded image
-            } else {
-                false // everything else is a regular attachment
-            };
+            // Tri-state on purpose: a part carrying no Content-Disposition at all
+            // is a different case from one that declares "attachment".
+            let declared_inline = part.content_disposition().map(|cd| cd.ctype() == "inline");
+            let is_inline = is_body_part(
+                &filename,
+                mime_type.as_deref(),
+                content_id.as_deref(),
+                declared_inline,
+                has_real_filename,
+                &body_html,
+            );
+            let sender_declared_inline = declared_inline == Some(true);
             if !is_inline {
                 real_attachment_count += 1;
             }
@@ -1335,8 +1381,8 @@ pub async fn store_body_and_attachments(db: &Database, mail_id: &str, body_bytes
                     ).ok();
                     let att_id = existing.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
                     if let Err(e) = conn.execute(
-                        "INSERT OR REPLACE INTO attachments (id, mail_id, filename, mime_type, size_bytes, content_id, is_inline, local_path) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-                        rusqlite::params![att_id, mail_id, filename, mime_type, size, content_id, is_inline as i32, path_str],
+                        "INSERT OR REPLACE INTO attachments (id, mail_id, filename, mime_type, size_bytes, content_id, is_inline, local_path, declared_inline) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                        rusqlite::params![att_id, mail_id, filename, mime_type, size, content_id, is_inline as i32, path_str, sender_declared_inline as i32],
                     ) {
                         log::error!("Failed to insert attachment '{}' for mail {}: {}", filename, mail_id, e);
                     }
@@ -1516,25 +1562,17 @@ pub async fn backfill_folder_bodies(
                     });
                     let raw_cid = part.content_id().map(|s| s.to_string());
                     let content_id = raw_cid.map(|s| s.trim_matches(|c| c == '<' || c == '>').to_string());
-                    let is_image = mime_type.as_deref().map(|m| m.starts_with("image/")).unwrap_or(false);
                     let has_real_filename = part.attachment_name().is_some_and(|n| n != "unnamed");
-                    let disposition_inline = part.content_disposition()
-                        .map(|cd| cd.ctype() == "inline")
-                        .unwrap_or(false);
-                    // See store_body_and_attachments: a cid: reference in the
-                    // HTML outranks the declared disposition.
-                    let cid_in_html = is_image && content_id.as_deref()
-                        .is_some_and(|cid| !cid.is_empty() && body_html.contains(&format!("cid:{}", cid)));
-                    let is_inline = if is_signature_part(&filename, mime_type.as_deref()) {
-                        true
-                    } else if cid_in_html {
-                        true
-                    } else if disposition_inline && is_image && content_id.is_some() {
-                        true
-                    } else {
-                        // No disposition header, unnamed image with CID — an embedded image.
-                        !disposition_inline && content_id.is_some() && !has_real_filename && is_image
-                    };
+                    let declared_inline = part.content_disposition().map(|cd| cd.ctype() == "inline");
+                    let is_inline = is_body_part(
+                        &filename,
+                        mime_type.as_deref(),
+                        content_id.as_deref(),
+                        declared_inline,
+                        has_real_filename,
+                        &body_html,
+                    );
+                    let sender_declared_inline = declared_inline == Some(true);
                     if !is_inline {
                         real_attachment_count += 1;
                     }
@@ -1564,8 +1602,8 @@ pub async fn backfill_folder_bodies(
                         ).ok();
                         let att_id = existing.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
                         if let Err(e) = conn.execute(
-                            "INSERT OR REPLACE INTO attachments (id, mail_id, filename, mime_type, size_bytes, content_id, is_inline, local_path) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-                            rusqlite::params![att_id, mail_id, filename, mime_type, size, content_id, is_inline as i32, path_str],
+                            "INSERT OR REPLACE INTO attachments (id, mail_id, filename, mime_type, size_bytes, content_id, is_inline, local_path, declared_inline) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                            rusqlite::params![att_id, mail_id, filename, mime_type, size, content_id, is_inline as i32, path_str, sender_declared_inline as i32],
                         ) {
                             log::error!("Failed to insert attachment '{}' for mail {}: {}", filename, mail_id, e);
                         }
@@ -2061,6 +2099,84 @@ pub async fn append_to_folder(
         .context(format!("Failed to append message to {}", folder_path))?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod body_part_tests {
+    use super::is_body_part;
+
+    const JPEG: Option<&str> = Some("image/jpeg");
+    const PDF: Option<&str> = Some("application/pdf");
+
+    // Apple Mail on iPhone: the signature image declares itself inline, carries
+    // no Content-ID at all, and the body points at a blob: URL of the sender's
+    // own session. The declaration is the only signal there is.
+    #[test]
+    fn trusts_a_declared_inline_image_without_a_content_id() {
+        let body = r#"<img src="blob:null/4e83da26" alt="image001.png">"#;
+        assert!(is_body_part("Outlook-lurd1yg3.jpg", JPEG, None, Some(true), true, body));
+    }
+
+    // Same message: the spreadsheets say "attachment" and must stay listed.
+    #[test]
+    fn lists_a_declared_attachment() {
+        assert!(!is_body_part(
+            "Zaehlerstammdaten2.xlsx",
+            Some("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+            None,
+            Some(false),
+            true,
+            "",
+        ));
+    }
+
+    // Exchange stamps a Content-ID on genuine attachments. Treating that as
+    // evidence of inline-ness is what hid real files; the invoice must be listed
+    // even though it has one.
+    #[test]
+    fn a_content_id_alone_never_makes_a_part_inline() {
+        let cid = Some("154B203019D811469F802BA7DB8293DE@EURP190.PROD.OUTLOOK.COM");
+        assert!(!is_body_part("Rechnung_RE-2609.pdf", PDF, cid, Some(false), true, ""));
+        // The same is true once the part is an image — a photo attached from Outlook.
+        assert!(!is_body_part("IMG_0042.jpg", JPEG, cid, Some(false), true, ""));
+    }
+
+    // The rest of that message: a logo the body genuinely draws.
+    #[test]
+    fn a_cid_reference_in_the_body_outranks_the_declaration() {
+        let body = r#"<img src="cid:signatureLogo" alt="Logo">"#;
+        assert!(is_body_part("ATT00001.jpg", JPEG, Some("signatureLogo"), Some(true), true, body));
+        // ...and it wins even when the sender called the part an attachment.
+        assert!(is_body_part("ATT00001.jpg", JPEG, Some("signatureLogo"), Some(false), true, body));
+    }
+
+    // Gmail hands the header back with its angle brackets, the IMAP path without.
+    #[test]
+    fn matches_a_content_id_with_or_without_angle_brackets() {
+        let body = r#"<img src="cid:logo@x">"#;
+        assert!(is_body_part("logo.png", Some("image/png"), Some("<logo@x>"), None, true, body));
+        assert!(is_body_part("logo.png", Some("image/png"), Some("logo@x"), None, true, body));
+    }
+
+    #[test]
+    fn a_pdf_called_inline_is_still_a_file_the_user_wants() {
+        assert!(!is_body_part("offer.pdf", PDF, None, Some(true), true, ""));
+    }
+
+    #[test]
+    fn signature_parts_are_metadata_whatever_they_declare() {
+        assert!(is_body_part("smime.p7s", Some("application/pkcs7-signature"), None, Some(false), true, ""));
+    }
+
+    // No Content-Disposition header at all: an unnamed image carrying a
+    // Content-ID is embedded, one with a real filename is not.
+    #[test]
+    fn falls_back_to_the_filename_when_no_disposition_is_declared() {
+        assert!(is_body_part("unnamed", Some("image/png"), Some("x@y"), None, false, ""));
+        assert!(!is_body_part("holiday.png", Some("image/png"), Some("x@y"), None, true, ""));
+        assert!(!is_body_part("unnamed", Some("image/png"), None, None, false, ""));
+        assert!(!is_body_part("unnamed", Some("image/png"), Some(""), None, false, ""));
+    }
 }
 
 #[cfg(test)]

@@ -647,7 +647,7 @@ fn do_create_backup_inner(
         let attachments: Vec<serde_json::Value> = {
             let conn = db.lock_db();
             let mut stmt = conn.prepare(
-                "SELECT id, mail_id, filename, mime_type, size_bytes, content_id, is_inline, local_path, created_at
+                "SELECT id, mail_id, filename, mime_type, size_bytes, content_id, is_inline, local_path, created_at, declared_inline
                  FROM attachments ORDER BY mail_id"
             ).map_err(|e| e.to_string())?;
 
@@ -662,6 +662,7 @@ fn do_create_backup_inner(
                     "is_inline": row.get::<_, i32>(6)?,
                     "local_path": row.get::<_, Option<String>>(7)?,
                     "created_at": row.get::<_, String>(8)?,
+                    "declared_inline": row.get::<_, i32>(9)?,
                 }))
             })
             .map_err(|e| e.to_string())?
@@ -1705,8 +1706,8 @@ fn do_restore_backup_inner(
             let conn = db.lock_db();
             let insert_or = if is_replace { "INSERT OR REPLACE" } else { "INSERT OR IGNORE" };
             let sql = format!(
-                "{} INTO attachments (id, mail_id, filename, mime_type, size_bytes, content_id, is_inline, local_path, created_at)
-                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)",
+                "{} INTO attachments (id, mail_id, filename, mime_type, size_bytes, content_id, is_inline, local_path, created_at, declared_inline)
+                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
                 insert_or
             );
 
@@ -1730,6 +1731,9 @@ fn do_restore_backup_inner(
                         att.get("is_inline").and_then(|v| v.as_i64()).unwrap_or(0),
                         new_local_path.to_string_lossy().to_string(),
                         att.get("created_at").and_then(|v| v.as_str()).unwrap_or(""),
+                        // Absent in archives written before the column existed;
+                        // 0 is the safe default (the body check still applies).
+                        att.get("declared_inline").and_then(|v| v.as_i64()).unwrap_or(0),
                     ],
                 ).map_err(|e| e.to_string())?;
             }

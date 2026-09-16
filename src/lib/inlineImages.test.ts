@@ -114,6 +114,30 @@ describe("listedAttachments", () => {
   });
 
   it("lists an inline image the body never shows", () => {
+    // Inline-ness we inferred, so the body has to back it up. This is what keeps
+    // a real photo visible when the sender attached one with a Content-ID.
     expect(listedAttachments("<p>no images</p>", [logo, pdf]).map((a) => a.id)).toEqual(["a1", "a2"]);
+  });
+
+  it("hides an image the sender declared inline even when the body cannot show it", () => {
+    // Apple Mail's signature image: declared inline, referenced by a blob: URL of
+    // the sender's own session under a name that does not match the stored file.
+    const appleSig = {
+      ...base,
+      id: "a4",
+      filename: "Outlook-lurd1yg3.jpg",
+      mime_type: "image/jpeg",
+      content_id: null,
+      is_inline: true,
+      declared_inline: true,
+      local_path: "C:\att\Outlook-lurd1yg3.jpg",
+    };
+    const body = '<img src="blob:null/4e83da26" alt="image001.png">';
+    expect(listedAttachments(body, [appleSig, pdf]).map((a) => a.id)).toEqual(["a2"]);
+  });
+
+  it("still demands proof from rows stored before the declaration was known", () => {
+    // declared_inline is absent, so the body check applies exactly as it used to.
+    expect(listedAttachments("<p>no images</p>", [logo]).map((a) => a.id)).toEqual(["a1"]);
   });
 });
