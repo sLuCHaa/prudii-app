@@ -11,6 +11,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "../../stores/appStore";
 import { ReadingAmbient } from "./ReadingAmbient";
 import { resolveInlineImages, removeUnresolvableImages, listedAttachments } from "../../lib/inlineImages";
+import { invalidateMailListQueries } from "../../lib/mailQueries";
 import { useAttachments, useToggleStar, useToggleMailFlag } from "../../hooks/useAccounts";
 import { useScroller } from "../../hooks/useScroller";
 import { openAttachment, startAttachmentDrag, quickLookAttachment, saveAttachment, fetchMailBody, trashMail, archiveMail, getThreadMails, markAsRead, unsubscribeMail } from "../../lib/tauri";
@@ -1273,7 +1274,7 @@ export function ThreadView({ mail }: ThreadViewProps) {
     // Same exit path as archive: the list plays the row sweep and picks the next mail.
     setPendingRemoveIds([mail.id]);
     trashMail(mail.id)
-      .then(() => queryClient.invalidateQueries({ queryKey: ["folders"] }))
+      .then(() => invalidateMailListQueries(queryClient))
       .catch((e) => {
         setPendingRemoveIds([]);
         dialog.alert({ type: "danger", title: t("common.error"), message: causeMessage(e) });
@@ -1283,8 +1284,11 @@ export function ThreadView({ mail }: ThreadViewProps) {
   const handleArchive = useCallback(async () => {
     setPendingRemoveIds([mail.id]);
     archiveMail(mail.id)
-      .then(() => queryClient.invalidateQueries({ queryKey: ["folders"] }))
+      .then(() => invalidateMailListQueries(queryClient))
       .catch((e) => {
+        // Same as trash: without this the row stays swept away while the mail
+        // is still sitting in the folder.
+        setPendingRemoveIds([]);
         dialog.alert({ type: "danger", title: t("common.error"), message: causeMessage(e) });
       });
   }, [mail.id, setPendingRemoveIds, dialog, t, queryClient]);

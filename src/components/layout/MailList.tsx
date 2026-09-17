@@ -44,6 +44,7 @@ import { SNOOZE_PRESETS, toSnoozeStamp } from "../../lib/snooze";
 const SNOOZE_MENU_WIDTH = 176;
 import { formatMailDate, getDateGroup } from "../../lib/dateUtils";
 import { runMailAction, toastError, causeMessage } from "../../lib/errorToast";
+import { invalidateMailListQueries } from "../../lib/mailQueries";
 import { accumulate, decide, isHorizontalIntent } from "../../lib/swipe";
 import { isListNavKey, nextCursor, pageSize, spanIds } from "../../lib/listKeys";
 import { MAIL_FLAG_COLORS } from "../../types";
@@ -1129,14 +1130,7 @@ export function MailList() {
   const searchResults = useSearchMails(searchOpen ? searchQuery : "");
   const queryClient = useQueryClient();
   /** Invalidate folder counts + all combined/inbox queries so every view stays fresh. */
-  const invalidateMailQueries = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["folders"] });
-    queryClient.invalidateQueries({ queryKey: ["mails"] });
-    queryClient.invalidateQueries({ queryKey: ["filtered-mails"] });
-    queryClient.invalidateQueries({ queryKey: ["all-inbox-mails"] });
-    queryClient.invalidateQueries({ queryKey: ["combined-folder-mails"] });
-    queryClient.invalidateQueries({ queryKey: ["split-inbox-mails"] });
-  }, [queryClient]);
+  const invalidateMailQueries = useCallback(() => invalidateMailListQueries(queryClient), [queryClient]);
   const dialog = useDialog();
   const [contextMenu, setContextMenu] = useState<{ mail: Mail; x: number; y: number; bulk: boolean } | null>(null);
   const [snoozeMenu, setSnoozeMenu] = useState<{ mail: Mail; x: number; y: number } | null>(null);
