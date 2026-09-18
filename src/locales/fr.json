@@ -263,6 +263,12 @@
       "message": "Images externes bloquées pour la confidentialité.",
       "load": "Charger les images"
     },
+    "missingParts": {
+      "message_one": "L'expéditeur n'a pas joint {{count}} fichier.",
+      "message_other": "L'expéditeur n'a pas joint {{count}} fichiers.",
+      "named_one": "L'expéditeur n'a pas joint {{count}} fichier : {{names}}",
+      "named_other": "L'expéditeur n'a pas joint {{count}} fichiers : {{names}}"
+    },
     "bodyMenu": {
       "openLink": "Ouvrir le lien",
       "copyLink": "Copier le lien",

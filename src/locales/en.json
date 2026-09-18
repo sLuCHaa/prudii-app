@@ -263,6 +263,12 @@
       "message": "External images blocked for privacy.",
       "load": "Load images"
     },
+    "missingParts": {
+      "message_one": "The sender did not include {{count}} file.",
+      "message_other": "The sender did not include {{count}} files.",
+      "named_one": "The sender did not include {{count}} file: {{names}}",
+      "named_other": "The sender did not include {{count}} files: {{names}}"
+    },
     "bodyMenu": {
       "openLink": "Open link",
       "copyLink": "Copy link",

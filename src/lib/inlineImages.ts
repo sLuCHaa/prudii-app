@@ -22,7 +22,7 @@ function fileUrl(path: string): string {
   return "file:///" + posix;
 }
 
-function normalizeCid(cid: string): string {
+export function normalizeCid(cid: string): string {
   return cid.trim().replace(/^<|>$/g, "").toLowerCase();
 }
 
@@ -35,7 +35,8 @@ function decodeBase64(token: string): string | null {
   }
 }
 
-function referencedCid(src: string): string | null {
+/** The content id an <img> source points at, through the GMX wrapper if need be. */
+export function referencedCid(src: string): string | null {
   if (/^cid:/i.test(src)) return src.slice(4);
   const wrapped = /^Attachment\/([A-Za-z0-9+/_=-]+)$/.exec(src);
   if (!wrapped) return null;

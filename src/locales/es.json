@@ -263,6 +263,12 @@
       "message": "Imágenes externas bloqueadas por privacidad.",
       "load": "Cargar imágenes"
     },
+    "missingParts": {
+      "message_one": "El remitente no adjuntó {{count}} archivo.",
+      "message_other": "El remitente no adjuntó {{count}} archivos.",
+      "named_one": "El remitente no adjuntó {{count}} archivo: {{names}}",
+      "named_other": "El remitente no adjuntó {{count}} archivos: {{names}}"
+    },
     "bodyMenu": {
       "openLink": "Abrir enlace",
       "copyLink": "Copiar enlace",

@@ -263,6 +263,12 @@
       "message": "Externe Bilder aus Datenschutzgründen blockiert.",
       "load": "Bilder laden"
     },
+    "missingParts": {
+      "message_one": "Der Absender hat {{count}} Datei nicht mitgeschickt.",
+      "message_other": "Der Absender hat {{count}} Dateien nicht mitgeschickt.",
+      "named_one": "Der Absender hat {{count}} Datei nicht mitgeschickt: {{names}}",
+      "named_other": "Der Absender hat {{count}} Dateien nicht mitgeschickt: {{names}}"
+    },
     "bodyMenu": {
       "openLink": "Link öffnen",
       "copyLink": "Link kopieren",

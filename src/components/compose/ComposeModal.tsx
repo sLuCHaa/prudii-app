@@ -29,6 +29,7 @@ import type { AiRepliesEvent, EmailTemplate, ReplySuggestion } from "../../types
 import { escapeHtml } from "../../lib/sanitize";
 import { fillEmptyParagraphs, inlineComposeStyles, extractLocalImages, dropImagesByCid } from "../../lib/outgoingHtml";
 import { resolveInlineImagesInHtml } from "../../lib/inlineImages";
+import { stripMmlTags } from "../../lib/missingParts";
 import { HtmlMailFrame } from "../layout/MailDetail";
 import { RecipientInput, type RecipientInputHandle } from "./RecipientInput";
 import type { Mail, SendMailRequest, SendAttachment, Attachment, Account, AppSettings } from "../../types";
@@ -198,7 +199,9 @@ function safeFormatDate(dateStr: string): string {
 }
 
 function plainTextToQuotedHtml(text: string): string {
-  const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  // An MML placeholder the sender's client never turned into a MIME part is
+  // not content: quoting it carries their local paths onward, nothing else.
+  const normalized = stripMmlTags(text.replace(/\r\n/g, "\n").replace(/\r/g, "\n"));
   // Format=flowed heuristic: a trailing space before a single \n marks a soft wrap.
   // Merge it with the next line. Preserve \n\n paragraph breaks.
   const unwrapped = normalized.replace(/ \n(?!\n)/g, " ");

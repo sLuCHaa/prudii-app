@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback, memo, useMemo } from "react";
 import { Tooltip } from "../ui/Tooltip";
 import { parseISO } from "date-fns";
-import { FileText, Image, Film, Music, File, Loader2, Download, ChevronDown, ChevronRight, MessageSquare, Copy, Check, Code, Eye, FileCode, FileType, Printer, MailMinus, ImageOff, FolderOpen, ClipboardList, ClipboardPlus } from "lucide-react";
+import { FileText, Image, Film, Music, File, Loader2, Download, ChevronDown, ChevronRight, MessageSquare, Copy, Check, Code, Eye, FileCode, FileType, Printer, MailMinus, ImageOff, FileWarning, FolderOpen, ClipboardList, ClipboardPlus } from "lucide-react";
 import { SkeletonText } from "../ui/Skeleton";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -11,6 +11,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "../../stores/appStore";
 import { ReadingAmbient } from "./ReadingAmbient";
 import { resolveInlineImages, removeUnresolvableImages, listedAttachments } from "../../lib/inlineImages";
+import { findMissingParts, stripMmlTags } from "../../lib/missingParts";
 import { invalidateMailListQueries } from "../../lib/mailQueries";
 import { useAttachments, useToggleStar, useToggleMailFlag } from "../../hooks/useAccounts";
 import { useScroller } from "../../hooks/useScroller";
@@ -639,6 +640,14 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, sing
     return /<img[^>]+src=["']https?:\/\//i.test(displayMail.body_html);
   }, [displayMail.body_html]);
 
+  // Waiting for the attachment list matters: until it arrives every cid looks
+  // unresolvable and the banner would flash on perfectly fine mails.
+  const { data: messageAttachments } = useAttachments(displayMail.id);
+  const missingParts = useMemo(
+    () => (messageAttachments ? findMissingParts(displayMail, messageAttachments) : { names: [], count: 0 }),
+    [displayMail.body_html, displayMail.body_text, messageAttachments]
+  );
+
   const formattedDate = useMemo(() =>
     formatDateTime(parseISO(mail.date), appSettings.use_24h_clock)
   , [mail.date, appSettings.use_24h_clock]);
@@ -833,13 +842,23 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, sing
                   </button>
                 </div>
               )}
+              {missingParts.count > 0 && (
+                <div className="flex items-start gap-2 px-4 py-2 mb-2 bg-bg-secondary border border-border rounded-lg text-xs text-text-secondary">
+                  <FileWarning className="w-3.5 h-3.5 mt-px text-text-tertiary shrink-0" />
+                  <span>
+                    {missingParts.names.length === missingParts.count
+                      ? t("mailDetail.missingParts.named", { count: missingParts.count, names: missingParts.names.join(", ") })
+                      : t("mailDetail.missingParts.message", { count: missingParts.count })}
+                  </span>
+                </div>
+              )}
               {viewSource ? (
                 <MailSourceView mailId={displayMail.id} />
               ) : displayMail.body_html && !viewPlainText ? (
                 <HtmlMailFrame mailId={displayMail.id} html={displayMail.body_html} allowExternalImages={allowExternalImages} onIframeRef={(el) => { messageIframeRef.current = el; onIframeRef?.(el); }} onTrackersDetected={handleTrackersDetected} onLinkClick={onLinkClick} onImageClick={handleInlineImageClick} />
               ) : (
                 <pre className="text-sm text-text-secondary whitespace-pre-wrap font-sans leading-relaxed select-text">
-                  {displayMail.body_text}
+                  {stripMmlTags(displayMail.body_text ?? "")}
                 </pre>
               )}
             </div>
