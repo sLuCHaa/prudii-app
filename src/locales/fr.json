@@ -190,6 +190,9 @@
     "sendWithoutSubject": "Envoyer sans objet",
     "quotedMessage": "Message cité",
     "editQuote": "Modifier la citation",
+    "preview": "Aperçu",
+    "previewAttachments": "Pièces jointes",
+    "previewHint": "Voici comment ton e-mail sera envoyé. La messagerie du destinataire peut l'afficher légèrement différemment.",
     "draftSavingNow": "Enregistrement…",
     "draftSavedAt": "Enregistré {{time}}",
     "savedAgo": "Sauvegarde automatique {{time}}",
@@ -592,6 +595,12 @@
     "undoSendDelay": "Délai d'annulation d'envoi",
     "undoSendDelayDesc": "Temps pour annuler un e-mail envoyé. Réglez sur Désactivé pour envoyer immédiatement.",
     "undoSendOff": "Désactivé",
+    "composeFont": {
+      "title": "Police des e-mails",
+      "description": "La police et la taille utilisées pour envoyer tes e-mails. Arial, Verdana et Georgia s'affichent de la même façon chez presque tous les destinataires.",
+      "default": "Par défaut (Prudii)",
+      "sample": "Voici comment le destinataire verra ton texte."
+    },
     "ai": {
       "title": "IA Locale (Ollama)",
       "description": "Utilise un modèle d'IA exécuté localement pour résumer les emails et suggérer des réponses. Tes données ne quittent jamais ton ordinateur.",

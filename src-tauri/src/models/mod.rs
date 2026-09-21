@@ -127,6 +127,8 @@ pub struct AppSettings {
     pub transparent_sidebar: bool,
     pub strip_tracking_params: bool,
     pub use_system_font: bool,
+    pub compose_font: String,
+    pub compose_font_size: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

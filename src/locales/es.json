@@ -190,6 +190,9 @@
     "sendWithoutSubject": "Enviar sin asunto",
     "quotedMessage": "Mensaje citado",
     "editQuote": "Editar cita",
+    "preview": "Vista previa",
+    "previewAttachments": "Adjuntos",
+    "previewHint": "Así se enviará tu correo. La aplicación de correo del destinatario puede mostrarlo con ligeras diferencias.",
     "draftSavingNow": "Guardando…",
     "draftSavedAt": "Guardado {{time}}",
     "savedAgo": "Guardado automáticamente {{time}}",
@@ -615,7 +618,13 @@
     },
     "undoSendDelay": "Retraso de deshacer envío",
     "undoSendDelayDesc": "Tiempo para cancelar un correo enviado. Establezca en Desactivado para enviar inmediatamente.",
-    "undoSendOff": "Desactivado"
+    "undoSendOff": "Desactivado",
+    "composeFont": {
+      "title": "Fuente de los correos",
+      "description": "La fuente y el tamaño con los que se envían tus correos. Arial, Verdana y Georgia se ven igual para casi todos los destinatarios.",
+      "default": "Predeterminada de Prudii",
+      "sample": "Así verá el destinatario tu texto."
+    }
   },
   "backup": {
     "title": "Copia de seguridad y restauración",

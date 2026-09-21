@@ -190,6 +190,9 @@
     "sendWithoutSubject": "Send without subject",
     "quotedMessage": "Quoted message",
     "editQuote": "Edit quote",
+    "preview": "Preview",
+    "previewAttachments": "Attachments",
+    "previewHint": "This is how your email will be sent. The recipient's mail app may render it slightly differently.",
     "draftSavingNow": "Saving…",
     "draftSavedAt": "Saved {{time}}",
     "savedAgo": "Auto-saved {{time}}",
@@ -404,6 +407,12 @@
     "undoSendDelay": "Undo Send Delay",
     "undoSendDelayDesc": "Time to cancel a sent email. Set to Off to send immediately.",
     "undoSendOff": "Off",
+    "composeFont": {
+      "title": "Email font",
+      "description": "The font and size your emails are sent with. Arial, Verdana and Georgia look the same for almost every recipient.",
+      "default": "Prudii default",
+      "sample": "This is how your text will look to the recipient."
+    },
     "appearance": {
       "title": "Appearance",
       "description": "Choose how Prudii Mail looks. \"System\" follows your Windows theme automatically.",

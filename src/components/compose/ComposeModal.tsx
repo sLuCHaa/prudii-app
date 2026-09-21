@@ -5,7 +5,7 @@ import { dateLocale } from "../../lib/dateUtils";
 import { PulseDot } from "../motion/PulseDot";
 import { GradientAvatar } from "../motion/GradientAvatar";
 import { SPRING_SNAPPY } from "../motion/tokens";
-import { X, Paperclip, Trash2, Send, File, FileText, Image, Film, Music, FileCode, FileSpreadsheet, Archive, Sparkles, Loader2, FileType, CalendarClock, ChevronDown, Pencil, Check } from "lucide-react";
+import { X, Paperclip, Trash2, Send, File, FileText, Image, Film, Music, FileCode, FileSpreadsheet, Archive, Sparkles, Loader2, FileType, CalendarClock, ChevronDown, Pencil, Check, Eye } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { EditorContent } from "@tiptap/react";
 import TiptapImage from "@tiptap/extension-image";
@@ -27,11 +27,12 @@ import { saveDraft, syncAccount, fetchMailBody, suggestReplies, sendMail, schedu
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AiRepliesEvent, EmailTemplate, ReplySuggestion } from "../../types";
 import { escapeHtml } from "../../lib/sanitize";
-import { fillEmptyParagraphs, inlineComposeStyles, extractLocalImages, dropImagesByCid } from "../../lib/outgoingHtml";
+import { fillEmptyParagraphs, inlineComposeStyles, composeTypography, extractLocalImages, dropImagesByCid } from "../../lib/outgoingHtml";
 import { resolveInlineImagesInHtml } from "../../lib/inlineImages";
 import { stripMmlTags } from "../../lib/missingParts";
 import { HtmlMailFrame } from "../layout/MailDetail";
 import { RecipientInput, type RecipientInputHandle } from "./RecipientInput";
+import { ComposePreview, type ComposePreviewData } from "./ComposePreview";
 import type { Mail, SendMailRequest, SendAttachment, Attachment, Account, AppSettings } from "../../types";
 import { formatFileSize } from "../../lib/fileSize";
 
@@ -464,6 +465,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
 
   const storeAppSettings = useAppStore((s) => s.appSettings);
   const appSettings = initData?.appSettings ?? storeAppSettings;
+  const typography = composeTypography(appSettings.compose_font, appSettings.compose_font_size);
 
   const startUndoSend = useAppStore((s) => s.startUndoSend);
   const undoSendSnapshot = useAppStore((s) => s.undoSend.composeSnapshot);
@@ -504,6 +506,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
   const [showScheduleMenu, setShowScheduleMenu] = useState(false);
   const [quotedHtml, setQuotedHtml] = useState("");
+  const [preview, setPreview] = useState<ComposePreviewData | null>(null);
 
   const emailsOf = (list: string[]) => list.map((r) => {
     const m = r.match(/<([^>]+)>/);
@@ -1074,7 +1077,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     // Only on the way out: the editor writes a blank line as `<p></p>`, which
     // collapses to nothing when a mail client renders it — and its paragraph
     // spacing/font live in our stylesheet, which does not travel with the mail.
-    const editorHtml = inlineComposeStyles(fillEmptyParagraphs(editor.getHTML()));
+    const editorHtml = inlineComposeStyles(fillEmptyParagraphs(editor.getHTML()), typography);
     const editorText = editor.getText({ blockSeparator: '\n\n' });
     const bodyHtml = editorHtml + quotedHtml;
     const bodyText = editorText + (quotedHtml ? "\n\n" + quotedHtml.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim() : "");
@@ -1404,7 +1407,20 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   const dialog = useDialog();
   // Keep escBlockedRef current every render so the capture-once keydown listener
   // can check it without a stale closure.
-  escBlockedRef.current = showDiscardDialog || linkDialogOpen || dialog.isOpen;
+  escBlockedRef.current = showDiscardDialog || linkDialogOpen || dialog.isOpen || preview !== null;
+
+  function openPreview() {
+    const account = accounts?.find((a) => a.id === fromAccountId);
+    setPreview({
+      from: account ? (account.display_name ? `${account.display_name} <${account.email}>` : account.email) : "",
+      to,
+      cc,
+      bcc,
+      subject,
+      attachments: attachments.map((a) => a.name),
+      html: buildOutgoingBody().bodyHtml,
+    });
+  }
 
   function handleDiscardClick() {
     const hasContent = editor ? editor.getText().trim().length > 0 : false;
@@ -1686,6 +1702,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
             <EditorContent
               editor={editor}
               className="compose-editor text-sm text-text leading-relaxed"
+              style={{ "--compose-font": typography.fontStack, "--compose-font-size": `${typography.fontSizePt}pt` } as React.CSSProperties}
             />
             {quotedHtml && (
               <div className="mt-2">
@@ -1851,46 +1868,56 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
                 </>
               ) : null}
             </div>
-            <div
-              ref={scheduleBtnRef}
-              className="relative flex items-stretch gap-0 rounded-xl [box-shadow:0_2px_8px_rgba(59,130,246,0.25)]"
-            >
-              <SendButton onSend={handleSend} disabled={to.length === 0 && !toHasPending} />
-              <button
-                onClick={() => setShowScheduleMenu(!showScheduleMenu)}
-                disabled={(to.length === 0 && !toHasPending) || sending}
-                className="flex items-center px-2 bg-accent text-white rounded-r-xl border-l border-white/20 disabled:opacity-50 transition-[filter] duration-200 hover:brightness-110 active:brightness-95"
+            <div className="flex items-center gap-2">
+              <IconButton
+                icon={<Eye />}
+                aria-label={t("compose.preview")}
+                title={t("compose.preview")}
+                onClick={openPreview}
+              />
+              <div
+                ref={scheduleBtnRef}
+                className="relative flex items-stretch gap-0 rounded-xl [box-shadow:0_2px_8px_rgba(59,130,246,0.25)]"
               >
-                <ChevronDown className="w-4 h-4" />
-              </button>
-              {showScheduleMenu && (
-                <div className="absolute bottom-full right-0 mb-2 min-w-[200px] bg-surface rounded-lg shadow-lg border border-border py-1 z-50">
-                  <div className="px-3 py-1.5 text-xs font-semibold text-text-tertiary flex items-center gap-1.5">
-                    <CalendarClock className="w-3.5 h-3.5" />
-                    {t("scheduled.scheduleSend")}
-                  </div>
-                  {getSchedulePresets().map((preset) => (
+                <SendButton onSend={handleSend} disabled={to.length === 0 && !toHasPending} />
+                <button
+                  onClick={() => setShowScheduleMenu(!showScheduleMenu)}
+                  disabled={(to.length === 0 && !toHasPending) || sending}
+                  className="flex items-center px-2 bg-accent text-white rounded-r-xl border-l border-white/20 disabled:opacity-50 transition-[filter] duration-200 hover:brightness-110 active:brightness-95"
+                >
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+                {showScheduleMenu && (
+                  <div className="absolute bottom-full right-0 mb-2 min-w-[200px] bg-surface rounded-lg shadow-lg border border-border py-1 z-50">
+                    <div className="px-3 py-1.5 text-xs font-semibold text-text-tertiary flex items-center gap-1.5">
+                      <CalendarClock className="w-3.5 h-3.5" />
+                      {t("scheduled.scheduleSend")}
+                    </div>
+                    {getSchedulePresets().map((preset) => (
+                      <button
+                        key={preset.label}
+                        onClick={() => handleScheduleSend(preset.date)}
+                        className="w-full text-left px-3 py-1.5 text-sm text-text hover:bg-hover transition-colors"
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                    <div className="border-t border-border my-1" />
                     <button
-                      key={preset.label}
-                      onClick={() => handleScheduleSend(preset.date)}
+                      onClick={handleScheduleCustom}
                       className="w-full text-left px-3 py-1.5 text-sm text-text hover:bg-hover transition-colors"
                     >
-                      {preset.label}
+                      {t("scheduled.customTime")}
                     </button>
-                  ))}
-                  <div className="border-t border-border my-1" />
-                  <button
-                    onClick={handleScheduleCustom}
-                    className="w-full text-left px-3 py-1.5 text-sm text-text hover:bg-hover transition-colors"
-                  >
-                    {t("scheduled.customTime")}
-                  </button>
-                </div>
-              )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
       </div>
+
+      {preview && <ComposePreview data={preview} onClose={() => setPreview(null)} />}
 
       {showDiscardDialog && (
         <motion.div

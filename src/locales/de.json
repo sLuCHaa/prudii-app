@@ -190,6 +190,9 @@
     "sendWithoutSubject": "Ohne Betreff senden",
     "quotedMessage": "Zitierte Nachricht",
     "editQuote": "Zitat bearbeiten",
+    "preview": "Vorschau",
+    "previewAttachments": "Anhänge",
+    "previewHint": "So wird deine E-Mail versendet. Das Mailprogramm des Empfängers kann die Darstellung leicht verändern.",
     "draftSavingNow": "Speichert…",
     "draftSavedAt": "Gespeichert {{time}}",
     "savedAgo": "Automatisch gesichert {{time}}",
@@ -610,6 +613,12 @@
     "undoSendDelay": "Senden-Rückgängig-Verzögerung",
     "undoSendDelayDesc": "Zeit zum Abbrechen einer gesendeten E-Mail. Auf Aus setzen für sofortigen Versand.",
     "undoSendOff": "Aus",
+    "composeFont": {
+      "title": "Schrift für E-Mails",
+      "description": "Schriftart und -größe, mit der deine E-Mails verschickt werden. Arial, Verdana und Georgia sehen bei fast allen Empfängern gleich aus.",
+      "default": "Prudii-Standard",
+      "sample": "So sieht dein Text beim Empfänger aus."
+    },
     "deleteAccountConfirm": {
       "title": "Konto löschen?",
       "body": "Alle lokal gecachten E-Mails dieses Kontos werden entfernt. Das Konto auf dem Server bleibt unverändert.",

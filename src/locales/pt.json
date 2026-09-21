@@ -190,6 +190,9 @@
     "sendWithoutSubject": "Enviar sem assunto",
     "quotedMessage": "Mensagem citada",
     "editQuote": "Editar citação",
+    "preview": "Pré-visualizar",
+    "previewAttachments": "Anexos",
+    "previewHint": "É assim que o seu e-mail será enviado. O aplicativo de e-mail do destinatário pode exibi-lo com pequenas diferenças.",
     "draftSavingNow": "A guardar…",
     "draftSavedAt": "Guardado {{time}}",
     "savedAgo": "Salvo automaticamente {{time}}",
@@ -404,6 +407,12 @@
     "undoSendDelay": "Atraso de desfazer envio",
     "undoSendDelayDesc": "Tempo para cancelar um e-mail enviado. Defina como Desligado para enviar imediatamente.",
     "undoSendOff": "Desligado",
+    "composeFont": {
+      "title": "Fonte dos e-mails",
+      "description": "A fonte e o tamanho com que os seus e-mails são enviados. Arial, Verdana e Georgia aparecem iguais para quase todos os destinatários.",
+      "default": "Padrão do Prudii",
+      "sample": "É assim que o destinatário verá o seu texto."
+    },
     "appearance": {
       "title": "Aparência",
       "description": "Escolha como o Prudii Mail deve aparecer. \"Sistema\" segue automaticamente o tema do seu Windows.",

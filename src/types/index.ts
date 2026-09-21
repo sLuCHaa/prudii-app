@@ -121,6 +121,8 @@ export interface AppSettings {
   transparent_sidebar: boolean;
   strip_tracking_params: boolean;
   use_system_font: boolean;
+  compose_font: string;
+  compose_font_size: number; // pt
 }
 
 export interface OllamaStatus {

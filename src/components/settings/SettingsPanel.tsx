@@ -74,6 +74,7 @@ const LANGUAGE_OPTIONS: { value: AppLanguage; labelKey: string }[] = [
 
 import type { DensityMode } from "../../types";
 import { ACCENT_OPTIONS, DEFAULT_ACCENT_HEX } from "../../lib/accents";
+import { COMPOSE_FONTS, COMPOSE_FONT_SIZES, composeTypography, type ComposeFontId } from "../../lib/outgoingHtml";
 
 const DENSITY_OPTIONS: { id: DensityMode; labelKey: string }[] = [
   { id: "compact", labelKey: "settings.density.compact" },
@@ -687,6 +688,8 @@ export function SettingsPanel() {
     }
   }
 
+  const composeTypo = composeTypography(localSettings.compose_font, localSettings.compose_font_size);
+
   function updateLocalSetting<K extends keyof typeof localSettings>(key: K, value: typeof localSettings[K]) {
     setLocalSettings((prev) => ({ ...prev, [key]: value }));
     setSettingsSaved(false);
@@ -1005,6 +1008,53 @@ export function SettingsPanel() {
                         </button>
                       ))}
                     </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <Type className="w-4 h-4 text-text-tertiary" />
+                      <h3 className="text-sm font-medium text-text">{t("settings.composeFont.title")}</h3>
+                    </div>
+                    <p className="text-xs text-text-tertiary mb-3">
+                      {t("settings.composeFont.description")}
+                    </p>
+                    <div className="flex gap-2 flex-wrap">
+                      {(Object.keys(COMPOSE_FONTS) as ComposeFontId[]).map((id) => (
+                        <button
+                          key={id}
+                          onClick={() => updateLocalSetting("compose_font", id)}
+                          style={{ fontFamily: COMPOSE_FONTS[id].stack }}
+                          className={`px-3 py-2 rounded-lg border text-sm transition-colors ${
+                            composeTypo.fontStack === COMPOSE_FONTS[id].stack
+                              ? "border-accent bg-accent-soft text-accent"
+                              : "border-border text-text-secondary hover:bg-hover"
+                          }`}
+                        >
+                          {id === "prudii" ? t("settings.composeFont.default") : COMPOSE_FONTS[id].label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex gap-2 mt-3">
+                      {COMPOSE_FONT_SIZES.map((size) => (
+                        <button
+                          key={size}
+                          onClick={() => updateLocalSetting("compose_font_size", size)}
+                          className={`flex-1 px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
+                            composeTypo.fontSizePt === size
+                              ? "border-accent bg-accent-soft text-accent"
+                              : "border-border text-text-secondary hover:bg-hover"
+                          }`}
+                        >
+                          {size} pt
+                        </button>
+                      ))}
+                    </div>
+                    <p
+                      className="mt-3 p-3 rounded-lg border border-border bg-bg-secondary text-text"
+                      style={{ fontFamily: composeTypo.fontStack, fontSize: `${composeTypo.fontSizePt}pt`, lineHeight: 1.5 }}
+                    >
+                      {t("settings.composeFont.sample")}
+                    </p>
                   </div>
 
                   <div>

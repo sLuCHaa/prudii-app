@@ -1,30 +1,59 @@
 import { describe, it, expect } from "vitest";
-import { fillEmptyParagraphs, inlineComposeStyles, extractLocalImages, dropImagesByCid, decodeFileUrl, OUTGOING_FONT_STACK } from "./outgoingHtml";
+import { fillEmptyParagraphs, inlineComposeStyles, composeTypography, extractLocalImages, dropImagesByCid, decodeFileUrl, OUTGOING_FONT_STACK, COMPOSE_FONTS, DEFAULT_COMPOSE_FONT_SIZE } from "./outgoingHtml";
+
+const DEFAULT_TYPO = composeTypography("prudii", DEFAULT_COMPOSE_FONT_SIZE);
 
 describe("inlineComposeStyles", () => {
-  it("stamps margin and font onto bare paragraphs", () => {
-    const out = inlineComposeStyles("<p>Hallo</p>");
-    expect(out).toBe(`<p style="margin:0 0 0.5em 0;font-family:${OUTGOING_FONT_STACK}">Hallo</p>`);
+  it("stamps margin, font, size and line height onto bare paragraphs", () => {
+    const out = inlineComposeStyles("<p>Hallo</p>", DEFAULT_TYPO);
+    expect(out).toBe(`<p style="margin:0 0 0.5em 0;font-family:${OUTGOING_FONT_STACK};font-size:11pt;line-height:1.5">Hallo</p>`);
+  });
+
+  it("uses the chosen font and size", () => {
+    const out = inlineComposeStyles("<p>Hallo</p>", composeTypography("georgia", 14));
+    expect(out).toContain(`font-family:${COMPOSE_FONTS.georgia.stack}`);
+    expect(out).toContain("font-size:14pt");
+  });
+
+  it("swaps the stack's quotes when the attribute is single-quoted", () => {
+    const out = inlineComposeStyles("<p style='text-align:center'>M</p>", composeTypography("trebuchet", 11));
+    expect(out).toContain(`font-family:"Trebuchet MS"`);
+    expect(out).not.toContain("'Trebuchet MS'");
   });
 
   it("keeps existing declarations and only adds what is missing", () => {
-    const out = inlineComposeStyles('<p style="text-align: center">M</p>');
+    const out = inlineComposeStyles('<p style="text-align: center">M</p>', DEFAULT_TYPO);
     expect(out).toContain("text-align: center");
     expect(out).toContain("margin:0 0 0.5em 0");
     expect(out).toContain("font-family:");
-    const withMargin = inlineComposeStyles('<p style="margin:0">M</p>');
+    expect(out).toContain("font-size:11pt");
+    const withMargin = inlineComposeStyles('<p style="margin:0">M</p>', DEFAULT_TYPO);
     expect(withMargin.match(/margin/g)).toHaveLength(1);
     expect(withMargin).toContain("font-family:");
+    const withSize = inlineComposeStyles('<p style="font-size:9pt">M</p>', DEFAULT_TYPO);
+    expect(withSize.match(/font-size/g)).toHaveLength(1);
+    expect(withSize).toContain("font-size:9pt");
   });
 
   it("is idempotent", () => {
-    const once = inlineComposeStyles("<p>A</p><p><br></p>");
-    expect(inlineComposeStyles(once)).toBe(once);
+    const once = inlineComposeStyles("<p>A</p><p><br></p>", DEFAULT_TYPO);
+    expect(inlineComposeStyles(once, DEFAULT_TYPO)).toBe(once);
   });
 
   it("leaves other tags and quoted markup untouched", () => {
     const html = '<div>X</div><blockquote cite="a">Y</blockquote><img src="data:image/png;base64,AAA">';
-    expect(inlineComposeStyles(html)).toBe(html);
+    expect(inlineComposeStyles(html, DEFAULT_TYPO)).toBe(html);
+  });
+});
+
+describe("composeTypography", () => {
+  it("resolves a known font and size", () => {
+    expect(composeTypography("arial", 14)).toEqual({ fontStack: COMPOSE_FONTS.arial.stack, fontSizePt: 14 });
+  });
+
+  it("falls back to the defaults for unknown values", () => {
+    // Settings written by a newer version may carry ids this build does not know.
+    expect(composeTypography("comic-sans", 13)).toEqual({ fontStack: OUTGOING_FONT_STACK, fontSizePt: DEFAULT_COMPOSE_FONT_SIZE });
   });
 });
 

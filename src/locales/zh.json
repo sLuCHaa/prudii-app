@@ -189,6 +189,9 @@
     "sendWithoutSubject": "发送无主题邮件",
     "quotedMessage": "引用的消息",
     "editQuote": "编辑引用",
+    "preview": "预览",
+    "previewAttachments": "附件",
+    "previewHint": "这是您的邮件发送后的样子。收件人的邮件程序可能会略有不同地显示。",
     "draftSavingNow": "保存中…",
     "draftSavedAt": "已保存 {{time}}",
     "savedAgo": "已自动保存 {{time}}",
@@ -403,6 +406,12 @@
     "undoSendDelay": "撤销发送延迟",
     "undoSendDelayDesc": "取消已发送邮件的时间。设为关闭可立即发送。",
     "undoSendOff": "关闭",
+    "composeFont": {
+      "title": "邮件字体",
+      "description": "发送邮件时使用的字体和字号。Arial、Verdana 和 Georgia 在几乎所有收件人那里显示效果都相同。",
+      "default": "Prudii 默认",
+      "sample": "收件人看到的文字效果就是这样。"
+    },
     "appearance": {
       "title": "外观",
       "description": "选择 Prudii Mail 的外观。\"系统\"将自动跟随您的 Windows 主题。",

@@ -65,8 +65,8 @@ const DARK_STYLES = `
   ::-webkit-scrollbar-thumb:hover { background: #574C3E; }
 `;
 
-export function HtmlMailFrame({ html, allowExternalImages = true, onIframeRef, onTrackersDetected, onLinkClick, onImageClick }: { html: string; allowExternalImages?: boolean; onIframeRef?: (el: HTMLIFrameElement | null) => void; onTrackersDetected?: (trackers: TrackerInfo[]) => void; onLinkClick?: (href: string) => void; onImageClick?: (src: string) => void }) {
-  const darkMode = useAppStore((s) => s.darkMode);
+export function HtmlMailFrame({ html, allowExternalImages = true, forceLight = false, onIframeRef, onTrackersDetected, onLinkClick, onImageClick }: { html: string; allowExternalImages?: boolean; /** Render as most recipients see it, ignoring the app's dark mode. */ forceLight?: boolean; onIframeRef?: (el: HTMLIFrameElement | null) => void; onTrackersDetected?: (trackers: TrackerInfo[]) => void; onLinkClick?: (href: string) => void; onImageClick?: (src: string) => void }) {
+  const darkMode = useAppStore((s) => s.darkMode) && !forceLight;
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const { height, refit } = useMailFrameFit(iframeRef);
   const [bodyMenu, setBodyMenu] = useState<{ target: BridgeContextMenu; x: number; y: number; seq: number } | null>(null);

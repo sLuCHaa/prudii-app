@@ -544,6 +544,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     transparent_sidebar: true,
     strip_tracking_params: true,
     use_system_font: false,
+    compose_font: "prudii",
+    compose_font_size: 11,
   },
   appSettingsLoaded: false,
   setAppSettings: (appSettings) => set({ appSettings, appSettingsLoaded: true }),
