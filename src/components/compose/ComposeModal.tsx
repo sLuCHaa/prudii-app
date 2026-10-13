@@ -1698,7 +1698,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
             </div>
           )}
 
-          <div className="p-4 min-h-[250px] focus-within:bg-bg-secondary rounded-lg transition-colors">
+          <div className="p-4 min-h-[250px]">
             <EditorContent
               editor={editor}
               className="compose-editor text-sm text-text leading-relaxed"
