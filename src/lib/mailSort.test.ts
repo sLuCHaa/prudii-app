@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseMailSort, nextSort, isDateSort, sortField, sortDirection } from "./mailSort";
+import { parseMailSort, nextSort, isDateSort, sortField, sortDirection, absenceMeansMoved } from "./mailSort";
 
 describe("parseMailSort", () => {
   it("accepts the six known values", () => {
@@ -26,6 +26,15 @@ describe("nextSort", () => {
   it("flips the direction of the active field", () => {
     expect(nextSort("date_desc", "date")).toBe("date_asc");
     expect(nextSort("subject_asc", "subject")).toBe("subject_desc");
+  });
+});
+
+describe("absenceMeansMoved", () => {
+  it("only trusts a missing open mail under newest-first", () => {
+    expect(absenceMeansMoved("date_desc")).toBe(true);
+    for (const sort of ["date_asc", "correspondent_asc", "correspondent_desc", "subject_asc", "subject_desc"] as const) {
+      expect(absenceMeansMoved(sort)).toBe(false);
+    }
   });
 });
 

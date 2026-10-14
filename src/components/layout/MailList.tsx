@@ -43,7 +43,7 @@ import { SNOOZE_PRESETS, toSnoozeStamp } from "../../lib/snooze";
 /** Keeps the snooze menu right-aligned with the button that opens it. */
 const SNOOZE_MENU_WIDTH = 176;
 import { formatMailDate } from "../../lib/dateUtils";
-import { isDateSort, parseMailSort } from "../../lib/mailSort";
+import { absenceMeansMoved, isDateSort, parseMailSort } from "../../lib/mailSort";
 import { buildListItems, type ListItem } from "../../lib/mailListItems";
 import { makeIsOutgoing } from "../../lib/outgoing";
 import { MailSortMenu } from "./MailSortMenu";
@@ -552,7 +552,7 @@ function VirtualMailList({
     getItemKey: (i: number) => {
       if (i >= virtualItems.length) return "__spinner";
       const item = virtualItems[i];
-      return item.kind === "separator" ? `sep-${item.group}` : item.mail.id;
+      return item.kind === "separator" ? item.key : item.mail.id;
     },
   });
 
@@ -723,7 +723,7 @@ function VirtualMailList({
           if (item.kind === "separator") {
             return (
               <div
-                key={`sep-${item.group}`}
+                key={item.key}
                 data-index={vRow.index}
                 ref={rowVirtualizer.measureElement}
                 style={{
@@ -1325,7 +1325,7 @@ export function MailList() {
   // across folders) and under pill filters (they legitimately drop the open
   // mail from the query, e.g. reading it under "unread").
   useEffect(() => {
-    if (!searchOpen && folderFilter === "all" && selectedFolderId && selectedMailId && queryData !== undefined) {
+    if (!searchOpen && folderFilter === "all" && absenceMeansMoved(mailSort) && selectedFolderId && selectedMailId && queryData !== undefined) {
       const index = fetchedMails.findIndex((m) => m.id === selectedMailId);
       if (index === -1) {
         // A pinned mail (opened from a task link or a notification) is routinely
@@ -1335,7 +1335,7 @@ export function MailList() {
         setSelectedMailIndex(index);
       }
     }
-  }, [fetchedMails, searchOpen, folderFilter, selectedFolderId, selectedMailId, pinnedMailId, queryData, setSelectedMailId, setSelectedMailIndex]);
+  }, [fetchedMails, searchOpen, folderFilter, mailSort, selectedFolderId, selectedMailId, pinnedMailId, queryData, setSelectedMailId, setSelectedMailIndex]);
 
   // Infinite scroll handler — called directly via onScroll prop (no stale closures)
   const handleListScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {

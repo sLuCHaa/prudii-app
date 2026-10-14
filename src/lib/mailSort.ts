@@ -29,3 +29,8 @@ export function nextSort(current: MailSort, field: MailSortField): MailSort {
 export function isDateSort(sort: MailSort): boolean {
   return sortField(sort) === "date";
 }
+
+/** Only newest-first loads the open mail's neighbourhood first; elsewhere it may just sit on a later page. */
+export function absenceMeansMoved(sort: MailSort): boolean {
+  return sort === "date_desc";
+}
