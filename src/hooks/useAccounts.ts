@@ -2,6 +2,7 @@ import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tansta
 import { listAccounts, createAccount, deleteAccount, listFolders, listMails, listFilteredMails, listAllInboxMails, listCombinedFolderMails, listSnoozedMails, listSplitInboxMails, listInboxSplits, listAttachments, toggleStar, togglePin, toggleMailFlag, listRules, createRule, updateRule, deleteRule, applyRulesNow } from "../lib/tauri";
 import type { CreateAccountRequest, CreateRuleRequest, Mail, MailFlag, MailRule } from "../types";
 import type { MailFilter } from "../stores/appStore";
+import type { MailSort } from "../lib/mailSort";
 
 const PAGE_SIZE = 100;
 
@@ -40,11 +41,11 @@ export function useFolders(accountId: string | null) {
   });
 }
 
-export function useMails(folderId: string | null, folderFilter?: string) {
+export function useMails(folderId: string | null, folderFilter: string | undefined, sort: MailSort) {
   const filterKey = folderFilter && folderFilter !== "all" ? folderFilter : undefined;
   return useInfiniteQuery<Mail[]>({
-    queryKey: ["mails", folderId, filterKey],
-    queryFn: ({ pageParam = 0 }) => listMails(folderId!, PAGE_SIZE, pageParam as number, filterKey),
+    queryKey: ["mails", folderId, filterKey, sort],
+    queryFn: ({ pageParam = 0 }) => listMails(folderId!, PAGE_SIZE, pageParam as number, filterKey, sort),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) =>
       lastPage.length < PAGE_SIZE ? undefined : allPages.flat().length,
@@ -53,11 +54,11 @@ export function useMails(folderId: string | null, folderFilter?: string) {
   });
 }
 
-export function useFilteredMails(filter: MailFilter, accountId?: string, folderFilter?: string) {
+export function useFilteredMails(filter: MailFilter, accountId: string | undefined, folderFilter: string | undefined, sort: MailSort) {
   const filterKey = folderFilter && folderFilter !== "all" ? folderFilter : undefined;
   return useInfiniteQuery<Mail[]>({
-    queryKey: ["filtered-mails", filter, accountId, filterKey],
-    queryFn: ({ pageParam = 0 }) => listFilteredMails(filter!, accountId, PAGE_SIZE, pageParam as number, filterKey),
+    queryKey: ["filtered-mails", filter, accountId, filterKey, sort],
+    queryFn: ({ pageParam = 0 }) => listFilteredMails(filter!, accountId, PAGE_SIZE, pageParam as number, filterKey, sort),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) =>
       lastPage.length < PAGE_SIZE ? undefined : allPages.flat().length,
@@ -66,11 +67,11 @@ export function useFilteredMails(filter: MailFilter, accountId?: string, folderF
   });
 }
 
-export function useAllInboxMails(enabled: boolean, folderFilter?: string) {
+export function useAllInboxMails(enabled: boolean, folderFilter: string | undefined, sort: MailSort) {
   const filterKey = folderFilter && folderFilter !== "all" ? folderFilter : undefined;
   return useInfiniteQuery<Mail[]>({
-    queryKey: ["all-inbox-mails", filterKey],
-    queryFn: ({ pageParam = 0 }) => listAllInboxMails(PAGE_SIZE, pageParam as number, filterKey),
+    queryKey: ["all-inbox-mails", filterKey, sort],
+    queryFn: ({ pageParam = 0 }) => listAllInboxMails(PAGE_SIZE, pageParam as number, filterKey, sort),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) =>
       lastPage.length < PAGE_SIZE ? undefined : allPages.flat().length,
@@ -79,11 +80,11 @@ export function useAllInboxMails(enabled: boolean, folderFilter?: string) {
   });
 }
 
-export function useCombinedFolderMails(folderType: string | null, folderFilter?: string) {
+export function useCombinedFolderMails(folderType: string | null, folderFilter: string | undefined, sort: MailSort) {
   const filterKey = folderFilter && folderFilter !== "all" ? folderFilter : undefined;
   return useInfiniteQuery<Mail[]>({
-    queryKey: ["combined-folder-mails", folderType, filterKey],
-    queryFn: ({ pageParam = 0 }) => listCombinedFolderMails(folderType!, PAGE_SIZE, pageParam as number, filterKey),
+    queryKey: ["combined-folder-mails", folderType, filterKey, sort],
+    queryFn: ({ pageParam = 0 }) => listCombinedFolderMails(folderType!, PAGE_SIZE, pageParam as number, filterKey, sort),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) =>
       lastPage.length < PAGE_SIZE ? undefined : allPages.flat().length,
@@ -99,10 +100,10 @@ export function useInboxSplits() {
   });
 }
 
-export function useSplitInboxMails(splitId: string | null) {
+export function useSplitInboxMails(splitId: string | null, sort: MailSort) {
   return useInfiniteQuery<Mail[]>({
-    queryKey: ["split-inbox-mails", splitId],
-    queryFn: ({ pageParam = 0 }) => listSplitInboxMails(splitId!, PAGE_SIZE, pageParam as number),
+    queryKey: ["split-inbox-mails", splitId, sort],
+    queryFn: ({ pageParam = 0 }) => listSplitInboxMails(splitId!, PAGE_SIZE, pageParam as number, sort),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) =>
       lastPage.length < PAGE_SIZE ? undefined : allPages.flat().length,

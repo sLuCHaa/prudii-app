@@ -43,6 +43,7 @@ import { SNOOZE_PRESETS, toSnoozeStamp } from "../../lib/snooze";
 /** Keeps the snooze menu right-aligned with the button that opens it. */
 const SNOOZE_MENU_WIDTH = 176;
 import { formatMailDate, getDateGroup } from "../../lib/dateUtils";
+import { parseMailSort } from "../../lib/mailSort";
 import { runMailAction, toastError, causeMessage } from "../../lib/errorToast";
 import { invalidateMailListQueries } from "../../lib/mailQueries";
 import { accumulate, decide, isHorizontalIntent } from "../../lib/swipe";
@@ -1245,19 +1246,22 @@ export function MailList() {
 
   // Folder filter key: pass to backend for server-side filtering (skip "all")
   const activeFilterKey = folderFilter !== "all" ? folderFilter : undefined;
+  const mailSort = parseMailSort(useAppStore((s) => s.appSettings.mail_sort));
 
   const folderQuery = useMails(
     !activeFilter && !showAllInboxes && !activeCombinedFolder ? selectedFolderId : null,
-    activeFilterKey
+    activeFilterKey,
+    mailSort
   );
   // Filters search across ALL accounts (no accountId filter)
   const filterQuery = useFilteredMails(
     activeFilter,
     undefined,
-    activeFilterKey
+    activeFilterKey,
+    mailSort
   );
-  const allInboxQuery = useAllInboxMails(showAllInboxes && !activeSplitId, activeFilterKey);
-  const combinedQuery = useCombinedFolderMails(activeCombinedFolder, activeFilterKey);
+  const allInboxQuery = useAllInboxMails(showAllInboxes && !activeSplitId, activeFilterKey, mailSort);
+  const combinedQuery = useCombinedFolderMails(activeCombinedFolder, activeFilterKey, mailSort);
   const snoozedQuery = useSnoozedMails(showSnoozed);
   const accounts = useAppStore((s) => s.accounts);
   const { snapshot: teamSnapshot } = useTeamSnapshot();
@@ -1276,7 +1280,7 @@ export function MailList() {
   const setAssignmentStatus = useSetAssignmentStatus();
   const unassignMail = useUnassignMail();
   const accountEmailOf = (accountId: string) => accounts.find((a) => a.id === accountId)?.email ?? "";
-  const splitQuery = useSplitInboxMails(showAllInboxes ? activeSplitId : null);
+  const splitQuery = useSplitInboxMails(showAllInboxes ? activeSplitId : null, mailSort);
   const splitsQuery = useInboxSplits();
   const inboxSplits = splitsQuery.data ?? [];
 

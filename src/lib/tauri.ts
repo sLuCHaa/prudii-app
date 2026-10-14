@@ -83,16 +83,16 @@ export async function updateFolderColor(folderId: string, color: string): Promis
   return invoke("update_folder_color", { folderId, color });
 }
 
-export async function listMails(folderId: string, limit?: number, offset?: number, folderFilter?: string): Promise<Mail[]> {
-  return invoke("list_mails", { folderId, limit: limit ?? null, offset: offset ?? null, folderFilter: folderFilter ?? null });
+export async function listMails(folderId: string, limit?: number, offset?: number, folderFilter?: string, sort?: string): Promise<Mail[]> {
+  return invoke("list_mails", { folderId, limit: limit ?? null, offset: offset ?? null, folderFilter: folderFilter ?? null, sort: sort ?? null });
 }
 
-export async function listFilteredMails(filterType: string, accountId?: string, limit?: number, offset?: number, folderFilter?: string): Promise<Mail[]> {
-  return invoke("list_filtered_mails", { filterType, accountId: accountId ?? null, limit: limit ?? null, offset: offset ?? null, folderFilter: folderFilter ?? null });
+export async function listFilteredMails(filterType: string, accountId?: string, limit?: number, offset?: number, folderFilter?: string, sort?: string): Promise<Mail[]> {
+  return invoke("list_filtered_mails", { filterType, accountId: accountId ?? null, limit: limit ?? null, offset: offset ?? null, folderFilter: folderFilter ?? null, sort: sort ?? null });
 }
 
-export async function listAllInboxMails(limit?: number, offset?: number, folderFilter?: string): Promise<Mail[]> {
-  return invoke("list_all_inbox_mails", { limit: limit ?? null, offset: offset ?? null, folderFilter: folderFilter ?? null });
+export async function listAllInboxMails(limit?: number, offset?: number, folderFilter?: string, sort?: string): Promise<Mail[]> {
+  return invoke("list_all_inbox_mails", { limit: limit ?? null, offset: offset ?? null, folderFilter: folderFilter ?? null, sort: sort ?? null });
 }
 
 export async function getMail(mailId: string): Promise<Mail | null> {
@@ -279,8 +279,8 @@ export async function quitApp(): Promise<void> {
   return invoke("quit_app");
 }
 
-export async function listCombinedFolderMails(folderType: string, limit?: number, offset?: number, folderFilter?: string): Promise<Mail[]> {
-  return invoke("list_combined_folder_mails", { folderType, limit: limit ?? null, offset: offset ?? null, folderFilter: folderFilter ?? null });
+export async function listCombinedFolderMails(folderType: string, limit?: number, offset?: number, folderFilter?: string, sort?: string): Promise<Mail[]> {
+  return invoke("list_combined_folder_mails", { folderType, limit: limit ?? null, offset: offset ?? null, folderFilter: folderFilter ?? null, sort: sort ?? null });
 }
 
 export async function countFolderMails(folderId: string): Promise<number> {
@@ -445,8 +445,8 @@ export async function deleteInboxSplit(id: string): Promise<void> {
   return invoke("delete_inbox_split", { id });
 }
 
-export async function listSplitInboxMails(splitId: string, limit?: number, offset?: number): Promise<Mail[]> {
-  return invoke("list_split_inbox_mails", { splitId, limit: limit ?? null, offset: offset ?? null });
+export async function listSplitInboxMails(splitId: string, limit?: number, offset?: number, sort?: string): Promise<Mail[]> {
+  return invoke("list_split_inbox_mails", { splitId, limit: limit ?? null, offset: offset ?? null, sort: sort ?? null });
 }
 
 export async function classifyUnclassifiedMails(): Promise<number> {
@@ -628,6 +628,7 @@ export interface BootstrapState {
   folders: Folder[]; // all accounts, flat
   folder_id: string | null; // the folder `mails` below belongs to
   mails: Mail[]; // first page of that folder
+  mail_sort: string;
 }
 
 /// Single startup round trip replacing list_accounts + list_folders x N +

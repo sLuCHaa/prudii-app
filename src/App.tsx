@@ -33,6 +33,7 @@ import { useConnectivity } from "./hooks/useConnectivity";
 import { backfillBodies, bootstrapState, getAppSettings, checkLicenseStartup, getStartupMailto, getStartupCompose, checkSnoozedMails, classifyUnclassifiedMails, listComposeAutosaves, deleteComposeAutosave, getSystemAccentColor } from "./lib/tauri";
 import { useTeamNotifier } from "./hooks/useTeam";
 import { isAccentHex, effectiveAccentHex } from "./lib/accents";
+import { parseMailSort } from "./lib/mailSort";
 import { checkForUpdate } from "./lib/updater";
 import { installGlobalTooltips } from "./lib/globalTooltips";
 import { resolveAppMode } from "./lib/appMode";
@@ -598,10 +599,8 @@ function AppInner() {
         queryClient.setQueryData(["folders", accountId], folders);
       }
       if (state.folder_id) {
-        // Matches useMails's queryKey exactly: filterKey is undefined for the
-        // default "all" folder filter, and it's a real (non-omitted) array
-        // element, so the key must stay a 3-tuple here too.
-        queryClient.setQueryData(["mails", state.folder_id, undefined], {
+        // Must match useMails's queryKey exactly, filterKey included as undefined.
+        queryClient.setQueryData(["mails", state.folder_id, undefined, parseMailSort(state.mail_sort)], {
           pages: [state.mails],
           pageParams: [0],
         });
