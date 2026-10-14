@@ -128,6 +128,58 @@ fn search_reflects_body_updates_and_deletes() {
     assert!(search_mails_inner(&conn, "walrus", None).unwrap().is_empty(), "deleted mail leaves the index");
 }
 
+fn insert_addressed(conn: &rusqlite::Connection, id: &str, folder: &str, from: &str, to: &str, cc: &str, subject: &str, date: &str) {
+    let list = |addr: &str| {
+        if addr.is_empty() { "[]".to_string() } else { format!(r#"[{{"name":"","email":"{}"}}]"#, addr) }
+    };
+    conn.execute(
+        "INSERT INTO mails (id, account_id, folder_id, subject, from_name, from_email, to_json, cc_json, bcc_json, date)
+         VALUES (?1, 'acc', ?2, ?3, '', ?4, ?5, ?6, '[]', ?7)",
+        rusqlite::params![id, folder, subject, from, list(to), list(cc), date],
+    )
+    .unwrap();
+}
+
+#[test]
+fn search_by_address_finds_mail_from_to_and_cc_newest_first() {
+    let db = fixture("address");
+    let conn = db.lock_db();
+    insert_addressed(&conn, "from-bob", "inbox", "bob@example.org", "a@x.de", "", "Hi", "2026-01-01T10:00:00Z");
+    insert_addressed(&conn, "to-bob", "sent", "a@x.de", "bob@example.org", "", "Re: Hi", "2026-01-02T10:00:00Z");
+    insert_addressed(&conn, "cc-bob", "inbox", "carol@example.org", "a@x.de", "Bob@Example.org", "Invoice", "2026-01-03T10:00:00Z");
+    insert_addressed(&conn, "unrelated", "inbox", "dave@example.net", "a@x.de", "", "Other", "2026-01-04T10:00:00Z");
+
+    let ids = |q: &str| search_mails_inner(&conn, q, Some("acc")).unwrap().into_iter().map(|h| h.mail_id).collect::<Vec<_>>();
+    assert_eq!(ids("bob@example.org"), vec!["cc-bob", "to-bob", "from-bob"], "sender, recipient and cc, case-insensitive");
+    assert_eq!(ids("<bob@example.org>,"), vec!["cc-bob", "to-bob", "from-bob"], "pasted address punctuation is ignored");
+    assert_eq!(ids("@example.org"), vec!["cc-bob", "to-bob", "from-bob"], "a bare domain matches too");
+    assert_eq!(ids("bob@example.org invoice"), vec!["cc-bob"], "remaining words narrow through the full-text index");
+    assert!(search_mails_inner(&conn, "bob@example.org", Some("other-acc")).unwrap().is_empty(), "account filter applies");
+}
+
+#[test]
+fn search_by_address_is_not_cut_to_the_fifty_best_ranked() {
+    let db = fixture("address-many");
+    let conn = db.lock_db();
+    for i in 0..120 {
+        insert_addressed(&conn, &format!("m{i:03}"), "inbox", "busy@example.org", "a@x.de", "", "Update", &format!("2025-01-01T10:{:02}:{:02}Z", i / 60, i % 60));
+    }
+    let hits = search_mails_inner(&conn, "busy@example.org", None).unwrap();
+    assert_eq!(hits.len(), 120);
+    assert_eq!(hits[0].mail_id, "m119", "newest first");
+}
+
+#[test]
+fn search_by_address_treats_like_wildcards_literally() {
+    let db = fixture("address-wild");
+    let conn = db.lock_db();
+    insert_addressed(&conn, "real", "inbox", "a_b@x.de", "", "", "One", "2026-01-01T10:00:00Z");
+    insert_addressed(&conn, "lookalike", "inbox", "axb@x.de", "", "", "Two", "2026-01-02T10:00:00Z");
+
+    let hits = search_mails_inner(&conn, "a_b@x.de", None).unwrap();
+    assert_eq!(hits.iter().map(|h| h.mail_id.as_str()).collect::<Vec<_>>(), vec!["real"]);
+}
+
 #[test]
 fn search_ignores_empty_and_garbage_queries() {
     let db = fixture("garbage");

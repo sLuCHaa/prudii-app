@@ -1776,6 +1776,72 @@ pub fn sanitize_fts_query(query: &str) -> String {
     tokens.join(" ")
 }
 
+/// The full-text index holds only the sender, so addresses match on the address columns.
+fn search_by_address(
+    conn: &rusqlite::Connection,
+    words: &[&str],
+    account_id: Option<&str>,
+) -> Result<Vec<SearchResult>, String> {
+    let (addresses, terms): (Vec<&str>, Vec<&str>) = words.iter().copied().partition(|w| w.contains('@'));
+
+    let mut sql = String::from(
+        "SELECT m.id, m.subject,
+                COALESCE(NULLIF(m.snippet, ''), SUBSTR(m.body_text, 1, 300)),
+                m.from_name, m.from_email, m.date, m.folder_id,
+                COALESCE(f.name, ''), m.is_read, m.has_attachments
+         FROM mails m
+         LEFT JOIN folders f ON f.id = m.folder_id
+         WHERE 1 = 1",
+    );
+    let mut params: Vec<String> = Vec::new();
+    for address in addresses {
+        let address = address.trim_matches(|c: char| matches!(c, '<' | '>' | ',' | ';' | '"' | '\'' | '(' | ')'));
+        if address.is_empty() {
+            continue;
+        }
+        let escaped = address.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+        params.push(format!("%{}%", escaped));
+        let n = params.len();
+        sql.push_str(&format!(
+            " AND (m.from_email LIKE ?{n} ESCAPE '\\' OR m.to_json LIKE ?{n} ESCAPE '\\' \
+             OR m.cc_json LIKE ?{n} ESCAPE '\\' OR m.bcc_json LIKE ?{n} ESCAPE '\\')"
+        ));
+    }
+    if params.is_empty() {
+        return Ok(Vec::new());
+    }
+    let fts = sanitize_fts_query(&terms.join(" "));
+    if !fts.is_empty() {
+        params.push(fts);
+        sql.push_str(&format!(" AND m.rowid IN (SELECT rowid FROM mails_fts WHERE mails_fts MATCH ?{})", params.len()));
+    }
+    if let Some(aid) = account_id {
+        params.push(aid.to_string());
+        sql.push_str(&format!(" AND m.account_id = ?{}", params.len()));
+    }
+    sql.push_str(" ORDER BY m.date DESC LIMIT 200");
+
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(params.iter()), |row| {
+            Ok(SearchResult {
+                mail_id: row.get(0)?,
+                subject: row.get(1)?,
+                snippet: row.get(2)?,
+                from_name: row.get(3)?,
+                from_email: row.get(4)?,
+                date: row.get(5)?,
+                folder_id: row.get(6)?,
+                folder_name: row.get(7)?,
+                is_read: row.get::<_, i32>(8)? != 0,
+                has_attachments: row.get::<_, i32>(9)? != 0,
+                rank: 0.0,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
 #[tauri::command(async)]
 pub fn search_mails(
     db: State<'_, Database>,
@@ -1792,6 +1858,11 @@ pub fn search_mails_inner(
     query: &str,
     account_id: Option<&str>,
 ) -> Result<Vec<SearchResult>, String> {
+    let words: Vec<&str> = query.split_whitespace().collect();
+    if words.iter().any(|w| w.contains('@')) {
+        return search_by_address(conn, &words, account_id);
+    }
+
     let safe_query = sanitize_fts_query(query);
     if safe_query.is_empty() {
         return Ok(Vec::new());
