@@ -44,6 +44,14 @@ describe("formatMailDate", () => {
     expect(deOut.startsWith("5")).toBe(true);
   });
 
+  it("adds the year for mail from an earlier year", async () => {
+    expect(formatMailDate("2023-10-13T10:00:00Z", true)).toBe("10/13/23");
+
+    i18n.addResourceBundle("de", "translation", de, true, true);
+    await i18n.changeLanguage("de");
+    expect(formatMailDate("2023-10-13T10:00:00Z", true)).toBe("13.10.23");
+  });
+
   it("returns the raw string for garbage input", () => {
     expect(formatMailDate("not-a-date", true)).toBe("not-a-date");
   });

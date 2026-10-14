@@ -1,4 +1,4 @@
-import { format, parseISO, isToday, isYesterday, isThisWeek, isThisMonth } from "date-fns";
+import { format, parseISO, isToday, isYesterday, isThisWeek, isThisMonth, isThisYear } from "date-fns";
 import { de, enUS, es, fr, pt, ru, zhCN } from "date-fns/locale";
 import type { Locale } from "date-fns";
 import i18n from "./i18n";
@@ -38,7 +38,8 @@ export function formatMailDate(dateStr: string, use24h: boolean): string {
     if (isToday(date)) return formatTime(date, use24h);
     if (isYesterday(date)) return i18n.t("dateGroups.yesterday");
     // Intl orders day/month per locale ("Mar 12" vs "12. März")
-    return new Intl.DateTimeFormat(i18n.language, { month: "short", day: "numeric" }).format(date);
+    if (isThisYear(date)) return new Intl.DateTimeFormat(i18n.language, { month: "short", day: "numeric" }).format(date);
+    return new Intl.DateTimeFormat(i18n.language, { day: "2-digit", month: "2-digit", year: "2-digit" }).format(date);
   } catch {
     return dateStr;
   }
