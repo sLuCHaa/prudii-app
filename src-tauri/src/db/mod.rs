@@ -1,3 +1,5 @@
+pub mod mail_sort;
+
 use anyhow::Result;
 use rusqlite::Connection;
 use std::path::PathBuf;
@@ -23,6 +25,7 @@ impl Database {
         // WAL mode allows concurrent readers with one writer, preventing UI freezes during sync
         // busy_timeout prevents immediate SQLITE_BUSY errors during concurrent access
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=30000;")?;
+        mail_sort::register_functions(&conn)?;
 
         let db = Self {
             conn: Mutex::new(conn),
