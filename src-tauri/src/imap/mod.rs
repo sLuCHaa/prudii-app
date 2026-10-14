@@ -601,6 +601,8 @@ async fn repair_sync_time_dates(session: &mut ImapSession, folder: &Folder, db: 
     }
 }
 
+const PLAUSIBLE_ARRIVAL_SINCE: i64 = 631_152_000; // 1990-01-01
+
 /// A date days after the server arrival can only be a sync-time stamp.
 fn fix_dates_from_arrivals(
     db: &Database,
@@ -623,6 +625,9 @@ fn fix_dates_from_arrivals(
         let (Some(arrival), Ok(stored_date)) = (arrivals.get(&uid), chrono::DateTime::parse_from_rfc3339(&date)) else {
             continue;
         };
+        if arrival.timestamp() < PLAUSIBLE_ARRIVAL_SINCE {
+            continue;
+        }
         if stored_date.with_timezone(&chrono::Utc) - *arrival > chrono::Duration::days(2) {
             let corrected = arrival.format("%Y-%m-%dT%H:%M:%SZ").to_string();
             if conn.execute("UPDATE mails SET date = ?1 WHERE id = ?2", rusqlite::params![corrected, id]).is_ok() {
@@ -2457,6 +2462,22 @@ mod header_batch_tests {
         assert_eq!(date(1), "2023-10-13T06:15:00Z");
         assert_eq!(date(2), "2026-01-05T10:00:00Z");
         assert_eq!(date(3), "2015-01-05T10:00:00Z");
+    }
+
+    #[test]
+    fn repair_ignores_an_implausible_arrival_date() {
+        let db = fixture("repairepoch");
+        let parser = MessageParser::default();
+        let raw = "From: a@example.com\r\nSubject: s\r\nMessage-ID: <e@example.com>\r\nDate: Mon, 05 Jan 2015 10:00:00 +0000\r\n\r\n";
+        let mail = FetchedMail { uid: 9, raw_bytes: raw.as_bytes().to_vec(), flags: Vec::new(), size: 0, internal_date: None };
+        process_header_batch(&[mail], &parser, "acc", &inbox(), &db, &HashSet::new());
+        let epoch = chrono::DateTime::parse_from_rfc3339("1970-01-01T00:00:00Z").unwrap().with_timezone(&chrono::Utc);
+
+        assert_eq!(fix_dates_from_arrivals(&db, "inbox", &HashMap::from([(9, epoch)])), 0);
+
+        let conn = db.lock_db();
+        let date: String = conn.query_row("SELECT date FROM mails WHERE uid = 9", [], |r| r.get(0)).unwrap();
+        assert_eq!(date, "2015-01-05T10:00:00Z");
     }
 
     #[test]
