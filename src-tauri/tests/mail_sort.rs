@@ -92,6 +92,19 @@ fn correspondent_sort_uses_the_first_recipient_for_outgoing_mail() {
 }
 
 #[test]
+fn correspondent_sort_ignores_quotes_around_names() {
+    let db = fixture("corr-quotes");
+    let conn = db.lock_db();
+    mail(&conn, "heinrich", "sent", "s1", "Me", "me@x.de", r#"[{"name":"'Heinrich'","email":"h@y.de"}]"#, "2026-01-01T10:00:00Z", false);
+    mail(&conn, "anna", "sent", "s2", "Me", "me@x.de", r#"[{"name":"Anna","email":"a@y.de"}]"#, "2026-01-02T10:00:00Z", false);
+    mail(&conn, "zoe", "inbox", "s3", "\"Zoe\"", "z@y.de", "[]", "2026-01-03T10:00:00Z", false);
+    mail(&conn, "bob", "inbox", "s4", "Bob", "b@y.de", "[]", "2026-01-04T10:00:00Z", false);
+
+    assert_eq!(ids(&conn, "sent", Some("correspondent_asc")), ["anna", "heinrich"]);
+    assert_eq!(ids(&conn, "inbox", Some("correspondent_asc")), ["bob", "zoe"]);
+}
+
+#[test]
 fn equal_sort_keys_page_without_gaps_or_repeats() {
     let db = fixture("paging");
     let conn = db.lock_db();

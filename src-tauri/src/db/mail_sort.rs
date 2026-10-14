@@ -36,12 +36,12 @@ pub fn register_functions(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
 /// Outgoing mail sorts by its first recipient, everything else by its sender.
 fn correspondent(p: &str) -> String {
     format!(
-        "(CASE WHEN {p}folder_id IN (SELECT id FROM folders WHERE folder_type IN ('sent', 'drafts')) \
+        "TRIM(CASE WHEN {p}folder_id IN (SELECT id FROM folders WHERE folder_type IN ('sent', 'drafts')) \
               OR LOWER({p}from_email) IN (SELECT LOWER(email) FROM accounts) \
          THEN CASE WHEN json_valid({p}to_json) \
                    THEN COALESCE(NULLIF(json_extract({p}to_json, '$[0].name'), ''), json_extract({p}to_json, '$[0].email'), '') \
                    ELSE '' END \
-         ELSE COALESCE(NULLIF({p}from_name, ''), {p}from_email) END) COLLATE NOCASE"
+         ELSE COALESCE(NULLIF({p}from_name, ''), {p}from_email) END, '''\" ') COLLATE NOCASE"
     )
 }
 
