@@ -123,6 +123,7 @@ export interface AppSettings {
   use_system_font: boolean;
   compose_font: string;
   compose_font_size: number; // pt
+  mail_sort: string;
 }
 
 export interface OllamaStatus {

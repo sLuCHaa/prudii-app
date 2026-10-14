@@ -6,6 +6,7 @@ import { parseMailtoUrl, type MailtoParams } from "../lib/mailtoParser";
 import type { Update } from "../lib/updater";
 import type { ToastAction, ToastData, ToastType } from "../components/ui/Toast";
 import { prefers24HourClock } from "../lib/localeDefaults";
+import type { MailSort } from "../lib/mailSort";
 
 export interface ComposeSnapshot {
   to: string[];
@@ -189,6 +190,7 @@ interface AppState {
   /** A user's choice: applies it and stores it in the app settings, unlike
    *  setThemeMode, which the boot path and the settings sync call. */
   chooseThemeMode: (mode: ThemeMode) => void;
+  chooseMailSort: (sort: MailSort) => void;
 
   updateAvailable: Update | null;
   setUpdateAvailable: (update: Update | null) => void;
@@ -508,6 +510,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     applyTheme(mode, dark);
     set({ themeMode: mode, darkMode: dark });
   },
+  chooseMailSort: (sort) => {
+    const next = { ...get().appSettings, mail_sort: sort };
+    set({ appSettings: next });
+    if (!get().appSettingsLoaded) return;
+    updateAppSettings(next).catch(() => {});
+  },
   chooseThemeMode: (mode) => {
     get().setThemeMode(mode);
     // Before the settings are loaded, persisting would overwrite the database
@@ -546,6 +554,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     use_system_font: false,
     compose_font: "prudii",
     compose_font_size: 11,
+    mail_sort: "date_desc",
   },
   appSettingsLoaded: false,
   setAppSettings: (appSettings) => set({ appSettings, appSettingsLoaded: true }),
