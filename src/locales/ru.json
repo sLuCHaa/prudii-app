@@ -375,7 +375,16 @@
     "markAllRead": "Отметить как прочитанное",
     "markAllUnread": "Отметить как непрочитанное",
     "batchArchive": "Архивировать",
-    "batchTrash": "Удалить"
+    "batchTrash": "Удалить",
+    "sort": {
+      "button": "Сортировка",
+      "date": "Дата",
+      "correspondent": "Корреспондент",
+      "subject": "Тема",
+      "ascending": "по возрастанию",
+      "descending": "по убыванию"
+    },
+    "toRecipient": "Кому: {{name}}"
   },
   "search": {
     "placeholder": "Поиск писем...",

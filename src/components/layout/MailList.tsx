@@ -42,8 +42,11 @@ import { SNOOZE_PRESETS, toSnoozeStamp } from "../../lib/snooze";
 
 /** Keeps the snooze menu right-aligned with the button that opens it. */
 const SNOOZE_MENU_WIDTH = 176;
-import { formatMailDate, getDateGroup } from "../../lib/dateUtils";
-import { parseMailSort } from "../../lib/mailSort";
+import { formatMailDate } from "../../lib/dateUtils";
+import { isDateSort, parseMailSort } from "../../lib/mailSort";
+import { buildListItems, type ListItem } from "../../lib/mailListItems";
+import { makeIsOutgoing } from "../../lib/outgoing";
+import { MailSortMenu } from "./MailSortMenu";
 import { runMailAction, toastError, causeMessage } from "../../lib/errorToast";
 import { invalidateMailListQueries } from "../../lib/mailQueries";
 import { accumulate, decide, isHorizontalIntent } from "../../lib/swipe";
@@ -443,10 +446,6 @@ function rowEstimateFor(density: string | null): number {
   return density === "compact" ? 60 : density === "spacious" ? 80 : 68;
 }
 
-type VirtualItem =
-  | { kind: "separator"; group: string; label: string }
-  | { kind: "mail"; mail: Mail; mailIndex: number };
-
 interface VirtualMailListProps {
   listRef: React.RefObject<HTMLDivElement | null>;
   filteredMails: Mail[];
@@ -459,6 +458,8 @@ interface VirtualMailListProps {
   multiSelectMode: boolean;
   appSettings: { use_24h_clock: boolean };
   dateGroupLabels: Record<string, string>;
+  showDateGroups: boolean;
+  isOutgoing: (mail: Mail) => boolean;
   snoozeMenuMailId: string | null;
   openSnoozeMenu: (e: React.MouseEvent, mail: Mail) => void;
   hasNextPage: boolean | undefined;
@@ -479,7 +480,7 @@ interface VirtualMailListProps {
   trashMail: (id: string) => Promise<unknown>;
   snoozeMail: (id: string, until: string) => Promise<unknown>;
   onArchiveSuccess: (archivedIds: string[], preActionVisible: number) => void;
-  t: (key: string, options?: { count: number }) => string;
+  t: (key: string, options?: Record<string, unknown>) => string;
 }
 
 const SKY_FADE = "linear-gradient(to bottom, transparent, black 72px)";
@@ -496,6 +497,8 @@ function VirtualMailList({
   multiSelectMode,
   appSettings,
   dateGroupLabels,
+  showDateGroups,
+  isOutgoing,
   snoozeMenuMailId,
   openSnoozeMenu,
   hasNextPage,
@@ -522,20 +525,10 @@ function VirtualMailList({
   // scroll viewport, so the virtualizer and onScroll keep working).
   useScroller(listRef);
 
-  const virtualItems = useMemo<VirtualItem[]>(() => {
-    const items: VirtualItem[] = [];
-    let lastGroup = "";
-    for (let i = 0; i < filteredMails.length; i++) {
-      const mail = filteredMails[i];
-      const group = getDateGroup(mail.date);
-      if (group !== lastGroup) {
-        lastGroup = group;
-        items.push({ kind: "separator", group, label: dateGroupLabels[group] || group });
-      }
-      items.push({ kind: "mail", mail, mailIndex: i });
-    }
-    return items;
-  }, [filteredMails, dateGroupLabels]);
+  const virtualItems = useMemo<ListItem[]>(
+    () => buildListItems(filteredMails, dateGroupLabels, showDateGroups),
+    [filteredMails, dateGroupLabels, showDateGroups],
+  );
 
   // Read once per render — estimateSize runs for every index, and a DOM
   // attribute read per item adds up on long folders.
@@ -753,6 +746,7 @@ function VirtualMailList({
 
           const { mail, mailIndex } = item;
           const isSelected = selectedMailIds.has(mail.id);
+          const recipient = isOutgoing(mail) ? mail.to[0] : undefined;
 
           return (
             <div
@@ -891,8 +885,8 @@ function VirtualMailList({
                   ) : (
                     <div className="relative shrink-0 group/check">
                       <GradientAvatar
-                        name={mail.from.name}
-                        email={mail.from.email}
+                        name={recipient ? recipient.name : mail.from.name}
+                        email={recipient ? recipient.email : mail.from.email}
                         size={36}
                         className="group-hover/check:invisible"
                       />
@@ -917,7 +911,9 @@ function VirtualMailList({
                           !mail.is_read ? "font-semibold text-text" : "text-text-secondary"
                         }`}
                       >
-                        {mail.from.name || mail.from.email}
+                        {recipient
+                          ? t("mailList.toRecipient", { name: recipient.name || recipient.email })
+                          : mail.from.name || mail.from.email}
                       </span>
                       <span className="shrink-0 text-xs text-text-tertiary tabular-nums">
                         {formatMailDate(mail.date, appSettings.use_24h_clock)}
@@ -1247,6 +1243,7 @@ export function MailList() {
   // Folder filter key: pass to backend for server-side filtering (skip "all")
   const activeFilterKey = folderFilter !== "all" ? folderFilter : undefined;
   const mailSort = parseMailSort(useAppStore((s) => s.appSettings.mail_sort));
+  const chooseMailSort = useAppStore((s) => s.chooseMailSort);
 
   const folderQuery = useMails(
     !activeFilter && !showAllInboxes && !activeCombinedFolder ? selectedFolderId : null,
@@ -1264,6 +1261,10 @@ export function MailList() {
   const combinedQuery = useCombinedFolderMails(activeCombinedFolder, activeFilterKey, mailSort);
   const snoozedQuery = useSnoozedMails(showSnoozed);
   const accounts = useAppStore((s) => s.accounts);
+  const isOutgoing = useMemo(
+    () => makeIsOutgoing(folders, accounts.map((a) => a.email), activeCombinedFolder),
+    [folders, accounts, activeCombinedFolder],
+  );
   const { snapshot: teamSnapshot } = useTeamSnapshot();
   const assignments = useTeamAssignments(!!teamSnapshot);
   const assignmentsByMessageId = useMemo(() => indexAssignments(assignments), [assignments]);
@@ -1699,6 +1700,7 @@ export function MailList() {
   );
 
   const isSearchActive = searchOpen && searchQuery.length >= 2;
+  const showSortMenu = !isSearchActive && !showSnoozed && !showScheduled && !showAssigned;
   const searchResultsData = searchResults.data;
 
   useEffect(() => {
@@ -2066,6 +2068,7 @@ export function MailList() {
                 {t("mailList.emptyAll")}
               </button>
             )}
+            {showSortMenu && <MailSortMenu sort={mailSort} onChange={chooseMailSort} />}
             <button
               onClick={() => setSearchOpen(true)}
               className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
@@ -2187,6 +2190,8 @@ export function MailList() {
               multiSelectMode={multiSelectMode}
               appSettings={appSettings}
               dateGroupLabels={dateGroupLabels}
+              showDateGroups={showSnoozed || showAssigned || isDateSort(mailSort)}
+              isOutgoing={isOutgoing}
               snoozeMenuMailId={snoozeMenu?.mail.id ?? null}
               openSnoozeMenu={openSnoozeMenu}
               hasNextPage={hasNextPage}

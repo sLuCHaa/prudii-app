@@ -370,7 +370,16 @@
     "markAllRead": "标记为已读",
     "markAllUnread": "标记为未读",
     "batchArchive": "归档",
-    "batchTrash": "删除"
+    "batchTrash": "删除",
+    "sort": {
+      "button": "排序",
+      "date": "日期",
+      "correspondent": "联系人",
+      "subject": "主题",
+      "ascending": "升序",
+      "descending": "降序"
+    },
+    "toRecipient": "收件人：{{name}}"
   },
   "search": {
     "placeholder": "搜索邮件...",

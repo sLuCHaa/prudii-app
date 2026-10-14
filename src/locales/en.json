@@ -371,7 +371,16 @@
     "markAllRead": "Mark as read",
     "markAllUnread": "Mark as unread",
     "batchArchive": "Archive",
-    "batchTrash": "Delete"
+    "batchTrash": "Delete",
+    "sort": {
+      "button": "Sort",
+      "date": "Date",
+      "correspondent": "Correspondent",
+      "subject": "Subject",
+      "ascending": "ascending",
+      "descending": "descending"
+    },
+    "toRecipient": "To: {{name}}"
   },
   "search": {
     "placeholder": "Search emails...",

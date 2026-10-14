@@ -371,7 +371,16 @@
     "markAllRead": "Marcar como leído",
     "markAllUnread": "Marcar como no leído",
     "batchArchive": "Archivar",
-    "batchTrash": "Eliminar"
+    "batchTrash": "Eliminar",
+    "sort": {
+      "button": "Ordenar",
+      "date": "Fecha",
+      "correspondent": "Corresponsal",
+      "subject": "Asunto",
+      "ascending": "ascendente",
+      "descending": "descendente"
+    },
+    "toRecipient": "Para: {{name}}"
   },
   "search": {
     "placeholder": "Buscar correos...",

@@ -371,7 +371,16 @@
     "markAllRead": "Marquer comme lu",
     "markAllUnread": "Marquer comme non lu",
     "batchArchive": "Archiver",
-    "batchTrash": "Supprimer"
+    "batchTrash": "Supprimer",
+    "sort": {
+      "button": "Trier",
+      "date": "Date",
+      "correspondent": "Correspondant",
+      "subject": "Objet",
+      "ascending": "croissant",
+      "descending": "décroissant"
+    },
+    "toRecipient": "À : {{name}}"
   },
   "search": {
     "placeholder": "Rechercher dans les emails...",

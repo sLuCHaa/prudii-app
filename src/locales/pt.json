@@ -371,7 +371,16 @@
     "markAllRead": "Marcar como lido",
     "markAllUnread": "Marcar como não lido",
     "batchArchive": "Arquivar",
-    "batchTrash": "Excluir"
+    "batchTrash": "Excluir",
+    "sort": {
+      "button": "Ordenar",
+      "date": "Data",
+      "correspondent": "Correspondente",
+      "subject": "Assunto",
+      "ascending": "crescente",
+      "descending": "decrescente"
+    },
+    "toRecipient": "Para: {{name}}"
   },
   "search": {
     "placeholder": "Buscar emails...",
