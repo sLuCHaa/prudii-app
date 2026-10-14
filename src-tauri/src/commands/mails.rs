@@ -246,19 +246,19 @@ fn filter_clause(filter: &Option<String>, prefix: &str) -> String {
 }
 
 #[tauri::command(async)]
-pub fn list_mails(db: State<'_, Database>, folder_id: String, limit: Option<u32>, offset: Option<u32>, folder_filter: Option<String>) -> Result<Vec<Mail>, String> {
+pub fn list_mails(db: State<'_, Database>, folder_id: String, limit: Option<u32>, offset: Option<u32>, folder_filter: Option<String>, sort: Option<String>) -> Result<Vec<Mail>, String> {
     super::catch_panic(|| {
         let conn = db.lock_db();
-        list_mails_inner(&conn, &folder_id, limit, offset, &folder_filter)
+        list_mails_inner(&conn, &folder_id, limit, offset, &folder_filter, sort.as_deref())
     })
 }
 
 /// Command body, separated so integration tests can run it against a fixture DB.
-pub fn list_mails_inner(conn: &rusqlite::Connection, folder_id: &str, limit: Option<u32>, offset: Option<u32>, folder_filter: &Option<String>) -> Result<Vec<Mail>, String> {
+pub fn list_mails_inner(conn: &rusqlite::Connection, folder_id: &str, limit: Option<u32>, offset: Option<u32>, folder_filter: &Option<String>, sort: Option<&str>) -> Result<Vec<Mail>, String> {
     let limit = limit.unwrap_or(500).min(2000);
     let offset = offset.unwrap_or(0);
     let extra = filter_clause(folder_filter, "");
-    let sql = format!("SELECT id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, '' as body_text, '' as body_html, is_read, is_starred, is_flagged, is_replied, is_forwarded, has_attachments, thread_id, in_reply_to, size_bytes, COALESCE(flags, '') as flags, COALESCE(list_unsubscribe, '') as list_unsubscribe, COALESCE(is_pinned, 0) as is_pinned, COALESCE(snoozed_until, '') as snoozed_until, COALESCE(reply_to_json, '[]') as reply_to_json, COALESCE(\"references\", '') FROM mails WHERE folder_id = ?1 AND (snoozed_until IS NULL OR snoozed_until = '' OR snoozed_until <= datetime('now')){} ORDER BY is_pinned DESC, date DESC LIMIT ?2 OFFSET ?3", extra);
+    let sql = format!("SELECT id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, '' as body_text, '' as body_html, is_read, is_starred, is_flagged, is_replied, is_forwarded, has_attachments, thread_id, in_reply_to, size_bytes, COALESCE(flags, '') as flags, COALESCE(list_unsubscribe, '') as list_unsubscribe, COALESCE(is_pinned, 0) as is_pinned, COALESCE(snoozed_until, '') as snoozed_until, COALESCE(reply_to_json, '[]') as reply_to_json, COALESCE(\"references\", '') FROM mails WHERE folder_id = ?1 AND (snoozed_until IS NULL OR snoozed_until = '' OR snoozed_until <= datetime('now')){} ORDER BY {} LIMIT ?2 OFFSET ?3", extra, crate::db::mail_sort::order_clause(sort, "mails.", true));
     let mut stmt = conn
         .prepare(&sql)
         .map_err(|e| e.to_string())?;
@@ -316,7 +316,7 @@ pub fn list_mails_inner(conn: &rusqlite::Connection, folder_id: &str, limit: Opt
 }
 
 #[tauri::command(async)]
-pub fn list_all_inbox_mails(db: State<'_, Database>, limit: Option<u32>, offset: Option<u32>, folder_filter: Option<String>) -> Result<Vec<Mail>, String> {
+pub fn list_all_inbox_mails(db: State<'_, Database>, limit: Option<u32>, offset: Option<u32>, folder_filter: Option<String>, sort: Option<String>) -> Result<Vec<Mail>, String> {
     super::catch_panic(|| {
     let limit = limit.unwrap_or(500).min(2000);
     let offset = offset.unwrap_or(0);
@@ -326,8 +326,8 @@ pub fn list_all_inbox_mails(db: State<'_, Database>, limit: Option<u32>, offset:
              FROM mails m
              JOIN folders f ON m.folder_id = f.id
              WHERE f.folder_type = 'inbox' AND (m.snoozed_until IS NULL OR m.snoozed_until = '' OR m.snoozed_until <= datetime('now')){}
-             ORDER BY m.is_pinned DESC, m.date DESC
-             LIMIT ?1 OFFSET ?2", extra);
+             ORDER BY {}
+             LIMIT ?1 OFFSET ?2", extra, crate::db::mail_sort::order_clause(sort.as_deref(), "m.", true));
     let mut stmt = conn
         .prepare(&sql)
         .map_err(|e| e.to_string())?;
@@ -393,11 +393,13 @@ pub fn list_filtered_mails(
     limit: Option<u32>,
     offset: Option<u32>,
     folder_filter: Option<String>,
+    sort: Option<String>,
 ) -> Result<Vec<Mail>, String> {
     super::catch_panic(|| {
     let limit = limit.unwrap_or(500).min(2000);
     let offset = offset.unwrap_or(0);
     let extra = filter_clause(&folder_filter, "");
+    let order = crate::db::mail_sort::order_clause(sort.as_deref(), "mails.", false);
     let conn = db.lock_db();
 
     const BASE_SELECT: &str = "SELECT id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, '' as body_text, '' as body_html, is_read, is_starred, is_flagged, is_replied, is_forwarded, has_attachments, thread_id, in_reply_to, size_bytes, COALESCE(flags, '') as flags, COALESCE(list_unsubscribe, '') as list_unsubscribe, COALESCE(is_pinned, 0) as is_pinned, COALESCE(snoozed_until, '') as snoozed_until, COALESCE(reply_to_json, '[]') as reply_to_json, COALESCE(\"references\", '') FROM mails";
@@ -450,7 +452,7 @@ pub fn list_filtered_mails(
     // All queries use parameterized placeholders â€” no string interpolation
     let mails = match (filter_type.as_str(), &account_id) {
         ("starred", Some(acc_id)) => {
-            let sql = format!("{}{} ORDER BY date DESC LIMIT ?2 OFFSET ?3", BASE_SELECT, starred_where(true, &extra));
+            let sql = format!("{}{} ORDER BY {order} LIMIT ?2 OFFSET ?3", BASE_SELECT, starred_where(true, &extra));
             let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
             let rows = stmt.query_map(rusqlite::params![acc_id, limit, offset], row_mapper)
                 .map_err(|e| e.to_string())?
@@ -459,7 +461,7 @@ pub fn list_filtered_mails(
             rows
         }
         ("starred", None) => {
-            let sql = format!("{}{} ORDER BY date DESC LIMIT ?1 OFFSET ?2", BASE_SELECT, starred_where(false, &extra));
+            let sql = format!("{}{} ORDER BY {order} LIMIT ?1 OFFSET ?2", BASE_SELECT, starred_where(false, &extra));
             let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
             let rows = stmt.query_map(rusqlite::params![limit, offset], row_mapper)
                 .map_err(|e| e.to_string())?
@@ -468,7 +470,7 @@ pub fn list_filtered_mails(
             rows
         }
         (flag, Some(acc_id)) => {
-            let sql = format!("{} WHERE flags LIKE ?1 ESCAPE '\\' AND account_id = ?2{} ORDER BY date DESC LIMIT ?3 OFFSET ?4", BASE_SELECT, extra);
+            let sql = format!("{} WHERE flags LIKE ?1 ESCAPE '\\' AND account_id = ?2{} ORDER BY {order} LIMIT ?3 OFFSET ?4", BASE_SELECT, extra);
             let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
             // Escape LIKE wildcards in flag value
             let safe_flag = flag.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
@@ -480,7 +482,7 @@ pub fn list_filtered_mails(
             rows
         }
         (flag, None) => {
-            let sql = format!("{} WHERE flags LIKE ?1 ESCAPE '\\'{} ORDER BY date DESC LIMIT ?2 OFFSET ?3", BASE_SELECT, extra);
+            let sql = format!("{} WHERE flags LIKE ?1 ESCAPE '\\'{} ORDER BY {order} LIMIT ?2 OFFSET ?3", BASE_SELECT, extra);
             let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
             let safe_flag = flag.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
             let like_param = format!("%{}%", safe_flag);
@@ -3119,7 +3121,7 @@ pub fn toggle_mail_flag(db: State<'_, Database>, mail_id: String, flag: String) 
 
 /// List all mails across all accounts for a given folder type (inbox, sent, trash, etc.)
 #[tauri::command(async)]
-pub fn list_combined_folder_mails(db: State<'_, Database>, folder_type: String, limit: Option<u32>, offset: Option<u32>, folder_filter: Option<String>) -> Result<Vec<Mail>, String> {
+pub fn list_combined_folder_mails(db: State<'_, Database>, folder_type: String, limit: Option<u32>, offset: Option<u32>, folder_filter: Option<String>, sort: Option<String>) -> Result<Vec<Mail>, String> {
     super::catch_panic(|| {
     let limit = limit.unwrap_or(500).min(2000);
     let offset = offset.unwrap_or(0);
@@ -3129,8 +3131,8 @@ pub fn list_combined_folder_mails(db: State<'_, Database>, folder_type: String, 
              FROM mails m
              JOIN folders f ON m.folder_id = f.id
              WHERE f.folder_type = ?1 AND (m.snoozed_until IS NULL OR m.snoozed_until = '' OR m.snoozed_until <= datetime('now')){}
-             ORDER BY m.is_pinned DESC, m.date DESC
-             LIMIT ?2 OFFSET ?3", extra);
+             ORDER BY {}
+             LIMIT ?2 OFFSET ?3", extra, crate::db::mail_sort::order_clause(sort.as_deref(), "m.", true));
     let mut stmt = conn
         .prepare(&sql)
         .map_err(|e| e.to_string())?;
@@ -4120,6 +4122,7 @@ pub fn list_split_inbox_mails(
     split_id: String,
     limit: Option<u32>,
     offset: Option<u32>,
+    sort: Option<String>,
 ) -> Result<Vec<Mail>, String> {
     let conn = db.lock_db();
 
@@ -4168,8 +4171,8 @@ pub fn list_split_inbox_mails(
         }
 
         let sql = format!(
-            "SELECT {} FROM mails WHERE {} ORDER BY date DESC LIMIT {} OFFSET {}",
-            MAIL_LIST_COLUMNS, where_parts.join(" AND "), lim, off
+            "SELECT {} FROM mails WHERE {} ORDER BY {} LIMIT {} OFFSET {}",
+            MAIL_LIST_COLUMNS, where_parts.join(" AND "), crate::db::mail_sort::order_clause(sort.as_deref(), "mails.", false), lim, off
         );
 
         let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
@@ -4194,8 +4197,8 @@ pub fn list_split_inbox_mails(
     }
 
     let sql = format!(
-        "SELECT {} FROM mails WHERE {} ORDER BY date DESC LIMIT {} OFFSET {}",
-        MAIL_LIST_COLUMNS, where_parts.join(" AND "), lim, off
+        "SELECT {} FROM mails WHERE {} ORDER BY {} LIMIT {} OFFSET {}",
+        MAIL_LIST_COLUMNS, where_parts.join(" AND "), crate::db::mail_sort::order_clause(sort.as_deref(), "mails.", false), lim, off
     );
 
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;

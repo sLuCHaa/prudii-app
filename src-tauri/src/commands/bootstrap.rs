@@ -11,6 +11,7 @@ pub struct BootstrapState {
     pub folders: Vec<crate::models::Folder>, // all accounts, flat
     pub folder_id: Option<String>,           // the folder mails below belong to
     pub mails: Vec<crate::models::Mail>,     // first page (50) of that folder
+    pub mail_sort: String,
 }
 
 #[tauri::command(async)]
@@ -36,10 +37,14 @@ pub fn bootstrap_state_inner(conn: &rusqlite::Connection, last_folder_id: Option
         .filter(|id| folders.iter().any(|f| &f.id == id))
         .or_else(|| folders.iter().find(|f| f.folder_type == "inbox").map(|f| f.id.clone()));
 
+    let mail_sort: String = conn
+        .query_row("SELECT value FROM app_settings WHERE key = 'mail_sort'", [], |row| row.get(0))
+        .unwrap_or_else(|_| "date_desc".to_string());
+
     let mails = match &folder_id {
-        Some(id) => super::mails::list_mails_inner(conn, id, Some(50), Some(0), &None)?,
+        Some(id) => super::mails::list_mails_inner(conn, id, Some(50), Some(0), &None, Some(&mail_sort))?,
         None => Vec::new(),
     };
 
-    Ok(BootstrapState { accounts, folders, folder_id, mails })
+    Ok(BootstrapState { accounts, folders, folder_id, mails, mail_sort })
 }
