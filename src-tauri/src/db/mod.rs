@@ -69,6 +69,7 @@ impl Database {
         let _ = conn.execute_batch("ALTER TABLE folders ADD COLUMN uid_next INTEGER DEFAULT 0;");
         let _ = conn.execute_batch("ALTER TABLE accounts ADD COLUMN gmail_history_id TEXT DEFAULT '';");
         let _ = conn.execute_batch("ALTER TABLE folders ADD COLUMN delta_link TEXT DEFAULT '';");
+        let _ = conn.execute_batch("ALTER TABLE folders ADD COLUMN dates_checked INTEGER NOT NULL DEFAULT 0;");
         let _ = conn.execute_batch("ALTER TABLE mails ADD COLUMN list_unsubscribe TEXT DEFAULT '';");
         let _ = conn.execute_batch("ALTER TABLE mails ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0;");
         let _ = conn.execute_batch("ALTER TABLE mails ADD COLUMN snoozed_until TEXT DEFAULT '';");

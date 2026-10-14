@@ -18,6 +18,7 @@ struct FetchedMail {
     raw_bytes: Vec<u8>,
     flags: Vec<String>,
     size: u32,
+    internal_date: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// Connect to an IMAP server with TLS and login.
@@ -537,6 +538,101 @@ async fn reconcile_and_sync_flags(
     Ok(())
 }
 
+/// Mails synced before the INTERNALDATE fallback may carry their sync time as date.
+async fn repair_sync_time_dates(session: &mut ImapSession, folder: &Folder, db: &Database) {
+    let checked = {
+        let conn = db.lock_db();
+        conn.query_row(
+            "SELECT COALESCE(dates_checked, 0) FROM folders WHERE id = ?1",
+            rusqlite::params![folder.id],
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|v| v != 0)
+        .unwrap_or(true)
+    };
+    if checked {
+        return;
+    }
+
+    match tokio::time::timeout(std::time::Duration::from_secs(15), session.examine(&folder.path)).await {
+        Ok(Ok(_)) => {}
+        Ok(Err(e)) => {
+            log::warn!("date repair '{}': EXAMINE failed: {}", folder.name, e);
+            return;
+        }
+        Err(_) => {
+            log::warn!("date repair '{}': EXAMINE timed out", folder.name);
+            return;
+        }
+    }
+    let fetched = match tokio::time::timeout(
+        std::time::Duration::from_secs(60),
+        session.uid_fetch("1:*", "(UID INTERNALDATE)"),
+    ).await {
+        Ok(Ok(fetched)) => fetched,
+        Ok(Err(e)) => {
+            log::warn!("date repair '{}': UID FETCH INTERNALDATE failed: {}", folder.name, e);
+            return;
+        }
+        Err(_) => {
+            log::warn!("date repair '{}': UID FETCH INTERNALDATE timed out", folder.name);
+            return;
+        }
+    };
+    let arrivals: HashMap<u32, chrono::DateTime<chrono::Utc>> = fetched
+        .iter()
+        .filter_map(|item| Some((item.uid?, item.internal_date?)))
+        .collect();
+    // Empty answer for a non-empty folder: retry on the next sync
+    if arrivals.is_empty() {
+        return;
+    }
+
+    let fixed = fix_dates_from_arrivals(db, &folder.id, &arrivals);
+    {
+        let conn = db.lock_db();
+        let _ = conn.execute(
+            "UPDATE folders SET dates_checked = 1 WHERE id = ?1",
+            rusqlite::params![folder.id],
+        );
+    }
+    if fixed > 0 {
+        log::info!("date repair '{}': moved {} mails back to their arrival date", folder.name, fixed);
+    }
+}
+
+/// A date days after the server arrival can only be a sync-time stamp.
+fn fix_dates_from_arrivals(
+    db: &Database,
+    folder_id: &str,
+    arrivals: &HashMap<u32, chrono::DateTime<chrono::Utc>>,
+) -> usize {
+    let conn = db.lock_db();
+    let stored: Vec<(String, u32, String)> = match conn.prepare(
+        "SELECT id, uid, date FROM mails WHERE folder_id = ?1 AND uid IS NOT NULL",
+    ) {
+        Ok(mut stmt) => stmt
+            .query_map(rusqlite::params![folder_id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+            .map(|rows| rows.filter_map(|r| r.ok()).collect())
+            .unwrap_or_default(),
+        Err(_) => return 0,
+    };
+
+    let mut fixed = 0;
+    for (id, uid, date) in stored {
+        let (Some(arrival), Ok(stored_date)) = (arrivals.get(&uid), chrono::DateTime::parse_from_rfc3339(&date)) else {
+            continue;
+        };
+        if stored_date.with_timezone(&chrono::Utc) - *arrival > chrono::Duration::days(2) {
+            let corrected = arrival.format("%Y-%m-%dT%H:%M:%SZ").to_string();
+            if conn.execute("UPDATE mails SET date = ?1 WHERE id = ?2", rusqlite::params![corrected, id]).is_ok() {
+                fixed += 1;
+            }
+        }
+    }
+    fixed
+}
+
 /// Sync mails from a single IMAP folder — HEADERS ONLY (UID-based incremental).
 pub async fn sync_mails(
     session: &mut ImapSession,
@@ -599,6 +695,8 @@ pub async fn sync_mails(
         update_folder_counts(db, folder, server_exists, server_uid_validity, server_uid_next)?;
         return Ok(SyncStats { new_mails: 0, folder_name: folder.name.clone() });
     }
+
+    repair_sync_time_dates(session, folder, db).await;
 
     // Case 1: UIDVALIDITY changed
     if stored_uid_validity > 0 && server_uid_validity != stored_uid_validity {
@@ -728,7 +826,7 @@ pub async fn sync_mails(
         let set = format!("{}:{}", chunk[0], chunk[chunk.len() - 1]);
         let fetched = tokio::time::timeout(
             std::time::Duration::from_secs(60),
-            session.uid_fetch(&set, "(UID RFC822.HEADER FLAGS RFC822.SIZE)"),
+            session.uid_fetch(&set, "(UID RFC822.HEADER FLAGS RFC822.SIZE INTERNALDATE)"),
         )
         .await
         .map_err(|_| anyhow::anyhow!("IMAP fetch timed out after 60s"))?
@@ -742,6 +840,7 @@ pub async fn sync_mails(
                     raw_bytes: item.data.unwrap_or_default(),
                     flags: item.flags,
                     size: item.size.unwrap_or(0),
+                    internal_date: item.internal_date,
                 }),
                 _ => None,
             })
@@ -901,6 +1000,16 @@ fn parse_references(msg: &mail_parser::Message) -> Option<String> {
     if joined.is_empty() { None } else { Some(joined) }
 }
 
+/// mail_parser rejects many real-world Date headers (no zone, ISO, localized names).
+fn mail_date(header: Option<&mail_parser::DateTime>, internal: Option<chrono::DateTime<chrono::Utc>>) -> String {
+    header
+        .and_then(|d| chrono::DateTime::from_timestamp(d.to_timestamp(), 0))
+        .or(internal)
+        .unwrap_or_else(chrono::Utc::now)
+        .format("%Y-%m-%dT%H:%M:%SZ")
+        .to_string()
+}
+
 fn process_header_batch(
     batch: &[FetchedMail],
     parser: &MessageParser,
@@ -928,14 +1037,7 @@ fn process_header_batch(
             let bcc_json = addresses_to_json(msg.bcc());
             let reply_to_json = addresses_to_json(msg.reply_to());
 
-            let date = msg
-                .date()
-                .map(|d| {
-                    chrono::DateTime::from_timestamp(d.to_timestamp(), 0)
-                        .map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string())
-                        .unwrap_or_else(|| chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string())
-                })
-                .unwrap_or_else(|| chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string());
+            let date = mail_date(msg.date(), fetched.internal_date);
 
             let message_id = msg.message_id().unwrap_or_default().to_string();
             // Try as_text_list first, fall back to as_text for In-Reply-To
@@ -980,7 +1082,7 @@ fn process_header_batch(
             (
                 String::new(), String::new(), String::new(),
                 "[]".to_string(), "[]".to_string(), "[]".to_string(), "[]".to_string(),
-                chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+                mail_date(None, fetched.internal_date),
                 String::new(), None, None, false, String::new(),
                 String::new(),
             )
@@ -2252,11 +2354,11 @@ mod body_part_tests {
 
 #[cfg(test)]
 mod header_batch_tests {
-    use super::{process_header_batch, FetchedMail};
+    use super::{fix_dates_from_arrivals, process_header_batch, FetchedMail};
     use crate::db::Database;
     use crate::models::Folder;
     use mail_parser::MessageParser;
-    use std::collections::HashSet;
+    use std::collections::{HashMap, HashSet};
 
     fn fixture(tag: &str) -> Database {
         let dir = std::env::temp_dir().join(format!("prudii-header-batch-{}-{}", tag, std::process::id()));
@@ -2302,7 +2404,72 @@ mod header_batch_tests {
         }
         raw.push_str("\r\n");
         let size = raw.len() as u32;
-        FetchedMail { uid, raw_bytes: raw.into_bytes(), flags: vec![r"\Seen".to_string()], size }
+        FetchedMail { uid, raw_bytes: raw.into_bytes(), flags: vec![r"\Seen".to_string()], size, internal_date: None }
+    }
+
+    #[test]
+    fn an_unreadable_date_header_falls_back_to_the_internal_date() {
+        let db = fixture("internaldate");
+        let parser = MessageParser::default();
+        let raw = "From: Alice <alice@example.com>\r\nSubject: Old\r\nMessage-ID: <old@example.com>\r\nDate: Fri, 13 Oct 2023 08:15:00\r\n\r\n";
+        let internal = chrono::DateTime::parse_from_rfc3339("2023-10-13T06:15:30Z").unwrap().with_timezone(&chrono::Utc);
+        let batch = vec![FetchedMail {
+            uid: 3,
+            raw_bytes: raw.as_bytes().to_vec(),
+            flags: Vec::new(),
+            size: raw.len() as u32,
+            internal_date: Some(internal),
+        }];
+        process_header_batch(&batch, &parser, "acc", &inbox(), &db, &HashSet::new());
+
+        let conn = db.lock_db();
+        let date: String = conn.query_row("SELECT date FROM mails WHERE uid = 3", [], |r| r.get(0)).unwrap();
+        assert_eq!(date, "2023-10-13T06:15:30Z");
+    }
+
+    #[test]
+    fn repair_moves_only_sync_time_stamps_back_to_the_arrival_date() {
+        let db = fixture("repairdates");
+        let parser = MessageParser::default();
+        let mail = |uid: u32, date: &str| {
+            let raw = format!("From: a@example.com\r\nSubject: m{uid}\r\nMessage-ID: <m{uid}@example.com>\r\nDate: {date}\r\n\r\n");
+            FetchedMail { uid, raw_bytes: raw.into_bytes(), flags: Vec::new(), size: 0, internal_date: None }
+        };
+        process_header_batch(
+            &[
+                mail(1, "Tue, 13 Oct 2026 09:00:00 +0000"),
+                mail(2, "Mon, 05 Jan 2026 10:00:00 +0000"),
+                mail(3, "Mon, 05 Jan 2015 10:00:00 +0000"),
+            ],
+            &parser, "acc", &inbox(), &db, &HashSet::new(),
+        );
+        let at = |s: &str| chrono::DateTime::parse_from_rfc3339(s).unwrap().with_timezone(&chrono::Utc);
+        let arrivals = HashMap::from([
+            (1, at("2023-10-13T06:15:00Z")),
+            (2, at("2026-01-05T10:02:00Z")),
+            (3, at("2024-06-01T00:00:00Z")),
+        ]);
+
+        assert_eq!(fix_dates_from_arrivals(&db, "inbox", &arrivals), 1);
+
+        let conn = db.lock_db();
+        let date = |uid: u32| conn.query_row("SELECT date FROM mails WHERE uid = ?1", [uid], |r| r.get::<_, String>(0)).unwrap();
+        assert_eq!(date(1), "2023-10-13T06:15:00Z");
+        assert_eq!(date(2), "2026-01-05T10:00:00Z");
+        assert_eq!(date(3), "2015-01-05T10:00:00Z");
+    }
+
+    #[test]
+    fn a_readable_date_header_wins_over_the_internal_date() {
+        let db = fixture("dateheader");
+        let parser = MessageParser::default();
+        let mut mail = fetched(4, "Fresh", "<fresh@example.com>", None);
+        mail.internal_date = Some(chrono::DateTime::parse_from_rfc3339("2026-01-05T10:02:00Z").unwrap().with_timezone(&chrono::Utc));
+        process_header_batch(&[mail], &parser, "acc", &inbox(), &db, &HashSet::new());
+
+        let conn = db.lock_db();
+        let date: String = conn.query_row("SELECT date FROM mails WHERE uid = 4", [], |r| r.get(0)).unwrap();
+        assert_eq!(date, "2026-01-05T10:00:00Z");
     }
 
     #[test]

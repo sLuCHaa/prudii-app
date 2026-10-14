@@ -49,6 +49,7 @@ pub struct FetchItem {
     pub flags: Vec<String>,
     pub data: Option<Vec<u8>>,
     pub size: Option<u32>,
+    pub internal_date: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// Result of STATUS
@@ -481,12 +482,14 @@ impl ImapClient {
         let uid = extract_uid(&text);
         let flags = extract_flags(&text);
         let size = extract_size(&text);
+        let internal_date = extract_internal_date(&text);
 
         Ok(FetchItem {
             uid,
             flags,
             data,
             size,
+            internal_date,
         })
     }
 
@@ -890,6 +893,17 @@ fn extract_size(text: &str) -> Option<u32> {
     }
 }
 
+/// Extract INTERNALDATE from FETCH response text
+fn extract_internal_date(text: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+    let upper = text.to_uppercase();
+    let pos = upper.find("INTERNALDATE \"")?;
+    let after = &text[pos + 14..];
+    let value = &after[..after.find('"')?];
+    chrono::DateTime::parse_from_str(value.trim(), "%d-%b-%Y %H:%M:%S %z")
+        .ok()
+        .map(|d| d.with_timezone(&chrono::Utc))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -953,5 +967,24 @@ mod tests {
     fn reads_an_empty_flag_list_as_no_flags() {
         assert!(extract_flags("1 FETCH (FLAGS ())").is_empty());
         assert!(extract_flags("1 FETCH (UID 5)").is_empty());
+    }
+
+    #[test]
+    fn reads_the_internal_date_as_utc() {
+        let date = extract_internal_date(
+            r#"* 12 FETCH (UID 5 INTERNALDATE "13-Oct-2023 08:15:00 +0200" FLAGS (\Seen) RFC822.SIZE 120 RFC822.HEADER )"#,
+        );
+        assert_eq!(date.map(|d| d.to_rfc3339()), Some("2023-10-13T06:15:00+00:00".to_string()));
+    }
+
+    #[test]
+    fn reads_a_space_padded_internal_date_day() {
+        let date = extract_internal_date(r#"* 1 FETCH (INTERNALDATE " 7-Jul-1996 02:44:25 -0700")"#);
+        assert_eq!(date.map(|d| d.to_rfc3339()), Some("1996-07-07T09:44:25+00:00".to_string()));
+    }
+
+    #[test]
+    fn reads_a_missing_internal_date_as_none() {
+        assert!(extract_internal_date("* 1 FETCH (UID 5 FLAGS ())").is_none());
     }
 }
