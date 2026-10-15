@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback, memo, useMemo } from "react";
 import { Tooltip } from "../ui/Tooltip";
 import { parseISO } from "date-fns";
-import { FileText, Image, Film, Music, File, Loader2, Download, ChevronDown, ChevronRight, MessageSquare, Copy, Check, Code, Eye, FileCode, FileType, Printer, MailMinus, ImageOff, FileWarning, FolderOpen, ClipboardList, ClipboardPlus } from "lucide-react";
+import { FileText, Image, Film, Music, File, Loader2, Download, ChevronDown, ChevronRight, ChevronUp, MessageSquare, Copy, Check, Code, Eye, FileCode, FileType, Printer, MailMinus, ImageOff, FileWarning, FolderOpen, ClipboardList, ClipboardPlus, Ellipsis } from "lucide-react";
 import { SkeletonText } from "../ui/Skeleton";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -15,6 +15,9 @@ import { findMissingParts, stripMmlTags } from "../../lib/missingParts";
 import { invalidateMailListQueries } from "../../lib/mailQueries";
 import { useAttachments, useToggleStar, useToggleMailFlag } from "../../hooks/useAccounts";
 import { useScroller } from "../../hooks/useScroller";
+import { useChatAnchor } from "../../hooks/useChatAnchor";
+import { stripQuotedHtml, stripQuotedText, isForwardSubject } from "../../lib/quotedHistory";
+import { makeIsOutgoing } from "../../lib/outgoing";
 import { openAttachment, startAttachmentDrag, quickLookAttachment, saveAttachment, fetchMailBody, trashMail, archiveMail, getThreadMails, markAsRead, unsubscribeMail } from "../../lib/tauri";
 import { revealLabelKey, revealAttachment } from "../../lib/attachmentActions";
 import { isMacOS, isWindows } from "../../lib/platform";
@@ -327,6 +330,8 @@ const DARK_STYLES = `
   body {
     color: #1a1a1a;
     filter: invert(0.88) hue-rotate(180deg);
+    /* A mail's body background is painted on the canvas, out of the filter's reach. */
+    background: transparent !important;
   }
   a, a * { color: #2563eb !important; }
   img, video, picture, svg {
@@ -338,7 +343,7 @@ const DARK_STYLES = `
   ::-webkit-scrollbar-thumb:hover { background: #574C3E; }
 `;
 
-const HtmlMailFrame = memo(function HtmlMailFrame({ mailId, html, allowExternalImages = true, onIframeRef, onTrackersDetected, onLinkClick, onImageClick }: { mailId: string; html: string; allowExternalImages?: boolean; onIframeRef?: (el: HTMLIFrameElement | null) => void; onTrackersDetected?: (trackers: TrackerInfo[]) => void; onLinkClick?: (href: string) => void; onImageClick?: (src: string) => void }) {
+const HtmlMailFrame = memo(function HtmlMailFrame({ mailId, html, tight = false, allowExternalImages = true, onIframeRef, onTrackersDetected, onLinkClick, onImageClick }: { mailId: string; html: string; tight?: boolean; allowExternalImages?: boolean; onIframeRef?: (el: HTMLIFrameElement | null) => void; onTrackersDetected?: (trackers: TrackerInfo[]) => void; onLinkClick?: (href: string) => void; onImageClick?: (src: string) => void }) {
   const darkMode = useAppStore((s) => s.darkMode);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const { height, refit } = useMailFrameFit(iframeRef);
@@ -379,9 +384,9 @@ const HtmlMailFrame = memo(function HtmlMailFrame({ mailId, html, allowExternalI
     () =>
       `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="script-src '${MAIL_LINK_BRIDGE_CSP_HASH}'; object-src 'none';"><style>
-${BASE_STYLES}
+${BASE_STYLES}${tight ? "\n  body { padding: 4px 0; }" : ""}
 </style></head><body>${cleanHtml}<style>${themeStyles}</style><script>${MAIL_LINK_BRIDGE}</script></body></html>`,
-    [cleanHtml, themeStyles]
+    [cleanHtml, themeStyles, tight]
   );
 
   useEffect(() => {
@@ -456,7 +461,8 @@ ${BASE_STYLES}
         ref={iframeRef}
         srcDoc={srcDoc}
         sandbox="allow-same-origin allow-scripts"
-        style={{ width: "100%", height, border: "none", overflow: "hidden", background: "transparent" }}
+        // On a color-scheme mismatch Chromium paints an opaque canvas behind the mail.
+        style={{ width: "100%", height, border: "none", overflow: "hidden", background: "transparent", colorScheme: darkMode ? "dark" : "light" }}
         onLoad={refit}
         aria-label={t("mailDetail.emailContent")}
       />
@@ -501,8 +507,11 @@ function CopyEmailButton({ email }: { email: string }) {
 interface MessageCardProps {
   mail: Mail;
   isLatest: boolean;
-  isSelected?: boolean;
   singleMail?: boolean;
+  defaultExpanded: boolean;
+  chat?: boolean;
+  own?: boolean;
+  onCollapse?: (mailId: string) => void;
   onReply: (mail: Mail) => void;
   onReplyAll: (mail: Mail) => void;
   onForward: (mail: Mail) => void;
@@ -511,10 +520,12 @@ interface MessageCardProps {
   onUpdateMail?: (mailId: string, updates: Partial<Mail>) => void;
 }
 
-const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, singleMail, onReply, onReplyAll, onForward, onIframeRef, onLinkClick, onUpdateMail }: MessageCardProps) {
+const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defaultExpanded, chat, own, onCollapse, onReply, onReplyAll, onForward, onIframeRef, onLinkClick, onUpdateMail }: MessageCardProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const [expanded, setExpanded] = useState(isLatest || !!isSelected || !!singleMail);
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  const [showQuoted, setShowQuoted] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
   const [loadedMail, setLoadedMail] = useState<Mail | null>(null);
   const [loading, setLoading] = useState(false);
   const setMails = useAppStore((s) => s.setMails);
@@ -584,7 +595,10 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, sing
     });
   }, [mail.id, mail.is_starred, updateMail, toggleStarMutation]);
 
-  const handleToggle = useCallback(() => setExpanded(prev => !prev), []);
+  const handleToggle = useCallback(() => {
+    if (expanded) onCollapse?.(mail.id);
+    setExpanded(!expanded);
+  }, [expanded, onCollapse, mail.id]);
   const handleReply = useCallback(() => onReply(displayMail), [onReply, displayMail]);
   const handleReplyAll = useCallback(() => onReplyAll(displayMail), [onReplyAll, displayMail]);
   const handleForward = useCallback(() => onForward(displayMail), [onForward, displayMail]);
@@ -615,6 +629,20 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, sing
   const [allowImagesOverride, setAllowImagesOverride] = useState(false);
   const hasBody = displayMail.body_html || displayMail.body_text;
   const hasBothFormats = !!displayMail.body_html && !!displayMail.body_text;
+  const showsHtml = !!displayMail.body_html && !viewPlainText;
+  const plainText = useMemo(() => stripMmlTags(displayMail.body_text ?? ""), [displayMail.body_text]);
+
+  const collapsesQuotes = !!chat && !isForwardSubject(mail.subject);
+  const htmlWithoutQuotes = useMemo(
+    () => (collapsesQuotes && displayMail.body_html ? stripQuotedHtml(displayMail.body_html) : null),
+    [collapsesQuotes, displayMail.body_html],
+  );
+  const textWithoutQuotes = useMemo(
+    () => (collapsesQuotes && plainText ? stripQuotedText(plainText) : null),
+    [collapsesQuotes, plainText],
+  );
+  const hasQuotes = !viewSource && (showsHtml ? htmlWithoutQuotes : textWithoutQuotes) !== null;
+  const hideQuotes = hasQuotes && !showQuoted;
 
   const accountAllowsImages = useMemo(() => {
     const acct = accounts.find((a) => a.id === mail.account_id);
@@ -630,9 +658,14 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, sing
 
   const incrementTrackersBlocked = useAppStore((s) => s.incrementTrackersBlocked);
 
+  // The frame re-detects on every HTML change; the tally counts each message once.
+  const trackersCountedRef = useRef(false);
   const handleTrackersDetected = useCallback((detected: TrackerInfo[]) => {
     setTrackers(detected);
-    if (detected.length > 0) incrementTrackersBlocked(detected.length);
+    if (detected.length > 0 && !trackersCountedRef.current) {
+      trackersCountedRef.current = true;
+      incrementTrackersBlocked(detected.length);
+    }
   }, [incrementTrackersBlocked]);
 
   const hasExternalImages = useMemo(() => {
@@ -664,6 +697,273 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, sing
     () => folders.find((f) => f.id === mail.folder_id)?.folder_type === "drafts",
     [folders, mail.folder_id],
   );
+
+  const fromLine = (
+    <div className="flex items-center gap-1.5 mb-0.5">
+      <span className="text-text-secondary font-medium select-text">{mail.from.name || mail.from.email}</span>
+      <span className="select-text">&lt;{mail.from.email}&gt;</span>
+      <CopyEmailButton email={mail.from.email} />
+    </div>
+  );
+
+  const senderLines = (
+    <>
+      {fromLine}
+      {/* Empfaenger aufklappbar: zugeklappt eine Zeile, aufgeklappt
+          bricht dieselbe Zeile um und Cc kommt dazu — nichts wird
+          doppelt gezeigt und nichts dauerhaft versteckt. */}
+      <details className="group">
+        <summary className="flex items-start gap-1 cursor-pointer list-none [&::-webkit-details-marker]:hidden hover:text-text-secondary">
+          <ChevronRight className="w-3 h-3 mt-0.5 shrink-0 transition-transform group-open:rotate-90" />
+          <span className="truncate group-open:whitespace-normal select-text">
+            {t("mailDetail.toLabel")}: {recipients}
+          </span>
+        </summary>
+        {ccRecipients && (
+          <div className="ml-4 mt-0.5 select-text">
+            {t("mailDetail.ccLabel")}: {ccRecipients}
+          </div>
+        )}
+      </details>
+    </>
+  );
+
+  const viewToggleClass = (active: boolean) =>
+    `flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+      active ? "bg-accent-soft text-accent" : "text-text-tertiary hover:text-text-secondary hover:bg-hover"
+    }`;
+
+  const viewToggles = (
+    <>
+      {hasBothFormats && (
+        <>
+          <button onClick={() => setViewPlainText(false)} className={viewToggleClass(!viewPlainText)}>
+            <Code className="w-3.5 h-3.5" />
+            {t("mailDetail.htmlView")}
+          </button>
+          <button onClick={() => setViewPlainText(true)} className={viewToggleClass(viewPlainText)}>
+            <FileType className="w-3.5 h-3.5" />
+            {t("mailDetail.plainText")}
+          </button>
+        </>
+      )}
+      <button onClick={() => setViewSource((v) => !v)} className={viewToggleClass(viewSource)}>
+        <FileCode className="w-3.5 h-3.5" />
+        {t("mailDetail.sourceView")}
+      </button>
+    </>
+  );
+
+  // Attachments live ABOVE the body: a forwarded conversation can carry pages
+  // of quoted history, and the files were buried below all of it. Shown when
+  // the flag is set OR the body is loaded (header-sync flags can be inaccurate).
+  const showAttachments = !!(displayMail.has_attachments || displayMail.body_html || displayMail.body_text);
+
+  const bodyFallback = loading ? (
+    // Content-shaped placeholder instead of a lone spinner — the ~64px
+    // spinner box caused a hard layout jump when the body arrived.
+    <div className="py-4 space-y-3">
+      <SkeletonText lines={3} />
+      <div className="h-2" />
+      <SkeletonText lines={4} />
+      <div className="h-2" />
+      <SkeletonText lines={2} />
+    </div>
+  ) : bodyError ? (
+    <div className="py-4 text-center">
+      <p className="text-sm text-danger">{t("errors.bodyLoad")}</p>
+      {detectCause(bodyError) && (
+        <p className="text-xs text-text-tertiary mt-1">{t(`errors.cause.${detectCause(bodyError)}`)}</p>
+      )}
+    </div>
+  ) : !hasBody ? (
+    <p className="py-4 text-sm text-text-tertiary text-center">{t("mailDetail.noContent")}</p>
+  ) : null;
+
+  const notices = (
+    <>
+      {hasExternalImages && !allowExternalImages && (
+        <div className="flex items-center justify-between gap-3 px-4 py-2 mb-2 bg-bg-secondary border border-border rounded-lg text-xs text-text-secondary">
+          <div className="flex items-center gap-2">
+            <ImageOff className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
+            <span>{t("mailDetail.imagesBlocked.message")}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAllowImagesOverride(true)}
+            className="px-2 py-1 rounded hover:bg-hover transition-colors text-accent font-medium shrink-0"
+          >
+            {t("mailDetail.imagesBlocked.load")}
+          </button>
+        </div>
+      )}
+      {missingParts.count > 0 && (
+        <div className="flex items-start gap-2 px-4 py-2 mb-2 bg-bg-secondary border border-border rounded-lg text-xs text-text-secondary">
+          <FileWarning className="w-3.5 h-3.5 mt-px text-text-tertiary shrink-0" />
+          <span>
+            {missingParts.names.length === missingParts.count
+              ? t("mailDetail.missingParts.named", { count: missingParts.count, names: missingParts.names.join(", ") })
+              : t("mailDetail.missingParts.message", { count: missingParts.count })}
+          </span>
+        </div>
+      )}
+    </>
+  );
+
+  const body = viewSource ? (
+    <MailSourceView mailId={displayMail.id} />
+  ) : showsHtml ? (
+    <HtmlMailFrame mailId={displayMail.id} html={(hideQuotes && htmlWithoutQuotes) || displayMail.body_html || ""} tight={!!chat} allowExternalImages={allowExternalImages} onIframeRef={(el) => { messageIframeRef.current = el; onIframeRef?.(el); }} onTrackersDetected={handleTrackersDetected} onLinkClick={onLinkClick} onImageClick={handleInlineImageClick} />
+  ) : (
+    <pre className="text-sm text-text-secondary whitespace-pre-wrap font-sans leading-relaxed select-text">
+      {hideQuotes && textWithoutQuotes !== null ? textWithoutQuotes : plainText}
+    </pre>
+  );
+
+  const lightbox = inlineLightbox && (
+    <ImageLightbox
+      images={[inlineLightbox]}
+      initialIndex={0}
+      onClose={() => setInlineLightbox(null)}
+      onDownload={() => { /* not reachable: canDownload === false */ }}
+    />
+  );
+
+  const starButton = (
+    <button
+      onClick={handleStar}
+      className={`p-1.5 rounded-lg hover:bg-hover transition-colors ${
+        mail.is_starred ? "text-warning" : "text-text-tertiary"
+      }`}
+    >
+      <StarIcon size={14} strokeWidth={1.5} color={mail.is_starred ? "var(--c-warning)" : "currentColor"} />
+    </button>
+  );
+
+  if (chat) {
+    const name = own ? t("mailDetail.you") : mail.from.name || mail.from.email;
+    const shape = own
+      ? "bg-own-bubble border-own-bubble-border rounded-[14px] rounded-tr-[4px]"
+      : "bg-surface border-border rounded-[14px] rounded-tl-[4px]";
+    const divider = own ? "border-own-bubble-border" : "border-border-light";
+    const action = "flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium text-text-secondary hover:bg-hover transition-colors";
+
+    return (
+      <div className={`flex items-start gap-2.5 min-w-0 ${expanded ? "w-[min(85%,780px)]" : "max-w-[min(85%,780px)]"}`}>
+        {!own && <ContactAvatar name={mail.from.name} email={mail.from.email} size={28} className="shrink-0 mt-5.5" />}
+        <div className={`flex-1 min-w-0 flex flex-col gap-1 ${own ? "items-end" : "items-start"}`}>
+          <button
+            type="button"
+            onClick={handleToggle}
+            aria-expanded={expanded}
+            className="flex items-center gap-1.5 max-w-full px-1 rounded text-xs text-text-tertiary hover:text-text-secondary transition-colors"
+          >
+            {!mail.is_read && <span className="w-2 h-2 rounded-full bg-accent shrink-0" />}
+            <span className="font-medium text-text-secondary truncate">{name}</span>
+            {isDraft && (
+              <span className="px-1.5 py-0.5 text-[11px] font-medium bg-warning/15 text-warning rounded shrink-0">
+                {t("mailDetail.draft")}
+              </span>
+            )}
+            <span aria-hidden="true">·</span>
+            <span className="shrink-0">{formattedDate}</span>
+          </button>
+
+          {expanded ? (
+            <div className={`w-full min-w-0 border px-3.5 pt-3 pb-1.5 ${shape} ${isDraft ? "ring-2 ring-warning/40" : ""}`}>
+              {showAttachments && <AttachmentList mailId={displayMail.id} bodyHtml={displayMail.body_html} className="mb-2.5" />}
+              {bodyFallback ?? <div className="prose-sm">{notices}{body}</div>}
+
+              {hasQuotes && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (showQuoted) onCollapse?.(mail.id);
+                    setShowQuoted(!showQuoted);
+                  }}
+                  aria-expanded={showQuoted}
+                  className={`mt-2 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-xs font-medium text-text-tertiary hover:bg-hover hover:text-text-secondary transition-colors ${
+                    own ? "border-own-bubble-border" : "border-border"
+                  }`}
+                >
+                  <Ellipsis className="w-3.5 h-3.5" />
+                  {showQuoted ? t("mailDetail.hideQuoted") : t("mailDetail.showQuoted")}
+                </button>
+              )}
+
+              {showDetails && (
+                <div className={`mt-2.5 pt-2.5 border-t text-xs text-text-tertiary ${divider}`}>
+                  {fromLine}
+                  <div className="select-text">{t("mailDetail.toLabel")}: {recipients}</div>
+                  {ccRecipients && (
+                    <div className="mt-0.5 select-text">{t("mailDetail.ccLabel")}: {ccRecipients}</div>
+                  )}
+                  {!bodyFallback && (
+                    <div className="flex flex-wrap items-center gap-1 mt-2">
+                      {viewToggles}
+                      <button onClick={handlePrint} className={viewToggleClass(false)}>
+                        <Printer className="w-3.5 h-3.5" />
+                        {t("mailDetail.print")}
+                      </button>
+                      {trackers.length === 0 && <TrackingIndicator trackers={trackers} />}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {lightbox}
+
+              <div className={`mt-2.5 pt-1 border-t flex flex-wrap items-center gap-0.5 ${divider}`}>
+                <button onClick={handleReply} className={action}>
+                  <Reply className="w-4 h-4" />
+                  {t("mailDetail.reply")}
+                </button>
+                <button onClick={handleReplyAll} className={action}>
+                  <ReplyAll className="w-4 h-4" />
+                  {t("mailDetail.replyAll")}
+                </button>
+                <button onClick={handleForward} className={action}>
+                  <Forward className="w-4 h-4" />
+                  {t("mailDetail.forward")}
+                </button>
+                <div className="flex-1" />
+                {trackers.length > 0 && <TrackingIndicator trackers={trackers} />}
+                <button
+                  onClick={() => setShowDetails((v) => !v)}
+                  aria-expanded={showDetails}
+                  className={`${action} ${showDetails ? "text-accent" : ""}`}
+                >
+                  {t("mailDetail.details")}
+                </button>
+                <FlagPicker flags={mail.flags || []} onToggleFlag={handleToggleFlag} size="sm" />
+                {starButton}
+                <Tooltip label={t("mailDetail.collapseMessage")}>
+                  <button
+                    onClick={handleToggle}
+                    aria-label={t("mailDetail.collapseMessage")}
+                    className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
+                  >
+                    <ChevronUp className="w-4 h-4" />
+                  </button>
+                </Tooltip>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={handleToggle}
+              aria-label={t("mailDetail.expandMessage", { name })}
+              className={`flex items-center gap-2 max-w-full min-w-0 border px-3 py-2 text-left text-text-tertiary hover:border-text-tertiary transition-colors ${shape}`}
+            >
+              {mail.has_attachments && <Paperclip className="w-3.5 h-3.5 shrink-0" />}
+              <span className="truncate text-[13px] text-text-secondary">{mail.snippet || mail.subject}</span>
+              <ChevronDown className="w-3.5 h-3.5 shrink-0" />
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`bg-surface border border-border rounded-xl overflow-hidden transition-shadow ${
@@ -713,14 +1013,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, sing
 
         <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
           <FlagPicker flags={mail.flags || []} onToggleFlag={handleToggleFlag} size="sm" />
-          <button
-            onClick={handleStar}
-            className={`p-1.5 rounded-lg hover:bg-hover transition-colors ${
-              mail.is_starred ? "text-warning" : "text-text-tertiary"
-            }`}
-          >
-            <StarIcon size={14} strokeWidth={1.5} color={mail.is_starred ? "var(--c-warning)" : "currentColor"} />
-          </button>
+          {starButton}
           {!singleMail && (
             <div className={`transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}>
               <ChevronDown className="w-4 h-4 text-text-tertiary" />
@@ -735,145 +1028,25 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, isSelected, sing
         style={singleMail ? undefined : { maxHeight: expanded ? "none" : 0 }}
       >
         <div className="px-4 pb-4 border-t border-border-light">
-          <div className="py-2 text-xs text-text-tertiary">
-            <div className="flex items-center gap-1.5 mb-0.5">
-              <span className="text-text-secondary font-medium select-text">{mail.from.name || mail.from.email}</span>
-              <span className="select-text">&lt;{mail.from.email}&gt;</span>
-              <CopyEmailButton email={mail.from.email} />
-            </div>
-            {/* Empfaenger aufklappbar: zugeklappt eine Zeile, aufgeklappt
-                bricht dieselbe Zeile um und Cc kommt dazu — nichts wird
-                doppelt gezeigt und nichts dauerhaft versteckt. */}
-            <details className="group">
-              <summary className="flex items-start gap-1 cursor-pointer list-none [&::-webkit-details-marker]:hidden hover:text-text-secondary">
-                <ChevronRight className="w-3 h-3 mt-0.5 shrink-0 transition-transform group-open:rotate-90" />
-                <span className="truncate group-open:whitespace-normal select-text">
-                  {t("mailDetail.toLabel")}: {recipients}
-                </span>
-              </summary>
-              {ccRecipients && (
-                <div className="ml-4 mt-0.5 select-text">
-                  {t("mailDetail.ccLabel")}: {ccRecipients}
-                </div>
-              )}
-            </details>
-          </div>
+          <div className="py-2 text-xs text-text-tertiary">{senderLines}</div>
 
-          {/* Attachments live ABOVE the body: a forwarded conversation can
-              carry pages of quoted history, and the files were buried below
-              all of it. Shown when the flag is set OR the body is loaded
-              (header-sync flags can be inaccurate). */}
-          {(displayMail.has_attachments || displayMail.body_html || displayMail.body_text) && (
+          {showAttachments && (
             <AttachmentList mailId={displayMail.id} bodyHtml={displayMail.body_html} className="mb-3 pb-3 border-b border-border-light" />
           )}
 
-          {loading ? (
-            // Content-shaped placeholder instead of a lone spinner — the ~64px
-            // spinner box caused a hard layout jump when the body arrived.
-            <div className="py-4 space-y-3">
-              <SkeletonText lines={3} />
-              <div className="h-2" />
-              <SkeletonText lines={4} />
-              <div className="h-2" />
-              <SkeletonText lines={2} />
-            </div>
-          ) : bodyError ? (
-            <div className="py-4 text-center">
-              <p className="text-sm text-danger">{t("errors.bodyLoad")}</p>
-              {detectCause(bodyError) && (
-                <p className="text-xs text-text-tertiary mt-1">{t(`errors.cause.${detectCause(bodyError)}`)}</p>
-              )}
-            </div>
-          ) : hasBody ? (
+          {bodyFallback ?? (
             <div className="prose-sm">
               <div className="flex items-center gap-1 mb-2">
-                  {hasBothFormats && (
-                    <>
-                      <button
-                        onClick={() => setViewPlainText(false)}
-                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-                          !viewPlainText
-                            ? "bg-accent-soft text-accent"
-                            : "text-text-tertiary hover:text-text-secondary hover:bg-hover"
-                        }`}
-                      >
-                        <Code className="w-3.5 h-3.5" />
-                        {t("mailDetail.htmlView")}
-                      </button>
-                      <button
-                        onClick={() => setViewPlainText(true)}
-                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-                          viewPlainText
-                            ? "bg-accent-soft text-accent"
-                            : "text-text-tertiary hover:text-text-secondary hover:bg-hover"
-                        }`}
-                      >
-                        <FileType className="w-3.5 h-3.5" />
-                        {t("mailDetail.plainText")}
-                      </button>
-                    </>
-                  )}
-                  <button
-                    onClick={() => setViewSource((v) => !v)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-                      viewSource
-                        ? "bg-accent-soft text-accent"
-                        : "text-text-tertiary hover:text-text-secondary hover:bg-hover"
-                    }`}
-                  >
-                    <FileCode className="w-3.5 h-3.5" />
-                    {t("mailDetail.sourceView")}
-                  </button>
-                  <div className="flex-1" />
+                {viewToggles}
+                <div className="flex-1" />
                 <TrackingIndicator trackers={trackers} />
               </div>
-              {hasExternalImages && !allowExternalImages && (
-                <div className="flex items-center justify-between gap-3 px-4 py-2 mb-2 bg-bg-secondary border border-border rounded-lg text-xs text-text-secondary">
-                  <div className="flex items-center gap-2">
-                    <ImageOff className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
-                    <span>{t("mailDetail.imagesBlocked.message")}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setAllowImagesOverride(true)}
-                    className="px-2 py-1 rounded hover:bg-hover transition-colors text-accent font-medium shrink-0"
-                  >
-                    {t("mailDetail.imagesBlocked.load")}
-                  </button>
-                </div>
-              )}
-              {missingParts.count > 0 && (
-                <div className="flex items-start gap-2 px-4 py-2 mb-2 bg-bg-secondary border border-border rounded-lg text-xs text-text-secondary">
-                  <FileWarning className="w-3.5 h-3.5 mt-px text-text-tertiary shrink-0" />
-                  <span>
-                    {missingParts.names.length === missingParts.count
-                      ? t("mailDetail.missingParts.named", { count: missingParts.count, names: missingParts.names.join(", ") })
-                      : t("mailDetail.missingParts.message", { count: missingParts.count })}
-                  </span>
-                </div>
-              )}
-              {viewSource ? (
-                <MailSourceView mailId={displayMail.id} />
-              ) : displayMail.body_html && !viewPlainText ? (
-                <HtmlMailFrame mailId={displayMail.id} html={displayMail.body_html} allowExternalImages={allowExternalImages} onIframeRef={(el) => { messageIframeRef.current = el; onIframeRef?.(el); }} onTrackersDetected={handleTrackersDetected} onLinkClick={onLinkClick} onImageClick={handleInlineImageClick} />
-              ) : (
-                <pre className="text-sm text-text-secondary whitespace-pre-wrap font-sans leading-relaxed select-text">
-                  {stripMmlTags(displayMail.body_text ?? "")}
-                </pre>
-              )}
+              {notices}
+              {body}
             </div>
-          ) : (
-            <p className="py-4 text-sm text-text-tertiary text-center">{t("mailDetail.noContent")}</p>
           )}
 
-          {inlineLightbox && (
-            <ImageLightbox
-              images={[inlineLightbox]}
-              initialIndex={0}
-              onClose={() => setInlineLightbox(null)}
-              onDownload={() => { /* not reachable: canDownload === false */ }}
-            />
-          )}
+          {lightbox}
 
           <div className="mt-3 pt-3 border-t border-border-light flex items-center gap-2">
             <button
@@ -1129,11 +1302,16 @@ const MailAttachmentGroup = memo(function MailAttachmentGroup({ mail, onLocate }
   );
 });
 
+// Older bubbles start collapsed: every expanded one fetches its body.
+const CHAT_EXPANDED_NEWEST = 3;
+
 function ThreadMessages({
   threadMails,
   isSingleMail,
-  loading,
   selectedMailId,
+  chat,
+  isOwn,
+  onCollapse,
   onReply,
   onReplyAll,
   onForward,
@@ -1142,8 +1320,10 @@ function ThreadMessages({
 }: {
   threadMails: Mail[];
   isSingleMail: boolean;
-  loading: boolean;
   selectedMailId?: string;
+  chat: boolean;
+  isOwn: (mail: Mail) => boolean;
+  onCollapse: (mailId: string) => void;
   onReply: (mail: Mail) => void;
   onReplyAll: (mail: Mail) => void;
   onForward: (mail: Mail) => void;
@@ -1151,6 +1331,35 @@ function ThreadMessages({
   onUpdateMail: (mailId: string, updates: Partial<Mail>) => void;
 }) {
   const messagesRef = useRef<HTMLDivElement>(null);
+
+  if (chat && !isSingleMail) {
+    const newest = new Set(threadMails.slice(0, CHAT_EXPANDED_NEWEST).map((m) => m.id));
+    const oldestFirst = [...threadMails].reverse();
+    return (
+      <div ref={messagesRef} className="flex flex-col gap-4 pt-3">
+        {oldestFirst.map((m, index) => {
+          const own = isOwn(m);
+          return (
+            <div key={m.id} data-mail-id={m.id} className={`message-card flex ${own ? "justify-end" : "justify-start"}`}>
+              <MessageCard
+                mail={m}
+                isLatest={index === oldestFirst.length - 1}
+                defaultExpanded={newest.has(m.id) || m.id === selectedMailId || !m.is_read}
+                chat
+                own={own}
+                onCollapse={onCollapse}
+                onReply={onReply}
+                onReplyAll={onReplyAll}
+                onForward={onForward}
+                onLinkClick={onLinkClick}
+                onUpdateMail={onUpdateMail}
+              />
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
 
   // Cards must never depend on a JS animation to become visible.
   return (
@@ -1169,8 +1378,9 @@ function ThreadMessages({
             <MessageCard
               mail={m}
               isLatest={index === 0}
-              isSelected={m.id === selectedMailId}
+              defaultExpanded={isSingleMail || index === 0 || m.id === selectedMailId}
               singleMail={isSingleMail}
+              onCollapse={onCollapse}
               onReply={onReply}
               onReplyAll={onReplyAll}
               onForward={onForward}
@@ -1196,6 +1406,16 @@ export function ThreadView({ mail }: ThreadViewProps) {
       ?.querySelector(`[data-mail-id="${CSS.escape(mailId)}"]`)
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [messagesScrollRef]);
+  // Collapsing while scrolled into a message would leave the reader below it.
+  const revealMessageStart = useCallback((mailId: string) => {
+    requestAnimationFrame(() => {
+      const scroller = messagesScrollRef.current;
+      const el = scroller?.querySelector(`[data-mail-id="${CSS.escape(mailId)}"]`);
+      if (!scroller || !el) return;
+      const offset = el.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+      if (offset < 0) scroller.scrollTop += offset - 12;
+    });
+  }, [messagesScrollRef]);
   const [threadMails, setThreadMails] = useState<Mail[]>([mail]);
   const [loading, setLoading] = useState(true);
   const openCompose = useAppStore((s) => s.openCompose);
@@ -1203,6 +1423,14 @@ export function ThreadView({ mail }: ThreadViewProps) {
   const setSelectedMailId = useAppStore((s) => s.setSelectedMailId);
   const setPendingRemoveIds = useAppStore((s) => s.setPendingRemoveIds);
   const folders = useAppStore((s) => s.folders);
+  const accounts = useAppStore((s) => s.accounts);
+  const chatView = useAppStore((s) => s.appSettings.thread_view === "chat");
+  const isOwn = useMemo(
+    () => makeIsOutgoing(folders, accounts.map((a) => a.email), null),
+    [folders, accounts],
+  );
+  const messagesContentRef = useRef<HTMLDivElement>(null);
+  useChatAnchor(messagesScrollRef, messagesContentRef, mail.id, chatView);
   const selectedFolderId = useAppStore((s) => s.selectedFolderId);
   const addToast = useAppStore((s) => s.addToast);
   const queryClient = useQueryClient();
@@ -1241,8 +1469,8 @@ export function ThreadView({ mail }: ThreadViewProps) {
 
   // The scroll container survives selection changes; reset it per mail.
   useEffect(() => {
-    messagesScrollRef.current?.scrollTo({ top: 0 });
-  }, [mail.id]);
+    if (!chatView) messagesScrollRef.current?.scrollTo({ top: 0 });
+  }, [mail.id, chatView]);
 
   // Paint the selected mail immediately; the thread merges in async.
   useEffect(() => {
@@ -1541,12 +1769,15 @@ export function ThreadView({ mail }: ThreadViewProps) {
         {/* Reading measure: on a maximized window plain-text mails otherwise
             stretch across the full pane width. HTML newsletters bring their
             own (narrower) layout and are unaffected. */}
-        <div className="mx-auto w-full max-w-[840px]">
+        {/* Chat bubbles cap their own width; the free space belongs between the sides. */}
+        <div ref={messagesContentRef} className={`mx-auto w-full ${chatView && !isSingleMail ? "max-w-7xl" : "max-w-[840px]"}`}>
           <ThreadMessages
             threadMails={threadMails}
             isSingleMail={isSingleMail}
-            loading={loading}
             selectedMailId={mail.id}
+            chat={chatView}
+            isOwn={isOwn}
+            onCollapse={revealMessageStart}
             onReply={handleReply}
             onReplyAll={handleReplyAll}
             onForward={handleForward}

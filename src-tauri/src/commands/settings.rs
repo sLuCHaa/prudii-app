@@ -53,6 +53,7 @@ pub fn get_app_settings(db: State<'_, Database>) -> Result<AppSettings, String> 
             compose_font: get_string("compose_font", "prudii"),
             compose_font_size: get_u32("compose_font_size", 11),
             mail_sort: get_string("mail_sort", "date_desc"),
+            thread_view: get_string("thread_view", "classic"),
         })
     })
 }
@@ -147,6 +148,12 @@ pub fn update_app_settings(
         conn.execute(
             "INSERT OR REPLACE INTO app_settings (key, value) VALUES (?1, ?2)",
             rusqlite::params!["mail_sort", &settings.mail_sort],
+        )
+        .map_err(|e| e.to_string())?;
+
+        conn.execute(
+            "INSERT OR REPLACE INTO app_settings (key, value) VALUES (?1, ?2)",
+            rusqlite::params!["thread_view", &settings.thread_view],
         )
         .map_err(|e| e.to_string())?;
 

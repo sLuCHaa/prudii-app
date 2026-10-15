@@ -254,6 +254,12 @@
     "archiveConversation": "Konversation archivieren",
     "deleteConversation": "Konversation löschen",
     "latest": "Neueste",
+    "you": "Du",
+    "showQuoted": "Verlauf anzeigen",
+    "hideQuoted": "Verlauf ausblenden",
+    "details": "Details",
+    "expandMessage": "Nachricht von {{name}} aufklappen",
+    "collapseMessage": "Nachricht einklappen",
     "draft": "Entwurf",
     "message_one": "{{count}} Nachricht in der Konversation",
     "message_other": "{{count}} Nachrichten in der Konversation",
@@ -584,6 +590,12 @@
       "compact": "Kompakt",
       "comfortable": "Normal",
       "spacious": "Großzügig"
+    },
+    "threadView": {
+      "title": "Konversationsansicht",
+      "description": "Wie Konversationen mit mehreren Nachrichten angezeigt werden.",
+      "classic": "Klassisch",
+      "chat": "Chat"
     },
     "density.compact": "Kompakt",
     "density.comfortable": "Komfortabel",

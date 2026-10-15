@@ -555,6 +555,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     compose_font: "prudii",
     compose_font_size: 11,
     mail_sort: "date_desc",
+    thread_view: "classic",
   },
   appSettingsLoaded: false,
   setAppSettings: (appSettings) => set({ appSettings, appSettingsLoaded: true }),

@@ -72,7 +72,7 @@ const LANGUAGE_OPTIONS: { value: AppLanguage; labelKey: string }[] = [
   { value: "ru", labelKey: "settings.language.ru" },
 ];
 
-import type { DensityMode } from "../../types";
+import type { DensityMode, ThreadViewMode } from "../../types";
 import { ACCENT_OPTIONS, DEFAULT_ACCENT_HEX } from "../../lib/accents";
 import { COMPOSE_FONTS, COMPOSE_FONT_SIZES, composeTypography, type ComposeFontId } from "../../lib/outgoingHtml";
 
@@ -80,6 +80,11 @@ const DENSITY_OPTIONS: { id: DensityMode; labelKey: string }[] = [
   { id: "compact", labelKey: "settings.density.compact" },
   { id: "comfortable", labelKey: "settings.density.comfortable" },
   { id: "spacious", labelKey: "settings.density.spacious" },
+];
+
+const THREAD_VIEW_OPTIONS: { id: ThreadViewMode; labelKey: string }[] = [
+  { id: "classic", labelKey: "settings.threadView.classic" },
+  { id: "chat", labelKey: "settings.threadView.chat" },
 ];
 
 const UNDO_SEND_OPTIONS = [
@@ -1101,6 +1106,28 @@ export function SettingsPanel() {
                           onClick={() => updateLocalSetting("density", id)}
                           className={`flex-1 px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
                             localSettings.density === id
+                              ? "border-accent bg-accent-soft text-accent"
+                              : "border-border text-text-secondary hover:bg-hover"
+                          }`}
+                        >
+                          {t(labelKey)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-medium text-text mb-1">{t("settings.threadView.title")}</h3>
+                    <p className="text-xs text-text-tertiary mb-3">
+                      {t("settings.threadView.description")}
+                    </p>
+                    <div className="flex gap-2">
+                      {THREAD_VIEW_OPTIONS.map(({ id, labelKey }) => (
+                        <button
+                          key={id}
+                          onClick={() => updateLocalSetting("thread_view", id)}
+                          className={`flex-1 px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
+                            localSettings.thread_view === id
                               ? "border-accent bg-accent-soft text-accent"
                               : "border-border text-text-secondary hover:bg-hover"
                           }`}

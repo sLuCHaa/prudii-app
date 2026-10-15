@@ -253,6 +253,12 @@
     "archiveConversation": "归档会话",
     "deleteConversation": "删除会话",
     "latest": "最新",
+    "you": "我",
+    "showQuoted": "显示历史记录",
+    "hideQuoted": "隐藏历史记录",
+    "details": "详情",
+    "expandMessage": "展开来自 {{name}} 的邮件",
+    "collapseMessage": "收起邮件",
     "draft": "草稿",
     "message_one": "会话中的 {{count}} 封邮件",
     "message_other": "会话中的 {{count}} 封邮件",
@@ -592,6 +598,12 @@
       "compact": "紧凑",
       "comfortable": "适中",
       "spacious": "宽松"
+    },
+    "threadView": {
+      "title": "会话视图",
+      "description": "多封邮件的会话如何显示。",
+      "classic": "经典",
+      "chat": "聊天"
     },
     "density.compact": "紧凑",
     "density.comfortable": "舒适",

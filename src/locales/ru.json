@@ -258,6 +258,12 @@
     "archiveConversation": "Архивировать переписку",
     "deleteConversation": "Удалить переписку",
     "latest": "Последнее",
+    "you": "Вы",
+    "showQuoted": "Показать историю",
+    "hideQuoted": "Скрыть историю",
+    "details": "Подробности",
+    "expandMessage": "Развернуть сообщение от {{name}}",
+    "collapseMessage": "Свернуть сообщение",
     "draft": "Черновик",
     "message_one": "{{count}} письмо в переписке",
     "message_other": "{{count}} писем в переписке",
@@ -588,6 +594,12 @@
       "compact": "Компактно",
       "comfortable": "Обычно",
       "spacious": "Просторно"
+    },
+    "threadView": {
+      "title": "Вид переписки",
+      "description": "Как отображаются переписки из нескольких сообщений.",
+      "classic": "Классический",
+      "chat": "Чат"
     },
     "density.compact": "Компактно",
     "density.comfortable": "Комфортно",

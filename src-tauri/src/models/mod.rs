@@ -130,6 +130,7 @@ pub struct AppSettings {
     pub compose_font: String,
     pub compose_font_size: u32,
     pub mail_sort: String,
+    pub thread_view: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

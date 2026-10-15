@@ -254,6 +254,12 @@
     "archiveConversation": "Archiver la conversation",
     "deleteConversation": "Supprimer la conversation",
     "latest": "Dernier",
+    "you": "Vous",
+    "showQuoted": "Afficher l'historique",
+    "hideQuoted": "Masquer l'historique",
+    "details": "Détails",
+    "expandMessage": "Développer le message de {{name}}",
+    "collapseMessage": "Réduire le message",
     "draft": "Brouillon",
     "message_one": "{{count}} message dans la conversation",
     "message_other": "{{count}} messages dans la conversation",
@@ -584,6 +590,12 @@
       "compact": "Compact",
       "comfortable": "Normal",
       "spacious": "Spacieux"
+    },
+    "threadView": {
+      "title": "Affichage des conversations",
+      "description": "Comment les conversations de plusieurs messages sont affichées.",
+      "classic": "Classique",
+      "chat": "Discussion"
     },
     "density.compact": "Compact",
     "density.comfortable": "Confortable",

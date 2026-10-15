@@ -254,6 +254,12 @@
     "archiveConversation": "Archive conversation",
     "deleteConversation": "Delete conversation",
     "latest": "Latest",
+    "you": "You",
+    "showQuoted": "Show history",
+    "hideQuoted": "Hide history",
+    "details": "Details",
+    "expandMessage": "Expand message from {{name}}",
+    "collapseMessage": "Collapse message",
     "draft": "Draft",
     "message_one": "{{count}} message in conversation",
     "message_other": "{{count}} messages in conversation",
@@ -599,6 +605,12 @@
       "compact": "Compact",
       "comfortable": "Comfortable",
       "spacious": "Spacious"
+    },
+    "threadView": {
+      "title": "Conversation view",
+      "description": "How conversations with several messages are shown.",
+      "classic": "Classic",
+      "chat": "Chat"
     },
     "density.compact": "Compact",
     "density.comfortable": "Comfortable",

@@ -101,6 +101,7 @@ export const MAIL_FLAG_COLORS: Record<MailFlag, { bg: string; text: string; name
 };
 
 export type DensityMode = "compact" | "comfortable" | "spacious";
+export type ThreadViewMode = "classic" | "chat";
 export type AccentColor = "terracotta" | "blue" | "purple" | "green" | "orange" | "pink" | "red" | "teal" | "amber" | "system";
 
 export interface AppSettings {
@@ -124,6 +125,7 @@ export interface AppSettings {
   compose_font: string;
   compose_font_size: number; // pt
   mail_sort: string;
+  thread_view: ThreadViewMode;
 }
 
 export interface OllamaStatus {
