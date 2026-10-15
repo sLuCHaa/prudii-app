@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
-pub(crate) const SCHEMA_VERSION: u32 = 42;
+pub(crate) const SCHEMA_VERSION: u32 = 43;
 
 pub struct Database {
     pub conn: Mutex<Connection>,
@@ -615,6 +615,80 @@ impl Database {
             );
             CREATE INDEX IF NOT EXISTS idx_tasks_status_order ON tasks(status, sort_order);
             CREATE INDEX IF NOT EXISTS idx_task_links_mail ON task_mail_links(mail_id);"
+        );
+
+        let _ = conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS calendars (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                color TEXT NOT NULL,
+                is_default INTEGER NOT NULL DEFAULT 0,
+                visible INTEGER NOT NULL DEFAULT 1,
+                sort_order REAL NOT NULL DEFAULT 0,
+                source TEXT NOT NULL DEFAULT 'local',
+                account_id TEXT,
+                remote_id TEXT,
+                sync_token TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS events (
+                id TEXT PRIMARY KEY,
+                calendar_id TEXT NOT NULL REFERENCES calendars(id) ON DELETE CASCADE,
+                uid TEXT NOT NULL,
+                recurrence_id TEXT,
+                title TEXT NOT NULL DEFAULT '',
+                description TEXT NOT NULL DEFAULT '',
+                location TEXT NOT NULL DEFAULT '',
+                all_day INTEGER NOT NULL DEFAULT 0,
+                dtstart TEXT NOT NULL,
+                dtend TEXT NOT NULL,
+                tzid TEXT,
+                start_utc TEXT NOT NULL,
+                range_end_utc TEXT,
+                rrule TEXT,
+                exdates TEXT NOT NULL DEFAULT '[]',
+                rdates TEXT NOT NULL DEFAULT '[]',
+                status TEXT NOT NULL DEFAULT 'confirmed' CHECK (status IN ('confirmed','tentative','cancelled')),
+                transparency TEXT NOT NULL DEFAULT 'opaque' CHECK (transparency IN ('opaque','transparent')),
+                sequence INTEGER NOT NULL DEFAULT 0,
+                organizer_email TEXT,
+                organizer_name TEXT,
+                is_organizer INTEGER NOT NULL DEFAULT 0,
+                my_partstat TEXT,
+                account_id TEXT,
+                ical_raw TEXT,
+                etag TEXT,
+                remote_href TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_events_uid ON events(calendar_id, uid, IFNULL(recurrence_id, ''));
+            CREATE INDEX IF NOT EXISTS idx_events_range ON events(start_utc, range_end_utc);
+            CREATE TABLE IF NOT EXISTS event_alarms (
+                id TEXT PRIMARY KEY,
+                event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                minutes_before INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_event_alarms_event ON event_alarms(event_id);
+            CREATE TABLE IF NOT EXISTS event_attendees (
+                event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                email TEXT NOT NULL,
+                name TEXT NOT NULL DEFAULT '',
+                role TEXT NOT NULL DEFAULT 'req-participant' CHECK (role IN ('req-participant','opt-participant','chair','non-participant')),
+                partstat TEXT NOT NULL DEFAULT 'needs-action' CHECK (partstat IN ('needs-action','accepted','tentative','declined','delegated')),
+                rsvp INTEGER NOT NULL DEFAULT 1,
+                comment TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (event_id, email)
+            );
+            CREATE TABLE IF NOT EXISTS event_reminders_sent (
+                event_id TEXT NOT NULL,
+                occurrence_start TEXT NOT NULL,
+                minutes_before INTEGER NOT NULL,
+                sent_at TEXT NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (event_id, occurrence_start, minutes_before)
+            );"
         );
 
         // Only bump version AFTER all migrations have run

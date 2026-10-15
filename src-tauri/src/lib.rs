@@ -1,4 +1,5 @@
 pub mod ai;
+pub mod calendar;
 pub mod classify;
 pub mod cleanup_guard;
 pub mod commands;

@@ -205,3 +205,35 @@ fn contacts_fold_populates_from_mails() {
     drop(conn);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn calendar_tables_exist_with_unique_slots_and_cascade() {
+    let dir = temp_dir("calendar");
+    let db = Database::new(dir.clone()).unwrap();
+    let conn = db.lock_db();
+
+    let version: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
+    assert_eq!(version, 43);
+
+    conn.execute("INSERT INTO calendars (id, name, color) VALUES ('c1', 'Cal', '#3b82f6')", []).unwrap();
+    let insert = |id: &str, rid: Option<&str>| {
+        conn.execute(
+            "INSERT INTO events (id, calendar_id, uid, recurrence_id, dtstart, dtend, start_utc)
+             VALUES (?1, 'c1', 'u1', ?2, '2026-10-15T09:00:00', '2026-10-15T10:00:00', '2026-10-15T07:00:00Z')",
+            rusqlite::params![id, rid],
+        )
+    };
+    insert("e1", None).unwrap();
+    assert!(insert("e2", None).is_err(), "a second master with the same uid must be rejected");
+    insert("e3", Some("2026-10-22T09:00:00")).unwrap();
+    assert!(insert("e4", Some("2026-10-22T09:00:00")).is_err(), "one override per slot");
+
+    conn.execute("INSERT INTO event_alarms (id, event_id, minutes_before) VALUES ('a1', 'e1', 15)", []).unwrap();
+    conn.execute("DELETE FROM calendars WHERE id = 'c1'", []).unwrap();
+    let events: i64 = conn.query_row("SELECT COUNT(*) FROM events", [], |r| r.get(0)).unwrap();
+    let alarms: i64 = conn.query_row("SELECT COUNT(*) FROM event_alarms", [], |r| r.get(0)).unwrap();
+    assert_eq!((events, alarms), (0, 0), "events and alarms cascade with their calendar");
+
+    drop(conn);
+    let _ = std::fs::remove_dir_all(&dir);
+}
