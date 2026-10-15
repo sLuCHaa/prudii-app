@@ -617,7 +617,7 @@ impl Database {
             CREATE INDEX IF NOT EXISTS idx_task_links_mail ON task_mail_links(mail_id);"
         );
 
-        let _ = conn.execute_batch(
+        if let Err(e) = conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS calendars (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
@@ -689,7 +689,9 @@ impl Database {
                 sent_at TEXT NOT NULL DEFAULT (datetime('now')),
                 PRIMARY KEY (event_id, occurrence_start, minutes_before)
             );"
-        );
+        ) {
+            log::error!("calendar schema migration failed: {}", e);
+        }
 
         // Only bump version AFTER all migrations have run
         conn.pragma_update(None, "user_version", SCHEMA_VERSION)?;
