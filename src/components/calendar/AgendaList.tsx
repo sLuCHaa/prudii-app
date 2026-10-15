@@ -29,6 +29,7 @@ interface DayGroup {
 export function AgendaList({ occurrences, tasks, onOpen, onOpenTask, onToggleTask, onReachEnd, emptyTitle, emptyDescription }: AgendaListProps) {
   const { t } = useTranslation();
   const use24h = useAppStore((s) => s.appSettings.use_24h_clock);
+  const scroller = useRef<HTMLDivElement>(null);
   const sentinel = useRef<HTMLDivElement>(null);
 
   const groups = useMemo(() => {
@@ -52,17 +53,16 @@ export function AgendaList({ occurrences, tasks, onOpen, onOpenTask, onToggleTas
     if (!onReachEnd || !el) return;
     const io = new IntersectionObserver((entries) => {
       if (entries.some((e) => e.isIntersecting)) onReachEnd();
-    }, { rootMargin: "200px" });
+    }, { root: scroller.current, rootMargin: "200px" });
     io.observe(el);
     return () => io.disconnect();
-  }, [onReachEnd, groups.length]);
-
-  if (groups.length === 0) {
-    return <EmptyState icon={<CalendarDays className="w-10 h-10 text-text-tertiary" />} title={emptyTitle} description={emptyDescription} />;
-  }
+  }, [onReachEnd, occurrences, tasks]);
 
   return (
-    <div className="h-full overflow-y-auto">
+    <div ref={scroller} className="h-full overflow-y-auto">
+      {groups.length === 0 && (
+        <EmptyState icon={<CalendarDays className="w-10 h-10 text-text-tertiary" />} title={emptyTitle} description={emptyDescription} />
+      )}
       {groups.map((g) => (
         <section key={isoDate(g.day)}>
           <h3 className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-surface/95 px-6 py-2 text-xs font-semibold text-text-secondary backdrop-blur">
