@@ -150,10 +150,10 @@ export function EventDrawer({ target, onClose }: EventDrawerProps) {
   }, [form, target, calendars, settings, detail, occurrence]);
 
   useEffect(() => {
-    if (!missing) return;
+    if (!missing || form) return;
     calendarErrorToast(new Error("calendar.errors.notFound"));
     onClose();
-  }, [missing, onClose]);
+  }, [missing, form, onClose]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -180,7 +180,7 @@ export function EventDrawer({ target, onClose }: EventDrawerProps) {
       const newStart = parseIsoDate(date);
       const shift = differenceInCalendarDays(newStart, oldStart);
       const preset = detectPreset(f.rrule, oldStart);
-      const rrule = START_DERIVED.includes(preset) ? presetRrule(preset, newStart) : f.rrule;
+      const rrule = target.mode === "new" && START_DERIVED.includes(preset) ? presetRrule(preset, newStart) : f.rrule;
       return { ...f, startDate: date, endDate: isoDate(addDays(parseIsoDate(f.endDate), shift)), rrule };
     });
   }
