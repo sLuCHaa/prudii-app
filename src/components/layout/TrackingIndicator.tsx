@@ -3,6 +3,7 @@ import { Seal as ShieldCheck } from "../icons";
 
 import { useTranslation } from "react-i18next";
 import type { TrackerInfo } from "../../lib/sanitize";
+import { useDropUp } from "../../hooks/useDropUp";
 
 interface TrackingIndicatorProps {
   trackers: TrackerInfo[];
@@ -18,6 +19,8 @@ export function TrackingIndicator({ trackers }: TrackingIndicatorProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const dropUp = useDropUp(open, menuRef, popupRef);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -58,7 +61,7 @@ export function TrackingIndicator({ trackers }: TrackingIndicatorProps) {
       </button>
 
       {open && hasTrackers && (
-        <div className="absolute top-full right-0 mt-1 w-72 bg-surface border border-border rounded-lg shadow-lg z-50 overflow-hidden">
+        <div ref={popupRef} className={`absolute ${dropUp ? "bottom-full mb-1" : "top-full mt-1"} right-0 w-72 bg-surface border border-border rounded-lg shadow-lg z-50 overflow-hidden`}>
           <div className="px-3 py-2 border-b border-border bg-bg-secondary">
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-success" />

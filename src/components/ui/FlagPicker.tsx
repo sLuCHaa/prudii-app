@@ -3,6 +3,7 @@ import { Flag, Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { MAIL_FLAG_COLORS, type MailFlag } from "../../types";
 import { FLAG_ORDER } from "../../lib/mailFlags";
+import { useDropUp } from "../../hooks/useDropUp";
 
 interface FlagPickerProps {
   flags: string[];
@@ -14,6 +15,8 @@ export function FlagPicker({ flags, onToggleFlag, size = "md" }: FlagPickerProps
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const dropUp = useDropUp(open, menuRef, popupRef);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -67,7 +70,8 @@ export function FlagPicker({ flags, onToggleFlag, size = "md" }: FlagPickerProps
 
       {open && (
         <div
-          className="absolute right-0 top-full mt-1 bg-surface border border-border rounded-lg shadow-lg py-1 z-50 min-w-[140px]"
+          ref={popupRef}
+          className={`absolute right-0 ${dropUp ? "bottom-full mb-1" : "top-full mt-1"} bg-surface border border-border rounded-lg shadow-lg py-1 z-50 min-w-[140px]`}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="px-3 py-1.5 text-xs text-text-tertiary border-b border-border">
