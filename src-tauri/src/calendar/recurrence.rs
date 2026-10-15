@@ -5,7 +5,7 @@ use super::tz::{fmt_date, fmt_utc, fmt_wall, parse_date, parse_wall, row_tz, wal
 use super::{EventRow, Occurrence};
 use chrono::{DateTime, Duration, NaiveDate, NaiveDateTime, Utc};
 use chrono_tz::Tz;
-use rrule::{RRule, RRuleSet, Unvalidated};
+use rrule::{Frequency, RRule, RRuleSet, Unvalidated};
 use std::collections::HashSet;
 
 pub const MAX_OCCURRENCES: u16 = 5000;
@@ -75,6 +75,10 @@ fn rule_set(row: &EventRow) -> Option<RRuleSet> {
     if let Some(rule) = &row.rrule {
         let text = normalize_until(rule.trim().trim_start_matches("RRULE:"), row.all_day, tz);
         match text.parse::<RRule<Unvalidated>>() {
+            // Expansion walks from DTSTART on every query; minute steps over years stall it.
+            Ok(parsed) if matches!(parsed.get_freq(), Frequency::Secondly | Frequency::Minutely) => {
+                log::warn!("ignoring sub-hourly RRULE {:?} on event {}", rule, row.id)
+            }
             Ok(parsed) => match parsed.validate(dt_start) {
                 Ok(valid) => {
                     set = set.rrule(valid);
@@ -440,6 +444,17 @@ mod tests {
         let r = row("2026-10-15T09:00:00", "2026-10-15T10:00:00", BERLIN, Some("FREQ=SOMETIMES"));
         assert_eq!(starts(&r, "2026-10-01T00:00:00Z", "2026-11-01T00:00:00Z"), vec!["2026-10-15T07:00:00Z"]);
         assert!(derive_range(&r).unwrap().1.is_some());
+    }
+
+    #[test]
+    fn minutely_and_secondly_rules_fall_back_to_a_single_event() {
+        let r = row("2020-01-06T09:00:00", "2020-01-06T09:30:00", BERLIN, Some("FREQ=MINUTELY"));
+        assert_eq!(starts(&r, "2020-01-06T00:00:00Z", "2020-01-07T00:00:00Z"), vec!["2020-01-06T08:00:00Z"]);
+        assert!(derive_range(&r).unwrap().1.is_some());
+        let s = row("2020-01-06T09:00:00", "2020-01-06T09:30:00", BERLIN, Some("FREQ=SECONDLY;COUNT=5"));
+        assert_eq!(starts(&s, "2020-01-06T00:00:00Z", "2020-01-07T00:00:00Z").len(), 1);
+        let h = row("2026-10-15T09:00:00", "2026-10-15T09:15:00", BERLIN, Some("FREQ=HOURLY;COUNT=3"));
+        assert_eq!(starts(&h, "2026-10-15T00:00:00Z", "2026-10-16T00:00:00Z").len(), 3);
     }
 
     #[test]
