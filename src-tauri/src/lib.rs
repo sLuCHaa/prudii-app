@@ -1,5 +1,6 @@
 pub mod ai;
 pub mod calendar;
+pub mod calendar_reminders;
 pub mod classify;
 pub mod cleanup_guard;
 pub mod commands;
@@ -740,6 +741,7 @@ pub fn run() {
                                 log::warn!("scheduled-send check failed: {}", e);
                             }
                             crate::task_reminders::run_task_reminder_check(&handle).await;
+                            crate::calendar_reminders::run_event_reminder_check(&handle).await;
                             tokio::time::sleep(std::time::Duration::from_secs(60)).await;
                         }
                     });

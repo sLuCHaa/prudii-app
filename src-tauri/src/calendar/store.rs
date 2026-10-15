@@ -15,7 +15,7 @@ use crate::db::Database;
 use chrono::{DateTime, Duration, Utc};
 use chrono_tz::Tz;
 use rusqlite::{params, Connection, OptionalExtension};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 pub const DEFAULT_COLOR: &str = "#3b82f6";
 const MAX_ALARM_MINUTES: i64 = 7 * 24 * 60;
@@ -851,6 +851,64 @@ pub(crate) fn export_ics_impl(db: &Database, calendar_id: &str) -> Result<(Strin
     Ok((cal.name.clone(), calendar_to_ics(&events, Some(&cal.name), None, Utc::now())))
 }
 
+/// (event id, occurrence start as listed, minutes before)
+pub type SentKey = (String, String, i64);
+
+/// Occurrences around `now` in every calendar (hidden ones still remind), with their alarms.
+pub(crate) fn reminder_candidates_impl(db: &Database, now: DateTime<Utc>) -> Result<Vec<(Occurrence, Vec<i64>)>, String> {
+    let conn = db.lock_db();
+    let ids: Vec<String> = {
+        let mut stmt = conn.prepare("SELECT id FROM calendars").map_err(err)?;
+        let rows = stmt.query_map([], |r| r.get(0)).map_err(err)?.collect::<Result<Vec<String>, _>>().map_err(err)?;
+        rows
+    };
+    let occurrences = occurrences_in(&conn, now - Duration::days(2), now + Duration::days(8), Some(&ids))?;
+    let mut alarms: HashMap<String, Vec<i64>> = HashMap::new();
+    let mut out = Vec::new();
+    for o in occurrences {
+        let list = match alarms.get(&o.event_id) {
+            Some(l) => l.clone(),
+            None => {
+                let l = load_alarms(&conn, &o.event_id)?;
+                alarms.insert(o.event_id.clone(), l.clone());
+                l
+            }
+        };
+        if !list.is_empty() {
+            out.push((o, list));
+        }
+    }
+    Ok(out)
+}
+
+pub(crate) fn sent_reminders_impl(db: &Database) -> Result<HashSet<SentKey>, String> {
+    let conn = db.lock_db();
+    let mut stmt = conn.prepare("SELECT event_id, occurrence_start, minutes_before FROM event_reminders_sent").map_err(err)?;
+    let rows = stmt
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+        .map_err(err)?
+        .collect::<Result<HashSet<SentKey>, _>>()
+        .map_err(err);
+    rows
+}
+
+/// True when this call recorded the reminder, false if it was already recorded.
+pub(crate) fn mark_reminder_sent_impl(db: &Database, key: &SentKey) -> Result<bool, String> {
+    let conn = db.lock_db();
+    let n = conn
+        .execute(
+            "INSERT OR IGNORE INTO event_reminders_sent (event_id, occurrence_start, minutes_before) VALUES (?1, ?2, ?3)",
+            params![key.0, key.1, key.2],
+        )
+        .map_err(err)?;
+    Ok(n == 1)
+}
+
+pub(crate) fn prune_reminders_impl(db: &Database) -> Result<(), String> {
+    let conn = db.lock_db();
+    conn.execute("DELETE FROM event_reminders_sent WHERE sent_at < datetime('now', '-30 days')", []).map(|_| ()).map_err(err)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1288,5 +1346,27 @@ mod tests {
         let db = temp_db();
         let c = cal(&db);
         assert_eq!(import_ics_impl(&db, &c, "BEGIN:VCALENDAR\nEND:VCALENDAR\n").unwrap_err(), "calendar.errors.noEvents");
+    }
+
+    #[test]
+    fn reminder_log_is_idempotent_and_hidden_calendars_still_remind() {
+        let db = temp_db();
+        let hidden = create_calendar_impl(&db, "Hidden", "#00ff00").unwrap();
+        let now = Utc::now();
+        create_event_impl(
+            &db,
+            EventInput { alarms: vec![10], ..input(&hidden.id, "Call", timed(&fmt_utc(now + Duration::minutes(5)), &fmt_utc(now + Duration::minutes(35)))) },
+        )
+        .unwrap();
+        update_calendar_impl(&db, &hidden.id, CalendarPatch { visible: Some(false), ..Default::default() }).unwrap();
+        let cands = reminder_candidates_impl(&db, now).unwrap();
+        assert_eq!(cands.len(), 1);
+        assert_eq!(cands[0].1, vec![10]);
+        let key = (cands[0].0.event_id.clone(), cands[0].0.start.clone(), 10);
+        assert!(mark_reminder_sent_impl(&db, &key).unwrap());
+        assert!(!mark_reminder_sent_impl(&db, &key).unwrap(), "a second mark is a no-op");
+        assert!(sent_reminders_impl(&db).unwrap().contains(&key));
+        prune_reminders_impl(&db).unwrap();
+        assert!(sent_reminders_impl(&db).unwrap().contains(&key), "fresh entries survive pruning");
     }
 }

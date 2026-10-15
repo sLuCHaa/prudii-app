@@ -42,6 +42,11 @@ fn task_reminder_body(task: &Task, use_24h: bool) -> String {
     }
 }
 
+fn event_reminder_body(occ: &crate::calendar::Occurrence, use_24h: bool, all_day_label: &str) -> String {
+    let when = if occ.all_day { all_day_label.to_string() } else { format_due_time(Some(occ.start.as_str()), use_24h).unwrap_or_default() };
+    if occ.location.trim().is_empty() { when } else { format!("{} · {}", when, occ.location.trim()) }
+}
+
 #[cfg_attr(not(windows), allow(dead_code))]
 struct NewMailToast {
     mail_id: String,
@@ -199,6 +204,54 @@ pub fn send_task_reminder(app: &AppHandle, task: &Task) {
     }
 }
 
+#[cfg(windows)]
+pub fn send_event_reminder(app: &AppHandle, occ: &crate::calendar::Occurrence) {
+    use tauri::{Emitter, Manager};
+    use tauri_winrt_notification::{Sound, Toast};
+
+    let db = app.state::<Database>();
+    if !notifications_enabled(&db) {
+        return;
+    }
+    let sound = setting_flag(&db, "notification_sound", true);
+    let use_24h = setting_flag(&db, "use_24h_clock", true);
+    let labels = crate::menu_labels::for_lang(&read_language(&db));
+    let title = if occ.title.trim().is_empty() { labels.event_reminder.to_string() } else { occ.title.clone() };
+
+    let mut toast = Toast::new("com.prudii.mail").title(&title).text1(&event_reminder_body(occ, use_24h, labels.event_all_day));
+    toast = if sound { toast.sound(Some(Sound::Default)) } else { toast.sound(None) };
+    if let Some(url) = crate::calendar::meeting::find_meeting_link(&[&occ.location, &occ.description]) {
+        toast = toast.add_button(labels.event_join, &format!("event-join:{}", url));
+    }
+
+    let app_clone = app.clone();
+    let event_id = occ.event_id.clone();
+    let occurrence_key = occ.occurrence_key.clone();
+    toast = toast.on_activated(move |action| {
+        match action.as_deref() {
+            Some(a) if a.starts_with("event-join:") => {
+                use tauri_plugin_opener::OpenerExt;
+                if let Err(e) = app_clone.opener().open_url(a.trim_start_matches("event-join:"), None::<&str>) {
+                    log::warn!("failed to open meeting link: {e}");
+                }
+            }
+            _ => {
+                if let Some(window) = app_clone.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.unminimize();
+                    let _ = window.set_focus();
+                }
+                let _ = app_clone.emit("event-open", serde_json::json!({ "event_id": event_id, "occurrence_key": occurrence_key }));
+            }
+        }
+        Ok(())
+    });
+
+    if let Err(e) = toast.show() {
+        log::warn!("Failed to show event reminder notification: {:?}", e);
+    }
+}
+
 #[cfg(not(windows))]
 pub fn send_task_reminder(app: &AppHandle, task: &Task) {
     use tauri::Manager;
@@ -225,6 +278,33 @@ pub fn send_task_reminder(app: &AppHandle, task: &Task) {
     }
     if let Err(e) = builder.show() {
         log::warn!("Failed to show task reminder notification: {:?}", e);
+    }
+}
+
+#[cfg(not(windows))]
+pub fn send_event_reminder(app: &AppHandle, occ: &crate::calendar::Occurrence) {
+    use tauri::Manager;
+    use tauri_plugin_notification::NotificationExt;
+
+    let db = app.state::<Database>();
+    if !notifications_enabled(&db) {
+        return;
+    }
+    let sound = setting_flag(&db, "notification_sound", true);
+    let use_24h = setting_flag(&db, "use_24h_clock", true);
+    let labels = crate::menu_labels::for_lang(&read_language(&db));
+    let title = if occ.title.trim().is_empty() { labels.event_reminder.to_string() } else { occ.title.clone() };
+
+    let mut builder = app.notification().builder().title(title).body(event_reminder_body(occ, use_24h, labels.event_all_day));
+    if sound {
+        #[cfg(target_os = "linux")]
+        let name = "message-new-email";
+        #[cfg(not(target_os = "linux"))]
+        let name = "default";
+        builder = builder.sound(name);
+    }
+    if let Err(e) = builder.show() {
+        log::warn!("Failed to show event reminder notification: {:?}", e);
     }
 }
 

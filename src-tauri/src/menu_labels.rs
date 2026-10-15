@@ -18,6 +18,9 @@ pub struct MenuLabels {
     pub mark_read: &'static str,
     pub task_due: &'static str,
     pub task_mark_done: &'static str,
+    pub event_reminder: &'static str,
+    pub event_join: &'static str,
+    pub event_all_day: &'static str,
 }
 
 pub fn for_lang(lang: &str) -> MenuLabels {
@@ -40,6 +43,9 @@ pub fn for_lang(lang: &str) -> MenuLabels {
             mark_read: "Als gelesen markieren",
             task_due: "Aufgabe fällig",
             task_mark_done: "Erledigt",
+            event_reminder: "Termin",
+            event_join: "Beitreten",
+            event_all_day: "Ganztägig",
         },
         "es" => MenuLabels {
             settings: "Configuración…",
@@ -59,6 +65,9 @@ pub fn for_lang(lang: &str) -> MenuLabels {
             mark_read: "Marcar como leído",
             task_due: "Tarea vencida",
             task_mark_done: "Hecho",
+            event_reminder: "Evento",
+            event_join: "Unirse",
+            event_all_day: "Todo el día",
         },
         "fr" => MenuLabels {
             settings: "Paramètres…",
@@ -78,6 +87,9 @@ pub fn for_lang(lang: &str) -> MenuLabels {
             mark_read: "Marquer comme lu",
             task_due: "Tâche échue",
             task_mark_done: "Terminé",
+            event_reminder: "Événement",
+            event_join: "Rejoindre",
+            event_all_day: "Toute la journée",
         },
         "pt" => MenuLabels {
             settings: "Configurações…",
@@ -97,6 +109,9 @@ pub fn for_lang(lang: &str) -> MenuLabels {
             mark_read: "Marcar como lido",
             task_due: "Tarefa vencida",
             task_mark_done: "Concluída",
+            event_reminder: "Evento",
+            event_join: "Entrar",
+            event_all_day: "Dia inteiro",
         },
         "ru" => MenuLabels {
             settings: "Настройки…",
@@ -116,6 +131,9 @@ pub fn for_lang(lang: &str) -> MenuLabels {
             mark_read: "Пометить прочитанным",
             task_due: "Задача просрочена",
             task_mark_done: "Готово",
+            event_reminder: "Событие",
+            event_join: "Присоединиться",
+            event_all_day: "Весь день",
         },
         "zh" => MenuLabels {
             settings: "设置…",
@@ -135,6 +153,9 @@ pub fn for_lang(lang: &str) -> MenuLabels {
             mark_read: "标为已读",
             task_due: "任务到期",
             task_mark_done: "完成",
+            event_reminder: "日程",
+            event_join: "加入",
+            event_all_day: "全天",
         },
         _ => MenuLabels {
             settings: "Settings…",
@@ -154,6 +175,9 @@ pub fn for_lang(lang: &str) -> MenuLabels {
             mark_read: "Mark as read",
             task_due: "Task due",
             task_mark_done: "Done",
+            event_reminder: "Event",
+            event_join: "Join",
+            event_all_day: "All day",
         },
     }
 }

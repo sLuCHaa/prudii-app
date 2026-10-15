@@ -2,6 +2,7 @@
 
 pub mod content_line;
 pub mod ical;
+pub mod meeting;
 pub mod recurrence;
 pub mod store;
 pub mod tz;
