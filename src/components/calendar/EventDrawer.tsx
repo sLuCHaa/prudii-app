@@ -12,8 +12,10 @@ import { isoDate, parseIsoDate } from "../../lib/calendar/dates";
 import { detectPreset, presetRrule } from "../../lib/calendar/rrule";
 import { findMeetingLink } from "../../lib/calendar/meetingLinks";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
+import { DateField } from "../ui/DateField";
 import { Select } from "../ui/Select";
 import { Skeleton } from "../ui/Skeleton";
+import { TimeField } from "../ui/TimeField";
 import { SPRING_SNAPPY, TRANSITION_INSTANT } from "../motion/tokens";
 import { AlarmEditor } from "./AlarmEditor";
 import { RecurrenceEditor } from "./RecurrenceEditor";
@@ -316,14 +318,14 @@ export function EventDrawer({ target, onClose }: EventDrawerProps) {
               </label>
               <div className="mt-2 grid grid-cols-[3.5rem_1fr_auto] items-center gap-2">
                 <span className="text-xs text-text-tertiary">{t("calendar.drawer.starts")}</span>
-                <input type="date" value={form.startDate} onChange={(e) => e.target.value && changeStartDate(e.target.value)} className={INPUT} />
+                <DateField value={form.startDate} onChange={changeStartDate} ariaLabel={t("calendar.drawer.starts")} />
                 {form.allDay ? <span /> : (
-                  <input type="time" step={300} value={form.startTime} onChange={(e) => e.target.value && changeStartTime(e.target.value)} className={INPUT} />
+                  <TimeField value={form.startTime} onChange={changeStartTime} ariaLabel={t("calendar.drawer.starts")} />
                 )}
                 <span className="text-xs text-text-tertiary">{t("calendar.drawer.ends")}</span>
-                <input type="date" value={form.endDate} min={form.startDate} onChange={(e) => e.target.value && patchForm({ endDate: e.target.value })} className={INPUT} />
+                <DateField value={form.endDate} min={form.startDate} onChange={(endDate) => patchForm({ endDate })} ariaLabel={t("calendar.drawer.ends")} />
                 {form.allDay ? <span /> : (
-                  <input type="time" step={300} value={form.endTime} onChange={(e) => e.target.value && patchForm({ endTime: e.target.value })} className={INPUT} />
+                  <TimeField value={form.endTime} onChange={(endTime) => patchForm({ endTime })} ariaLabel={t("calendar.drawer.ends")} />
                 )}
               </div>
               {error && <p className="mt-1.5 text-xs text-danger">{error}</p>}

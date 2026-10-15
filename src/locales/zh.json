@@ -1,4 +1,10 @@
 {
+  "picker": {
+    "chooseDate": "选择日期",
+    "chooseTime": "选择时间",
+    "today": "今天",
+    "clear": "清除"
+  },
   "common": {
     "cancel": "取消",
     "discard": "放弃",
@@ -1007,6 +1013,7 @@
   "scheduled": {
     "scheduled": "定时发送",
     "scheduleSend": "定时发送",
+    "schedule": "定时",
     "in2hours": "2小时后",
     "tomorrow9": "明天上午9:00",
     "nextMonday9": "下周一上午9:00",

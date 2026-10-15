@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { addDays, format } from "date-fns";
+import { DateField } from "../ui/DateField";
 import { Select } from "../ui/Select";
 import {
   buildRrule, DAY_CODES, describeRrule, detectPreset, nthWeekday, parseRrule, presetRrule, PRESETS,
@@ -138,12 +139,12 @@ function CustomRule({ spec, start, onChange }: { spec: RecurrenceSpec; start: Da
           <input type="radio" checked={spec.end.kind === "until"} onChange={() => set({ end: { kind: "until", date: isoDate(addDays(start, 30)) } })} />
           {t("calendar.repeat.onDate")}
           {spec.end.kind === "until" && (
-            <input
-              type="date"
+            <DateField
               value={spec.end.date}
               min={isoDate(start)}
-              onChange={(e) => e.target.value && set({ end: { kind: "until", date: e.target.value } })}
-              className={INPUT}
+              onChange={(date) => set({ end: { kind: "until", date } })}
+              ariaLabel={t("calendar.repeat.onDate")}
+              className="w-48"
             />
           )}
         </label>

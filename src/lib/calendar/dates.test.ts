@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { enUS } from "date-fns/locale";
 import {
-  daySegment, isLaneEvent, isoDate, monthGrid, occurrenceRange, occursOnDay, parseIsoDate, shiftAnchor, spanInDays,
+  daySegment, gridKeyTarget, isLaneEvent, isoDate, monthGrid, occurrenceRange, occursOnDay, parseIsoDate, shiftAnchor, spanInDays,
   viewDays, viewTitle, visibleRange, weekNumber,
 } from "./dates";
 import type { Occurrence } from "../../types/calendar";
@@ -86,5 +86,32 @@ describe("occurrences", () => {
     expect(spanInDays(occ("2026-10-10", "2026-10-14", true), days)).toEqual({ startIdx: 0, endIdx: 1 });
     expect(spanInDays(occ("2026-10-20", "2026-10-21", true), days)).toBeNull();
     expect(isoDate(parseIsoDate("2026-10-15"))).toBe("2026-10-15");
+  });
+});
+
+describe("gridKeyTarget", () => {
+  const day = local(2026, 10, 15);
+  const go = (key: string, weekStart: 0 | 1 = 1) => {
+    const d = gridKeyTarget(day, key, weekStart);
+    return d && isoDate(d);
+  };
+
+  it("moves by day, week and month", () => {
+    expect(go("ArrowLeft")).toBe("2026-10-14");
+    expect(go("ArrowRight")).toBe("2026-10-16");
+    expect(go("ArrowUp")).toBe("2026-10-08");
+    expect(go("ArrowDown")).toBe("2026-10-22");
+    expect(go("PageUp")).toBe("2026-09-15");
+    expect(go("PageDown")).toBe("2026-11-15");
+  });
+
+  it("jumps to the ends of the week for the configured week start", () => {
+    expect(go("Home")).toBe("2026-10-12");
+    expect(go("End")).toBe("2026-10-18");
+    expect(go("Home", 0)).toBe("2026-10-11");
+  });
+
+  it("ignores other keys", () => {
+    expect(go("Enter")).toBeNull();
   });
 });

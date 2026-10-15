@@ -11,7 +11,7 @@ import { isLaneEvent, isoDate, occurrenceRange } from "../../lib/calendar/dates"
 import { defaultDraftTimes, DEFAULT_SETTINGS, formatOccurrenceTime } from "../../lib/calendar/format";
 import { weekStartsOn } from "../../lib/localeDefaults";
 import { dateLocale } from "../../lib/dateUtils";
-import { MiniMonth } from "./MiniMonth";
+import { MiniMonth } from "../ui/MiniMonth";
 import { EventChip } from "./EventChip";
 import { TaskChip } from "./TaskChip";
 import { EventPopover } from "./EventPopover";

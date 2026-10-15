@@ -1,4 +1,10 @@
 {
+  "picker": {
+    "chooseDate": "Datum wählen",
+    "chooseTime": "Uhrzeit wählen",
+    "today": "Heute",
+    "clear": "Löschen"
+  },
   "common": {
     "cancel": "Abbrechen",
     "discard": "Verwerfen",
@@ -1008,6 +1014,7 @@
   "scheduled": {
     "scheduled": "Geplant",
     "scheduleSend": "Senden planen",
+    "schedule": "Planen",
     "in2hours": "In 2 Stunden",
     "tomorrow9": "Morgen 9:00 Uhr",
     "nextMonday9": "Nächsten Montag 9:00 Uhr",

@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "../../stores/appStore";
 import { checkSieveSupport, getVacation, setVacation } from "../../lib/tauri";
 import { Button } from "../ui/Button";
+import { DateField } from "../ui/DateField";
 import type { VacationSettings, VacationState } from "../../types";
 
 const INPUT = "w-full px-3 py-2 rounded-lg border border-border bg-bg-secondary text-text text-sm focus:border-accent";
@@ -118,11 +119,11 @@ export function VacationSection({ accountId }: { accountId: string }) {
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="text-xs text-text-tertiary mb-1 block">{t("settings.account.vacation.from")}</label>
-            <input type="date" value={draft.from ?? ""} onChange={(e) => patch({ from: e.target.value })} className={INPUT} />
+            <DateField value={draft.from ?? ""} onChange={(from) => patch({ from })} clearable ariaLabel={t("settings.account.vacation.from")} />
           </div>
           <div>
             <label className="text-xs text-text-tertiary mb-1 block">{t("settings.account.vacation.until")}</label>
-            <input type="date" value={draft.until ?? ""} onChange={(e) => patch({ until: e.target.value })} className={INPUT} />
+            <DateField value={draft.until ?? ""} min={draft.from ?? undefined} onChange={(until) => patch({ until })} clearable ariaLabel={t("settings.account.vacation.until")} />
           </div>
         </div>
         <p className="text-xs text-text-tertiary">{t("settings.account.vacation.serverTime")}</p>

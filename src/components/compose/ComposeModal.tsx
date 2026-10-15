@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from "react";
 import type { ReactNode } from "react";
-import { formatDistanceToNowStrict } from "date-fns";
+import { format, formatDistanceToNowStrict } from "date-fns";
 import { dateLocale } from "../../lib/dateUtils";
 import { PulseDot } from "../motion/PulseDot";
 import { GradientAvatar } from "../motion/GradientAvatar";
@@ -21,7 +21,10 @@ import { useAccounts } from "../../hooks/useAccounts";
 import { useScroller } from "../../hooks/useScroller";
 import { useDialog } from "../ui/DialogProvider";
 import { IconButton } from "../ui/Button";
+import { DateField } from "../ui/DateField";
 import { Select } from "../ui/Select";
+import { TimeField } from "../ui/TimeField";
+import { isoDate } from "../../lib/calendar/dates";
 import { listen, emit } from "@tauri-apps/api/event";
 import { saveDraft, syncAccount, fetchMailBody, suggestReplies, sendMail, scheduleSend, listTemplates, listAttachments, getAttachmentData, trashMail, saveComposeAutosave } from "../../lib/tauri";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -376,6 +379,41 @@ export interface ComposeFormProps {
 
 type SendPhase = "idle" | "loading" | "sent";
 
+interface CustomSchedule {
+  date: string;
+  time: string;
+}
+
+function CustomScheduleForm({ value, onChange, onBack, onSchedule }: {
+  value: CustomSchedule;
+  onChange: (value: CustomSchedule) => void;
+  onBack: () => void;
+  onSchedule: (at: Date) => void;
+}) {
+  const { t } = useTranslation();
+  const at = new Date(`${value.date}T${value.time}`);
+  const inFuture = at.getTime() > Date.now();
+  return (
+    <div className="w-72 space-y-2 px-3 pt-1 pb-2">
+      <DateField value={value.date} min={isoDate(new Date())} onChange={(date) => onChange({ ...value, date })} ariaLabel={t("scheduled.scheduleSend")} />
+      <TimeField value={value.time} onChange={(time) => onChange({ ...value, time })} ariaLabel={t("scheduled.scheduleSend")} className="w-full" />
+      <div className="flex items-center justify-between pt-1">
+        <button type="button" onClick={onBack} className="py-1 text-xs text-text-secondary transition-colors hover:text-text">
+          {t("common.back")}
+        </button>
+        <button
+          type="button"
+          disabled={!inFuture}
+          onClick={() => { if (at.getTime() > Date.now()) onSchedule(at); }}
+          className="py-1 text-xs font-semibold text-accent transition-colors hover:text-accent-hover disabled:opacity-40"
+        >
+          {t("scheduled.schedule")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function SendButton({ onSend, disabled }: { onSend: () => Promise<boolean>; disabled: boolean }) {
   const { t } = useTranslation();
   const [phase, setPhase] = useState<SendPhase>("idle");
@@ -505,6 +543,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
   const [showScheduleMenu, setShowScheduleMenu] = useState(false);
+  const [customSchedule, setCustomSchedule] = useState<CustomSchedule | null>(null);
   const [quotedHtml, setQuotedHtml] = useState("");
   const [preview, setPreview] = useState<ComposePreviewData | null>(null);
 
@@ -1385,23 +1424,9 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   }
 
   function handleScheduleCustom() {
-    setShowScheduleMenu(false);
-    // Use native datetime-local input via a hidden element
-    const input = document.createElement("input");
-    input.type = "datetime-local";
-    input.min = new Date().toISOString().slice(0, 16);
-    input.style.position = "fixed";
-    input.style.opacity = "0";
-    document.body.appendChild(input);
-    input.showPicker?.();
-    input.addEventListener("change", () => {
-      const val = input.value;
-      if (val) handleScheduleSend(new Date(val));
-      document.body.removeChild(input);
-    });
-    input.addEventListener("blur", () => {
-      setTimeout(() => { if (document.body.contains(input)) document.body.removeChild(input); }, 200);
-    });
+    const start = new Date();
+    start.setHours(start.getHours() + 2, 0, 0, 0);
+    setCustomSchedule({ date: isoDate(start), time: format(start, "HH:mm") });
   }
 
   const dialog = useDialog();
@@ -1881,7 +1906,10 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
               >
                 <SendButton onSend={handleSend} disabled={to.length === 0 && !toHasPending} />
                 <button
-                  onClick={() => setShowScheduleMenu(!showScheduleMenu)}
+                  onClick={() => {
+                    setShowScheduleMenu(!showScheduleMenu);
+                    setCustomSchedule(null);
+                  }}
                   disabled={(to.length === 0 && !toHasPending) || sending}
                   className="flex items-center px-2 bg-accent text-white rounded-r-xl border-l border-white/20 disabled:opacity-50 transition-[filter] duration-200 hover:brightness-110 active:brightness-95"
                 >
@@ -1893,22 +1921,33 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
                       <CalendarClock className="w-3.5 h-3.5" />
                       {t("scheduled.scheduleSend")}
                     </div>
-                    {getSchedulePresets().map((preset) => (
-                      <button
-                        key={preset.label}
-                        onClick={() => handleScheduleSend(preset.date)}
-                        className="w-full text-left px-3 py-1.5 text-sm text-text hover:bg-hover transition-colors"
-                      >
-                        {preset.label}
-                      </button>
-                    ))}
-                    <div className="border-t border-border my-1" />
-                    <button
-                      onClick={handleScheduleCustom}
-                      className="w-full text-left px-3 py-1.5 text-sm text-text hover:bg-hover transition-colors"
-                    >
-                      {t("scheduled.customTime")}
-                    </button>
+                    {customSchedule ? (
+                      <CustomScheduleForm
+                        value={customSchedule}
+                        onChange={setCustomSchedule}
+                        onBack={() => setCustomSchedule(null)}
+                        onSchedule={handleScheduleSend}
+                      />
+                    ) : (
+                      <>
+                        {getSchedulePresets().map((preset) => (
+                          <button
+                            key={preset.label}
+                            onClick={() => handleScheduleSend(preset.date)}
+                            className="w-full text-left px-3 py-1.5 text-sm text-text hover:bg-hover transition-colors"
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                        <div className="border-t border-border my-1" />
+                        <button
+                          onClick={handleScheduleCustom}
+                          className="w-full text-left px-3 py-1.5 text-sm text-text hover:bg-hover transition-colors"
+                        >
+                          {t("scheduled.customTime")}
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

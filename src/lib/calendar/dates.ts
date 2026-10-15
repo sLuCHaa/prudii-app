@@ -30,6 +30,21 @@ export function monthGrid(anchor: Date, weekStart: WeekDay): Date[][] {
   return weeks;
 }
 
+/** The day a navigation key moves to in a month grid; null for other keys. */
+export function gridKeyTarget(day: Date, key: string, weekStart: WeekDay): Date | null {
+  switch (key) {
+    case "ArrowLeft": return addDays(day, -1);
+    case "ArrowRight": return addDays(day, 1);
+    case "ArrowUp": return addDays(day, -7);
+    case "ArrowDown": return addDays(day, 7);
+    case "PageUp": return addMonths(day, -1);
+    case "PageDown": return addMonths(day, 1);
+    case "Home": return startOfWeek(day, { weekStartsOn: weekStart });
+    case "End": return addDays(startOfWeek(day, { weekStartsOn: weekStart }), 6);
+    default: return null;
+  }
+}
+
 export function viewDays(view: CalendarViewKind, anchor: Date, weekStart: WeekDay, workDays: number[]): Date[] {
   if (view === "day") return [startOfDay(anchor)];
   const first = startOfWeek(anchor, { weekStartsOn: weekStart });

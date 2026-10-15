@@ -14,7 +14,7 @@ import { weekStartsOn } from "../../lib/localeDefaults";
 import { dateLocale } from "../../lib/dateUtils";
 import { SPRING_SNAPPY, TRANSITION_INSTANT } from "../motion/tokens";
 import { TaskDrawer } from "../tasks/TaskDrawer";
-import { MiniMonth } from "./MiniMonth";
+import { MiniMonth } from "../ui/MiniMonth";
 import { CalendarList } from "./CalendarList";
 import { MonthGrid } from "./MonthGrid";
 import { TimeGrid } from "./TimeGrid";

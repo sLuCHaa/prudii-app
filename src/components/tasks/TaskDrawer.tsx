@@ -13,7 +13,9 @@ import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
 import { useDialog } from "../ui/DialogProvider";
 import { Select, type SelectOption } from "../ui/Select";
 import { Button } from "../ui/Button";
+import { DateField } from "../ui/DateField";
 import { Skeleton } from "../ui/Skeleton";
+import { TimeField } from "../ui/TimeField";
 import { RichTextEditor } from "../editor/RichTextEditor";
 import { STATUS_KEY } from "./TaskStatusBadge";
 import { ChecklistEditor } from "./ChecklistEditor";
@@ -112,7 +114,8 @@ function DuePopover({
 }) {
   const { t } = useTranslation();
   const ref = useFocusTrap<HTMLDivElement>(true);
-  const [value, setValue] = useState(() => toDatetimeLocalValue(dueAt));
+  const [date, setDate] = useState(() => toDatetimeLocalValue(dueAt).slice(0, 10));
+  const [time, setTime] = useState(() => toDatetimeLocalValue(dueAt).slice(11) || "09:00");
 
   const quick: { key: QuickKey; label: string; iso: string }[] = (["today", "tomorrow", "nextWeek"] as QuickKey[]).map((key) => ({
     key,
@@ -133,7 +136,7 @@ function DuePopover({
       role="dialog"
       aria-label={t("tasks.due")}
       data-due-popover
-      className="absolute top-full left-0 mt-2 z-30 w-66 max-w-full p-2 rounded-2xl bg-surface border border-border shadow-lg"
+      className="absolute top-full left-0 mt-2 z-30 w-80 max-w-full p-2 rounded-2xl bg-surface border border-border shadow-lg"
     >
       <div className="grid grid-cols-2 gap-1.5 mb-2">
         {quick.map((q) => (
@@ -156,22 +159,13 @@ function DuePopover({
         </button>
       </div>
 
-      <label htmlFor="task-due-input" className="block px-1 mb-1 text-[11px] uppercase tracking-wider text-text-tertiary">
+      <div className="px-1 mb-1 text-[11px] uppercase tracking-wider text-text-tertiary">
         {t("tasks.dueDateTime")}
-      </label>
-      <input
-        id="task-due-input"
-        type="datetime-local"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e: ReactKeyboardEvent<HTMLInputElement>) => {
-          if (e.key !== "Enter" || !value) return;
-          e.preventDefault();
-          onPick(fromDatetimeLocalValue(value));
-          onClose();
-        }}
-        className="w-full h-9 px-2.5 rounded-xl border border-border bg-bg-secondary text-text text-xs focus:border-accent transition-colors"
-      />
+      </div>
+      <div className="flex gap-1.5">
+        <DateField value={date} onChange={setDate} ariaLabel={t("tasks.dueDateTime")} className="min-w-0 flex-1" />
+        <TimeField value={time} onChange={setTime} ariaLabel={t("tasks.dueDateTime")} className="w-26" />
+      </div>
 
       <div className="flex items-center justify-between mt-2 px-1">
         <button type="button" onClick={onClose} className="text-xs text-text-secondary hover:text-text transition-colors py-1">
@@ -179,8 +173,8 @@ function DuePopover({
         </button>
         <button
           type="button"
-          disabled={!value}
-          onClick={() => { onPick(fromDatetimeLocalValue(value)); onClose(); }}
+          disabled={!date}
+          onClick={() => { onPick(fromDatetimeLocalValue(`${date}T${time}`)); onClose(); }}
           className="text-xs font-semibold text-accent hover:text-accent-hover transition-colors py-1 disabled:opacity-40"
         >
           {t("tasks.dueApply")}
@@ -269,6 +263,9 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
     function handleMouseDown(e: MouseEvent) {
       if (dialog.isOpen) return;
       const target = e.target as Element;
+      // Menus, listboxes and the date picker portal to <body>, so they land
+      // outside the drawer and the due popover without being an outside click.
+      if (target.closest?.('[role="listbox"],[role="menu"],[data-floating-panel]')) return;
       if (
         duePopoverOpen &&
         !dueChipRef.current?.contains(target) &&
@@ -276,9 +273,6 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
       ) {
         setDuePopoverOpen(false);
       }
-      // ContextMenu (and the priority Select's listbox) portals to <body>, so its
-      // options land outside the drawer without being an outside click.
-      if (target.closest?.('[role="listbox"],[role="menu"]')) return;
       if (drawerRef.current && !drawerRef.current.contains(target)) closeDrawer();
     }
     function handleKeyDown(e: KeyboardEvent) {

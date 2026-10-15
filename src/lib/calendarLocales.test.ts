@@ -30,6 +30,11 @@ const EXTRA = [
   "shortcuts.desc.calendarPrevNext",
   "shortcuts.desc.calendarToday",
   "shortcuts.desc.calendarViews",
+  "picker.chooseDate",
+  "picker.chooseTime",
+  "picker.today",
+  "picker.clear",
+  "scheduled.schedule",
 ];
 
 describe("calendar translations", () => {
