@@ -8,6 +8,7 @@ import { AccountWizard } from "../accounts/AccountWizard";
 import { SettingsPanel } from "../settings/SettingsPanel";
 import { AttachmentBrowser } from "./AttachmentBrowser";
 import { TasksView } from "../tasks/TasksView";
+import { CalendarView } from "../calendar/CalendarView";
 import { OfflineBanner } from "./OfflineBanner";
 import { UpdateBanner } from "../ui/UpdateBanner";
 import { WelcomeScreen } from "../accounts/WelcomeScreen";
@@ -35,6 +36,7 @@ export function AppLayout() {
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const showAttachmentBrowser = useAppStore((s) => s.showAttachmentBrowser);
   const showTasks = useAppStore((s) => s.showTasks);
+  const showCalendar = useAppStore((s) => s.showCalendar);
   const [sidebarWidth, setSidebarWidth] = useState(() => loadPanelWidth("sidebar-width", 240, SIDEBAR_MIN, SIDEBAR_MAX));
   const [mailListWidth, setMailListWidth] = useState(() => loadPanelWidth("maillist-width", 320, MAILLIST_MIN, MAILLIST_MAX));
   const [isResizing, setIsResizing] = useState(false);
@@ -185,7 +187,11 @@ export function AppLayout() {
               />
             )}
 
-            {showTasks ? (
+            {showCalendar ? (
+              <div className="flex-1 min-w-0 bg-bg">
+                <CalendarView />
+              </div>
+            ) : showTasks ? (
               <div className="flex-1 min-w-0 bg-bg">
                 <TasksView />
               </div>

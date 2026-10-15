@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { FileText, AlertOctagon, Folder, Plus, ChevronDown, ChevronRight, FolderPlus, Pencil, HardDrive, Cloud, X, Check, Crown, Clock, CalendarClock, PanelLeftClose, PanelLeftOpen, Loader2, AlertCircle, Palette, RefreshCw, RotateCcw, Settings, ClipboardList, UserCheck } from "lucide-react";
+import { FileText, AlertOctagon, Folder, Plus, ChevronDown, ChevronRight, FolderPlus, Pencil, HardDrive, Cloud, X, Check, Crown, Clock, CalendarClock, PanelLeftClose, PanelLeftOpen, Loader2, AlertCircle, Palette, RefreshCw, RotateCcw, Settings, ClipboardList, UserCheck, CalendarDays } from "lucide-react";
+import { useTodayCount } from "../../hooks/useCalendar";
 import gsap from "gsap";
 import { prefersReducedMotion } from "../motion/tokens";
 import { useAppStore, type MailFilter } from "../../stores/appStore";
@@ -1098,6 +1099,9 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
   const setShowAttachmentBrowser = useAppStore((s) => s.setShowAttachmentBrowser);
   const showTasks = useAppStore((s) => s.showTasks);
   const setShowTasks = useAppStore((s) => s.setShowTasks);
+  const showCalendar = useAppStore((s) => s.showCalendar);
+  const setShowCalendar = useAppStore((s) => s.setShowCalendar);
+  const { data: todayCount = 0 } = useTodayCount();
   const hasFeature = useAppStore((s) => s.hasFeature);
   const accounts = useAppStore((s) => s.accounts);
   const { data: openTaskCount = 0 } = useOpenTaskCount();
@@ -1215,6 +1219,15 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
       onDragLeave: handleTasksDragLeave,
       onDrop: handleTasksDrop,
       dropActive: tasksDropActive,
+    },
+    {
+      id: "calendar",
+      label: t("sidebar.calendar"),
+      icon: <CalendarDays className="w-4 h-4" />,
+      onClick: () => setShowCalendar(!showCalendar),
+      isActive: showCalendar,
+      count: todayCount,
+      show: true,
     },
     {
       id: "attachments",

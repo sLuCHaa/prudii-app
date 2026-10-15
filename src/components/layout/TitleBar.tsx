@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ClipboardList, Copy, Minus, Square, X } from "lucide-react";
+import { CalendarDays, ClipboardList, Copy, Minus, Square, X } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";
@@ -19,6 +19,7 @@ export function TitleBar() {
   const appWindow = useMemo(() => getCurrentWindow(), []);
   const setShowSettings = useAppStore((s) => s.setShowSettings);
   const setShowTasks = useAppStore((s) => s.setShowTasks);
+  const setShowCalendar = useAppStore((s) => s.setShowCalendar);
   const appSettings = useAppStore((s) => s.appSettings);
   const { data: openTaskCount = 0 } = useOpenTaskCount();
   const tasksButtonRef = useRef<HTMLButtonElement>(null);
@@ -92,6 +93,14 @@ export function TitleBar() {
 
       <div className="flex h-full">
         <PrivacyBadge />
+        <button
+          onClick={() => setShowCalendar(true)}
+          className="inline-flex items-center justify-center w-11 h-full hover:bg-hover transition-colors text-text-secondary"
+          title={t("calendar.title")}
+          aria-label={t("calendar.title")}
+        >
+          <CalendarDays size={14} strokeWidth={1.5} />
+        </button>
         <button
           ref={tasksButtonRef}
           onClick={(e) => { if (e.shiftKey) openQuickAdd(); else setShowTasks(true); }}

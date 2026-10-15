@@ -54,6 +54,7 @@ const SHORTCUTS: { groupKey: string; items: { keys: string; descKey: string; hid
       { keys: "Mod+Shift+N", descKey: "syncAll" },
       { keys: "Mod+Shift+A", descKey: "addAccount" },
       { keys: "Mod+Shift+T", descKey: "openTasks" },
+      { keys: "Mod+Shift+K", descKey: "openCalendar" },
       { keys: "F11", descKey: "fullscreen", hideOnMac: true },
       { keys: "?", descKey: "thisHelp" },
     ],
@@ -62,6 +63,15 @@ const SHORTCUTS: { groupKey: string; items: { keys: string; descKey: string; hid
     groupKey: "tasks",
     items: [
       { keys: "t", descKey: "newTask" },
+    ],
+  },
+  {
+    groupKey: "calendar",
+    items: [
+      { keys: "n", descKey: "newEvent" },
+      { keys: "← / →", descKey: "calendarPrevNext" },
+      { keys: ".", descKey: "calendarToday" },
+      { keys: "1 – 5", descKey: "calendarViews" },
     ],
   },
 ];

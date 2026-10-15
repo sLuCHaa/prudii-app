@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { Search, Inbox, Send, FileText, Archive, Star, Settings, Trash2, Pencil, FolderOpen, Sun, Moon, Palette, LayoutGrid, Languages, HelpCircle, ClipboardList } from "lucide-react";
+import { Search, Inbox, Send, FileText, Archive, Star, Settings, Trash2, Pencil, FolderOpen, Sun, Moon, Palette, LayoutGrid, Languages, HelpCircle, ClipboardList, CalendarDays, CalendarPlus } from "lucide-react";
+import { defaultDraftTimes, DEFAULT_SETTINGS } from "../../lib/calendar/format";
 import { motion, AnimatePresence } from "motion/react";
 import { SPRING_BOUNCY } from "../motion/tokens";
 import { useAppStore } from "../../stores/appStore";
@@ -151,6 +152,21 @@ export function CommandPalette() {
       icon: <ClipboardList className="w-4 h-4" />,
       section: groupActions,
       action: () => requestQuickAddFocus(),
+    });
+    items.push({
+      id: "calendar-open",
+      label: t("shortcuts.desc.openCalendar"),
+      icon: <CalendarDays className="w-4 h-4" />,
+      section: groupActions,
+      action: () => useAppStore.getState().setShowCalendar(true),
+      shortcut: formatShortcut("Mod+Shift+K", isMacOS),
+    });
+    items.push({
+      id: "calendar-new",
+      label: t("calendar.newEvent"),
+      icon: <CalendarPlus className="w-4 h-4" />,
+      section: groupActions,
+      action: () => useAppStore.getState().openNewEvent({ times: defaultDraftTimes(new Date(), DEFAULT_SETTINGS) }),
     });
 
     items.push({
