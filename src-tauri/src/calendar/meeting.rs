@@ -8,7 +8,9 @@ pub fn find_meeting_link(texts: &[&str]) -> Option<String> {
             let url = token.trim_end_matches(['.', ';', ']']);
             let Some(rest) = url.strip_prefix("https://") else { continue };
             let host = rest.split(['/', '?', '#']).next().unwrap_or("").to_ascii_lowercase();
-            if MEETING_HOSTS.iter().any(|h| host == *h || host.ends_with(&format!(".{}", h))) {
+            // Browsers treat `\` and `@` as host boundaries, so the suffix check alone could name another site.
+            let plain = host.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '-'));
+            if plain && MEETING_HOSTS.iter().any(|h| host == *h || host.ends_with(&format!(".{}", h))) {
                 return Some(url.to_string());
             }
         }
@@ -35,5 +37,11 @@ mod tests {
         assert_eq!(find_meeting_link(&["https://example.com/zoom.us"]), None);
         assert_eq!(find_meeting_link(&["http://meet.google.com/abc"]), None);
         assert_eq!(find_meeting_link(&["https://notzoom.us/j/1"]), None);
+    }
+
+    #[test]
+    fn ignores_hosts_with_odd_characters() {
+        assert_eq!(find_meeting_link(&["https://evil.com\\.zoom.us/j/1"]), None);
+        assert_eq!(find_meeting_link(&["https://evil.com@us02web.zoom.us/j/1"]), None);
     }
 }
