@@ -237,11 +237,14 @@ fn row_to_event(r: &rusqlite::Row) -> rusqlite::Result<EventRow> {
     })
 }
 
-fn fetch_event(conn: &Connection, id: &str) -> Result<EventRow, String> {
+fn find_event(conn: &Connection, id: &str) -> Result<Option<EventRow>, String> {
     conn.query_row(&format!("SELECT {} FROM events e WHERE e.id = ?1", EVENT_COLS), params![id], row_to_event)
         .optional()
-        .map_err(err)?
-        .ok_or_else(|| "calendar.errors.notFound".to_string())
+        .map_err(err)
+}
+
+fn fetch_event(conn: &Connection, id: &str) -> Result<EventRow, String> {
+    find_event(conn, id)?.ok_or_else(|| "calendar.errors.notFound".to_string())
 }
 
 fn find_slot(conn: &Connection, calendar_id: &str, uid: &str, recurrence_id: Option<&str>) -> Result<Option<EventRow>, String> {
@@ -730,6 +733,20 @@ fn split_series(conn: &Connection, master: &mut EventRow, key: &str) -> Result<E
     Ok(tail)
 }
 
+/// After a series edit, the edited slot's override takes the patch's text and
+/// times as they are instead of the series shift.
+fn reapply_to_override(conn: &Connection, existing: Option<EventRow>, patch: &EventPatch) -> Result<(), String> {
+    let Some(ov) = existing.map(|o| find_event(conn, &o.id)).transpose()?.flatten() else { return Ok(()) };
+    let own = EventPatch {
+        title: patch.title.clone(),
+        description: patch.description.clone(),
+        location: patch.location.clone(),
+        times: patch.times.clone(),
+        ..Default::default()
+    };
+    update_single(conn, ov, &own).map(|_| ())
+}
+
 pub(crate) fn update_event_impl(db: &Database, id: &str, occurrence_key: Option<String>, scope: Scope, patch: EventPatch) -> Result<EventDetail, String> {
     let conn = db.lock_db();
     let tx = conn.unchecked_transaction().map_err(err)?;
@@ -740,9 +757,15 @@ pub(crate) fn update_event_impl(db: &Database, id: &str, occurrence_key: Option<
             Scope::This => update_this(&tx, &master, &key, existing, &patch)?,
             Scope::Following if key != master.dtstart => {
                 let tail = split_series(&tx, &mut master, &key)?;
-                update_all(&tx, tail, Some(&key), &patch)?
+                let id = update_all(&tx, tail, Some(&key), &patch)?;
+                reapply_to_override(&tx, existing, &patch)?;
+                id
             }
-            Scope::Following | Scope::All => update_all(&tx, master, Some(&key), &patch)?,
+            Scope::Following | Scope::All => {
+                let id = update_all(&tx, master, Some(&key), &patch)?;
+                reapply_to_override(&tx, existing, &patch)?;
+                id
+            }
         },
     };
     tx.commit().map_err(err)?;
@@ -1256,6 +1279,28 @@ mod tests {
             titles_and_starts(&db, "2026-10-05T00:00:00Z", "2026-10-15T00:00:00Z"),
             vec![("T".to_string(), "2026-10-06T07:00:00Z".to_string()), ("Solo".to_string(), "2026-10-13T07:00:00Z".to_string())]
         );
+    }
+
+    #[test]
+    fn a_moved_override_lands_where_a_series_edit_puts_it() {
+        for (scope, first) in [(Scope::All, "2026-10-05T09:00:00Z"), (Scope::Following, "2026-10-05T07:00:00Z")] {
+            let db = temp_db();
+            let c = cal(&db);
+            let id = weekly(&db, &c, "FREQ=WEEKLY;BYDAY=MO");
+            let key = Some("2026-10-12T09:00:00".to_string());
+            let moved = EventPatch { times: Some(timed("2026-10-12T08:00:00Z", "2026-10-12T08:30:00Z")), ..Default::default() };
+            let ov = update_event_impl(&db, &id, key.clone(), Scope::This, moved).unwrap();
+            let patch = EventPatch {
+                title: Some("Moved".into()),
+                times: Some(timed("2026-10-12T09:00:00Z", "2026-10-12T09:30:00Z")),
+                ..Default::default()
+            };
+            update_event_impl(&db, &ov.event.id, key, scope, patch).unwrap();
+            let occ = list(&db, "2026-10-05T00:00:00Z", "2026-10-20T00:00:00Z");
+            let starts: Vec<&str> = occ.iter().map(|o| o.start.as_str()).collect();
+            assert_eq!(starts, vec![first, "2026-10-12T09:00:00Z", "2026-10-19T09:00:00Z"], "{:?}", scope);
+            assert_eq!(occ[1].title, "Moved", "{:?}", scope);
+        }
     }
 
     #[test]
