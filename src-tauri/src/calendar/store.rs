@@ -15,7 +15,7 @@ use crate::db::Database;
 use chrono::{DateTime, Duration, Utc};
 use chrono_tz::Tz;
 use rusqlite::{params, Connection, OptionalExtension};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 pub const DEFAULT_COLOR: &str = "#3b82f6";
 const MAX_ALARM_MINUTES: i64 = 7 * 24 * 60;
@@ -792,6 +792,65 @@ pub(crate) fn delete_event_impl(db: &Database, id: &str, occurrence_key: Option<
     tx.commit().map_err(err)
 }
 
+pub(crate) fn import_ics_impl(db: &Database, calendar_id: &str, text: &str) -> Result<ImportResult, String> {
+    let parsed = parse_calendar(text);
+    if parsed.events.is_empty() {
+        return Err("calendar.errors.noEvents".into());
+    }
+    let conn = db.lock_db();
+    ensure_calendar(&conn, calendar_id)?;
+    let tx = conn.unchecked_transaction().map_err(err)?;
+    let mut result = ImportResult::default();
+    for p in &parsed.events {
+        let existing = find_slot(&tx, calendar_id, &p.uid, p.recurrence_id.as_deref())?;
+        if existing.as_ref().is_some_and(|e| p.sequence < e.sequence) {
+            result.skipped += 1;
+            continue;
+        }
+        let id = existing.as_ref().map(|e| e.id.clone()).unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let mut row = p.to_row(id, calendar_id.to_string());
+        if let Some(e) = &existing {
+            row.is_organizer = e.is_organizer;
+            row.my_partstat = e.my_partstat.clone();
+            row.account_id = e.account_id.clone();
+        }
+        if derive_range(&row).is_none() {
+            result.skipped += 1;
+            continue;
+        }
+        write_event(&tx, &row)?;
+        set_alarms(&tx, &row.id, &p.alarms)?;
+        set_attendees(&tx, &row.id, &p.attendees.iter().map(Attendee::from).collect::<Vec<_>>())?;
+        if existing.is_some() {
+            result.updated += 1;
+        } else {
+            result.imported += 1;
+        }
+    }
+    tx.commit().map_err(err)?;
+    Ok(result)
+}
+
+pub(crate) fn export_ics_impl(db: &Database, calendar_id: &str) -> Result<(String, String), String> {
+    let conn = db.lock_db();
+    let cal = fetch_calendar(&conn, calendar_id)?;
+    let mut stmt = conn
+        .prepare(&format!(
+            "SELECT {} FROM events e WHERE e.calendar_id = ?1 ORDER BY e.recurrence_id IS NOT NULL, e.start_utc",
+            EVENT_COLS
+        ))
+        .map_err(err)?;
+    let rows: Vec<EventRow> = stmt.query_map(params![calendar_id], row_to_event).map_err(err)?.collect::<Result<_, _>>().map_err(err)?;
+    let mut parts = Vec::with_capacity(rows.len());
+    for row in rows {
+        let alarms = load_alarms(&conn, &row.id)?;
+        let attendees = load_attendees(&conn, &row.id)?;
+        parts.push((row, alarms, attendees));
+    }
+    let events: Vec<ExportEvent> = parts.iter().map(|(row, alarms, attendees)| ExportEvent { row, alarms, attendees }).collect();
+    Ok((cal.name.clone(), calendar_to_ics(&events, Some(&cal.name), None, Utc::now())))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1180,5 +1239,54 @@ mod tests {
         assert_eq!(row.rrule.as_deref(), Some("FREQ=WEEKLY;BYDAY=TU;UNTIL=20261027T235959Z"));
         let starts: Vec<String> = list(&db, "2026-10-20T00:00:00Z", "2026-11-05T00:00:00Z").into_iter().map(|o| o.start).collect();
         assert_eq!(starts, vec!["2026-10-20T07:00:00Z", "2026-10-27T08:00:00Z"]);
+    }
+
+    const OUTLOOK: &str = include_str!("fixtures/outlook_windows_tz.ics");
+    const GOOGLE: &str = include_str!("fixtures/google_weekly.ics");
+
+    #[test]
+    fn importing_twice_updates_instead_of_duplicating() {
+        let db = temp_db();
+        let c = cal(&db);
+        assert_eq!(import_ics_impl(&db, &c, OUTLOOK).unwrap(), ImportResult { imported: 1, updated: 0, skipped: 0 });
+        assert_eq!(import_ics_impl(&db, &c, OUTLOOK).unwrap(), ImportResult { imported: 0, updated: 1, skipped: 0 });
+        let occ = list(&db, "2026-10-20T00:00:00Z", "2026-10-21T00:00:00Z");
+        assert_eq!(occ.len(), 1);
+        assert_eq!(occ[0].start, "2026-10-20T12:00:00Z");
+        let detail = get_event_impl(&db, &occ[0].event_id).unwrap();
+        assert_eq!(detail.alarms, vec![15]);
+        assert_eq!(detail.attendees.len(), 1);
+        assert_eq!(detail.event.organizer_email.as_deref(), Some("robin@contoso.example"));
+    }
+
+    #[test]
+    fn older_sequences_are_skipped() {
+        let db = temp_db();
+        let c = cal(&db);
+        import_ics_impl(&db, &c, OUTLOOK).unwrap();
+        let older = OUTLOOK.replace("SEQUENCE:2", "SEQUENCE:1");
+        assert_eq!(import_ics_impl(&db, &c, &older).unwrap(), ImportResult { imported: 0, updated: 0, skipped: 1 });
+    }
+
+    #[test]
+    fn imported_series_expand_and_export_back() {
+        let db = temp_db();
+        let c = cal(&db);
+        import_ics_impl(&db, &c, GOOGLE).unwrap();
+        let starts: Vec<String> = list(&db, "2026-10-05T00:00:00Z", "2026-10-27T00:00:00Z").into_iter().map(|o| o.start).collect();
+        assert_eq!(starts, vec!["2026-10-05T07:00:00Z", "2026-10-19T07:00:00Z", "2026-10-26T08:00:00Z"]);
+        let (name, ics) = export_ics_impl(&db, &c).unwrap();
+        assert_eq!(name, "Mine");
+        let parsed = parse_calendar(&ics);
+        assert_eq!(parsed.events.len(), 1);
+        assert_eq!(parsed.events[0].exdates, vec!["2026-10-12T09:00:00".to_string()]);
+        assert!(ics.contains("X-GOOGLE-CONFERENCE:https://meet.google.com/abc-defg-hij"));
+    }
+
+    #[test]
+    fn files_without_events_are_rejected() {
+        let db = temp_db();
+        let c = cal(&db);
+        assert_eq!(import_ics_impl(&db, &c, "BEGIN:VCALENDAR\nEND:VCALENDAR\n").unwrap_err(), "calendar.errors.noEvents");
     }
 }
