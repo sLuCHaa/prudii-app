@@ -50,6 +50,7 @@ export function EventPopover({ occurrence: o, anchor, calendarName, onClose, onE
     <motion.div
       ref={ref}
       role="dialog"
+      tabIndex={-1}
       aria-label={o.title || t("calendar.untitled")}
       initial={reduce ? false : { opacity: 0, scale: 0.97 }}
       animate={{ opacity: 1, scale: 1 }}

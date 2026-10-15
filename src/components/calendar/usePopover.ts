@@ -17,6 +17,23 @@ export function usePopover(anchor: DOMRect, onClose: () => void) {
     setPos((p) => (p.left === left && p.top === top ? p : { left, top }));
   });
 
+  // Non-modal popover: move focus in on open, hand it back on close.
+  useEffect(() => {
+    const panel = ref.current;
+    const previous = document.activeElement as HTMLElement | null;
+    const first = panel?.querySelector<HTMLElement>('button, [href], input, [tabindex]:not([tabindex="-1"])');
+    (first ?? panel)?.focus();
+    return () => {
+      const active = document.activeElement;
+      if (
+        previous?.isConnected &&
+        (!active || active === document.body || (panel?.contains(active) ?? false))
+      ) {
+        previous.focus();
+      }
+    };
+  }, []);
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key !== "Escape") return;
