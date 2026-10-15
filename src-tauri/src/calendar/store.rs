@@ -3,7 +3,7 @@
 
 use super::ical::{calendar_to_ics, parse_calendar, ExportEvent};
 use super::recurrence::{
-    derive_range, expand, is_series, key_to_naive, naive_to_key, rule_count, shift_key, shift_rrule_days, slot_shape,
+    derive_range, expand, is_series, key_to_naive, naive_to_key, rule_count, shift_key, shift_rrule_days, shift_until, slot_shape,
     slots_before, truncate_before, with_count, ExpandInput,
 };
 use super::tz::{fmt_date, fmt_utc, fmt_wall, parse_date, parse_utc, row_tz, system_tz, system_tz_name, utc_to_wall, wall_to_utc};
@@ -581,8 +581,11 @@ fn shift_overrides(conn: &Connection, master: &EventRow, delta: Duration) -> Res
         rows.reverse();
     }
     for (id, rid) in rows {
-        conn.execute("UPDATE events SET recurrence_id = ?1 WHERE id = ?2", params![shift_key(master.all_day, &rid, delta), id])
-            .map_err(err)?;
+        let mut ov = fetch_event(conn, &id)?;
+        ov.recurrence_id = Some(shift_key(master.all_day, &rid, delta));
+        ov.dtstart = shift_key(ov.all_day, &ov.dtstart, delta);
+        ov.dtend = shift_key(ov.all_day, &ov.dtend, delta);
+        write_event(conn, &ov)?;
     }
     Ok(())
 }
@@ -658,7 +661,7 @@ fn update_all(conn: &Connection, mut master: EventRow, key: Option<&str>, patch:
             if !delta.is_zero() {
                 let day_shift = (ns.date() - anchor.date()).num_days();
                 if let Some(rule) = &master.rrule {
-                    master.rrule = Some(shift_rrule_days(rule, day_shift));
+                    master.rrule = Some(shift_until(&shift_rrule_days(rule, day_shift), master.all_day, delta));
                 }
                 let all_day = master.all_day;
                 master.exdates = master.exdates.iter().map(|x| shift_key(all_day, x, delta)).collect();
@@ -1122,5 +1125,60 @@ mod tests {
         let occ = list(&db, "2026-10-15T00:00:00Z", "2026-10-20T00:00:00Z");
         assert_eq!(occ.len(), 3);
         assert!(occ.iter().all(|o| o.calendar_id == other.id));
+    }
+
+    #[test]
+    fn overrides_move_with_a_shifted_series() {
+        let db = temp_db();
+        let c = cal(&db);
+        let id = weekly(&db, &c, "FREQ=WEEKLY;BYDAY=MO");
+        update_event_impl(&db, &id, Some("2026-10-12T09:00:00".into()), Scope::This, EventPatch { title: Some("Solo".into()), ..Default::default() }).unwrap();
+        let patch = EventPatch { times: Some(timed("2026-10-20T07:00:00Z", "2026-10-20T07:30:00Z")), ..Default::default() };
+        update_event_impl(&db, &id, Some("2026-10-19T09:00:00".into()), Scope::All, patch).unwrap();
+        assert_eq!(
+            titles_and_starts(&db, "2026-10-05T00:00:00Z", "2026-10-15T00:00:00Z"),
+            vec![("T".to_string(), "2026-10-06T07:00:00Z".to_string()), ("Solo".to_string(), "2026-10-13T07:00:00Z".to_string())]
+        );
+    }
+
+    #[test]
+    fn overrides_follow_a_split_and_a_following_delete() {
+        let db = temp_db();
+        let c = cal(&db);
+        let id = weekly(&db, &c, "FREQ=WEEKLY;BYDAY=MO");
+        update_event_impl(&db, &id, Some("2026-10-26T09:00:00".into()), Scope::This, EventPatch { title: Some("Solo".into()), ..Default::default() }).unwrap();
+        let tail = update_event_impl(&db, &id, Some("2026-10-19T09:00:00".into()), Scope::Following, EventPatch { title: Some("New".into()), ..Default::default() }).unwrap();
+        let ov_uid: String = db.lock_db().query_row("SELECT uid FROM events WHERE recurrence_id = '2026-10-26T09:00:00'", [], |r| r.get(0)).unwrap();
+        assert_eq!(ov_uid, tail.event.uid);
+        let titles: Vec<String> = list(&db, "2026-10-26T00:00:00Z", "2026-10-28T00:00:00Z").into_iter().map(|o| o.title).collect();
+        assert_eq!(titles, vec!["Solo"]);
+        delete_event_impl(&db, &tail.event.id, Some("2026-10-19T09:00:00".into()), Scope::Following).unwrap();
+        let rows: i64 = db.lock_db().query_row("SELECT COUNT(*) FROM events WHERE recurrence_id IS NOT NULL", [], |r| r.get(0)).unwrap();
+        assert_eq!(rows, 0);
+    }
+
+    #[test]
+    fn dropping_the_rule_removes_overrides() {
+        let db = temp_db();
+        let c = cal(&db);
+        let id = weekly(&db, &c, "FREQ=WEEKLY;BYDAY=MO");
+        update_event_impl(&db, &id, Some("2026-10-12T09:00:00".into()), Scope::This, EventPatch { title: Some("Solo".into()), ..Default::default() }).unwrap();
+        update_event_impl(&db, &id, None, Scope::All, EventPatch { clear_rrule: true, ..Default::default() }).unwrap();
+        let rows: i64 = db.lock_db().query_row("SELECT COUNT(*) FROM events", [], |r| r.get(0)).unwrap();
+        assert_eq!(rows, 1);
+        assert_eq!(list(&db, "2026-10-01T00:00:00Z", "2026-11-01T00:00:00Z").len(), 1);
+    }
+
+    #[test]
+    fn until_moves_with_a_shifted_series() {
+        let db = temp_db();
+        let c = cal(&db);
+        let id = weekly(&db, &c, "FREQ=WEEKLY;BYDAY=MO;UNTIL=20261026T235959Z");
+        let patch = EventPatch { times: Some(timed("2026-10-06T07:00:00Z", "2026-10-06T07:30:00Z")), ..Default::default() };
+        update_event_impl(&db, &id, None, Scope::All, patch).unwrap();
+        let row = get_event_impl(&db, &id).unwrap().event;
+        assert_eq!(row.rrule.as_deref(), Some("FREQ=WEEKLY;BYDAY=TU;UNTIL=20261027T235959Z"));
+        let starts: Vec<String> = list(&db, "2026-10-20T00:00:00Z", "2026-11-05T00:00:00Z").into_iter().map(|o| o.start).collect();
+        assert_eq!(starts, vec!["2026-10-20T07:00:00Z", "2026-10-27T08:00:00Z"]);
     }
 }

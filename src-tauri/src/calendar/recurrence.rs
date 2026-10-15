@@ -269,6 +269,27 @@ pub fn shift_rrule_days(rule: &str, days: i64) -> String {
         .join(";")
 }
 
+/// Moves an UNTIL bound along with a shifted series; unparsable values stay as they are.
+pub fn shift_until(rule: &str, _all_day: bool, delta: Duration) -> String {
+    rule.split(';')
+        .map(|part| {
+            let Some((k, v)) = part.split_once('=') else { return part.to_string() };
+            if !k.trim().eq_ignore_ascii_case("UNTIL") {
+                return part.to_string();
+            }
+            let shifted = if let Some(raw) = v.strip_suffix('Z') {
+                NaiveDateTime::parse_from_str(raw, "%Y%m%dT%H%M%S").ok().map(|n| format!("{}Z", (n + delta).format("%Y%m%dT%H%M%S")))
+            } else if let Ok(d) = NaiveDate::parse_from_str(v, "%Y%m%d") {
+                Some((d + Duration::days(delta.num_days())).format("%Y%m%d").to_string())
+            } else {
+                NaiveDateTime::parse_from_str(v, "%Y%m%dT%H%M%S").ok().map(|n| (n + delta).format("%Y%m%dT%H%M%S").to_string())
+            };
+            format!("{}={}", k, shifted.unwrap_or_else(|| v.to_string()))
+        })
+        .collect::<Vec<_>>()
+        .join(";")
+}
+
 pub fn shift_key(all_day: bool, key: &str, by: Duration) -> String {
     match key_to_naive(all_day, key) {
         Some(n) => naive_to_key(all_day, n + by),
@@ -422,5 +443,14 @@ mod tests {
         assert_eq!(rule_count("FREQ=WEEKLY;COUNT=5"), Some(5));
         assert_eq!(rule_count("FREQ=WEEKLY"), None);
         assert_eq!(with_count("FREQ=WEEKLY;COUNT=5;BYDAY=MO", 3), "FREQ=WEEKLY;COUNT=3;BYDAY=MO");
+    }
+
+    #[test]
+    fn until_shifts_with_the_series() {
+        let d = Duration::days(1);
+        assert_eq!(shift_until("FREQ=WEEKLY;UNTIL=20261026T235959Z;BYDAY=MO", false, d), "FREQ=WEEKLY;UNTIL=20261027T235959Z;BYDAY=MO");
+        assert_eq!(shift_until("FREQ=DAILY;UNTIL=20261026", true, d), "FREQ=DAILY;UNTIL=20261027");
+        assert_eq!(shift_until("FREQ=DAILY;UNTIL=junk", true, d), "FREQ=DAILY;UNTIL=junk");
+        assert_eq!(shift_until("FREQ=DAILY;COUNT=3", false, d), "FREQ=DAILY;COUNT=3");
     }
 }
