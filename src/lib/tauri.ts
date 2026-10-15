@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { Calendar, CalendarPatch, CalendarSettings, EditScope, EventDetail, EventInput, EventPatch, EventTimes, ImportResult, Occurrence } from "../types/calendar";
 import type { Account, AiResponse, Assignment, Attachment, AttachmentWithContext, AppConfig, AppSettings, BackupOptions, BulkSaveResult, ChecklistItem, Contact, CreateAccountRequest, CreateRuleRequest, CreateTaskInput, EmailTemplate, Folder, InboxSplit, LicenseInfo, Mail, MailRule, OAuthResult, OllamaStatus, RestorePreview, ScheduledMail, SearchResult, SendMailRequest, SieveSupport, Task, TaskAttachment, TaskDetail, TaskStatus, TeamSnapshot, UnsubscribeResult, UpdateTaskPatch, VacationSettings, VacationState } from "../types";
 import { prefers24HourClock } from "./localeDefaults";
 
@@ -747,4 +748,76 @@ export async function getVacation(accountId: string): Promise<VacationState> {
 
 export async function setVacation(accountId: string, settings: VacationSettings): Promise<void> {
   return invoke("set_vacation", { accountId, settings });
+}
+
+// ---- Calendar ----
+
+export async function listCalendars(defaultName: string): Promise<Calendar[]> {
+  return invoke("list_calendars", { defaultName });
+}
+
+export async function createCalendar(name: string, color: string): Promise<Calendar> {
+  return invoke("create_calendar", { name, color });
+}
+
+export async function updateCalendar(id: string, patch: CalendarPatch): Promise<Calendar> {
+  return invoke("update_calendar", { id, patch });
+}
+
+export async function deleteCalendar(id: string): Promise<void> {
+  return invoke("delete_calendar", { id });
+}
+
+export async function listOccurrences(from: string, to: string, calendarIds?: string[]): Promise<Occurrence[]> {
+  return invoke("list_occurrences", { from, to, calendarIds: calendarIds ?? null });
+}
+
+export async function getEvent(id: string): Promise<EventDetail> {
+  return invoke("get_event", { id });
+}
+
+export async function createEvent(input: EventInput): Promise<EventDetail> {
+  return invoke("create_event", { input });
+}
+
+export async function updateEvent(id: string, occurrenceKey: string | null, scope: EditScope, patch: EventPatch): Promise<EventDetail> {
+  return invoke("update_event", { id, occurrenceKey, scope, patch });
+}
+
+export async function deleteEvent(id: string, occurrenceKey: string | null, scope: EditScope): Promise<void> {
+  return invoke("delete_event", { id, occurrenceKey, scope });
+}
+
+export async function moveOccurrence(id: string, occurrenceKey: string | null, times: EventTimes, scope: EditScope): Promise<EventDetail> {
+  return invoke("move_occurrence", { id, occurrenceKey, times, scope });
+}
+
+export async function searchEvents(query: string, from: string): Promise<Occurrence[]> {
+  return invoke("search_events", { query, from });
+}
+
+export async function countTodayOccurrences(): Promise<number> {
+  return invoke("count_today_occurrences");
+}
+
+export async function getCalendarSettings(): Promise<CalendarSettings> {
+  return invoke("get_calendar_settings");
+}
+
+export async function updateCalendarSettings(settings: CalendarSettings): Promise<void> {
+  return invoke("update_calendar_settings", { settings });
+}
+
+/** Opens the native file picker; null when the user cancels. */
+export async function importIcs(calendarId: string): Promise<ImportResult | null> {
+  return invoke("import_ics", { calendarId });
+}
+
+/** Opens the native save dialog; false when the user cancels. */
+export async function exportIcs(calendarId: string): Promise<boolean> {
+  return invoke("export_ics", { calendarId });
+}
+
+export async function tasksInRange(from: string, to: string): Promise<Task[]> {
+  return invoke("tasks_in_range", { from, to });
 }

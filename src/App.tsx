@@ -26,6 +26,7 @@ const BackupExportWindow = lazy(() =>
 );
 import { useAppStore } from "./stores/appStore";
 import { invalidateTaskQueries } from "./hooks/useTasks";
+import { invalidateCalendarQueries } from "./hooks/useCalendar";
 import { useSyncAll, useSyncAutomatic } from "./hooks/useSync";
 import { useAutoSync } from "./hooks/useAutoSync";
 import { useFocusSync } from "./hooks/useFocusSync";
@@ -330,6 +331,7 @@ function AppInner() {
       case "help": setShowHelp(true); break;
       case "openTasks": s.setShowTasks(true); break;
       case "newTask": s.setShowTasks(true); s.setOpenTaskId("new"); break;
+      case "openCalendar": s.setShowCalendar(true); break;
       case "toggleFullscreen": {
         const win = getCurrentWindow();
         win.isFullscreen().then((full) => win.setFullscreen(!full)).catch(() => {});
@@ -379,6 +381,23 @@ function AppInner() {
   useEffect(() => {
     const unlisten = listen("tasks-changed", () => {
       invalidateTaskQueries(queryClient);
+    });
+    return () => { unlisten.then((fn) => fn()); };
+  }, []);
+
+  // Backend emits this after every calendar mutation, restore and import.
+  useEffect(() => {
+    const unlisten = listen("calendar-changed", () => {
+      invalidateCalendarQueries(queryClient);
+    });
+    return () => { unlisten.then((fn) => fn()); };
+  }, []);
+
+  // Rust shows/focuses the window for a reminder click; this only opens the event.
+  useEffect(() => {
+    const unlisten = listen<{ event_id: string; occurrence_key: string }>("event-open", (event) => {
+      const { event_id, occurrence_key } = event.payload;
+      useAppStore.getState().openEventById(event_id, occurrence_key, occurrence_key.slice(0, 10));
     });
     return () => { unlisten.then((fn) => fn()); };
   }, []);

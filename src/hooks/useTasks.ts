@@ -37,6 +37,7 @@ export function invalidateTaskQueries(queryClient: QueryClient, taskId?: string 
   queryClient.invalidateQueries({ queryKey: taskId ? ["task", taskId] : ["task"] });
   queryClient.invalidateQueries({ queryKey: ["tasks-count"] });
   queryClient.invalidateQueries({ queryKey: ["tasks-for-mail"] });
+  queryClient.invalidateQueries({ queryKey: ["tasks-in-range"] });
 }
 
 // Task commands report what actually failed (e.g. the files that could not be

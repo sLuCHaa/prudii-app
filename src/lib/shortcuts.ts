@@ -12,6 +12,7 @@ export type GlobalAction =
   | "syncAll"
   | "toggleFullscreen"
   | "openTasks"
+  | "openCalendar"
   | "newTask";
 
 // Ids emitted by the native macOS menu bar (src-tauri/src/lib.rs).
@@ -49,6 +50,7 @@ export function resolveGlobalShortcut(e: KeyLike, isMac: boolean): GlobalAction 
     else if (key === "f") action = "forward";
     else if (key === "n") action = "syncAll";
     else if (key === "t") action = "openTasks";
+    else if (key === "k") action = "openCalendar";
   } else {
     if (key === "n") action = "newMessage";
     else if (key === ",") action = "settings";

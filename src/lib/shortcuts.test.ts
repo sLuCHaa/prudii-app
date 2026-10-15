@@ -17,6 +17,12 @@ describe("resolveGlobalShortcut", () => {
     }
   });
 
+  it("opens the calendar with Mod+Shift+K", () => {
+    expect(resolveGlobalShortcut(key("K", { ctrl: true, shift: true }), false)).toBe("openCalendar");
+    expect(resolveGlobalShortcut(key("K", { meta: true, shift: true }), true)).toBe("openCalendar");
+    expect(resolveGlobalShortcut(key("k", { ctrl: true }), false)).toBeNull();
+  });
+
   it("adds the desktop conventions on Windows/Linux", () => {
     expect(resolveGlobalShortcut(key("n", { ctrl: true }), false)).toBe("newMessage");
     expect(resolveGlobalShortcut(key(",", { ctrl: true }), false)).toBe("settings");
