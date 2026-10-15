@@ -1,5 +1,6 @@
 //! Local calendar: models, iCalendar mapping, recurrence expansion and storage.
 
+pub mod content_line;
 pub mod tz;
 pub mod windows_zones;
 
