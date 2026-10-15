@@ -1107,15 +1107,23 @@ fn json_to_sql(v: Option<&serde_json::Value>) -> rusqlite::types::Value {
     }
 }
 
-fn insert_json_rows(conn: &rusqlite::Connection, table: &str, columns: &[&str], rows: &[serde_json::Value], insert_or: &str) -> Result<(), String> {
+/// Returns, per row, whether the insert changed a row.
+fn insert_json_rows<'a>(
+    conn: &rusqlite::Connection,
+    table: &str,
+    columns: &[&str],
+    rows: impl IntoIterator<Item = &'a serde_json::Value>,
+    insert_or: &str,
+) -> Result<Vec<bool>, String> {
     let placeholders = (1..=columns.len()).map(|i| format!("?{}", i)).collect::<Vec<_>>().join(",");
     let sql = format!("{} INTO {} ({}) VALUES ({})", insert_or, table, columns.join(","), placeholders);
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let mut written = Vec::new();
     for row in rows {
         let values: Vec<rusqlite::types::Value> = columns.iter().map(|c| json_to_sql(row.get(*c))).collect();
-        stmt.execute(rusqlite::params_from_iter(values.iter())).map_err(|e| e.to_string())?;
+        written.push(stmt.execute(rusqlite::params_from_iter(values.iter())).map_err(|e| e.to_string())? == 1);
     }
-    Ok(())
+    Ok(written)
 }
 
 /// Writes the four calendar tables. The reminder log stays behind: it only
@@ -1160,9 +1168,13 @@ pub(crate) fn import_calendar_rows<R: Read + Seek>(
     }
     let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
     insert_json_rows(&tx, "calendars", CALENDAR_COLUMNS, &parsed[0], insert_or)?;
-    insert_json_rows(&tx, "events", EVENT_COLUMNS, &parsed[1], insert_or)?;
-    insert_json_rows(&tx, "event_alarms", ALARM_COLUMNS, &parsed[2], insert_or)?;
-    insert_json_rows(&tx, "event_attendees", ATTENDEE_COLUMNS, &parsed[3], insert_or)?;
+    let written = insert_json_rows(&tx, "events", EVENT_COLUMNS, &parsed[1], insert_or)?;
+    // A merge leaves events it skipped alone, children included.
+    let inserted: std::collections::HashSet<&str> =
+        parsed[1].iter().zip(&written).filter(|(_, w)| **w).filter_map(|(r, _)| r.get("id")?.as_str()).collect();
+    let ours = |r: &&serde_json::Value| is_replace || r.get("event_id").and_then(|v| v.as_str()).is_some_and(|id| inserted.contains(id));
+    insert_json_rows(&tx, "event_alarms", ALARM_COLUMNS, parsed[2].iter().filter(ours), insert_or)?;
+    insert_json_rows(&tx, "event_attendees", ATTENDEE_COLUMNS, parsed[3].iter().filter(ours), insert_or)?;
     // A merge can bring a second default calendar along; the first one wins.
     tx.execute(
         "UPDATE calendars SET is_default = CASE WHEN id = (
@@ -2304,7 +2316,7 @@ mod credentials_roundtrip {
 #[cfg(test)]
 mod calendar_roundtrip {
     use super::*;
-    use crate::calendar::store::{get_event_impl, list_calendars_impl, list_occurrences_impl};
+    use crate::calendar::store::{get_event_impl, list_calendars_impl, list_occurrences_impl, update_event_impl};
     use std::io::Cursor;
 
     fn temp_db() -> Database {
@@ -2362,5 +2374,43 @@ mod calendar_roundtrip {
         let calendars = list_calendars_impl(&db_b, "").unwrap();
         assert_eq!(calendars.len(), 2);
         assert_eq!(calendars.iter().filter(|c| c.is_default).count(), 1);
+    }
+
+    #[test]
+    fn merging_over_a_local_event_in_the_same_slot_keeps_the_local_alarms() {
+        let db_a = temp_db();
+        let cal = seed(&db_a);
+        let (_, bytes) = export(&db_a);
+        let db_b = temp_db();
+        {
+            let conn = db_b.lock_db();
+            conn.execute("INSERT INTO calendars (id, name, color, is_default, sort_order) VALUES (?1, 'Work', '#3b82f6', 1, 0)", rusqlite::params![cal])
+                .unwrap();
+            conn.execute(
+                "INSERT INTO events (id, calendar_id, uid, title, dtstart, dtend, tzid, start_utc)
+                 VALUES ('local', ?1, 'uid1@prudii', 'Mine', '2026-10-05T10:00:00', '2026-10-05T10:30:00', 'Europe/Berlin', '2026-10-05T08:00:00Z')",
+                rusqlite::params![cal],
+            )
+            .unwrap();
+            conn.execute("INSERT INTO event_alarms (id, event_id, minutes_before) VALUES ('al-local', 'local', 30)", []).unwrap();
+        }
+        let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+        import_calendar_rows(&db_b.lock_db(), &mut archive, false).unwrap();
+        assert_eq!(get_event_impl(&db_b, "local").unwrap().alarms, vec![30]);
+        assert!(get_event_impl(&db_b, "ev1").is_err());
+    }
+
+    #[test]
+    fn merging_the_same_backup_twice_keeps_one_alarm_per_event() {
+        let db_a = temp_db();
+        seed(&db_a);
+        let (_, bytes) = export(&db_a);
+        let db_b = temp_db();
+        import_calendar_rows(&db_b.lock_db(), &mut zip::ZipArchive::new(Cursor::new(bytes.clone())).unwrap(), false).unwrap();
+        let patch = crate::calendar::EventPatch { alarms: Some(vec![5]), ..Default::default() };
+        update_event_impl(&db_b, "ev1", None, crate::calendar::Scope::All, patch).unwrap();
+        import_calendar_rows(&db_b.lock_db(), &mut zip::ZipArchive::new(Cursor::new(bytes)).unwrap(), false).unwrap();
+        let rows: i64 = db_b.lock_db().query_row("SELECT COUNT(*) FROM event_alarms WHERE event_id = 'ev1'", [], |r| r.get(0)).unwrap();
+        assert_eq!(rows, 1);
     }
 }
