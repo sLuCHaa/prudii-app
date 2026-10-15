@@ -12,6 +12,7 @@ import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
 import { useDialog } from "../ui/DialogProvider";
 import { Select, type SelectOption } from "../ui/Select";
+import { Button } from "../ui/Button";
 import { Skeleton } from "../ui/Skeleton";
 import { RichTextEditor } from "../editor/RichTextEditor";
 import { STATUS_KEY } from "./TaskStatusBadge";
@@ -213,6 +214,7 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
   const dialog = useDialog();
   const reduce = useReducedMotion();
 
+  const [newTitle, setNewTitle] = useState("");
   const [descEscapeBlocked, setDescEscapeBlocked] = useState(false);
   const [duePopoverOpen, setDuePopoverOpen] = useState(false);
   const [dropActive, setDropActive] = useState(false);
@@ -414,17 +416,31 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
           </div>
 
           {isNew ? (
-            <input
-              autoFocus
-              placeholder={t("tasks.titlePlaceholder")}
-              onKeyDown={(e: ReactKeyboardEvent<HTMLInputElement>) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  submitCreate(e.currentTarget.value);
-                }
-              }}
-              className="w-full font-heading text-[22px] font-bold leading-tight bg-transparent focus:outline-none text-text placeholder:text-text-tertiary"
-            />
+            <>
+              <input
+                autoFocus
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                placeholder={t("tasks.titlePlaceholder")}
+                onKeyDown={(e: ReactKeyboardEvent<HTMLInputElement>) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    submitCreate(e.currentTarget.value);
+                  }
+                }}
+                className="w-full font-heading text-[22px] font-bold leading-tight bg-transparent focus:outline-none text-text placeholder:text-text-tertiary"
+              />
+              <div className="flex justify-end">
+                <Button
+                  size="sm"
+                  onClick={() => submitCreate(newTitle)}
+                  disabled={!newTitle.trim() || createTaskMutation.isPending}
+                  loading={createTaskMutation.isPending}
+                >
+                  {t("common.create")}
+                </Button>
+              </div>
+            </>
           ) : !task ? (
             <div className="space-y-3">
               <Skeleton height="1.75rem" width="70%" />

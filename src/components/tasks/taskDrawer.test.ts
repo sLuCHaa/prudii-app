@@ -80,6 +80,25 @@ describe("TaskDrawer — new task", () => {
     expect(onCreate).not.toHaveBeenCalled();
   });
 
+  it("creates the task with the Create button", () => {
+    const onCreate = vi.fn();
+    renderDrawer({ onCreate });
+    const input = host.querySelector("input") as HTMLInputElement;
+    const create = Array.from(host.querySelectorAll("button")).find((b) => b.textContent === "Create") as HTMLButtonElement;
+    expect(create.disabled).toBe(true);
+
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "  Buy milk  ");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(create.disabled).toBe(false);
+
+    act(() => create.click());
+
+    expect(onCreate).toHaveBeenCalledTimes(1);
+    expect(onCreate).toHaveBeenCalledWith({ title: "Buy milk" });
+  });
+
   it("closes on Escape", () => {
     const onClose = vi.fn();
     renderDrawer({ onClose });
