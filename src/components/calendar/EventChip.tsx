@@ -1,6 +1,8 @@
 import { useTranslation } from "react-i18next";
 import type { Occurrence } from "../../types/calendar";
 import { formatTime } from "../../lib/dateUtils";
+import { isoDate } from "../../lib/calendar/dates";
+import { grabbedDayIndex } from "../../lib/calendar/drag";
 import { OCCURRENCE_MIME, occurrenceId } from "./gridShared";
 
 interface EventChipProps {
@@ -8,9 +10,11 @@ interface EventChipProps {
   variant: "bar" | "dot";
   use24h: boolean;
   onOpen: (o: Occurrence, rect: DOMRect) => void;
+  /** The visible days a bar covers, in order. */
+  spanDays?: Date[];
 }
 
-export function EventChip({ occurrence: o, variant, use24h, onOpen }: EventChipProps) {
+export function EventChip({ occurrence: o, variant, use24h, onOpen, spanDays }: EventChipProps) {
   const { t } = useTranslation();
   const label = o.title || t("calendar.untitled");
   const muted = o.status === "cancelled" || o.my_partstat === "declined";
@@ -19,7 +23,13 @@ export function EventChip({ occurrence: o, variant, use24h, onOpen }: EventChipP
       type="button"
       draggable
       onDragStart={(e) => {
-        e.dataTransfer.setData(OCCURRENCE_MIME, occurrenceId(o));
+        const id = occurrenceId(o);
+        let grabbed: string | undefined;
+        if (spanDays?.length) {
+          const rect = e.currentTarget.getBoundingClientRect();
+          grabbed = isoDate(spanDays[grabbedDayIndex(e.clientX, rect.left, rect.width, spanDays.length)]);
+        }
+        e.dataTransfer.setData(OCCURRENCE_MIME, JSON.stringify(grabbed ? { id, grabbed } : { id }));
         e.dataTransfer.effectAllowed = "move";
       }}
       onClick={(e) => {

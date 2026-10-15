@@ -179,7 +179,7 @@ function WeekRow({ week, month, occurrences, tasks, onQuickCreate, onShowDay, ..
             className="absolute px-0.5"
             style={{ top: HEADER_PX + lane * LANE_PX, left: `${(s.startIdx / 7) * 100}%`, width: `${((s.endIdx - s.startIdx + 1) / 7) * 100}%` }}
           >
-            <EventChip occurrence={s.o} variant="bar" use24h={use24h} onOpen={handlers.onOpen} />
+            <EventChip occurrence={s.o} variant="bar" use24h={use24h} onOpen={handlers.onOpen} spanDays={week.slice(s.startIdx, s.endIdx + 1)} />
           </div>
         );
       })}

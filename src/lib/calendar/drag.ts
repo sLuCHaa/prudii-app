@@ -44,6 +44,26 @@ export function allDayPayload(start: string, end: string): EventTimes {
   return { all_day: true, start, end };
 }
 
+/** Index of the day under the pointer on a bar spanning `spanDays` equal-width days. */
+export function grabbedDayIndex(clientX: number, left: number, width: number, spanDays: number): number {
+  if (width <= 0 || spanDays <= 1) return 0;
+  const idx = Math.floor(((clientX - left) / width) * spanDays);
+  return Math.min(spanDays - 1, Math.max(0, idx));
+}
+
+export function parseOccurrenceDrag(raw: string): { id: string; grabbed: string | null } {
+  try {
+    const data: unknown = JSON.parse(raw);
+    if (data && typeof data === "object" && typeof (data as { id?: unknown }).id === "string") {
+      const { id, grabbed } = data as { id: string; grabbed?: unknown };
+      return { id, grabbed: typeof grabbed === "string" ? grabbed : null };
+    }
+  } catch {
+    // Older payloads carry the bare occurrence id.
+  }
+  return { id: raw, grabbed: null };
+}
+
 export function moveDueToDay(dueIso: string, day: Date): string {
   const due = new Date(dueIso);
   const moved = startOfDay(day);

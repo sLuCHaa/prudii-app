@@ -389,7 +389,7 @@ function AllDayLane({ days, occurrences, tasks, use24h, label, handlers }: AllDa
               width: `${((s.endIdx - s.startIdx + 1) / n) * 100}%`,
             }}
           >
-            <EventChip occurrence={s.o} variant="bar" use24h={use24h} onOpen={handlers.onOpen} />
+            <EventChip occurrence={s.o} variant="bar" use24h={use24h} onOpen={handlers.onOpen} spanDays={days.slice(s.startIdx, s.endIdx + 1)} />
           </div>
         ))}
       </div>

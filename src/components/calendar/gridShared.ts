@@ -2,8 +2,8 @@ import type { DragEvent } from "react";
 import { differenceInCalendarDays, isSameDay } from "date-fns";
 import type { EventTimes, Occurrence } from "../../types/calendar";
 import type { Task } from "../../types";
-import { occurrenceRange } from "../../lib/calendar/dates";
-import { allDayPayload, shiftAllDay, shiftTimed, timedPayload } from "../../lib/calendar/drag";
+import { occurrenceRange, parseIsoDate } from "../../lib/calendar/dates";
+import { allDayPayload, parseOccurrenceDrag, shiftAllDay, shiftTimed, timedPayload } from "../../lib/calendar/drag";
 
 export const OCCURRENCE_MIME = "application/x-prudii-occurrence";
 export const TASK_MIME = "application/x-prudii-task";
@@ -29,7 +29,7 @@ export function acceptsCalendarDrag(e: DragEvent): boolean {
   return types.includes(OCCURRENCE_MIME) || types.includes(TASK_MIME);
 }
 
-/** Moves a dropped event or task to `day`, keeping its time of day and length. */
+/** Moves a dropped event or task to `day`, keeping its time of day and length; a bar moves by the day it was grabbed at. */
 export function handleDayDrop(
   e: DragEvent,
   day: Date,
@@ -44,11 +44,11 @@ export function handleDayDrop(
     if (task) handlers.onMoveTask(task, day);
     return;
   }
-  const id = e.dataTransfer.getData(OCCURRENCE_MIME);
+  const { id, grabbed } = parseOccurrenceDrag(e.dataTransfer.getData(OCCURRENCE_MIME));
   const o = occurrences.find((x) => occurrenceId(x) === id);
   if (!o) return;
   const { start, end } = occurrenceRange(o);
-  const days = differenceInCalendarDays(day, start);
+  const days = differenceInCalendarDays(day, grabbed ? parseIsoDate(grabbed) : start);
   if (days === 0) return;
   if (o.all_day) {
     const moved = shiftAllDay(o.start, o.end, days);

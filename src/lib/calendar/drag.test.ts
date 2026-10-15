@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { atMinutes, minutesFromOffset, moveDueToDay, resizedEnd, shiftAllDay, shiftTimed, snapMinutes } from "./drag";
+import {
+  atMinutes, grabbedDayIndex, minutesFromOffset, moveDueToDay, parseOccurrenceDrag, resizedEnd, shiftAllDay, shiftTimed, snapMinutes,
+} from "./drag";
 
 describe("drag maths", () => {
   it("snaps to quarter hours inside the day", () => {
@@ -33,5 +35,21 @@ describe("drag maths", () => {
   it("keeps a task's time of day when it moves to another day", () => {
     const due = new Date(2026, 9, 15, 14, 30).toISOString();
     expect(new Date(moveDueToDay(due, new Date(2026, 9, 20))).getTime()).toBe(new Date(2026, 9, 20, 14, 30).getTime());
+  });
+
+  it("finds the day of a multi-day bar under the pointer", () => {
+    expect(grabbedDayIndex(100, 100, 300, 3)).toBe(0);
+    expect(grabbedDayIndex(350, 100, 300, 3)).toBe(2);
+    expect(grabbedDayIndex(250, 100, 300, 3)).toBe(1);
+    expect(grabbedDayIndex(50, 100, 300, 3)).toBe(0);
+    expect(grabbedDayIndex(400, 100, 300, 3)).toBe(2);
+    expect(grabbedDayIndex(120, 100, 0, 3)).toBe(0);
+  });
+
+  it("reads occurrence drag payloads, old plain ids included", () => {
+    expect(parseOccurrenceDrag(JSON.stringify({ id: "e|k", grabbed: "2026-10-14" }))).toEqual({ id: "e|k", grabbed: "2026-10-14" });
+    expect(parseOccurrenceDrag(JSON.stringify({ id: "e|k" }))).toEqual({ id: "e|k", grabbed: null });
+    expect(parseOccurrenceDrag("e|2026-10-14T09:00:00")).toEqual({ id: "e|2026-10-14T09:00:00", grabbed: null });
+    expect(parseOccurrenceDrag("42")).toEqual({ id: "42", grabbed: null });
   });
 });
