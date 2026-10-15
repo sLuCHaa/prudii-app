@@ -1330,7 +1330,7 @@
     },
     "repeat": {
       "custom": "Personnalisé…",
-      "every": "Tous les",
+      "every": "Intervalle :",
       "ends": "Fin",
       "never": "Jamais",
       "onDate": "Le",
