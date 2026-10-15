@@ -514,6 +514,281 @@ pub(crate) fn count_today_impl(db: &Database) -> Result<i64, String> {
     Ok(occ.iter().filter(|o| o.status != "cancelled" && o.my_partstat.as_deref() != Some("declined")).count() as i64)
 }
 
+fn apply_text(ev: &mut EventRow, p: &EventPatch) {
+    if let Some(t) = &p.title {
+        ev.title = t.trim().to_string();
+    }
+    if let Some(d) = &p.description {
+        ev.description = d.clone();
+    }
+    if let Some(l) = &p.location {
+        ev.location = l.trim().to_string();
+    }
+}
+
+fn set_times(ev: &mut EventRow, times: &EventTimes) -> Result<(), String> {
+    if times.all_day != ev.all_day {
+        ev.all_day = times.all_day;
+        ev.tzid = if times.all_day { None } else { Some(system_tz_name()) };
+    }
+    let (start, end) = times_to_frame(times, ev.tzid.as_deref())?;
+    ev.dtstart = start;
+    ev.dtend = end;
+    Ok(())
+}
+
+/// The series row, the slot key being edited and that slot's override row;
+/// None when the target is a standalone event.
+fn resolve_series(conn: &Connection, target: &EventRow, key: Option<String>) -> Result<Option<(EventRow, String, Option<EventRow>)>, String> {
+    if let Some(rid) = &target.recurrence_id {
+        let master = find_slot(conn, &target.calendar_id, &target.uid, None)?;
+        return Ok(master.map(|m| (m, rid.clone(), Some(target.clone()))));
+    }
+    if !is_series(target) {
+        return Ok(None);
+    }
+    let key = key.unwrap_or_else(|| target.dtstart.clone());
+    let existing = find_slot(conn, &target.calendar_id, &target.uid, Some(&key))?;
+    Ok(Some((target.clone(), key, existing)))
+}
+
+fn delete_overrides(conn: &Connection, calendar_id: &str, uid: &str, from_key: Option<&str>) -> Result<(), String> {
+    match from_key {
+        Some(k) => conn.execute(
+            "DELETE FROM events WHERE calendar_id = ?1 AND uid = ?2 AND recurrence_id IS NOT NULL AND recurrence_id >= ?3",
+            params![calendar_id, uid, k],
+        ),
+        None => conn.execute(
+            "DELETE FROM events WHERE calendar_id = ?1 AND uid = ?2 AND recurrence_id IS NOT NULL",
+            params![calendar_id, uid],
+        ),
+    }
+    .map(|_| ())
+    .map_err(err)
+}
+
+fn shift_overrides(conn: &Connection, master: &EventRow, delta: Duration) -> Result<(), String> {
+    let mut stmt = conn
+        .prepare("SELECT id, recurrence_id FROM events WHERE calendar_id = ?1 AND uid = ?2 AND recurrence_id IS NOT NULL ORDER BY recurrence_id")
+        .map_err(err)?;
+    let mut rows: Vec<(String, String)> = stmt
+        .query_map(params![master.calendar_id, master.uid], |r| Ok((r.get(0)?, r.get(1)?)))
+        .map_err(err)?
+        .collect::<Result<_, _>>()
+        .map_err(err)?;
+    // Walk against the shift so no row lands on a key another row still holds.
+    if delta > Duration::zero() {
+        rows.reverse();
+    }
+    for (id, rid) in rows {
+        conn.execute("UPDATE events SET recurrence_id = ?1 WHERE id = ?2", params![shift_key(master.all_day, &rid, delta), id])
+            .map_err(err)?;
+    }
+    Ok(())
+}
+
+/// Standalone events and override rows: fields apply directly. Overrides never
+/// take a rule or a calendar of their own.
+fn update_single(conn: &Connection, mut ev: EventRow, patch: &EventPatch) -> Result<String, String> {
+    apply_text(&mut ev, patch);
+    if let Some(t) = &patch.times {
+        set_times(&mut ev, t)?;
+    }
+    if ev.recurrence_id.is_none() {
+        if patch.clear_rrule {
+            ev.rrule = None;
+        } else if patch.rrule.is_some() {
+            ev.rrule = clean_rule(patch.rrule.clone());
+        }
+        if let Some(cal) = &patch.calendar_id {
+            ensure_calendar(conn, cal)?;
+            ev.calendar_id = cal.clone();
+        }
+    }
+    ev.sequence += 1;
+    write_event(conn, &ev)?;
+    if let Some(a) = &patch.alarms {
+        set_alarms(conn, &ev.id, a)?;
+    }
+    Ok(ev.id)
+}
+
+fn update_this(conn: &Connection, master: &EventRow, key: &str, existing: Option<EventRow>, patch: &EventPatch) -> Result<String, String> {
+    let ov = match existing {
+        Some(o) => o,
+        None => {
+            let (_, len) = slot_shape(master).ok_or("calendar.errors.invalidTimes")?;
+            let start = key_to_naive(master.all_day, key).ok_or("calendar.errors.invalidTimes")?;
+            let mut o = master.clone();
+            o.id = uuid::Uuid::new_v4().to_string();
+            o.recurrence_id = Some(key.to_string());
+            o.rrule = None;
+            o.exdates.clear();
+            o.rdates.clear();
+            o.dtstart = naive_to_key(master.all_day, start);
+            o.dtend = naive_to_key(master.all_day, start + len);
+            write_event(conn, &o)?;
+            copy_children(conn, &master.id, &o.id)?;
+            o
+        }
+    };
+    update_single(conn, ov, patch)
+}
+
+fn update_all(conn: &Connection, mut master: EventRow, key: Option<&str>, patch: &EventPatch) -> Result<String, String> {
+    apply_text(&mut master, patch);
+    if let Some(times) = &patch.times {
+        if times.all_day != master.all_day {
+            // Switching between timed and all-day re-anchors the series at the new
+            // start; the old exceptions no longer name any slot.
+            set_times(&mut master, times)?;
+            master.exdates.clear();
+            master.rdates.clear();
+            delete_overrides(conn, &master.calendar_id, &master.uid, None)?;
+        } else {
+            let invalid = || "calendar.errors.invalidTimes".to_string();
+            let (new_start, new_end) = times_to_frame(times, master.tzid.as_deref())?;
+            let anchor = key_to_naive(master.all_day, key.unwrap_or(master.dtstart.as_str())).ok_or_else(invalid)?;
+            let ns = key_to_naive(master.all_day, &new_start).ok_or_else(invalid)?;
+            let ne = key_to_naive(master.all_day, &new_end).ok_or_else(invalid)?;
+            let delta = ns - anchor;
+            let first = key_to_naive(master.all_day, &master.dtstart).ok_or_else(invalid)? + delta;
+            master.dtstart = naive_to_key(master.all_day, first);
+            master.dtend = naive_to_key(master.all_day, first + (ne - ns));
+            if !delta.is_zero() {
+                let day_shift = (ns.date() - anchor.date()).num_days();
+                if let Some(rule) = &master.rrule {
+                    master.rrule = Some(shift_rrule_days(rule, day_shift));
+                }
+                let all_day = master.all_day;
+                master.exdates = master.exdates.iter().map(|x| shift_key(all_day, x, delta)).collect();
+                master.rdates = master.rdates.iter().map(|x| shift_key(all_day, x, delta)).collect();
+                shift_overrides(conn, &master, delta)?;
+            }
+        }
+    }
+    if patch.clear_rrule {
+        master.rrule = None;
+        master.exdates.clear();
+        master.rdates.clear();
+        delete_overrides(conn, &master.calendar_id, &master.uid, None)?;
+    } else if patch.rrule.is_some() {
+        master.rrule = clean_rule(patch.rrule.clone());
+    }
+    if let Some(cal) = patch.calendar_id.as_ref().filter(|c| **c != master.calendar_id) {
+        ensure_calendar(conn, cal)?;
+        conn.execute(
+            "UPDATE events SET calendar_id = ?1 WHERE calendar_id = ?2 AND uid = ?3 AND recurrence_id IS NOT NULL",
+            params![cal, master.calendar_id, master.uid],
+        )
+        .map_err(err)?;
+        master.calendar_id = cal.clone();
+    }
+    master.sequence += 1;
+    write_event(conn, &master)?;
+    if let Some(a) = &patch.alarms {
+        set_alarms(conn, &master.id, a)?;
+    }
+    Ok(master.id)
+}
+
+/// Ends `master` before slot `key` and returns a new series (fresh uid) for the
+/// rest, taking its exceptions and overrides along.
+fn split_series(conn: &Connection, master: &mut EventRow, key: &str) -> Result<EventRow, String> {
+    let (_, len) = slot_shape(master).ok_or("calendar.errors.invalidTimes")?;
+    let start = key_to_naive(master.all_day, key).ok_or("calendar.errors.invalidTimes")?;
+    let mut tail = master.clone();
+    tail.id = uuid::Uuid::new_v4().to_string();
+    tail.uid = format!("{}@prudii", uuid::Uuid::new_v4());
+    tail.dtstart = naive_to_key(master.all_day, start);
+    tail.dtend = naive_to_key(master.all_day, start + len);
+    tail.exdates = master.exdates.iter().filter(|x| x.as_str() >= key).cloned().collect();
+    tail.rdates = master.rdates.iter().filter(|x| x.as_str() >= key).cloned().collect();
+    tail.sequence = 0;
+    tail.ical_raw = None;
+    if let Some(rule) = master.rrule.clone() {
+        if let Some(total) = rule_count(&rule) {
+            let before = slots_before(master, key);
+            tail.rrule = Some(with_count(&rule, total.saturating_sub(before).max(1)));
+        }
+        master.rrule = truncate_before(master, key);
+    }
+    master.exdates.retain(|x| x.as_str() < key);
+    master.rdates.retain(|x| x.as_str() < key);
+    master.sequence += 1;
+    write_event(conn, master)?;
+    write_event(conn, &tail)?;
+    copy_children(conn, &master.id, &tail.id)?;
+    conn.execute(
+        "UPDATE events SET uid = ?1 WHERE calendar_id = ?2 AND uid = ?3 AND recurrence_id IS NOT NULL AND recurrence_id >= ?4",
+        params![tail.uid, master.calendar_id, master.uid, key],
+    )
+    .map_err(err)?;
+    Ok(tail)
+}
+
+pub(crate) fn update_event_impl(db: &Database, id: &str, occurrence_key: Option<String>, scope: Scope, patch: EventPatch) -> Result<EventDetail, String> {
+    let conn = db.lock_db();
+    let tx = conn.unchecked_transaction().map_err(err)?;
+    let target = fetch_event(&tx, id)?;
+    let result_id = match resolve_series(&tx, &target, occurrence_key)? {
+        None => update_single(&tx, target, &patch)?,
+        Some((mut master, key, existing)) => match scope {
+            Scope::This => update_this(&tx, &master, &key, existing, &patch)?,
+            Scope::Following if key != master.dtstart => {
+                let tail = split_series(&tx, &mut master, &key)?;
+                update_all(&tx, tail, Some(&key), &patch)?
+            }
+            Scope::Following | Scope::All => update_all(&tx, master, Some(&key), &patch)?,
+        },
+    };
+    tx.commit().map_err(err)?;
+    detail_of(&conn, &result_id)
+}
+
+pub(crate) fn move_occurrence_impl(db: &Database, id: &str, occurrence_key: Option<String>, times: EventTimes, scope: Scope) -> Result<EventDetail, String> {
+    update_event_impl(db, id, occurrence_key, scope, EventPatch { times: Some(times), ..Default::default() })
+}
+
+pub(crate) fn delete_event_impl(db: &Database, id: &str, occurrence_key: Option<String>, scope: Scope) -> Result<(), String> {
+    let conn = db.lock_db();
+    let tx = conn.unchecked_transaction().map_err(err)?;
+    let target = fetch_event(&tx, id)?;
+    match resolve_series(&tx, &target, occurrence_key)? {
+        None => {
+            tx.execute("DELETE FROM events WHERE id = ?1", params![target.id]).map_err(err)?;
+        }
+        Some((mut master, key, existing)) => match scope {
+            Scope::This => {
+                if let Some(o) = existing {
+                    tx.execute("DELETE FROM events WHERE id = ?1", params![o.id]).map_err(err)?;
+                }
+                if !master.exdates.contains(&key) {
+                    master.exdates.push(key);
+                    master.exdates.sort();
+                }
+                master.sequence += 1;
+                write_event(&tx, &master)?;
+            }
+            Scope::Following if key != master.dtstart => {
+                if master.rrule.is_some() {
+                    master.rrule = truncate_before(&master, &key);
+                }
+                master.exdates.retain(|x| *x < key);
+                master.rdates.retain(|x| *x < key);
+                delete_overrides(&tx, &master.calendar_id, &master.uid, Some(&key))?;
+                master.sequence += 1;
+                write_event(&tx, &master)?;
+            }
+            Scope::Following | Scope::All => {
+                tx.execute("DELETE FROM events WHERE calendar_id = ?1 AND uid = ?2", params![master.calendar_id, master.uid])
+                    .map_err(err)?;
+            }
+        },
+    }
+    tx.commit().map_err(err)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -735,5 +1010,117 @@ mod tests {
         assert_eq!(get_calendar_settings_impl(&db), CalendarSettings { work_days: vec![1, 2, 5], ..custom.clone() });
         let broken = CalendarSettings { work_start_hour: 18, work_end_hour: 8, ..custom };
         assert_eq!(update_calendar_settings_impl(&db, &broken).unwrap_err(), "calendar.errors.invalidSettings");
+    }
+
+    fn titles_and_starts(db: &Database, from: &str, to: &str) -> Vec<(String, String)> {
+        list(db, from, to).into_iter().map(|o| (o.title, o.start)).collect()
+    }
+
+    fn weekly(db: &Database, c: &str, rule: &str) -> String {
+        zoned_row(db, c, "Europe/Berlin", "2026-10-05T09:00:00", "2026-10-05T09:30:00", Some(rule))
+    }
+
+    #[test]
+    fn editing_one_slot_creates_an_override() {
+        let db = temp_db();
+        let c = cal(&db);
+        let id = weekly(&db, &c, "FREQ=WEEKLY;BYDAY=MO");
+        let patch = EventPatch {
+            title: Some("Moved".into()),
+            times: Some(timed("2026-10-12T08:00:00Z", "2026-10-12T08:30:00Z")),
+            ..Default::default()
+        };
+        let d = update_event_impl(&db, &id, Some("2026-10-12T09:00:00".into()), Scope::This, patch).unwrap();
+        assert_eq!(d.event.recurrence_id.as_deref(), Some("2026-10-12T09:00:00"));
+        assert_eq!(
+            titles_and_starts(&db, "2026-10-05T00:00:00Z", "2026-10-20T00:00:00Z"),
+            vec![
+                ("T".to_string(), "2026-10-05T07:00:00Z".to_string()),
+                ("Moved".to_string(), "2026-10-12T08:00:00Z".to_string()),
+                ("T".to_string(), "2026-10-19T07:00:00Z".to_string()),
+            ]
+        );
+        update_event_impl(&db, &id, Some("2026-10-12T09:00:00".into()), Scope::This, EventPatch { title: Some("Again".into()), ..Default::default() }).unwrap();
+        let rows: i64 = db.lock_db().query_row("SELECT COUNT(*) FROM events", [], |r| r.get(0)).unwrap();
+        assert_eq!(rows, 2, "the second edit reuses the override");
+    }
+
+    #[test]
+    fn moving_the_whole_series_by_a_day_moves_rule_and_exceptions() {
+        let db = temp_db();
+        let c = cal(&db);
+        let id = weekly(&db, &c, "FREQ=WEEKLY;BYDAY=MO");
+        delete_event_impl(&db, &id, Some("2026-10-12T09:00:00".into()), Scope::This).unwrap();
+        let patch = EventPatch { times: Some(timed("2026-10-20T07:00:00Z", "2026-10-20T07:30:00Z")), ..Default::default() };
+        update_event_impl(&db, &id, Some("2026-10-19T09:00:00".into()), Scope::All, patch).unwrap();
+        let row = get_event_impl(&db, &id).unwrap().event;
+        assert_eq!(row.dtstart, "2026-10-06T09:00:00");
+        assert_eq!(row.rrule.as_deref(), Some("FREQ=WEEKLY;BYDAY=TU"));
+        assert_eq!(row.exdates, vec!["2026-10-13T09:00:00".to_string()]);
+        let starts: Vec<String> = list(&db, "2026-10-05T00:00:00Z", "2026-10-21T00:00:00Z").into_iter().map(|o| o.start).collect();
+        assert_eq!(starts, vec!["2026-10-06T07:00:00Z", "2026-10-20T07:00:00Z"]);
+    }
+
+    #[test]
+    fn editing_following_slots_splits_a_counted_series() {
+        let db = temp_db();
+        let c = cal(&db);
+        let id = weekly(&db, &c, "FREQ=WEEKLY;BYDAY=MO;COUNT=5");
+        let tail = update_event_impl(&db, &id, Some("2026-10-19T09:00:00".into()), Scope::Following, EventPatch { title: Some("New".into()), ..Default::default() }).unwrap();
+        let titles: Vec<String> = list(&db, "2026-10-01T00:00:00Z", "2026-11-10T00:00:00Z").into_iter().map(|o| o.title).collect();
+        assert_eq!(titles, vec!["T", "T", "New", "New", "New"]);
+        let master = get_event_impl(&db, &id).unwrap().event;
+        assert_eq!(master.rrule.as_deref(), Some("FREQ=WEEKLY;BYDAY=MO;UNTIL=20261019T065959Z"));
+        assert_eq!(tail.event.rrule.as_deref(), Some("FREQ=WEEKLY;BYDAY=MO;COUNT=3"));
+        assert_ne!(tail.event.uid, master.uid);
+    }
+
+    #[test]
+    fn deleting_this_following_and_all() {
+        let db = temp_db();
+        let c = cal(&db);
+        let id = weekly(&db, &c, "FREQ=WEEKLY;BYDAY=MO");
+        let starts = |db: &Database| -> Vec<String> { list(db, "2026-10-01T00:00:00Z", "2026-10-27T00:00:00Z").into_iter().map(|o| o.start).collect() };
+        delete_event_impl(&db, &id, Some("2026-10-12T09:00:00".into()), Scope::This).unwrap();
+        assert_eq!(starts(&db), vec!["2026-10-05T07:00:00Z", "2026-10-19T07:00:00Z", "2026-10-26T08:00:00Z"]);
+        delete_event_impl(&db, &id, Some("2026-10-19T09:00:00".into()), Scope::Following).unwrap();
+        assert_eq!(starts(&db), vec!["2026-10-05T07:00:00Z"]);
+        delete_event_impl(&db, &id, None, Scope::All).unwrap();
+        let rows: i64 = db.lock_db().query_row("SELECT COUNT(*) FROM events", [], |r| r.get(0)).unwrap();
+        assert_eq!(rows, 0);
+    }
+
+    #[test]
+    fn deleting_an_override_hides_its_slot() {
+        let db = temp_db();
+        let c = cal(&db);
+        let id = weekly(&db, &c, "FREQ=WEEKLY;BYDAY=MO");
+        let ov = update_event_impl(&db, &id, Some("2026-10-12T09:00:00".into()), Scope::This, EventPatch { title: Some("X".into()), ..Default::default() }).unwrap();
+        delete_event_impl(&db, &ov.event.id, None, Scope::This).unwrap();
+        let starts: Vec<String> = list(&db, "2026-10-01T00:00:00Z", "2026-10-20T00:00:00Z").into_iter().map(|o| o.start).collect();
+        assert_eq!(starts, vec!["2026-10-05T07:00:00Z", "2026-10-19T07:00:00Z"]);
+    }
+
+    #[test]
+    fn moving_an_event_in_a_foreign_zone_keeps_its_zone() {
+        let db = temp_db();
+        let c = cal(&db);
+        let id = zoned_row(&db, &c, "America/New_York", "2026-10-15T10:00:00", "2026-10-15T11:00:00", None);
+        let d = move_occurrence_impl(&db, &id, None, timed("2026-10-15T15:00:00Z", "2026-10-15T16:00:00Z"), Scope::All).unwrap();
+        assert_eq!(d.event.tzid.as_deref(), Some("America/New_York"));
+        assert_eq!((d.event.dtstart.as_str(), d.event.dtend.as_str()), ("2026-10-15T11:00:00", "2026-10-15T12:00:00"));
+    }
+
+    #[test]
+    fn a_single_event_can_become_a_series_and_change_calendar() {
+        let db = temp_db();
+        let c = cal(&db);
+        let other = create_calendar_impl(&db, "Other", "#123456").unwrap();
+        let d = create_event_impl(&db, input(&c, "Gym", timed("2026-10-15T16:00:00Z", "2026-10-15T17:00:00Z"))).unwrap();
+        let patch = EventPatch { rrule: Some("FREQ=DAILY;COUNT=3".into()), calendar_id: Some(other.id.clone()), ..Default::default() };
+        update_event_impl(&db, &d.event.id, None, Scope::All, patch).unwrap();
+        let occ = list(&db, "2026-10-15T00:00:00Z", "2026-10-20T00:00:00Z");
+        assert_eq!(occ.len(), 3);
+        assert!(occ.iter().all(|o| o.calendar_id == other.id));
     }
 }
