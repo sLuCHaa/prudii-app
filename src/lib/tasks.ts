@@ -1,3 +1,4 @@
+import { closestCorners, type ClientRect, type CollisionDetection } from "@dnd-kit/core";
 import type { Attachment, Task, TaskStatus } from "../types";
 import { TASK_STATUSES } from "../types";
 
@@ -88,6 +89,37 @@ export function fullColumnDropIndex(allTasks: Task[], status: TaskStatus, moving
   const at = column.findIndex((task) => task.id === predecessorId);
   return at >= 0 ? at + 1 : column.length;
 }
+
+function horizontalGap(x: number, rect: ClientRect): number {
+  if (x < rect.left) return rect.left - x;
+  if (x > rect.right) return x - rect.right;
+  return 0;
+}
+
+/**
+ * The pointer picks the lane: closestCorners on the dragged card's rect only hands
+ * a card over once most of it has crossed into the next column.
+ */
+export const boardCollisionDetection: CollisionDetection = (args) => {
+  const { pointerCoordinates, droppableRects, droppableContainers } = args;
+  if (!pointerCoordinates) return closestCorners(args);
+  let lane: TaskStatus | undefined;
+  let nearest = Infinity;
+  for (const container of droppableContainers) {
+    const rect = droppableRects.get(container.id);
+    if (container.data.current?.type !== "column" || !rect) continue;
+    const gap = horizontalGap(pointerCoordinates.x, rect);
+    if (gap < nearest) {
+      nearest = gap;
+      lane = container.data.current.status;
+    }
+  }
+  if (!lane) return closestCorners(args);
+  return closestCorners({
+    ...args,
+    droppableContainers: droppableContainers.filter((container) => container.data.current?.status === lane),
+  });
+};
 
 // JS `\b` only treats [A-Za-z0-9_] as word characters, so it fails to bound a word
 // starting with an umlaut (e.g. "übermorgen" right after a space). Build boundaries

@@ -1,9 +1,11 @@
 import { describe, it, expect } from "vitest";
+import { closestCorners, type CollisionDetection } from "@dnd-kit/core";
 import {
   isOverdue,
   isDueToday,
   groupByStatus,
   fullColumnDropIndex,
+  boardCollisionDetection,
   parseQuickAdd,
   chunkIds,
   mergeCounts,
@@ -226,6 +228,50 @@ describe("fullColumnDropIndex", () => {
     ];
     const visible = [sparse[0], makeTask({ id: "x", status: "open" })];
     expect(fullColumnDropIndex(sparse, "open", "x", visible)).toBe(2);
+  });
+});
+
+describe("boardCollisionDetection", () => {
+  const rect = (left: number, top: number, width: number, height: number) =>
+    ({ left, top, width, height, right: left + width, bottom: top + height });
+  // Three 380px lanes with a 25px gutter; "a" and "b" sit in "open", "c" in "in_progress", "done" is empty.
+  const droppables: [string, ReturnType<typeof rect>, Record<string, unknown>][] = [
+    ["open", rect(16, 100, 380, 700), { type: "column", status: "open" }],
+    ["a", rect(24, 110, 364, 70), { type: "card", status: "open" }],
+    ["b", rect(24, 188, 364, 70), { type: "card", status: "open" }],
+    ["in_progress", rect(421, 100, 380, 700), { type: "column", status: "in_progress" }],
+    ["c", rect(429, 110, 364, 70), { type: "card", status: "in_progress" }],
+    ["done", rect(826, 100, 380, 700), { type: "column", status: "done" }],
+  ];
+
+  function detect(pointerX: number | null, cardLeft: number, cardTop = 188, detector = boardCollisionDetection) {
+    const args = {
+      active: { id: "b" },
+      collisionRect: rect(cardLeft, cardTop, 364, 70),
+      droppableRects: new Map(droppables.map(([id, r]) => [id, r])),
+      droppableContainers: droppables.map(([id, , data]) => ({ id, data: { current: data } })),
+      pointerCoordinates: pointerX === null ? null : { x: pointerX, y: cardTop + 35 },
+    } as unknown as Parameters<CollisionDetection>[0];
+    return detector(args)[0]?.id;
+  }
+
+  it("follows the pointer into a lane while most of the card still hangs over the previous one", () => {
+    // Grabbed near its right edge: the card's rect barely reaches into "done".
+    expect(detect(946, 598, 188, closestCorners)).not.toBe("done");
+    expect(detect(946, 598)).toBe("done");
+  });
+
+  it("only offers the pointer's lane's own card and column", () => {
+    expect(detect(450, 100, 110)).toBe("c");
+    expect(detect(450, 100, 600)).toBe("in_progress");
+  });
+
+  it("picks the nearest lane while the pointer crosses the gutter between two", () => {
+    expect(detect(815, 450)).toBe("done");
+  });
+
+  it("falls back to the card's rect without a pointer, e.g. for keyboard drags", () => {
+    expect(detect(null, 598)).toBe(detect(null, 598, 188, closestCorners));
   });
 });
 

@@ -7,7 +7,6 @@ import {
   PointerSensor,
   KeyboardSensor,
   KeyboardCode,
-  closestCorners,
   useSensor,
   useSensors,
   defaultDropAnimationSideEffects,
@@ -20,7 +19,7 @@ import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useReducedMotion } from "motion/react";
 import type { Task, TaskStatus } from "../../types";
 import { TASK_STATUSES } from "../../types";
-import { fullColumnDropIndex, groupByStatus } from "../../lib/tasks";
+import { boardCollisionDetection, fullColumnDropIndex, groupByStatus } from "../../lib/tasks";
 import { useDeleteTask, useMoveTask } from "../../hooks/useTasks";
 import { useAppStore } from "../../stores/appStore";
 import { useDialog } from "../ui/DialogProvider";
@@ -266,7 +265,7 @@ export function TaskBoard({ tasks, allTasks }: TaskBoardProps) {
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCorners}
+      collisionDetection={boardCollisionDetection}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
