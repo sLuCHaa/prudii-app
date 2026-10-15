@@ -290,6 +290,25 @@ pub fn shift_until(rule: &str, _all_day: bool, delta: Duration) -> String {
         .join(";")
 }
 
+fn is_until(part: &str) -> bool {
+    part.split('=').next().is_some_and(|k| k.trim().eq_ignore_ascii_case("UNTIL"))
+}
+
+/// `rule` with UNTIL at the end of the day of `old`'s last slot (moved by `days`)
+/// in `new`'s frame, for a series switched between timed and all-day.
+pub fn rebound_until(rule: &str, old: &EventRow, new: &EventRow, days: i64) -> String {
+    let bare = EventRow { exdates: vec![], rdates: vec![], ..old.clone() };
+    let Some(set) = rule.split(';').any(is_until).then(|| rule_set(&bare)).flatten() else { return rule.to_string() };
+    let result = set.all(MAX_OCCURRENCES);
+    let (false, Some(last)) = (result.limited, result.dates.last()) else { return rule.to_string() };
+    let day_end = (last.naive_local().date() + Duration::days(days)).and_hms_opt(23, 59, 59).expect("23:59:59 is valid");
+    let until = wall_to_utc(&frame_tz(new), day_end).format("%Y%m%dT%H%M%SZ");
+    rule.split(';')
+        .map(|p| if is_until(p) { format!("UNTIL={}", until) } else { p.to_string() })
+        .collect::<Vec<_>>()
+        .join(";")
+}
+
 pub fn shift_key(all_day: bool, key: &str, by: Duration) -> String {
     match key_to_naive(all_day, key) {
         Some(n) => naive_to_key(all_day, n + by),
@@ -443,6 +462,14 @@ mod tests {
         assert_eq!(rule_count("FREQ=WEEKLY;COUNT=5"), Some(5));
         assert_eq!(rule_count("FREQ=WEEKLY"), None);
         assert_eq!(with_count("FREQ=WEEKLY;COUNT=5;BYDAY=MO", 3), "FREQ=WEEKLY;COUNT=3;BYDAY=MO");
+    }
+
+    #[test]
+    fn until_keeps_the_last_day_across_a_form_switch() {
+        let old = row("2026-10-05T09:00:00", "2026-10-05T09:30:00", BERLIN, Some("FREQ=WEEKLY;BYDAY=MO;UNTIL=20261019T065959Z"));
+        let new = row("2026-10-05", "2026-10-06", None, None);
+        assert_eq!(rebound_until(old.rrule.as_deref().unwrap(), &old, &new, 0), "FREQ=WEEKLY;BYDAY=MO;UNTIL=20261012T235959Z");
+        assert_eq!(rebound_until("FREQ=WEEKLY;BYDAY=TU", &old, &new, 1), "FREQ=WEEKLY;BYDAY=TU");
     }
 
     #[test]

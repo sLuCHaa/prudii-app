@@ -3,8 +3,8 @@
 
 use super::ical::{calendar_to_ics, parse_calendar, ExportEvent};
 use super::recurrence::{
-    derive_range, expand, is_series, key_to_naive, naive_to_key, rule_count, shift_key, shift_rrule_days, shift_until, slot_shape,
-    slots_before, truncate_before, with_count, ExpandInput,
+    derive_range, expand, is_series, key_to_naive, naive_to_key, rebound_until, rule_count, shift_key, shift_rrule_days, shift_until,
+    slot_shape, slots_before, truncate_before, with_count, ExpandInput,
 };
 use super::tz::{fmt_date, fmt_utc, fmt_wall, parse_date, parse_utc, row_tz, system_tz, system_tz_name, utc_to_wall, wall_to_utc};
 use super::{
@@ -12,7 +12,7 @@ use super::{
     ImportResult, Occurrence, Scope,
 };
 use crate::db::Database;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, NaiveDate, Utc};
 use chrono_tz::Tz;
 use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::{HashMap, HashSet};
@@ -570,25 +570,71 @@ fn delete_overrides(conn: &Connection, calendar_id: &str, uid: &str, from_key: O
     .map_err(err)
 }
 
-fn shift_overrides(conn: &Connection, master: &EventRow, delta: Duration) -> Result<(), String> {
+fn override_ids(conn: &Connection, master: &EventRow) -> Result<Vec<String>, String> {
     let mut stmt = conn
-        .prepare("SELECT id, recurrence_id FROM events WHERE calendar_id = ?1 AND uid = ?2 AND recurrence_id IS NOT NULL ORDER BY recurrence_id")
+        .prepare("SELECT id FROM events WHERE calendar_id = ?1 AND uid = ?2 AND recurrence_id IS NOT NULL ORDER BY recurrence_id")
         .map_err(err)?;
-    let mut rows: Vec<(String, String)> = stmt
-        .query_map(params![master.calendar_id, master.uid], |r| Ok((r.get(0)?, r.get(1)?)))
-        .map_err(err)?
-        .collect::<Result<_, _>>()
-        .map_err(err)?;
+    let ids = stmt.query_map(params![master.calendar_id, master.uid], |r| r.get(0)).map_err(err)?.collect::<Result<Vec<String>, _>>().map_err(err);
+    ids
+}
+
+fn shift_overrides(conn: &Connection, master: &EventRow, delta: Duration) -> Result<(), String> {
+    let mut ids = override_ids(conn, master)?;
     // Walk against the shift so no row lands on a key another row still holds.
     if delta > Duration::zero() {
-        rows.reverse();
+        ids.reverse();
     }
-    for (id, rid) in rows {
+    for id in ids {
         let mut ov = fetch_event(conn, &id)?;
-        ov.recurrence_id = Some(shift_key(master.all_day, &rid, delta));
+        ov.recurrence_id = ov.recurrence_id.map(|rid| shift_key(master.all_day, &rid, delta));
         ov.dtstart = shift_key(ov.all_day, &ov.dtstart, delta);
         ov.dtend = shift_key(ov.all_day, &ov.dtend, delta);
         write_event(conn, &ov)?;
+    }
+    Ok(())
+}
+
+/// Timed <-> all-day for a whole series: the first slot keeps its day (moved by
+/// the edited slot's day shift) and exceptions keep naming the same days.
+fn switch_series_form(conn: &Connection, master: &mut EventRow, key: Option<&str>, times: &EventTimes) -> Result<(), String> {
+    let invalid = || "calendar.errors.invalidTimes".to_string();
+    let old = master.clone();
+    let day_of = |k: &str| key_to_naive(old.all_day, k).map(|n| n.date());
+    set_times(master, times)?;
+    let (start, len) = slot_shape(master).ok_or_else(invalid)?;
+    let days = (start.date() - day_of(key.unwrap_or(&old.dtstart)).ok_or_else(invalid)?).num_days();
+    let all_day = master.all_day;
+    let at = |day: NaiveDate| (day + Duration::days(days)).and_time(start.time());
+    let convert = |keys: &[String]| -> Vec<String> {
+        let mut out: Vec<String> = keys.iter().filter_map(|k| day_of(k)).map(|d| naive_to_key(all_day, at(d))).collect();
+        out.sort();
+        out.dedup();
+        out
+    };
+    let first = at(day_of(&old.dtstart).ok_or_else(invalid)?);
+    master.dtstart = naive_to_key(all_day, first);
+    master.dtend = naive_to_key(all_day, first + len);
+    master.exdates = convert(&old.exdates);
+    master.rdates = convert(&old.rdates);
+    master.rrule = old.rrule.as_deref().map(|r| rebound_until(&shift_rrule_days(r, days), &old, master, days));
+    let mut taken = HashSet::new();
+    for id in override_ids(conn, &old)? {
+        let mut ov = fetch_event(conn, &id)?;
+        let rid = ov.recurrence_id.as_deref().and_then(day_of).map(|d| naive_to_key(all_day, at(d)));
+        let own = key_to_naive(ov.all_day, &ov.dtstart).map(|n| at(n.date()));
+        match (rid, own) {
+            (Some(rid), Some(own)) if taken.insert(rid.clone()) => {
+                ov.recurrence_id = Some(rid);
+                ov.all_day = all_day;
+                ov.tzid = master.tzid.clone();
+                ov.dtstart = naive_to_key(all_day, own);
+                ov.dtend = naive_to_key(all_day, own + len);
+                write_event(conn, &ov)?;
+            }
+            _ => {
+                conn.execute("DELETE FROM events WHERE id = ?1", params![id]).map_err(err)?;
+            }
+        }
     }
     Ok(())
 }
@@ -645,12 +691,7 @@ fn update_all(conn: &Connection, mut master: EventRow, key: Option<&str>, patch:
     apply_text(&mut master, patch);
     if let Some(times) = &patch.times {
         if times.all_day != master.all_day {
-            // Switching between timed and all-day re-anchors the series at the new
-            // start; the old exceptions no longer name any slot.
-            set_times(&mut master, times)?;
-            master.exdates.clear();
-            master.rdates.clear();
-            delete_overrides(conn, &master.calendar_id, &master.uid, None)?;
+            switch_series_form(conn, &mut master, key, times)?;
         } else {
             let invalid = || "calendar.errors.invalidTimes".to_string();
             let (new_start, new_end) = times_to_frame(times, master.tzid.as_deref())?;
@@ -1279,6 +1320,31 @@ mod tests {
             titles_and_starts(&db, "2026-10-05T00:00:00Z", "2026-10-15T00:00:00Z"),
             vec![("T".to_string(), "2026-10-06T07:00:00Z".to_string()), ("Solo".to_string(), "2026-10-13T07:00:00Z".to_string())]
         );
+    }
+
+    #[test]
+    fn switching_a_series_to_all_day_keeps_its_past_and_exceptions() {
+        let db = temp_db();
+        let c = cal(&db);
+        let id = weekly(&db, &c, "FREQ=WEEKLY;BYDAY=MO");
+        delete_event_impl(&db, &id, Some("2026-10-12T09:00:00".into()), Scope::This).unwrap();
+        update_event_impl(&db, &id, Some("2026-10-26T09:00:00".into()), Scope::This, EventPatch { title: Some("Solo".into()), ..Default::default() }).unwrap();
+        let all_day = EventTimes { all_day: true, start: "2026-10-19".into(), end: "2026-10-20".into() };
+        update_event_impl(&db, &id, Some("2026-10-19T09:00:00".into()), Scope::All, EventPatch { times: Some(all_day), ..Default::default() }).unwrap();
+        let row = get_event_impl(&db, &id).unwrap().event;
+        assert!(row.all_day);
+        assert_eq!((row.dtstart.as_str(), row.dtend.as_str(), row.tzid.as_deref()), ("2026-10-05", "2026-10-06", None));
+        assert_eq!(row.exdates, vec!["2026-10-12".to_string()]);
+        let occ = list(&db, "2026-10-01T00:00:00Z", "2026-10-27T00:00:00Z");
+        let slots: Vec<(&str, &str, bool)> = occ.iter().map(|o| (o.start.as_str(), o.title.as_str(), o.all_day)).collect();
+        assert_eq!(slots, vec![("2026-10-05", "T", true), ("2026-10-19", "T", true), ("2026-10-26", "Solo", true)]);
+
+        update_event_impl(&db, &id, Some("2026-10-19".into()), Scope::All, EventPatch { times: Some(timed("2026-10-19T07:00:00Z", "2026-10-19T07:30:00Z")), ..Default::default() }).unwrap();
+        let row = get_event_impl(&db, &id).unwrap().event;
+        assert!(!row.all_day && row.dtstart.starts_with("2026-10-05T"));
+        assert_eq!(row.exdates, vec![format!("2026-10-12{}", &row.dtstart[10..])]);
+        let titles: Vec<String> = list(&db, "2026-10-01T00:00:00Z", "2026-10-27T00:00:00Z").into_iter().map(|o| o.title).collect();
+        assert_eq!(titles, vec!["T", "T", "Solo"]);
     }
 
     #[test]
