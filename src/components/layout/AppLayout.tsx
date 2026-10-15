@@ -9,6 +9,7 @@ import { SettingsPanel } from "../settings/SettingsPanel";
 import { AttachmentBrowser } from "./AttachmentBrowser";
 import { TasksView } from "../tasks/TasksView";
 import { CalendarView } from "../calendar/CalendarView";
+import { AgendaRail } from "../calendar/AgendaRail";
 import { OfflineBanner } from "./OfflineBanner";
 import { UpdateBanner } from "../ui/UpdateBanner";
 import { WelcomeScreen } from "../accounts/WelcomeScreen";
@@ -21,6 +22,8 @@ const SIDEBAR_MIN = 180;
 const SIDEBAR_MAX = 400;
 const MAILLIST_MIN = 250;
 const MAILLIST_MAX = 600;
+const RAIL_MIN = 260;
+const RAIL_MAX = 420;
 
 function loadPanelWidth(key: string, fallback: number, min: number, max: number): number {
   const v = Number(localStorage.getItem(key));
@@ -151,6 +154,28 @@ export function AppLayout() {
     setMailListWidth(320);
   }, []);
 
+  const agendaRailOpen = useAppStore((s) => s.agendaRailOpen);
+  const [railWidth, setRailWidth] = useState(() => loadPanelWidth("agenda-rail-width", 300, RAIL_MIN, RAIL_MAX));
+  const railWidthRef = useRef(0);
+
+  // The rail sits right of its handle, so dragging right makes it narrower.
+  const handleRailResize = useCallback((delta: number) => {
+    setRailWidth((w) => {
+      const next = Math.min(RAIL_MAX, Math.max(RAIL_MIN, w - delta));
+      railWidthRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const saveRailWidth = useCallback(() => {
+    if (railWidthRef.current > 0) localStorage.setItem("agenda-rail-width", String(railWidthRef.current));
+  }, []);
+
+  const resetRailWidth = useCallback(() => {
+    localStorage.removeItem("agenda-rail-width");
+    setRailWidth(300);
+  }, []);
+
   return (
     <>
       <div className="app-shell flex flex-col h-screen bg-bg text-text">
@@ -210,6 +235,15 @@ export function AppLayout() {
                 <div className="flex-1 min-w-0 bg-bg">
                   <MailDetail />
                 </div>
+
+                {agendaRailOpen && (
+                  <>
+                    <ResizeHandle onResize={handleRailResize} onResizeEnd={saveRailWidth} onReset={resetRailWidth} />
+                    <div style={{ width: railWidth }} className="shrink-0 border-l border-border bg-surface">
+                      <AgendaRail />
+                    </div>
+                  </>
+                )}
               </>
             )}
           </div>

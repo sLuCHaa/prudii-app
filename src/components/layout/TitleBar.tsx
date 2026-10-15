@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CalendarDays, ClipboardList, Copy, Minus, Square, X } from "lucide-react";
+import { CalendarDays, ClipboardList, Copy, Minus, PanelRight, Square, X } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";
@@ -21,6 +21,9 @@ export function TitleBar() {
   const setShowTasks = useAppStore((s) => s.setShowTasks);
   const setShowCalendar = useAppStore((s) => s.setShowCalendar);
   const appSettings = useAppStore((s) => s.appSettings);
+  const agendaRailOpen = useAppStore((s) => s.agendaRailOpen);
+  const setAgendaRailOpen = useAppStore((s) => s.setAgendaRailOpen);
+  const mailViewVisible = useAppStore((s) => !s.showCalendar && !s.showTasks && !s.showAttachmentBrowser);
   const { data: openTaskCount = 0 } = useOpenTaskCount();
   const tasksButtonRef = useRef<HTMLButtonElement>(null);
   const [quickAddAnchor, setQuickAddAnchor] = useState<DOMRect | null>(null);
@@ -93,6 +96,17 @@ export function TitleBar() {
 
       <div className="flex h-full">
         <PrivacyBadge />
+        {mailViewVisible && (
+          <button
+            onClick={() => setAgendaRailOpen(!agendaRailOpen)}
+            aria-pressed={agendaRailOpen}
+            className={`inline-flex items-center justify-center w-11 h-full hover:bg-hover transition-colors ${agendaRailOpen ? "text-accent" : "text-text-secondary"}`}
+            title={t("calendar.rail.toggle")}
+            aria-label={t("calendar.rail.toggle")}
+          >
+            <PanelRight size={14} strokeWidth={1.5} />
+          </button>
+        )}
         <button
           onClick={() => setShowCalendar(true)}
           className="inline-flex items-center justify-center w-11 h-full hover:bg-hover transition-colors text-text-secondary"

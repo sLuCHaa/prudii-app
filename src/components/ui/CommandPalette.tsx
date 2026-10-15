@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { Search, Inbox, Send, FileText, Archive, Star, Settings, Trash2, Pencil, FolderOpen, Sun, Moon, Palette, LayoutGrid, Languages, HelpCircle, ClipboardList, CalendarDays, CalendarPlus } from "lucide-react";
+import { Search, Inbox, Send, FileText, Archive, Star, Settings, Trash2, Pencil, FolderOpen, Sun, Moon, Palette, LayoutGrid, Languages, HelpCircle, ClipboardList, CalendarDays, CalendarPlus, PanelRight } from "lucide-react";
 import { defaultDraftTimes, DEFAULT_SETTINGS } from "../../lib/calendar/format";
 import { motion, AnimatePresence } from "motion/react";
 import { SPRING_BOUNCY } from "../motion/tokens";
@@ -167,6 +167,16 @@ export function CommandPalette() {
       icon: <CalendarPlus className="w-4 h-4" />,
       section: groupActions,
       action: () => useAppStore.getState().openNewEvent({ times: defaultDraftTimes(new Date(), DEFAULT_SETTINGS) }),
+    });
+    items.push({
+      id: "agenda-rail",
+      label: t("calendar.rail.toggle"),
+      icon: <PanelRight className="w-4 h-4" />,
+      section: groupActions,
+      action: () => {
+        const s = useAppStore.getState();
+        s.setAgendaRailOpen(!s.agendaRailOpen);
+      },
     });
 
     items.push({
