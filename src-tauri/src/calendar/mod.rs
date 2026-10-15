@@ -3,6 +3,7 @@
 pub mod content_line;
 pub mod ical;
 pub mod recurrence;
+pub mod store;
 pub mod tz;
 pub mod windows_zones;
 
