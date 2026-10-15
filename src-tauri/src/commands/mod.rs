@@ -4,6 +4,7 @@ pub mod app_config;
 pub mod autosave;
 pub mod backup;
 pub mod bootstrap;
+pub mod calendar;
 pub mod connectivity;
 pub mod license;
 pub mod mails;

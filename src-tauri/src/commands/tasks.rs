@@ -452,6 +452,21 @@ pub(crate) fn mark_reminded_impl(db: &Database, id: &str) -> Result<(), String> 
     Ok(())
 }
 
+pub(crate) fn tasks_in_range_impl(db: &Database, from: &str, to: &str) -> Result<Vec<Task>, String> {
+    let conn = db.lock_db();
+    let sql = format!(
+        "{} WHERE t.due_at IS NOT NULL AND t.status != 'done' AND datetime(t.due_at) >= datetime(?1) AND datetime(t.due_at) < datetime(?2) ORDER BY datetime(t.due_at), t.sort_order",
+        TASK_SELECT
+    );
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let tasks = stmt
+        .query_map(params![from, to], row_to_task)
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(tasks)
+}
+
 fn count_open_impl(db: &Database) -> Result<i64, String> {
     let conn = db.lock_db();
     conn.query_row("SELECT COUNT(*) FROM tasks WHERE status != 'done'", [], |r| r.get(0))
@@ -834,6 +849,11 @@ pub fn move_task(app: AppHandle, db: State<'_, Database>, id: String, status: St
 #[tauri::command(async)]
 pub fn count_open_tasks(db: State<'_, Database>) -> Result<i64, String> {
     super::catch_panic(|| count_open_impl(&db))
+}
+
+#[tauri::command(async)]
+pub fn tasks_in_range(db: State<'_, Database>, from: String, to: String) -> Result<Vec<Task>, String> {
+    super::catch_panic(|| tasks_in_range_impl(&db, &from, &to))
 }
 
 #[tauri::command(async)]
@@ -1496,5 +1516,24 @@ mod tests {
 
         assert!(remove_task_attachment_impl(&db, &att_id).is_err());
         assert_eq!(get_task_impl(&db, &task.id).unwrap().attachments.len(), 1);
+    }
+
+    #[test]
+    fn tasks_in_range_returns_open_tasks_due_inside_the_window() {
+        let db = temp_db();
+        {
+            let conn = db.lock_db();
+            for (id, due, status) in [
+                ("inside", "2026-10-15T09:00:00Z", "open"),
+                ("working", "2026-10-15T23:59:00.000Z", "in_progress"),
+                ("done", "2026-10-15T10:00:00Z", "done"),
+                ("outside", "2026-10-16T00:00:00Z", "open"),
+            ] {
+                conn.execute("INSERT INTO tasks (id, title, due_at, status) VALUES (?1, ?1, ?2, ?3)", params![id, due, status]).unwrap();
+            }
+            conn.execute("INSERT INTO tasks (id, title) VALUES ('undated', 'undated')", []).unwrap();
+        }
+        let ids: Vec<String> = tasks_in_range_impl(&db, "2026-10-15T00:00:00Z", "2026-10-16T00:00:00Z").unwrap().into_iter().map(|t| t.id).collect();
+        assert_eq!(ids, vec!["inside", "working"]);
     }
 }
