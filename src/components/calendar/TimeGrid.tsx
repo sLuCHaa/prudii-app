@@ -15,12 +15,13 @@ import { acceptsCalendarDrag, handleDayDrop, occurrenceId, tasksOnDay, type Cale
 const HOUR_HEIGHT = 48;
 const SCROLL_TO_HOUR = 7;
 const LANE_PX = 22;
+const CLICK_SLOP_PX = 4;
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 
 type Drag =
   | { kind: "create"; dayIdx: number; anchorMin: number; currentMin: number }
-  | { kind: "move"; occ: Occurrence; rect: DOMRect; originDayIdx: number; originMin: number; dayIdx: number; min: number; moved: boolean }
-  | { kind: "resize"; occ: Occurrence; dayIdx: number; endMin: number };
+  | { kind: "move"; occ: Occurrence; rect: DOMRect; startX: number; startY: number; originDayIdx: number; originMin: number; dayIdx: number; min: number; moved: boolean }
+  | { kind: "resize"; occ: Occurrence; rect: DOMRect; startX: number; startY: number; dayIdx: number; endMin: number; moved: boolean };
 
 interface TimeGridProps extends CalendarGridHandlers {
   days: Date[];
@@ -105,22 +106,32 @@ export function TimeGrid({ days, occurrences, tasks, workStart, workEnd, workDay
       }
       const { start, end } = occurrenceRange(d.occ);
       const moved = shiftTimed(start, end, differenceInCalendarDays(days[d.dayIdx], days[d.originDayIdx]), d.min - d.originMin);
+      if (moved.start.getTime() === start.getTime() && moved.end.getTime() === end.getTime()) return;
       handlers.onMove(d.occ, timedPayload(moved.start, moved.end));
       return;
     }
-    const { start } = occurrenceRange(d.occ);
-    handlers.onMove(d.occ, timedPayload(start, resizedEnd(start, days[d.dayIdx], d.endMin)));
+    if (!d.moved) {
+      handlers.onOpen(d.occ, d.rect);
+      return;
+    }
+    const { start, end } = occurrenceRange(d.occ);
+    const newEnd = resizedEnd(start, days[d.dayIdx], d.endMin);
+    if (newEnd.getTime() === end.getTime()) return;
+    handlers.onMove(d.occ, timedPayload(start, newEnd));
   }
 
   useEffect(() => {
     if (!drag) return;
+    function far(d: { startX: number; startY: number }, e: PointerEvent) {
+      return Math.hypot(e.clientX - d.startX, e.clientY - d.startY) > CLICK_SLOP_PX;
+    }
     function onMove(e: PointerEvent) {
       const d = dragRef.current;
       const h = hit(e.clientX, e.clientY);
       if (!d || !h) return;
       if (d.kind === "create") setDrag({ ...d, currentMin: h.min });
-      else if (d.kind === "move") setDrag({ ...d, dayIdx: h.dayIdx, min: h.min, moved: d.moved || h.dayIdx !== d.originDayIdx || h.min !== d.originMin });
-      else setDrag({ ...d, dayIdx: h.dayIdx, endMin: h.min });
+      else if (d.kind === "move") setDrag({ ...d, dayIdx: h.dayIdx, min: h.min, moved: d.moved || (far(d, e) && (h.dayIdx !== d.originDayIdx || h.min !== d.originMin)) });
+      else setDrag({ ...d, dayIdx: h.dayIdx, endMin: h.min, moved: d.moved || far(d, e) });
     }
     function onUp() {
       const d = dragRef.current;
@@ -149,13 +160,14 @@ export function TimeGrid({ days, occurrences, tasks, workStart, workEnd, workDay
     e.stopPropagation();
     const h = hit(e.clientX, e.clientY);
     if (!h) return;
-    setDrag({ kind: "move", occ, rect: e.currentTarget.getBoundingClientRect(), originDayIdx: dayIdx, originMin: h.min, dayIdx, min: h.min, moved: false });
+    setDrag({ kind: "move", occ, rect: e.currentTarget.getBoundingClientRect(), startX: e.clientX, startY: e.clientY, originDayIdx: dayIdx, originMin: h.min, dayIdx, min: h.min, moved: false });
   }
 
   function startResize(e: ReactPointerEvent, occ: Occurrence, dayIdx: number, endMin: number) {
     if (e.button !== 0) return;
     e.stopPropagation();
-    setDrag({ kind: "resize", occ, dayIdx, endMin });
+    const rect = (e.currentTarget.parentElement ?? e.currentTarget).getBoundingClientRect();
+    setDrag({ kind: "resize", occ, rect, startX: e.clientX, startY: e.clientY, dayIdx, endMin, moved: false });
   }
 
   function ghostFor(dayIdx: number): { startMin: number; endMin: number } | null {
@@ -171,6 +183,7 @@ export function TimeGrid({ days, occurrences, tasks, workStart, workEnd, workDay
       const moved = shiftTimed(start, end, differenceInCalendarDays(days[d.dayIdx], days[d.originDayIdx]), d.min - d.originMin);
       return daySegment({ ...d.occ, start: moved.start.toISOString(), end: moved.end.toISOString() }, days[dayIdx]);
     }
+    if (!d.moved) return null;
     const { start } = occurrenceRange(d.occ);
     return daySegment({ ...d.occ, end: resizedEnd(start, days[d.dayIdx], d.endMin).toISOString() }, days[dayIdx]);
   }
