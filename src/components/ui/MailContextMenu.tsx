@@ -1,7 +1,8 @@
-import { Reply, ReplyAll, Forward, Star, StarOff, Mail as MailIcon, MailOpen, Archive, Trash2, Pin, PinOff, Clock, FolderInput, ClipboardList, ClipboardPlus, Flag, FlagOff, Users, UserMinus, CheckCircle2, RotateCcw } from "lucide-react";
+import { Reply, ReplyAll, Forward, Star, StarOff, Mail as MailIcon, MailOpen, Archive, Trash2, Pin, PinOff, Clock, FolderInput, ClipboardList, ClipboardPlus, CalendarPlus, Flag, FlagOff, Users, UserMinus, CheckCircle2, RotateCcw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { MAIL_FLAG_COLORS, type Mail, type Folder, type MailFlag, type Assignment, type TeamMember } from "../../types";
 import { useAppStore } from "../../stores/appStore";
+import { draftFromMail } from "../../lib/calendar/fromMail";
 import { ContextMenu } from "./ContextMenu";
 import type { MenuEntry } from "../../lib/menuModel";
 import { FLAG_ORDER, bulkFlagAction, commonFlags } from "../../lib/mailFlags";
@@ -174,6 +175,7 @@ export function MailContextMenu({
     { kind: "separator" },
     { kind: "item", id: "createTask", label: t("tasks.createFromMail"), icon: <ClipboardList className="w-4 h-4" />, onSelect: () => onCreateTask(mail) },
     { kind: "item", id: "addToTask", label: t("tasks.addToTask"), icon: <ClipboardPlus className="w-4 h-4" />, onSelect: () => onAddToTask(mail) },
+    { kind: "item", id: "createEvent", label: t("calendar.createFromMail"), icon: <CalendarPlus className="w-4 h-4" />, onSelect: () => useAppStore.getState().openNewEvent(draftFromMail(mail)) },
     { kind: "separator" },
     { kind: "item", id: "star", label: mail.is_starred ? t("mailDetail.unstar") : t("mailDetail.star"), icon: mail.is_starred ? <StarOff className="w-4 h-4" /> : <Star className="w-4 h-4" />, onSelect: () => onToggleStar(mail) },
     ...(onToggleFlag
