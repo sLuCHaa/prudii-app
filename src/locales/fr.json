@@ -659,6 +659,7 @@
     "attachments": "Pièces jointes",
     "attachmentsHint": "(peut être volumineux)",
     "includeTasks": "Tâches",
+    "includeCalendar": "Calendrier",
     "includeCredentials": "Identifiants de compte (chiffrés)",
     "credentialsHint": "Les mots de passe et jetons sont chiffrés avec ta phrase secrète. Sans elle, ils ne peuvent pas être restaurés.",
     "passphrase": "Phrase secrète",

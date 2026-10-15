@@ -244,6 +244,7 @@ export interface BackupOptions {
   include_attachments: boolean;
   // Optional so callers built before this option existed still type-check.
   include_tasks?: boolean;
+  include_calendar?: boolean;
   include_credentials?: boolean;
   passphrase?: string;
 }
@@ -259,7 +260,7 @@ export interface BackupManifest {
   version: number;
   schema_version: number;
   created_at: string;
-  includes: { app_settings: boolean; accounts: boolean; folders: boolean; mails: boolean; attachments: boolean; tasks: boolean; credentials: boolean };
+  includes: { app_settings: boolean; accounts: boolean; folders: boolean; mails: boolean; attachments: boolean; tasks: boolean; calendar?: boolean; credentials: boolean };
   stats: { account_count: number; folder_count: number; mail_count: number; attachment_count: number; task_count: number };
 }
 

@@ -659,6 +659,7 @@
     "attachments": "Adjuntos",
     "attachmentsHint": "(puede ser grande)",
     "includeTasks": "Tareas",
+    "includeCalendar": "Calendario",
     "includeCredentials": "Credenciales de cuenta (cifradas)",
     "credentialsHint": "Las contraseñas y tokens se cifran con tu frase de contraseña. Sin ella no se pueden restaurar.",
     "passphrase": "Frase de contraseña",

@@ -659,6 +659,7 @@
     "attachments": "Anexos",
     "attachmentsHint": "(pode ser grande)",
     "includeTasks": "Tarefas",
+    "includeCalendar": "Calendário",
     "includeCredentials": "Credenciais da conta (criptografadas)",
     "credentialsHint": "Senhas e tokens são criptografados com sua frase secreta. Sem ela, não podem ser restaurados.",
     "passphrase": "Frase secreta",

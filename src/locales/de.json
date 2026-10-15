@@ -659,6 +659,7 @@
     "attachments": "Anhänge",
     "attachmentsHint": "(kann groß sein)",
     "includeTasks": "Aufgaben",
+    "includeCalendar": "Kalender",
     "includeCredentials": "Konto-Zugangsdaten (verschlüsselt)",
     "credentialsHint": "Passwörter und Tokens werden mit deiner Passphrase verschlüsselt. Ohne sie können sie nicht wiederhergestellt werden.",
     "passphrase": "Passphrase",

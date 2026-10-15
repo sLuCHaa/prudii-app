@@ -35,7 +35,8 @@ export function hasBackupCategory(options: BackupOptions): boolean {
     options.include_folders ||
     options.include_mails ||
     options.include_attachments ||
-    options.include_tasks === true
+    options.include_tasks === true ||
+    options.include_calendar === true
   );
 }
 

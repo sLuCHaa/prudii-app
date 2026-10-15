@@ -25,6 +25,7 @@ export function BackupExportWindow() {
     include_mails: true,
     include_attachments: false,
     include_tasks: true,
+    include_calendar: true,
     include_credentials: false,
   });
   const [passphrase, setPassphrase] = useState("");

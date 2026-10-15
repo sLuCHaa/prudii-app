@@ -658,6 +658,7 @@
     "attachments": "附件",
     "attachmentsHint": "（可能较大）",
     "includeTasks": "任务",
+    "includeCalendar": "日历",
     "includeCredentials": "账户凭据（已加密）",
     "credentialsHint": "密码和令牌使用您的密码短语加密。没有它将无法恢复。",
     "passphrase": "密码短语",

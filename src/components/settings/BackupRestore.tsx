@@ -19,6 +19,7 @@ export function BackupRestore() {
     include_mails: true,
     include_attachments: false,
     include_tasks: true,
+    include_calendar: true,
     include_credentials: false,
   });
   const [passphrase, setPassphrase] = useState("");
@@ -254,6 +255,7 @@ export function BackupRestore() {
                     preview.manifest.includes.mails && t("backup.emails"),
                     preview.manifest.includes.attachments && t("backup.attachments"),
                     preview.manifest.includes.tasks && t("backup.includeTasks"),
+                    preview.manifest.includes.calendar && t("backup.includeCalendar"),
                     preview.manifest.includes.credentials && t("backup.includeCredentials"),
                   ].filter(Boolean).join(", ")}
                 </span>

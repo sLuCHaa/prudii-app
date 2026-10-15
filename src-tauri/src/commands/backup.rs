@@ -134,6 +134,7 @@ pub async fn create_backup(
         && !options.include_mails
         && !options.include_attachments
         && !options.include_tasks
+        && !options.include_calendar
     {
         return Err(NOTHING_SELECTED_KEY.into());
     }
@@ -231,6 +232,7 @@ fn do_create_backup_inner(
     if options.include_mails { total_steps += 2; } // mails + drafts
     if options.include_attachments { total_steps += 1; }
     if options.include_tasks { total_steps += 1; }
+    if options.include_calendar { total_steps += 1; }
 
     let mut current_step: u32 = 0;
 
@@ -252,6 +254,7 @@ fn do_create_backup_inner(
         mail_count: 0,
         attachment_count: 0,
         task_count: 0,
+        event_count: 0,
     };
 
     if options.include_settings {
@@ -712,6 +715,18 @@ fn do_create_backup_inner(
         stats.task_count = export_tasks(&db, &mut zip, data_dir, &zip_options)? as u64;
     }
 
+    if options.include_calendar {
+        current_step += 1;
+        emit_backup_progress(app, &BackupProgress {
+            status: "exporting_calendar".into(),
+            message: "Exporting calendar...".into(),
+            current_step,
+            total_steps,
+        });
+
+        stats.event_count = export_calendar(&db, &mut zip, &zip_options)? as u64;
+    }
+
     current_step += 1;
     emit_backup_progress(app, &BackupProgress {
         status: "exporting_manifest".into(),
@@ -731,6 +746,7 @@ fn do_create_backup_inner(
             mails: options.include_mails,
             attachments: options.include_attachments,
             tasks: options.include_tasks,
+            calendar: options.include_calendar,
             credentials: options.include_credentials,
         },
         stats,
@@ -1046,6 +1062,119 @@ pub(crate) fn extract_task_files<R: Read + Seek>(
     Ok(())
 }
 
+const CALENDAR_COLUMNS: &[&str] = &[
+    "id", "name", "color", "is_default", "visible", "sort_order", "source", "account_id", "remote_id", "sync_token", "created_at", "updated_at",
+];
+const EVENT_COLUMNS: &[&str] = &[
+    "id", "calendar_id", "uid", "recurrence_id", "title", "description", "location", "all_day", "dtstart", "dtend", "tzid",
+    "start_utc", "range_end_utc", "rrule", "exdates", "rdates", "status", "transparency", "sequence", "organizer_email",
+    "organizer_name", "is_organizer", "my_partstat", "account_id", "ical_raw", "etag", "remote_href", "created_at", "updated_at",
+];
+const ALARM_COLUMNS: &[&str] = &["id", "event_id", "minutes_before"];
+const ATTENDEE_COLUMNS: &[&str] = &["event_id", "email", "name", "role", "partstat", "rsvp", "comment", "updated_at"];
+
+fn table_json(conn: &rusqlite::Connection, table: &str, columns: &[&str]) -> Result<Vec<serde_json::Value>, String> {
+    let sql = format!("SELECT {} FROM {}", columns.join(", "), table);
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            let mut obj = serde_json::Map::new();
+            for (i, name) in columns.iter().enumerate() {
+                let value = match row.get_ref(i)? {
+                    rusqlite::types::ValueRef::Null | rusqlite::types::ValueRef::Blob(_) => serde_json::Value::Null,
+                    rusqlite::types::ValueRef::Integer(n) => n.into(),
+                    rusqlite::types::ValueRef::Real(f) => serde_json::json!(f),
+                    rusqlite::types::ValueRef::Text(t) => String::from_utf8_lossy(t).into_owned().into(),
+                };
+                obj.insert((*name).to_string(), value);
+            }
+            Ok(serde_json::Value::Object(obj))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(rows)
+}
+
+fn json_to_sql(v: Option<&serde_json::Value>) -> rusqlite::types::Value {
+    use rusqlite::types::Value;
+    match v {
+        None | Some(serde_json::Value::Null) => Value::Null,
+        Some(serde_json::Value::Bool(b)) => Value::Integer(*b as i64),
+        Some(serde_json::Value::Number(n)) => n.as_i64().map(Value::Integer).unwrap_or_else(|| Value::Real(n.as_f64().unwrap_or(0.0))),
+        Some(serde_json::Value::String(s)) => Value::Text(s.clone()),
+        Some(other) => Value::Text(other.to_string()),
+    }
+}
+
+fn insert_json_rows(conn: &rusqlite::Connection, table: &str, columns: &[&str], rows: &[serde_json::Value], insert_or: &str) -> Result<(), String> {
+    let placeholders = (1..=columns.len()).map(|i| format!("?{}", i)).collect::<Vec<_>>().join(",");
+    let sql = format!("{} INTO {} ({}) VALUES ({})", insert_or, table, columns.join(","), placeholders);
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    for row in rows {
+        let values: Vec<rusqlite::types::Value> = columns.iter().map(|c| json_to_sql(row.get(*c))).collect();
+        stmt.execute(rusqlite::params_from_iter(values.iter())).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Writes the four calendar tables. The reminder log stays behind: it only
+/// suppresses repeat toasts on this machine.
+pub(crate) fn export_calendar<W: Write + Seek>(
+    db: &Database,
+    zip: &mut zip::ZipWriter<W>,
+    opts: &zip::write::SimpleFileOptions,
+) -> Result<i64, String> {
+    let tables = {
+        let conn = db.lock_db();
+        [
+            ("calendars.json", table_json(&conn, "calendars", CALENDAR_COLUMNS)?),
+            ("events.json", table_json(&conn, "events", EVENT_COLUMNS)?),
+            ("event_alarms.json", table_json(&conn, "event_alarms", ALARM_COLUMNS)?),
+            ("event_attendees.json", table_json(&conn, "event_attendees", ATTENDEE_COLUMNS)?),
+        ]
+    };
+    let event_count = tables[1].1.len() as i64;
+    for (name, rows) in &tables {
+        let json = serde_json::to_string_pretty(rows).map_err(|e| e.to_string())?;
+        zip.start_file(*name, *opts).map_err(|e| e.to_string())?;
+        zip.write_all(json.as_bytes()).map_err(|e| e.to_string())?;
+    }
+    Ok(event_count)
+}
+
+/// Inserts the calendar tables in FK order, in one transaction; returns the event count.
+pub(crate) fn import_calendar_rows<R: Read + Seek>(
+    conn: &rusqlite::Connection,
+    archive: &mut zip::ZipArchive<R>,
+    is_replace: bool,
+) -> Result<i64, String> {
+    let insert_or = if is_replace { "INSERT OR REPLACE" } else { "INSERT OR IGNORE" };
+    let mut parsed = Vec::new();
+    for name in ["calendars.json", "events.json", "event_alarms.json", "event_attendees.json"] {
+        let rows: Vec<serde_json::Value> = match read_zip_json(archive, name)? {
+            Some(s) => serde_json::from_str(&s).map_err(|e| e.to_string())?,
+            None => Vec::new(),
+        };
+        parsed.push(rows);
+    }
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+    insert_json_rows(&tx, "calendars", CALENDAR_COLUMNS, &parsed[0], insert_or)?;
+    insert_json_rows(&tx, "events", EVENT_COLUMNS, &parsed[1], insert_or)?;
+    insert_json_rows(&tx, "event_alarms", ALARM_COLUMNS, &parsed[2], insert_or)?;
+    insert_json_rows(&tx, "event_attendees", ATTENDEE_COLUMNS, &parsed[3], insert_or)?;
+    // A merge can bring a second default calendar along; the first one wins.
+    tx.execute(
+        "UPDATE calendars SET is_default = CASE WHEN id = (
+            SELECT id FROM calendars ORDER BY is_default DESC, sort_order, created_at LIMIT 1
+         ) THEN 1 ELSE 0 END",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(parsed[1].len() as i64)
+}
+
 /// Emitted instead of raw error text so the UI can translate the two failures the
 /// user can actually act on. Both paths pass `backup.`-prefixed errors through verbatim.
 const WRONG_PASSPHRASE_KEY: &str = "backup.wrongPassphrase";
@@ -1277,11 +1406,13 @@ fn do_restore_backup_inner(
     if manifest.includes.mails { total_steps += 2; } // mails + FTS rebuild
     if manifest.includes.attachments { total_steps += 1; }
     if manifest.includes.tasks { total_steps += 1; }
+    if manifest.includes.calendar { total_steps += 1; }
     let mut current_step: u32 = 0;
 
     let mut accounts_needing_passwords: Vec<String> = Vec::new();
     let mut imported_account_ids: Vec<String> = Vec::new();
     let mut tasks_imported: i64 = 0;
+    let mut events_imported: i64 = 0;
 
     // Decrypted up front: a wrong passphrase must abort before the first table is written.
     let credentials = match passphrase {
@@ -1783,6 +1914,21 @@ fn do_restore_backup_inner(
         extract_task_files(&mut archive, &data_dir, &files)?;
     }
 
+    if manifest.includes.calendar {
+        current_step += 1;
+        emit_restore_progress(app, &BackupProgress {
+            status: "restoring_calendar".into(),
+            message: "Restoring calendar...".into(),
+            current_step,
+            total_steps,
+        });
+
+        events_imported = {
+            let conn = db.lock_db();
+            import_calendar_rows(&conn, &mut archive, is_replace)?
+        };
+    }
+
     if !accounts_needing_passwords.is_empty() {
         let _ = app.emit("restore-needs-passwords", serde_json::json!({
             "emails": accounts_needing_passwords,
@@ -1791,6 +1937,10 @@ fn do_restore_backup_inner(
 
     if tasks_imported > 0 {
         let _ = app.emit("tasks-changed", ());
+    }
+
+    if events_imported > 0 || manifest.includes.calendar {
+        let _ = app.emit("calendar-changed", ());
     }
 
     emit_restore_progress(app, &BackupProgress {
@@ -2148,5 +2298,69 @@ mod credentials_roundtrip {
 
         let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
         assert!(read_credentials(&mut archive, PASSPHRASE).unwrap().is_none());
+    }
+}
+
+#[cfg(test)]
+mod calendar_roundtrip {
+    use super::*;
+    use crate::calendar::store::{get_event_impl, list_calendars_impl, list_occurrences_impl};
+    use std::io::Cursor;
+
+    fn temp_db() -> Database {
+        Database::new(std::env::temp_dir().join(format!("prudii-test-{}", uuid::Uuid::new_v4()))).unwrap()
+    }
+
+    fn seed(db: &Database) -> String {
+        let cal = list_calendars_impl(db, "Work").unwrap().remove(0).id;
+        let conn = db.lock_db();
+        conn.execute(
+            "INSERT INTO events (id, calendar_id, uid, title, dtstart, dtend, tzid, start_utc, range_end_utc, rrule)
+             VALUES ('ev1', ?1, 'uid1@prudii', 'Standup', '2026-10-05T09:00:00', '2026-10-05T09:15:00', 'Europe/Berlin',
+                     '2026-10-05T07:00:00Z', NULL, 'FREQ=DAILY')",
+            rusqlite::params![cal],
+        )
+        .unwrap();
+        conn.execute("INSERT INTO event_alarms (id, event_id, minutes_before) VALUES ('al1', 'ev1', 5)", []).unwrap();
+        conn.execute("INSERT INTO event_attendees (event_id, email, name) VALUES ('ev1', 'sam@example.com', 'Sam')", []).unwrap();
+        cal
+    }
+
+    fn export(db: &Database) -> (i64, Vec<u8>) {
+        let opts = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        let n = export_calendar(db, &mut zip, &opts).unwrap();
+        (n, zip.finish().unwrap().into_inner())
+    }
+
+    #[test]
+    fn export_then_import_restores_calendars_events_alarms_and_attendees() {
+        let db_a = temp_db();
+        seed(&db_a);
+        let (count, bytes) = export(&db_a);
+        assert_eq!(count, 1);
+
+        let db_b = temp_db();
+        let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+        let imported = import_calendar_rows(&db_b.lock_db(), &mut archive, false).unwrap();
+        assert_eq!(imported, 1);
+        let detail = get_event_impl(&db_b, "ev1").unwrap();
+        assert_eq!(detail.alarms, vec![5]);
+        assert_eq!(detail.attendees[0].email, "sam@example.com");
+        assert_eq!(list_occurrences_impl(&db_b, "2026-10-06T00:00:00Z", "2026-10-08T00:00:00Z", None).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn merging_into_a_machine_with_its_own_calendar_keeps_one_default() {
+        let db_a = temp_db();
+        seed(&db_a);
+        let (_, bytes) = export(&db_a);
+        let db_b = temp_db();
+        list_calendars_impl(&db_b, "Mine").unwrap();
+        let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+        import_calendar_rows(&db_b.lock_db(), &mut archive, false).unwrap();
+        let calendars = list_calendars_impl(&db_b, "").unwrap();
+        assert_eq!(calendars.len(), 2);
+        assert_eq!(calendars.iter().filter(|c| c.is_default).count(), 1);
     }
 }

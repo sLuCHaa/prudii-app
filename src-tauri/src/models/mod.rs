@@ -228,6 +228,8 @@ pub struct BackupOptions {
     #[serde(default)]
     pub include_tasks: bool,
     #[serde(default)]
+    pub include_calendar: bool,
+    #[serde(default)]
     pub include_credentials: bool,
     #[serde(default)]
     pub passphrase: Option<String>,
@@ -243,6 +245,7 @@ impl std::fmt::Debug for BackupOptions {
             .field("include_mails", &self.include_mails)
             .field("include_attachments", &self.include_attachments)
             .field("include_tasks", &self.include_tasks)
+            .field("include_calendar", &self.include_calendar)
             .field("include_credentials", &self.include_credentials)
             .field("passphrase", &self.passphrase.as_ref().map(|_| "<redacted>"))
             .finish()
@@ -276,6 +279,8 @@ pub struct BackupIncludes {
     #[serde(default)]
     pub tasks: bool,
     #[serde(default)]
+    pub calendar: bool,
+    #[serde(default)]
     pub credentials: bool,
 }
 
@@ -287,6 +292,8 @@ pub struct BackupStats {
     pub attachment_count: u64,
     #[serde(default)]
     pub task_count: u64,
+    #[serde(default)]
+    pub event_count: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

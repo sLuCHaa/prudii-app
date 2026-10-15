@@ -9,6 +9,7 @@ const baseOptions: BackupOptions = {
   include_mails: true,
   include_attachments: false,
   include_tasks: true,
+  include_calendar: true,
   include_credentials: false,
 };
 
@@ -55,11 +56,16 @@ describe("hasBackupCategory", () => {
     include_mails: false,
     include_attachments: false,
     include_tasks: false,
+    include_calendar: false,
     include_credentials: false,
   };
 
   it("accepts a tasks-only backup", () => {
     expect(hasBackupCategory({ ...nothing, include_tasks: true })).toBe(true);
+  });
+
+  it("accepts a calendar-only backup", () => {
+    expect(hasBackupCategory({ ...nothing, include_calendar: true })).toBe(true);
   });
 
   it("rejects an empty selection", () => {

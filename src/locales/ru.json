@@ -663,6 +663,7 @@
     "attachments": "Вложения",
     "attachmentsHint": "(может быть большим)",
     "includeTasks": "Задачи",
+    "includeCalendar": "Календарь",
     "includeCredentials": "Учётные данные аккаунта (зашифровано)",
     "credentialsHint": "Пароли и токены шифруются вашей парольной фразой. Без неё их нельзя восстановить.",
     "passphrase": "Парольная фраза",

@@ -659,6 +659,7 @@
     "attachments": "Attachments",
     "attachmentsHint": "(can be large)",
     "includeTasks": "Tasks",
+    "includeCalendar": "Calendar",
     "includeCredentials": "Account credentials (encrypted)",
     "credentialsHint": "Passwords and tokens are encrypted with your passphrase. Without it they cannot be restored.",
     "passphrase": "Passphrase",

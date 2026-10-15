@@ -1,4 +1,4 @@
-import { Settings2, HardDrive, Folder, Mail, Paperclip, ListChecks, KeyRound } from "lucide-react";
+import { Settings2, HardDrive, Folder, Mail, Paperclip, ListChecks, CalendarDays, KeyRound } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { BackupOptions } from "../../types";
 import type { ValidateBackupOptionsResult } from "../../lib/backupOptions";
@@ -13,6 +13,7 @@ const BACKUP_ITEMS: { key: BackupToggleKey; icon: typeof Settings2; labelKey: st
   { key: "include_mails", icon: Mail, labelKey: "backup.emails" },
   { key: "include_attachments", icon: Paperclip, labelKey: "backup.attachments", hintKey: "backup.attachmentsHint" },
   { key: "include_tasks", icon: ListChecks, labelKey: "backup.includeTasks" },
+  { key: "include_calendar", icon: CalendarDays, labelKey: "backup.includeCalendar" },
   { key: "include_credentials", icon: KeyRound, labelKey: "backup.includeCredentials", hintKey: "backup.credentialsHint" },
 ];
 
