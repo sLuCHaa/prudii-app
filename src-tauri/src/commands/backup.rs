@@ -1,3 +1,4 @@
+use crate::calendar::store::{is_valid_color, DEFAULT_COLOR};
 use crate::credentials::SecretStore;
 use crate::db::Database;
 use crate::models::{BackupIncludes, BackupManifest, BackupOptions, BackupProgress, BackupStats, RestorePreview};
@@ -1165,6 +1166,12 @@ pub(crate) fn import_calendar_rows<R: Read + Seek>(
             None => Vec::new(),
         };
         parsed.push(rows);
+    }
+    // Colors end up in inline styles; a crafted backup must not inject CSS.
+    for cal in parsed[0].iter_mut().filter_map(|c| c.as_object_mut()) {
+        if !cal.get("color").and_then(|c| c.as_str()).is_some_and(is_valid_color) {
+            cal.insert("color".into(), DEFAULT_COLOR.into());
+        }
     }
     let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
     insert_json_rows(&tx, "calendars", CALENDAR_COLUMNS, &parsed[0], insert_or)?;
@@ -2398,6 +2405,17 @@ mod calendar_roundtrip {
         import_calendar_rows(&db_b.lock_db(), &mut archive, false).unwrap();
         assert_eq!(get_event_impl(&db_b, "local").unwrap().alarms, vec![30]);
         assert!(get_event_impl(&db_b, "ev1").is_err());
+    }
+
+    #[test]
+    fn restored_calendars_only_keep_hex_colors() {
+        let db_a = temp_db();
+        let cal = seed(&db_a);
+        db_a.lock_db().execute("UPDATE calendars SET color = 'url(https://x)' WHERE id = ?1", rusqlite::params![cal]).unwrap();
+        let (_, bytes) = export(&db_a);
+        let db_b = temp_db();
+        import_calendar_rows(&db_b.lock_db(), &mut zip::ZipArchive::new(Cursor::new(bytes)).unwrap(), false).unwrap();
+        assert_eq!(list_calendars_impl(&db_b, "").unwrap()[0].color, "#3b82f6");
     }
 
     #[test]

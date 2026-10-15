@@ -55,7 +55,7 @@ fn ensure_calendar(conn: &Connection, id: &str) -> Result<(), String> {
     fetch_calendar(conn, id).map(|_| ())
 }
 
-fn is_valid_color(c: &str) -> bool {
+pub(crate) fn is_valid_color(c: &str) -> bool {
     c.len() == 7 && c.starts_with('#') && c[1..].chars().all(|ch| ch.is_ascii_hexdigit())
 }
 
