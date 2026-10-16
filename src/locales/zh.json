@@ -1271,6 +1271,16 @@
     "noMatchesDesc": "没有任务符合你的搜索或筛选。",
     "clearFilters": "清除筛选"
   },
+  "updateBanner": {
+    "title": "有可用更新",
+    "subtitle": "新功能和问题修复",
+    "later": "稍后",
+    "install": "立即更新",
+    "loading": "正在下载更新 · {{pct}}%",
+    "verifying": "正在验证…",
+    "restarting": "更新已验证 · Prudii 正在重启…",
+    "retry": "重试"
+  },
   "whatsNew": {
     "title": "Prudii {{version}} 新功能",
     "subtitle": "自上次更新以来的新变化。",

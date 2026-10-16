@@ -1272,6 +1272,16 @@
     "noMatchesDesc": "Ninguna tarea coincide con tu búsqueda o filtro.",
     "clearFilters": "Borrar filtros"
   },
+  "updateBanner": {
+    "title": "Hay una actualización lista",
+    "subtitle": "Nuevas funciones y correcciones",
+    "later": "Más tarde",
+    "install": "Actualizar ahora",
+    "loading": "Descargando actualización · {{pct}} %",
+    "verifying": "Verificando …",
+    "restarting": "Actualización verificada · Prudii se reinicia …",
+    "retry": "Reintentar"
+  },
   "whatsNew": {
     "title": "Novedades de Prudii {{version}}",
     "subtitle": "Esto es lo que ha cambiado desde tu última actualización.",

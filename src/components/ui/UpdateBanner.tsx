@@ -1,22 +1,26 @@
 import { useState } from "react";
-import { ArrowUpCircle, Download, X, Loader2, CheckCircle, ShieldAlert } from "lucide-react";
+import { ArrowUp, Check, ShieldAlert } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";
 import { installUpdate } from "../../lib/updater";
+import { bannerView, type UpdatePhase } from "../../lib/updateBanner";
 import { Button } from "./Button";
 
-type Phase = "idle" | "downloading" | "verifying" | "ready" | "error";
+const TONE_TILE = {
+  accent: "bg-accent text-white",
+  success: "bg-success text-white",
+  danger: "bg-danger text-white",
+} as const;
 
 /**
- * Non-blocking top banner shown when `checkForUpdate` found a newer release
- * (stored in `updateAvailable`). Lets the user download & install in place, or
- * dismiss for the session — it reappears on the next launch while still pending.
+ * Shown when `checkForUpdate` found a newer release. "Later" hides it for this
+ * session; it returns on the next launch while the update is still pending.
  */
 export function UpdateBanner() {
   const { t } = useTranslation();
   const updateAvailable = useAppStore((s) => s.updateAvailable);
   const [dismissed, setDismissed] = useState(false);
-  const [phase, setPhase] = useState<Phase>("idle");
+  const [phase, setPhase] = useState<UpdatePhase>("idle");
   const [progressPct, setProgressPct] = useState(0);
 
   if (!updateAvailable || dismissed) return null;
@@ -36,44 +40,54 @@ export function UpdateBanner() {
     }
   }
 
-  const busy = phase === "downloading" || phase === "verifying" || phase === "ready";
+  const view = bannerView(phase, progressPct);
+  const Icon = view.tone === "danger" ? ShieldAlert : view.tone === "success" ? Check : ArrowUp;
 
   return (
-    <div className="shrink-0 flex items-center gap-3 px-4 py-2 bg-accent-soft border-b border-accent/30">
-      {phase === "error" ? (
-        <ShieldAlert className="w-4 h-4 text-danger shrink-0" />
-      ) : phase === "ready" ? (
-        <CheckCircle className="w-4 h-4 text-success shrink-0" />
-      ) : busy ? (
-        <Loader2 className="w-4 h-4 text-accent shrink-0 animate-spin" />
-      ) : (
-        <ArrowUpCircle className="w-4 h-4 text-accent shrink-0" />
-      )}
-
-      <span className="text-sm text-text truncate">
-        {phase === "downloading" && `${t("settings.update.downloading")} ${progressPct}%`}
-        {phase === "verifying" && t("settings.update.verifying")}
-        {phase === "ready" && t("settings.update.verified")}
-        {phase === "error" && t("settings.update.checksumError")}
-        {phase === "idle" && t("settings.update.available", { version: updateAvailable.version })}
+    <div
+      role="status"
+      className="relative shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1.5 bg-surface border-b border-border"
+      style={{ backgroundImage: "linear-gradient(90deg, var(--color-accent-soft), transparent 70%)" }}
+    >
+      <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${TONE_TILE[view.tone]}`}>
+        <Icon className="h-3.5 w-3.5" strokeWidth={2.4} />
       </span>
 
-      <div className="flex items-center gap-2 ml-auto shrink-0">
-        {(phase === "idle" || phase === "error") && (
-          <Button variant="primary" size="sm" icon={<Download />} onClick={handleUpdate}>
-            {t("settings.update.downloadButton")}
-          </Button>
-        )}
-        {!busy && (
-          <button
-            onClick={() => setDismissed(true)}
-            aria-label={t("common.close", { defaultValue: "Close" })}
-            className="p-1 rounded hover:bg-hover text-text-tertiary"
-          >
-            <X className="w-4 h-4" />
-          </button>
+      <div className="flex min-w-0 flex-1 items-baseline gap-2">
+        <span
+          title={t(view.titleKey, { pct: view.pct ?? 0 })}
+          className={`truncate text-[13px] font-semibold ${view.tone === "danger" ? "text-danger" : "text-text"}`}
+        >
+          {t(view.titleKey, { pct: view.pct ?? 0 })}
+        </span>
+        {view.showDetails && (
+          <>
+            <span className="shrink-0 rounded-full bg-accent-soft px-2 text-[11px] font-bold tabular-nums text-accent">
+              {updateAvailable.version}
+            </span>
+            <span className="hidden truncate text-xs text-text-secondary md:inline">{t("updateBanner.subtitle")}</span>
+          </>
         )}
       </div>
+
+      {view.actions !== "none" && (
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          <Button variant="ghost" size="sm" onClick={() => setDismissed(true)}>
+            {t("updateBanner.later")}
+          </Button>
+          <Button variant="primary" size="sm" onClick={handleUpdate}>
+            {t(view.actions === "retry" ? "updateBanner.retry" : "updateBanner.install")}
+          </Button>
+        </div>
+      )}
+
+      {view.pct !== null && (
+        <span
+          aria-hidden="true"
+          className="absolute -bottom-px left-0 h-0.5 bg-accent transition-[width] duration-200 ease-linear motion-reduce:transition-none"
+          style={{ width: `${view.pct}%` }}
+        />
+      )}
     </div>
   );
 }

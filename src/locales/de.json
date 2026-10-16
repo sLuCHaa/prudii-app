@@ -1272,6 +1272,16 @@
     "noMatchesDesc": "Keine Aufgabe passt zu deiner Suche oder deinem Filter.",
     "clearFilters": "Filter zurücksetzen"
   },
+  "updateBanner": {
+    "title": "Ein Update ist bereit",
+    "subtitle": "Neue Funktionen und Fehlerbehebungen",
+    "later": "Später",
+    "install": "Jetzt aktualisieren",
+    "loading": "Update wird geladen · {{pct}} %",
+    "verifying": "Wird geprüft …",
+    "restarting": "Update geprüft · Prudii startet neu …",
+    "retry": "Erneut versuchen"
+  },
   "whatsNew": {
     "title": "Neu in Prudii {{version}}",
     "subtitle": "Das hat sich seit deinem letzten Update getan.",
