@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { BundleImportResult, Calendar, CalendarPatch, CalendarSettings, EditScope, EventDetail, EventInput, EventPatch, EventTimes, ImportResult, Occurrence, SubscribeResult } from "../types/calendar";
+import type { BundleImportResult, Calendar, CalendarPatch, CalendarSettings, EditScope, EventDetail, EventInput, EventPatch, EventTimes, ImportResult, InvitationView, Occurrence, RespondInvitationArgs, SubscribeResult } from "../types/calendar";
 import type { Account, AiResponse, Assignment, Attachment, AttachmentWithContext, AppConfig, AppSettings, BackupOptions, BulkSaveResult, ChecklistItem, Contact, CreateAccountRequest, CreateRuleRequest, CreateTaskInput, EmailTemplate, Folder, InboxSplit, LicenseInfo, Mail, MailRule, OAuthResult, OllamaStatus, RestorePreview, ScheduledMail, SearchResult, SendMailRequest, SieveSupport, Task, TaskAttachment, TaskDetail, TaskStatus, TeamSnapshot, UnsubscribeResult, UpdateTaskPatch, VacationSettings, VacationState } from "../types";
 import { prefers24HourClock } from "./localeDefaults";
 
@@ -809,6 +809,22 @@ export async function updateCalendarSettings(settings: CalendarSettings): Promis
 }
 
 /** Opens the native file picker; null when the user cancels. */
+export async function getMailInvitation(mailId: string): Promise<InvitationView | null> {
+  return invoke("get_mail_invitation", { mailId });
+}
+
+export async function respondInvitation(args: RespondInvitationArgs): Promise<void> {
+  return invoke("respond_invitation", { ...args });
+}
+
+export async function addPublishedEvent(mailId: string, calendarId: string): Promise<ImportResult> {
+  return invoke("add_published_event", { mailId, calendarId });
+}
+
+export async function removeCancelledEvent(mailId: string): Promise<void> {
+  return invoke("remove_cancelled_event", { mailId });
+}
+
 export async function importIcs(calendarId: string): Promise<ImportResult | null> {
   return invoke("import_ics", { calendarId });
 }

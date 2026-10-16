@@ -111,7 +111,7 @@ export function viewTitle(
   return labels.week(weekNumber(days[0], weekStart), fmt.formatRange(days[0], days[days.length - 1]));
 }
 
-export function occurrenceRange(o: Occurrence): { start: Date; end: Date } {
+export function occurrenceRange(o: Pick<Occurrence, "all_day" | "start" | "end">): { start: Date; end: Date } {
   if (o.all_day) return { start: parseIsoDate(o.start), end: parseIsoDate(o.end) };
   return { start: new Date(o.start), end: new Date(o.end) };
 }

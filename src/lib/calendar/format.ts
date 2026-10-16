@@ -11,12 +11,17 @@ export const DEFAULT_SETTINGS: CalendarSettings = {
   work_days: [1, 2, 3, 4, 5],
 };
 
-export function formatOccurrenceTime(o: Occurrence, use24h: boolean, allDayLabel: string): string {
+export function formatOccurrenceTime(o: Pick<Occurrence, "all_day" | "start" | "end">, use24h: boolean, allDayLabel: string): string {
   if (o.all_day) return allDayLabel;
   const { start, end } = occurrenceRange(o);
   if (isSameDay(start, end)) return `${formatTime(start, use24h)} – ${formatTime(end, use24h)}`;
   const day = (d: Date) => format(d, "d MMM", { locale: dateLocale() });
   return `${day(start)}, ${formatTime(start, use24h)} – ${day(end)}, ${formatTime(end, use24h)}`;
+}
+
+export function formatSpan(span: Pick<Occurrence, "all_day" | "start" | "end">, use24h: boolean, allDayLabel: string): string {
+  const { start } = occurrenceRange(span);
+  return `${format(start, "EEE d MMM", { locale: dateLocale() })}, ${formatOccurrenceTime(span, use24h, allDayLabel)}`;
 }
 
 /** New-event times: the next full hour today, 09:00 on any other day. */

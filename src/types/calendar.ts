@@ -172,3 +172,57 @@ export interface BundleImportResult {
   calendars: BundleCalendarResult[];
   failed: BundleFailure[];
 }
+
+/** Timed: UTC instants; all-day: dates, end exclusive. */
+export interface TimeSpan {
+  all_day: boolean;
+  start: string;
+  end: string;
+}
+
+export interface InviteChanges {
+  time: { old: TimeSpan; new: TimeSpan } | null;
+  location: { old: string; new: string } | null;
+  title: { old: string; new: string } | null;
+}
+
+export type InviteAnswer = "accepted" | "tentative" | "declined";
+
+export interface InvitationView {
+  mail_id: string;
+  method: string;
+  uid: string;
+  recurrence_id: string | null;
+  title: string;
+  location: string;
+  description: string;
+  when: TimeSpan;
+  tzid: string | null;
+  rrule: string | null;
+  organizer_name: string | null;
+  organizer_email: string | null;
+  attendee_count: number;
+  meeting_link: string | null;
+  organizer_is_me: boolean;
+  my_partstat: string | null;
+  rsvp: boolean;
+  event_id: string | null;
+  calendar_id: string | null;
+  stored_status: string | null;
+  outdated: boolean;
+  updated: boolean;
+  changes: InviteChanges;
+  conflicts: string[];
+  conflict_count: number;
+  event_count: number;
+}
+
+export interface RespondInvitationArgs {
+  mailId: string;
+  partstat: InviteAnswer;
+  calendarId: string;
+  sendReply: boolean;
+  comment: string | null;
+  replySubject: string;
+  replyBody: string;
+}

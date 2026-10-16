@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { defaultDraftTimes, DEFAULT_SETTINGS, formatOccurrenceTime } from "./format";
+import { defaultDraftTimes, DEFAULT_SETTINGS, formatOccurrenceTime, formatSpan } from "./format";
 import type { Occurrence } from "../../types/calendar";
 
 const base: Occurrence = {
@@ -26,5 +26,13 @@ describe("defaultDraftTimes", () => {
     const other = defaultDraftTimes(new Date(2030, 0, 2), DEFAULT_SETTINGS);
     expect(new Date(other.start).getHours()).toBe(9);
     expect(defaultDraftTimes(new Date(2030, 0, 2), DEFAULT_SETTINGS, true)).toEqual({ all_day: true, start: "2030-01-02", end: "2030-01-03" });
+  });
+});
+
+describe("formatSpan", () => {
+  it("prefixes the day", () => {
+    const span = { all_day: false, start: new Date(2026, 9, 20, 9).toISOString(), end: new Date(2026, 9, 20, 10).toISOString() };
+    expect(formatSpan(span, true, "All day")).toBe("Tue 20 Oct, 09:00 – 10:00");
+    expect(formatSpan({ all_day: true, start: "2026-10-20", end: "2026-10-21" }, true, "All day")).toBe("Tue 20 Oct, All day");
   });
 });

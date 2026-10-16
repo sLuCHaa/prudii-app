@@ -1,15 +1,15 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
-  countTodayOccurrences, createCalendar, createEvent, deleteCalendar, deleteEvent, exportIcs, getCalendarSettings, getEvent,
-  importCalendarFiles, importIcs, listCalendars, listOccurrences, moveOccurrence, refreshSubscription, searchEvents, subscribeCalendar, tasksInRange, updateCalendar, updateCalendarSettings,
+  addPublishedEvent, countTodayOccurrences, createCalendar, createEvent, deleteCalendar, deleteEvent, exportIcs, getCalendarSettings, getEvent, getMailInvitation,
+  importCalendarFiles, importIcs, listCalendars, listOccurrences, moveOccurrence, refreshSubscription, removeCancelledEvent, respondInvitation, searchEvents, subscribeCalendar, tasksInRange, updateCalendar, updateCalendarSettings,
   updateEvent, updateSubscriptionUrl,
 } from "../lib/tauri";
 import type { CalendarPatch, CalendarSettings, EditScope, EventInput, EventPatch, EventTimes } from "../types/calendar";
 import { useAppStore } from "../stores/appStore";
 import i18n from "../lib/i18n";
 
-const CALENDAR_QUERY_KEYS = ["calendars", "occurrences", "event", "calendar-today", "calendar-search", "calendar-settings"];
+const CALENDAR_QUERY_KEYS = ["calendars", "occurrences", "event", "calendar-today", "calendar-search", "calendar-settings", "mail-invitation"];
 
 export function invalidateCalendarQueries(queryClient: QueryClient) {
   for (const key of CALENDAR_QUERY_KEYS) queryClient.invalidateQueries({ queryKey: [key] });
@@ -150,4 +150,20 @@ export function useRefreshSubscription() {
     onSettled: () => invalidateCalendarQueries(queryClient),
     onError: calendarErrorToast,
   });
+}
+
+export function useMailInvitation(mailId: string, enabled: boolean) {
+  return useQuery({ queryKey: ["mail-invitation", mailId], queryFn: () => getMailInvitation(mailId), enabled, staleTime: 30_000 });
+}
+
+export function useRespondInvitation() {
+  return useCalendarMutation(respondInvitation);
+}
+
+export function useAddPublishedEvent() {
+  return useCalendarMutation((v: { mailId: string; calendarId: string }) => addPublishedEvent(v.mailId, v.calendarId));
+}
+
+export function useRemoveCancelledEvent() {
+  return useCalendarMutation(removeCancelledEvent);
 }
