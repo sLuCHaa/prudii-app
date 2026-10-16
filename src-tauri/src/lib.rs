@@ -742,6 +742,7 @@ pub fn run() {
                             }
                             crate::task_reminders::run_task_reminder_check(&handle).await;
                             crate::calendar_reminders::run_event_reminder_check(&handle).await;
+                            tauri::async_runtime::spawn(crate::calendar::subscription::run_due_subscriptions(handle.clone()));
                             tokio::time::sleep(std::time::Duration::from_secs(60)).await;
                         }
                     });
@@ -1165,6 +1166,10 @@ pub fn run() {
             commands::calendar::update_calendar_settings,
             commands::calendar::import_ics,
             commands::calendar::export_ics,
+            commands::calendar::subscribe_calendar,
+            commands::calendar::refresh_subscription,
+            commands::calendar::get_subscription_url,
+            commands::calendar::update_subscription_url,
             commands::license::license_login,
             commands::license::license_logout,
             commands::license::get_license_info,

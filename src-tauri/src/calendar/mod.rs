@@ -205,3 +205,10 @@ pub struct FeedMeta {
     pub etag: Option<String>,
     pub hash: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SubscribeResult {
+    pub calendar: Calendar,
+    /// Events mirrored by the first fetch.
+    pub events: u32,
+}

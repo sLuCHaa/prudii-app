@@ -6,6 +6,8 @@ use crate::calendar::store::{
 use crate::calendar::{
     Calendar, CalendarPatch, CalendarSettings, EventDetail, EventInput, EventPatch, EventTimes, ImportResult, Occurrence, Scope,
 };
+use crate::calendar::subscription::{self, feed_client, normalize_feed_url, KeyringLinks, LinkStore};
+use crate::calendar::SubscribeResult;
 use crate::db::Database;
 use tauri::{AppHandle, Emitter, State};
 
@@ -51,7 +53,10 @@ pub fn update_calendar(app: AppHandle, db: State<'_, Database>, id: String, patc
 #[tauri::command(async)]
 pub fn delete_calendar(app: AppHandle, db: State<'_, Database>, id: String) -> Result<(), String> {
     super::catch_panic(|| {
-        let _ = delete_calendar_impl(&db, &id)?;
+        let deleted = delete_calendar_impl(&db, &id)?;
+        if deleted.read_only {
+            KeyringLinks.delete(&id);
+        }
         changed(&app);
         Ok(())
     })
@@ -186,6 +191,44 @@ pub fn export_ics(app: AppHandle, db: State<'_, Database>, calendar_id: String) 
         std::fs::write(&path, ics).map_err(|e| e.to_string())?;
         Ok(true)
     })
+}
+
+#[tauri::command]
+pub async fn subscribe_calendar(
+    app: AppHandle,
+    db: State<'_, Database>,
+    url: String,
+    color: String,
+    refresh_minutes: i64,
+) -> Result<SubscribeResult, String> {
+    let url = normalize_feed_url(&url)?;
+    let result = subscription::subscribe_impl(&db, &KeyringLinks, feed_client(), &url, &color, refresh_minutes).await?;
+    changed(&app);
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn refresh_subscription(app: AppHandle, db: State<'_, Database>, id: String) -> Result<Calendar, String> {
+    let result = subscription::refresh_impl(&db, &KeyringLinks, feed_client(), &id).await;
+    // The status changed even when the fetch failed.
+    changed(&app);
+    result
+}
+
+#[tauri::command(async)]
+pub fn get_subscription_url(db: State<'_, Database>, id: String) -> Result<String, String> {
+    super::catch_panic(|| {
+        subscription::ensure_subscription(&db, &id)?;
+        KeyringLinks.get(&id).map_err(|_| "calendar.errors.linkMissing".to_string())
+    })
+}
+
+#[tauri::command]
+pub async fn update_subscription_url(app: AppHandle, db: State<'_, Database>, id: String, url: String) -> Result<Calendar, String> {
+    let url = normalize_feed_url(&url)?;
+    let result = subscription::update_url_impl(&db, &KeyringLinks, feed_client(), &id, &url).await?;
+    changed(&app);
+    Ok(result)
 }
 
 #[cfg(test)]
