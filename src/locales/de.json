@@ -1461,6 +1461,59 @@
       "bundleFailed": "Nicht importiert: {{files}}",
       "moreFiles": "+{{count}} weitere"
     },
+    "invite": {
+      "accept": "Zusagen",
+      "tentative": "Vorbehalt",
+      "decline": "Absagen",
+      "answerOptions": "Antwortoptionen",
+      "sendReply": "Antwort senden",
+      "withComment": "Mit Kommentar…",
+      "noReply": "Ohne Antwort",
+      "commentPlaceholder": "Kommentar an den Organisator",
+      "send": "Senden",
+      "cancel": "Abbrechen",
+      "organizer": "Organisator: {{name}}",
+      "attendees_one": "{{count}} Teilnehmer",
+      "attendees_other": "{{count}} Teilnehmer",
+      "conflicts": "Überschneidet sich mit: {{titles}}",
+      "originalTime": "Beim Organisator: {{time}}",
+      "calendar": "Kalender",
+      "status": {
+        "accepted": "Du hast zugesagt.",
+        "tentative": "Du hast mit Vorbehalt zugesagt.",
+        "declined": "Du hast abgesagt.",
+        "needsAction": "Deine Antwort steht noch aus."
+      },
+      "updated": "Vom Organisator aktualisiert",
+      "changedTime": "Zeit: {{old}} → {{new}}",
+      "changedLocation": "Ort: {{old}} → {{new}}",
+      "changedTitle": "Titel: {{old}} → {{new}}",
+      "outdated": "Veraltete Einladung – eine neuere Version ist bereits eingetroffen.",
+      "cancelled": "Der Organisator hat den Termin abgesagt.",
+      "removeFromCalendar": "Aus Kalender entfernen",
+      "addToCalendar": "Zum Kalender hinzufügen",
+      "inCalendar": "Im Kalender",
+      "moreEvents_one": "+{{count}} weiterer Termin",
+      "moreEvents_other": "+{{count}} weitere Termine",
+      "replySent": "Antwort gesendet",
+      "replySubject": {
+        "accepted": "Zugesagt: {{title}}",
+        "tentative": "Mit Vorbehalt: {{title}}",
+        "declined": "Abgesagt: {{title}}"
+      },
+      "replyBody": {
+        "accepted": "Ich nehme die Einladung „{{title}}“ an.",
+        "tentative": "Ich nehme unter Vorbehalt an „{{title}}“ teil.",
+        "declined": "Ich kann an „{{title}}“ leider nicht teilnehmen."
+      },
+      "errors": {
+        "invalid": "Diese Einladung kann nicht verarbeitet werden.",
+        "notRequest": "Auf diese Mail kann nicht als Einladung geantwortet werden.",
+        "outdated": "Inzwischen ist eine neuere Version dieser Einladung eingetroffen.",
+        "noOrganizer": "Die Einladung nennt keinen Organisator für die Antwort.",
+        "sendFailed": "Deine Antwort ist gespeichert, konnte aber nicht gesendet werden."
+      }
+    },
     "errors": {
       "lastCalendar": "Der letzte Kalender kann nicht gelöscht werden.",
       "emptyName": "Bitte gib einen Namen ein.",

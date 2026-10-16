@@ -1461,6 +1461,59 @@
       "bundleFailed": "No importado: {{files}}",
       "moreFiles": "+{{count}} más"
     },
+    "invite": {
+      "accept": "Aceptar",
+      "tentative": "Quizás",
+      "decline": "Rechazar",
+      "answerOptions": "Opciones de respuesta",
+      "sendReply": "Enviar respuesta",
+      "withComment": "Con comentario…",
+      "noReply": "No enviar respuesta",
+      "commentPlaceholder": "Comentario para el organizador",
+      "send": "Enviar",
+      "cancel": "Cancelar",
+      "organizer": "Organizador: {{name}}",
+      "attendees_one": "{{count}} participante",
+      "attendees_other": "{{count}} participantes",
+      "conflicts": "Coincide con: {{titles}}",
+      "originalTime": "Hora del organizador: {{time}}",
+      "calendar": "Calendario",
+      "status": {
+        "accepted": "Has aceptado.",
+        "tentative": "Has respondido «quizás».",
+        "declined": "Has rechazado.",
+        "needsAction": "Pendiente de tu respuesta."
+      },
+      "updated": "Actualizado por el organizador",
+      "changedTime": "Hora: {{old}} → {{new}}",
+      "changedLocation": "Lugar: {{old}} → {{new}}",
+      "changedTitle": "Título: {{old}} → {{new}}",
+      "outdated": "Invitación obsoleta: ya ha llegado una versión más reciente.",
+      "cancelled": "El organizador ha cancelado este evento.",
+      "removeFromCalendar": "Quitar del calendario",
+      "addToCalendar": "Añadir al calendario",
+      "inCalendar": "En tu calendario",
+      "moreEvents_one": "+{{count}} evento más",
+      "moreEvents_other": "+{{count}} eventos más",
+      "replySent": "Respuesta enviada",
+      "replySubject": {
+        "accepted": "Aceptado: {{title}}",
+        "tentative": "Provisional: {{title}}",
+        "declined": "Rechazado: {{title}}"
+      },
+      "replyBody": {
+        "accepted": "Acepto la invitación «{{title}}».",
+        "tentative": "Puede que asista a «{{title}}».",
+        "declined": "No podré asistir a «{{title}}»."
+      },
+      "errors": {
+        "invalid": "No se puede procesar esta invitación.",
+        "notRequest": "Este correo no es una invitación que se pueda responder.",
+        "outdated": "Ha llegado una versión más reciente de esta invitación.",
+        "noOrganizer": "La invitación no indica ningún organizador al que responder.",
+        "sendFailed": "Tu respuesta se ha guardado, pero no se ha podido enviar."
+      }
+    },
     "errors": {
       "lastCalendar": "No se puede eliminar el último calendario.",
       "emptyName": "Introduce un nombre.",

@@ -1497,6 +1497,63 @@
       "bundleFailed": "Не импортировано: {{files}}",
       "moreFiles": "и ещё {{count}}"
     },
+    "invite": {
+      "accept": "Принять",
+      "tentative": "Под вопросом",
+      "decline": "Отклонить",
+      "answerOptions": "Варианты ответа",
+      "sendReply": "Отправить ответ",
+      "withComment": "С комментарием…",
+      "noReply": "Не отправлять ответ",
+      "commentPlaceholder": "Комментарий для организатора",
+      "send": "Отправить",
+      "cancel": "Отмена",
+      "organizer": "Организатор: {{name}}",
+      "attendees_one": "{{count}} участник",
+      "attendees_few": "{{count}} участника",
+      "attendees_many": "{{count}} участников",
+      "attendees_other": "{{count}} участника",
+      "conflicts": "Пересекается с: {{titles}}",
+      "originalTime": "Время организатора: {{time}}",
+      "calendar": "Календарь",
+      "status": {
+        "accepted": "Вы приняли приглашение.",
+        "tentative": "Вы ответили «под вопросом».",
+        "declined": "Вы отклонили приглашение.",
+        "needsAction": "Ожидает вашего ответа."
+      },
+      "updated": "Обновлено организатором",
+      "changedTime": "Время: {{old}} → {{new}}",
+      "changedLocation": "Место: {{old}} → {{new}}",
+      "changedTitle": "Название: {{old}} → {{new}}",
+      "outdated": "Устаревшее приглашение — уже пришла более новая версия.",
+      "cancelled": "Организатор отменил это событие.",
+      "removeFromCalendar": "Удалить из календаря",
+      "addToCalendar": "Добавить в календарь",
+      "inCalendar": "В вашем календаре",
+      "moreEvents_one": "+ещё {{count}} событие",
+      "moreEvents_few": "+ещё {{count}} события",
+      "moreEvents_many": "+ещё {{count}} событий",
+      "moreEvents_other": "+ещё {{count}} события",
+      "replySent": "Ответ отправлен",
+      "replySubject": {
+        "accepted": "Принято: {{title}}",
+        "tentative": "Под вопросом: {{title}}",
+        "declined": "Отклонено: {{title}}"
+      },
+      "replyBody": {
+        "accepted": "Я принимаю приглашение «{{title}}».",
+        "tentative": "Возможно, я приму участие в «{{title}}».",
+        "declined": "К сожалению, я не смогу принять участие в «{{title}}»."
+      },
+      "errors": {
+        "invalid": "Это приглашение не удаётся обработать.",
+        "notRequest": "На это письмо нельзя ответить как на приглашение.",
+        "outdated": "Пришла более новая версия этого приглашения.",
+        "noOrganizer": "В приглашении не указан организатор для ответа.",
+        "sendFailed": "Ваш ответ сохранён, но отправить его не удалось."
+      }
+    },
     "errors": {
       "lastCalendar": "Последний календарь удалить нельзя.",
       "emptyName": "Введите название.",

@@ -1461,6 +1461,59 @@
       "bundleFailed": "Non importé : {{files}}",
       "moreFiles": "+{{count}} de plus"
     },
+    "invite": {
+      "accept": "Accepter",
+      "tentative": "Peut-être",
+      "decline": "Refuser",
+      "answerOptions": "Options de réponse",
+      "sendReply": "Envoyer la réponse",
+      "withComment": "Avec un commentaire…",
+      "noReply": "Ne pas envoyer de réponse",
+      "commentPlaceholder": "Commentaire pour l’organisateur",
+      "send": "Envoyer",
+      "cancel": "Annuler",
+      "organizer": "Organisateur : {{name}}",
+      "attendees_one": "{{count}} participant",
+      "attendees_other": "{{count}} participants",
+      "conflicts": "Chevauche : {{titles}}",
+      "originalTime": "Heure de l’organisateur : {{time}}",
+      "calendar": "Calendrier",
+      "status": {
+        "accepted": "Vous avez accepté.",
+        "tentative": "Vous avez répondu « peut-être ».",
+        "declined": "Vous avez refusé.",
+        "needsAction": "En attente de votre réponse."
+      },
+      "updated": "Mis à jour par l’organisateur",
+      "changedTime": "Heure : {{old}} → {{new}}",
+      "changedLocation": "Lieu : {{old}} → {{new}}",
+      "changedTitle": "Titre : {{old}} → {{new}}",
+      "outdated": "Invitation obsolète : une version plus récente est déjà arrivée.",
+      "cancelled": "L’organisateur a annulé cet événement.",
+      "removeFromCalendar": "Retirer du calendrier",
+      "addToCalendar": "Ajouter au calendrier",
+      "inCalendar": "Dans votre calendrier",
+      "moreEvents_one": "+{{count}} autre événement",
+      "moreEvents_other": "+{{count}} autres événements",
+      "replySent": "Réponse envoyée",
+      "replySubject": {
+        "accepted": "Accepté : {{title}}",
+        "tentative": "Provisoire : {{title}}",
+        "declined": "Refusé : {{title}}"
+      },
+      "replyBody": {
+        "accepted": "J’accepte l’invitation « {{title}} ».",
+        "tentative": "Je participerai peut-être à « {{title}} ».",
+        "declined": "Je ne pourrai pas participer à « {{title}} »."
+      },
+      "errors": {
+        "invalid": "Cette invitation ne peut pas être traitée.",
+        "notRequest": "Ce message n’est pas une invitation à laquelle répondre.",
+        "outdated": "Une version plus récente de cette invitation est arrivée.",
+        "noOrganizer": "L’invitation n’indique aucun organisateur à qui répondre.",
+        "sendFailed": "Votre réponse est enregistrée, mais n’a pas pu être envoyée."
+      }
+    },
     "errors": {
       "lastCalendar": "Le dernier calendrier ne peut pas être supprimé.",
       "emptyName": "Saisis un nom.",

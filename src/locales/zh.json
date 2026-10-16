@@ -1458,6 +1458,59 @@
       "bundleFailed": "未导入：{{files}}",
       "moreFiles": "另外 {{count}} 个"
     },
+    "invite": {
+      "accept": "接受",
+      "tentative": "暂定",
+      "decline": "拒绝",
+      "answerOptions": "回复选项",
+      "sendReply": "发送回复",
+      "withComment": "附带备注…",
+      "noReply": "不发送回复",
+      "commentPlaceholder": "给组织者的备注",
+      "send": "发送",
+      "cancel": "取消",
+      "organizer": "组织者：{{name}}",
+      "attendees_one": "{{count}} 位参与者",
+      "attendees_other": "{{count}} 位参与者",
+      "conflicts": "时间冲突：{{titles}}",
+      "originalTime": "组织者时间：{{time}}",
+      "calendar": "日历",
+      "status": {
+        "accepted": "您已接受。",
+        "tentative": "您已回复暂定。",
+        "declined": "您已拒绝。",
+        "needsAction": "等待您的回复。"
+      },
+      "updated": "组织者已更新",
+      "changedTime": "时间：{{old}} → {{new}}",
+      "changedLocation": "地点：{{old}} → {{new}}",
+      "changedTitle": "标题：{{old}} → {{new}}",
+      "outdated": "邀请已过时——已收到更新的版本。",
+      "cancelled": "组织者已取消此日程。",
+      "removeFromCalendar": "从日历中移除",
+      "addToCalendar": "添加到日历",
+      "inCalendar": "已在您的日历中",
+      "moreEvents_one": "另外 {{count}} 个日程",
+      "moreEvents_other": "另外 {{count}} 个日程",
+      "replySent": "回复已发送",
+      "replySubject": {
+        "accepted": "已接受：{{title}}",
+        "tentative": "暂定：{{title}}",
+        "declined": "已拒绝：{{title}}"
+      },
+      "replyBody": {
+        "accepted": "我接受邀请“{{title}}”。",
+        "tentative": "我可能会参加“{{title}}”。",
+        "declined": "很抱歉，我无法参加“{{title}}”。"
+      },
+      "errors": {
+        "invalid": "无法处理此邀请。",
+        "notRequest": "这封邮件不是可回复的邀请。",
+        "outdated": "此邀请已有更新的版本。",
+        "noOrganizer": "邀请中没有可回复的组织者。",
+        "sendFailed": "您的回复已保存，但未能发送。"
+      }
+    },
     "errors": {
       "lastCalendar": "无法删除最后一个日历。",
       "emptyName": "请输入名称。",

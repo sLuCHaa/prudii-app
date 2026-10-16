@@ -1461,6 +1461,59 @@
       "bundleFailed": "Not imported: {{files}}",
       "moreFiles": "+{{count}} more"
     },
+    "invite": {
+      "accept": "Accept",
+      "tentative": "Maybe",
+      "decline": "Decline",
+      "answerOptions": "Response options",
+      "sendReply": "Send response",
+      "withComment": "Add a comment…",
+      "noReply": "Don’t send a response",
+      "commentPlaceholder": "Comment for the organizer",
+      "send": "Send",
+      "cancel": "Cancel",
+      "organizer": "Organizer: {{name}}",
+      "attendees_one": "{{count}} participant",
+      "attendees_other": "{{count}} participants",
+      "conflicts": "Overlaps with: {{titles}}",
+      "originalTime": "Organizer’s time: {{time}}",
+      "calendar": "Calendar",
+      "status": {
+        "accepted": "You accepted.",
+        "tentative": "You answered maybe.",
+        "declined": "You declined.",
+        "needsAction": "Waiting for your answer."
+      },
+      "updated": "Updated by the organizer",
+      "changedTime": "Time: {{old}} → {{new}}",
+      "changedLocation": "Location: {{old}} → {{new}}",
+      "changedTitle": "Title: {{old}} → {{new}}",
+      "outdated": "Outdated invitation — a newer version has already arrived.",
+      "cancelled": "The organizer cancelled this event.",
+      "removeFromCalendar": "Remove from calendar",
+      "addToCalendar": "Add to calendar",
+      "inCalendar": "In your calendar",
+      "moreEvents_one": "+{{count}} more event",
+      "moreEvents_other": "+{{count}} more events",
+      "replySent": "Response sent",
+      "replySubject": {
+        "accepted": "Accepted: {{title}}",
+        "tentative": "Tentative: {{title}}",
+        "declined": "Declined: {{title}}"
+      },
+      "replyBody": {
+        "accepted": "I accept the invitation “{{title}}”.",
+        "tentative": "I might attend “{{title}}”.",
+        "declined": "I won’t be able to attend “{{title}}”."
+      },
+      "errors": {
+        "invalid": "This invitation can’t be handled.",
+        "notRequest": "This mail is not an invitation you can answer.",
+        "outdated": "A newer version of this invitation has arrived.",
+        "noOrganizer": "The invitation names no organizer to answer.",
+        "sendFailed": "Your answer is saved, but the response could not be sent."
+      }
+    },
     "errors": {
       "lastCalendar": "The last calendar cannot be deleted.",
       "emptyName": "Please enter a name.",

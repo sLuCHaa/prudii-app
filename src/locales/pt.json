@@ -1461,6 +1461,59 @@
       "bundleFailed": "Não importado: {{files}}",
       "moreFiles": "+{{count}} mais"
     },
+    "invite": {
+      "accept": "Aceitar",
+      "tentative": "Talvez",
+      "decline": "Recusar",
+      "answerOptions": "Opções de resposta",
+      "sendReply": "Enviar resposta",
+      "withComment": "Com comentário…",
+      "noReply": "Não enviar resposta",
+      "commentPlaceholder": "Comentário para o organizador",
+      "send": "Enviar",
+      "cancel": "Cancelar",
+      "organizer": "Organizador: {{name}}",
+      "attendees_one": "{{count}} participante",
+      "attendees_other": "{{count}} participantes",
+      "conflicts": "Conflita com: {{titles}}",
+      "originalTime": "Horário do organizador: {{time}}",
+      "calendar": "Calendário",
+      "status": {
+        "accepted": "Você aceitou.",
+        "tentative": "Você respondeu talvez.",
+        "declined": "Você recusou.",
+        "needsAction": "Aguardando sua resposta."
+      },
+      "updated": "Atualizado pelo organizador",
+      "changedTime": "Horário: {{old}} → {{new}}",
+      "changedLocation": "Local: {{old}} → {{new}}",
+      "changedTitle": "Título: {{old}} → {{new}}",
+      "outdated": "Convite desatualizado — uma versão mais recente já chegou.",
+      "cancelled": "O organizador cancelou este evento.",
+      "removeFromCalendar": "Remover do calendário",
+      "addToCalendar": "Adicionar ao calendário",
+      "inCalendar": "No seu calendário",
+      "moreEvents_one": "+{{count}} outro evento",
+      "moreEvents_other": "+{{count}} outros eventos",
+      "replySent": "Resposta enviada",
+      "replySubject": {
+        "accepted": "Aceito: {{title}}",
+        "tentative": "Provisório: {{title}}",
+        "declined": "Recusado: {{title}}"
+      },
+      "replyBody": {
+        "accepted": "Aceito o convite “{{title}}”.",
+        "tentative": "Talvez eu participe de “{{title}}”.",
+        "declined": "Não poderei participar de “{{title}}”."
+      },
+      "errors": {
+        "invalid": "Não é possível processar este convite.",
+        "notRequest": "Este e-mail não é um convite que possa ser respondido.",
+        "outdated": "Chegou uma versão mais recente deste convite.",
+        "noOrganizer": "O convite não indica um organizador para responder.",
+        "sendFailed": "Sua resposta foi salva, mas não pôde ser enviada."
+      }
+    },
     "errors": {
       "lastCalendar": "O último calendário não pode ser excluído.",
       "emptyName": "Informe um nome.",
