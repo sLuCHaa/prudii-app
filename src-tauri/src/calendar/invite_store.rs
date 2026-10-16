@@ -97,7 +97,7 @@ fn apply_update(conn: &Connection, existing: &EventRow, p: &ParsedEvent, me: &Me
 
 /// A changed instance of a known series becomes its own override row.
 fn add_override(conn: &Connection, master: &EventRow, p: &ParsedEvent, me: &Me) -> Result<bool, String> {
-    if master.recurrence_id.is_some() || p.recurrence_id.is_none() {
+    if master.recurrence_id.is_some() || p.recurrence_id.is_none() || superseded(master, p.sequence) {
         return Ok(false);
     }
     let mut row = p.to_row(uuid::Uuid::new_v4().to_string(), master.calendar_id.clone());
@@ -117,7 +117,42 @@ fn superseded(row: &EventRow, sequence: i64) -> bool {
     sequence < row.sequence || (row.status == "cancelled" && sequence <= row.sequence)
 }
 
-fn auto_update(conn: &Connection, mail: &MailInvite, p: &ParsedEvent) -> Result<bool, String> {
+/// Re-reading or re-answering the same version must not undo local edits (RFC 5546 order).
+fn is_newer(p: &ParsedEvent, row: &EventRow) -> bool {
+    let stamps = (itip::dtstamp(&p.raw), row.ical_raw.as_deref().and_then(itip::dtstamp));
+    p.sequence > row.sequence || (p.sequence == row.sequence && matches!(stamps, (Some(new), Some(old)) if new > old))
+}
+
+/// The exact slot an invitation names, else its series.
+fn slot_or_series<'a>(rows: &'a [EventRow], recurrence_id: &Option<String>) -> Option<&'a EventRow> {
+    rows.iter().find(|r| &r.recurrence_id == recurrence_id).or_else(|| rows.iter().find(|r| r.recurrence_id.is_none()))
+}
+
+/// A REQUEST carrying the series replaces the whole set (RFC 5546).
+fn drop_stale_instances(conn: &Connection, rows: &[EventRow], master: &ParsedEvent, all: &[ParsedEvent]) -> Result<(), String> {
+    let carried = |rid: &Option<String>| all.iter().any(|e| e.uid == master.uid && &e.recurrence_id == rid);
+    for r in rows.iter().filter(|r| r.recurrence_id.is_some() && r.sequence <= master.sequence && !carried(&r.recurrence_id)) {
+        conn.execute("DELETE FROM events WHERE id = ?1", params![r.id]).map_err(err)?;
+    }
+    Ok(())
+}
+
+fn apply_request(conn: &Connection, rows: &[EventRow], p: &ParsedEvent, all: &[ParsedEvent], me: &Me) -> Result<bool, String> {
+    let Some(anchor) = rows.first() else { return Ok(false) };
+    match rows.iter().find(|r| r.recurrence_id == p.recurrence_id) {
+        Some(slot) if superseded(slot, p.sequence) || !is_newer(p, slot) => Ok(false),
+        Some(slot) => {
+            let applied = apply_update(conn, slot, p, me)?;
+            if applied && p.recurrence_id.is_none() {
+                drop_stale_instances(conn, rows, p, all)?;
+            }
+            Ok(applied)
+        }
+        None => add_override(conn, anchor, p, me),
+    }
+}
+
+fn auto_update(conn: &Connection, mail: &MailInvite, p: &ParsedEvent, all: &[ParsedEvent]) -> Result<bool, String> {
     if same(p.organizer_email.as_deref(), &mail.account_email) {
         return Ok(false);
     }
@@ -126,12 +161,7 @@ fn auto_update(conn: &Connection, mail: &MailInvite, p: &ParsedEvent) -> Result<
     if !same(anchor.organizer_email.as_deref(), &mail.from_email) {
         return Ok(false);
     }
-    let me = itip::find_me(p, &mail.account_email);
-    match rows.iter().find(|r| r.recurrence_id == p.recurrence_id) {
-        Some(slot) if superseded(slot, p.sequence) => Ok(false),
-        Some(slot) => apply_update(conn, slot, p, &me),
-        None => add_override(conn, anchor, p, &me),
-    }
+    apply_request(conn, &rows, p, all, &itip::find_me(p, &mail.account_email))
 }
 
 fn cancel_slot(conn: &Connection, master: &EventRow, key: &str, sequence: i64) -> Result<bool, String> {
@@ -192,8 +222,9 @@ pub(crate) fn process_mail_impl(db: &Database, mail_id: &str) -> Result<bool, St
     let tx = conn.unchecked_transaction().map_err(err)?;
     let mut changed = false;
     if method == "REQUEST" {
-        for p in &parse_calendar(ics).events {
-            changed |= auto_update(&tx, &mail, p)?;
+        let events = parse_calendar(ics).events;
+        for p in &events {
+            changed |= auto_update(&tx, &mail, p, &events)?;
         }
     } else {
         for target in itip::cancel_targets(ics) {
@@ -318,7 +349,9 @@ fn build_view(conn: &Connection, mail_id: &str, mail: &MailInvite, now: DateTime
     let when = span_of(&slot);
     let rows = known_rows(conn, &p.uid)?;
     let exact = rows.iter().find(|r| r.recurrence_id == p.recurrence_id);
-    let anchor = exact.or_else(|| rows.iter().find(|r| r.recurrence_id.is_none()));
+    let anchor = slot_or_series(&rows, &p.recurrence_id);
+    // An applied cancellation is current; only a newer invitation outdates it.
+    let outdated = anchor.is_some_and(|r| if method == "CANCEL" { p.sequence < r.sequence } else { superseded(r, p.sequence) });
     let base = match exact.filter(|r| r.sequence < p.sequence) {
         Some(r) => Some(snapshot(r)),
         None => previous_version(conn, mail_id, &mail.account_id, p)?.map(|e| snapshot(&e.to_row(String::new(), String::new()))),
@@ -346,7 +379,7 @@ fn build_view(conn: &Connection, mail_id: &str, mail: &MailInvite, now: DateTime
         event_id: anchor.map(|r| r.id.clone()),
         calendar_id: anchor.map(|r| r.calendar_id.clone()),
         stored_status: anchor.map(|r| r.status.clone()),
-        outdated: exact.is_some_and(|r| superseded(r, p.sequence)),
+        outdated,
         updated: method == "REQUEST" && base.is_some(),
         changes: base.map(|b| diff(&b, &snapshot(&invite_row))).unwrap_or_default(),
         conflicts: titles,
@@ -429,7 +462,7 @@ pub(crate) fn respond_impl(
         return Err("calendar.invite.errors.noOrganizer".into());
     }
     let rows = known_rows(&conn, &p.uid)?;
-    if rows.iter().any(|r| r.recurrence_id == p.recurrence_id && superseded(r, p.sequence)) {
+    if slot_or_series(&rows, &p.recurrence_id).is_some_and(|r| superseded(r, p.sequence)) {
         return Err("calendar.invite.errors.outdated".into());
     }
     let me = itip::find_me(&p, &mail.account_email);
@@ -460,15 +493,7 @@ pub(crate) fn respond_impl(
         }
         Some(anchor) => {
             for e in &ours {
-                match rows.iter().find(|r| r.recurrence_id == e.recurrence_id) {
-                    Some(r) if !superseded(r, e.sequence) => {
-                        apply_update(&tx, r, e, &me)?;
-                    }
-                    Some(_) => {}
-                    None => {
-                        add_override(&tx, anchor, e, &me)?;
-                    }
-                }
+                apply_request(&tx, &known_rows(&tx, &e.uid)?, e, &parsed.events, &me)?;
             }
             let cal = anchor.calendar_id.clone();
             match &p.recurrence_id {
@@ -583,7 +608,9 @@ mod tests {
     use super::*;
     use crate::calendar::content_line::fold_line;
     use crate::calendar::ical::parse_calendar;
-    use crate::calendar::store::{create_event_impl, import_ics_impl, list_calendars_impl, load_alarms, mirror_ics_impl, update_event_impl};
+    use crate::calendar::store::{
+        create_event_impl, import_ics_impl, list_calendars_impl, list_occurrences_impl, load_alarms, mirror_ics_impl, update_event_impl,
+    };
     use crate::calendar::{EventInput, EventPatch, EventTimes, FeedMeta, Scope};
     use chrono::TimeZone;
 
@@ -1102,5 +1129,89 @@ mod tests {
         }
         assert_eq!(relevant_unfetched_mails_impl(&db, "acc", now(), 20).unwrap(), vec!["f".to_string(), "a".to_string()]);
         assert_eq!(relevant_unfetched_mails_impl(&db, "acc", now(), 1).unwrap(), vec!["f".to_string()]);
+    }
+
+    #[test]
+    fn a_series_update_replaces_the_instances_it_no_longer_carries() {
+        let moved = ics(
+            "REQUEST",
+            &[
+                vevent("s1", 0, "20261020T070000Z", YES, &["RRULE:FREQ=WEEKLY;COUNT=4"]),
+                vevent("s1", 0, "20261027T090000Z", YES, &["RECURRENCE-ID:20261027T070000Z"]),
+            ],
+        );
+        let shifted = ics("REQUEST", &[vevent("s1", 1, "20261020T080000Z", YES, &["RRULE:FREQ=WEEKLY;COUNT=4"])]);
+        for from in ["robin@example.com", "calendar-notification@google.com"] {
+            let (db, cal) = setup();
+            known(&db, &cal, &moved, "accepted");
+            mail(&db, "m2", from, &shifted);
+            let applied = process_mail_impl(&db, "m2").unwrap();
+            assert_eq!(applied, from.starts_with("robin"), "{from}");
+            if !applied {
+                respond_impl(&db, "m2", "accepted", &cal, None, false, now()).unwrap();
+            }
+            let starts: Vec<String> =
+                list_occurrences_impl(&db, "2026-10-19T00:00:00Z", "2026-11-16T00:00:00Z", None).unwrap().into_iter().map(|o| o.start).collect();
+            assert_eq!(starts, vec!["2026-10-20T08:00:00Z", "2026-10-27T08:00:00Z", "2026-11-03T08:00:00Z", "2026-11-10T08:00:00Z"], "{from}");
+        }
+    }
+
+    #[test]
+    fn changing_my_answer_keeps_my_local_edits() {
+        let (db, cal) = setup();
+        mail(&db, "m1", "robin@example.com", &ics("REQUEST", &[vevent("r1", 0, "20261020T070000Z", OPEN, &["DTSTAMP:20261015T080000Z"])]));
+        respond_impl(&db, "m1", "accepted", &cal, None, false, now()).unwrap();
+        let id = event(&db, "r1", None).id;
+        update_event_impl(&db, &id, None, Scope::All, EventPatch { title: Some("My notes".into()), ..Default::default() }).unwrap();
+        respond_impl(&db, "m1", "tentative", &cal, None, false, now()).unwrap();
+        let row = event(&db, "r1", None);
+        assert_eq!((row.title.as_str(), row.my_partstat.as_deref()), ("My notes", Some("tentative")));
+    }
+
+    #[test]
+    fn reading_the_original_invitation_again_keeps_my_answer() {
+        let (db, cal) = setup();
+        mail(&db, "m1", "robin@example.com", &ics("REQUEST", &[vevent("r1", 0, "20261020T070000Z", OPEN, &[])]));
+        respond_impl(&db, "m1", "accepted", &cal, None, false, now()).unwrap();
+        assert!(!process_mail_impl(&db, "m1").unwrap());
+        assert_eq!(event(&db, "r1", None).my_partstat.as_deref(), Some("accepted"));
+    }
+
+    #[test]
+    fn of_two_updates_with_the_same_sequence_the_later_stamp_wins() {
+        let (db, cal) = setup();
+        let version = |stamp: &str, room: &str| ics("REQUEST", &[vevent("r1", 1, "20261020T070000Z", YES, &[stamp, room])]);
+        known(&db, &cal, &version("DTSTAMP:20261015T080000Z", "LOCATION:Room 1"), "accepted");
+        mail(&db, "newer", "robin@example.com", &version("DTSTAMP:20261016T090000Z", "LOCATION:Room 3"));
+        mail(&db, "older", "robin@example.com", &version("DTSTAMP:20261016T080000Z", "LOCATION:Room 2"));
+        assert!(process_mail_impl(&db, "newer").unwrap());
+        assert!(!process_mail_impl(&db, "older").unwrap());
+        assert_eq!(event(&db, "r1", None).location, "Room 3");
+    }
+
+    #[test]
+    fn an_older_instance_update_does_not_revive_a_cancelled_series() {
+        let (db, cal) = setup();
+        series(&db, &cal);
+        mail(&db, "c1", "robin@example.com", &cancel_all(1));
+        mail(&db, "old", "robin@example.com", &ics("REQUEST", &[vevent("s1", 0, "20261027T090000Z", YES, &["RECURRENCE-ID:20261027T070000Z"])]));
+        assert!(process_mail_impl(&db, "c1").unwrap());
+        assert!(!process_mail_impl(&db, "old").unwrap());
+        assert_eq!(count(&db, "s1"), 1);
+        assert!(invitation_view_impl(&db, "old", now()).unwrap().unwrap().outdated);
+        assert_eq!(respond_impl(&db, "old", "accepted", &cal, None, false, now()), Err("calendar.invite.errors.outdated".to_string()));
+        assert_eq!(count(&db, "s1"), 1);
+    }
+
+    #[test]
+    fn a_cancellation_card_is_outdated_only_once_a_newer_invitation_arrives() {
+        let (db, cal) = setup();
+        known(&db, &cal, &ics("REQUEST", &[vevent("r1", 0, "20261020T070000Z", YES, &[])]), "accepted");
+        mail(&db, "c0", "robin@example.com", &ics("CANCEL", &[vevent("r1", 0, "20261020T070000Z", OPEN, &[])]));
+        assert!(process_mail_impl(&db, "c0").unwrap());
+        assert!(!invitation_view_impl(&db, "c0", now()).unwrap().unwrap().outdated);
+        mail(&db, "m1", "robin@example.com", &ics("REQUEST", &[vevent("r1", 1, "20261020T080000Z", YES, &[])]));
+        assert!(process_mail_impl(&db, "m1").unwrap());
+        assert!(invitation_view_impl(&db, "c0", now()).unwrap().unwrap().outdated);
     }
 }

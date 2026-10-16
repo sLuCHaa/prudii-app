@@ -3,7 +3,7 @@
 
 use super::content_line::{escape_text, fold_line, parse_components, write_prop, Component};
 use super::ical::{parse_calendar, ParsedCalendar, ParsedEvent};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Me {
@@ -49,6 +49,14 @@ pub fn find_me(p: &ParsedEvent, account_email: &str) -> Me {
         },
         None => Me { email: wanted.to_string(), partstat: None, rsvp: true, params: Vec::new() },
     }
+}
+
+/// RFC 5546 breaks SEQUENCE ties by DTSTAMP, which is always UTC.
+pub fn dtstamp(raw: &str) -> Option<DateTime<Utc>> {
+    let event = parse_components(raw).into_iter().find(|c| c.name == "VEVENT")?;
+    let value = event.prop("DTSTAMP")?.value.trim().to_string();
+    let utc = value.strip_suffix('Z').or_else(|| value.strip_suffix('z'))?;
+    NaiveDateTime::parse_from_str(utc, "%Y%m%dT%H%M%S").ok().map(|n| n.and_utc())
 }
 
 /// The event a mail is about: its series if present, else the first instance.
@@ -191,6 +199,16 @@ mod tests {
                 CancelTarget { uid: "b".into(), recurrence_id: None, sequence: 4 },
             ]
         );
+    }
+
+    #[test]
+    fn the_stamp_comes_from_the_event_itself() {
+        let raw = "BEGIN:VEVENT\r\nUID:a\r\nDTSTAMP:20261015T080000Z\r\nBEGIN:VALARM\r\nDTSTAMP:20991231T000000Z\r\nEND:VALARM\r\nEND:VEVENT";
+        assert_eq!(dtstamp(raw), Some(Utc.with_ymd_and_hms(2026, 10, 15, 8, 0, 0).unwrap()));
+        assert_eq!(dtstamp(&parse_calendar(GOOGLE).events[0].raw), Some(Utc.with_ymd_and_hms(2026, 10, 1, 12, 0, 0).unwrap()));
+        assert_eq!(dtstamp("BEGIN:VEVENT\r\nUID:a\r\nEND:VEVENT"), None);
+        assert_eq!(dtstamp("BEGIN:VEVENT\r\nDTSTAMP:yesterday\r\nEND:VEVENT"), None);
+        assert_eq!(dtstamp("BEGIN:VEVENT\r\nDTSTAMP:20261015T080000\r\nEND:VEVENT"), None);
     }
 
     #[test]
