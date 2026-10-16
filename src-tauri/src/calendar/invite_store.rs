@@ -6,9 +6,12 @@ use super::invite_mail::{choose, is_calendar_part, FoundInvite, InviteCandidate}
 use super::itip::{self, CancelTarget, Me};
 use super::meeting::find_meeting_link;
 use super::recurrence::{derive_range, expand, key_to_naive, naive_to_key, slot_shape, ExpandInput};
-use super::store::{load_alarms, occurrences_in, row_to_event, set_alarms, set_attendees, write_event, EVENT_COLS};
+use super::store::{
+    ensure_writable, get_calendar_settings_impl, import_ics_impl, load_alarms, occurrences_in, row_to_event, set_alarms, set_attendees,
+    write_event, EVENT_COLS,
+};
 use super::tz::{parse_utc, system_tz};
-use super::{Attendee, EventRow, InvitationView, InviteChanges, Occurrence, TextChange, TimeChange, TimeSpan, SUBSCRIPTION};
+use super::{Attendee, EventRow, ImportResult, InvitationView, InviteChanges, Occurrence, TextChange, TimeChange, TimeSpan, SUBSCRIPTION};
 use crate::db::Database;
 use chrono::{DateTime, Duration, Utc};
 use rusqlite::{params, Connection, OptionalExtension};
@@ -383,6 +386,152 @@ pub(crate) fn invitation_view_impl(db: &Database, mail_id: &str, now: DateTime<U
     let conn = db.lock_db();
     let mail = load_mail(&conn, mail_id)?;
     build_view(&conn, mail_id, &mail, now)
+}
+
+const ANSWERS: [&str; 3] = ["accepted", "tentative", "declined"];
+
+/// What `respond_invitation` sends once the answer is saved.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReplyDraft {
+    pub account_id: String,
+    pub to: String,
+    pub ics: String,
+}
+
+/// Saves my answer (declining a new invitation creates nothing) and prepares the
+/// REPLY. The answer is stored before anything is sent.
+pub(crate) fn respond_impl(
+    db: &Database,
+    mail_id: &str,
+    partstat: &str,
+    calendar_id: &str,
+    comment: Option<&str>,
+    want_reply: bool,
+    now: DateTime<Utc>,
+) -> Result<Option<ReplyDraft>, String> {
+    if !ANSWERS.contains(&partstat) {
+        return Err("calendar.invite.errors.invalid".into());
+    }
+    let settings = get_calendar_settings_impl(db);
+    let conn = db.lock_db();
+    let mail = load_mail(&conn, mail_id)?;
+    let ics = match (mail.method.as_deref(), mail.ics.as_deref()) {
+        (Some("REQUEST"), Some(ics)) => ics.to_string(),
+        _ => return Err("calendar.invite.errors.notRequest".into()),
+    };
+    let parsed = parse_calendar(&ics);
+    let p = itip::primary_event(&parsed).ok_or("calendar.errors.noEvents")?.clone();
+    if want_reply && p.organizer_email.is_none() {
+        return Err("calendar.invite.errors.noOrganizer".into());
+    }
+    let rows = known_rows(&conn, &p.uid)?;
+    if rows.iter().any(|r| r.recurrence_id == p.recurrence_id && p.sequence < r.sequence) {
+        return Err("calendar.invite.errors.outdated".into());
+    }
+    let me = itip::find_me(&p, &mail.account_email);
+    let ours: Vec<&ParsedEvent> = parsed.events.iter().filter(|e| e.uid == p.uid).collect();
+    let tx = conn.unchecked_transaction().map_err(err)?;
+    match rows.first() {
+        None if partstat == "declined" => {}
+        None => {
+            ensure_writable(&tx, calendar_id)?;
+            for e in &ours {
+                let mut row = e.to_row(uuid::Uuid::new_v4().to_string(), calendar_id.to_string());
+                row.my_partstat = Some(partstat.to_string());
+                row.account_id = Some(mail.account_id.clone());
+                if derive_range(&row).is_none() {
+                    continue;
+                }
+                write_event(&tx, &row)?;
+                let alarms: Vec<i64> = if !e.alarms.is_empty() {
+                    e.alarms.clone()
+                } else if row.all_day {
+                    Vec::new()
+                } else {
+                    settings.default_reminder_minutes.into_iter().collect()
+                };
+                set_alarms(&tx, &row.id, &alarms)?;
+                set_attendees(&tx, &row.id, &attendees_of(e))?;
+            }
+        }
+        Some(anchor) => {
+            for e in &ours {
+                match rows.iter().find(|r| r.recurrence_id == e.recurrence_id) {
+                    Some(r) if e.sequence >= r.sequence => {
+                        apply_update(&tx, r, e, &me)?;
+                    }
+                    Some(_) => {}
+                    None => {
+                        add_override(&tx, anchor, e, &me)?;
+                    }
+                }
+            }
+            let cal = anchor.calendar_id.clone();
+            match &p.recurrence_id {
+                None => tx.execute("UPDATE events SET my_partstat = ?1 WHERE calendar_id = ?2 AND uid = ?3", params![partstat, cal, p.uid]),
+                Some(k) => tx.execute(
+                    "UPDATE events SET my_partstat = ?1 WHERE calendar_id = ?2 AND uid = ?3 AND recurrence_id = ?4",
+                    params![partstat, cal, p.uid, k],
+                ),
+            }
+            .map_err(err)?;
+        }
+    }
+    tx.execute("UPDATE mails SET invite_partstat = ?1 WHERE id = ?2", params![partstat, mail_id]).map_err(err)?;
+    tx.commit().map_err(err)?;
+    Ok(p.organizer_email.clone().filter(|_| want_reply).map(|to| ReplyDraft {
+        account_id: mail.account_id.clone(),
+        to,
+        ics: itip::build_reply(&ics, &p, &me, partstat, comment, now),
+    }))
+}
+
+pub(crate) fn add_published_impl(db: &Database, mail_id: &str, calendar_id: &str) -> Result<ImportResult, String> {
+    let ics = {
+        let conn = db.lock_db();
+        let mail = load_mail(&conn, mail_id)?;
+        match (mail.method.as_deref(), mail.ics) {
+            (Some("PUBLISH"), Some(ics)) => ics,
+            _ => return Err("calendar.invite.errors.invalid".into()),
+        }
+    };
+    import_ics_impl(db, calendar_id, &ics)
+}
+
+/// A cancelled instance leaves an exception on its series; a cancelled event goes entirely.
+pub(crate) fn remove_cancelled_impl(db: &Database, mail_id: &str) -> Result<(), String> {
+    let conn = db.lock_db();
+    let mail = load_mail(&conn, mail_id)?;
+    let ics = match (mail.method.as_deref(), mail.ics.as_deref()) {
+        (Some("CANCEL"), Some(ics)) => ics.to_string(),
+        _ => return Err("calendar.invite.errors.invalid".into()),
+    };
+    let tx = conn.unchecked_transaction().map_err(err)?;
+    for target in itip::cancel_targets(&ics) {
+        let rows = known_rows(&tx, &target.uid)?;
+        let Some(anchor) = rows.first() else { continue };
+        match &target.recurrence_id {
+            None => {
+                tx.execute("DELETE FROM events WHERE calendar_id = ?1 AND uid = ?2", params![anchor.calendar_id, target.uid]).map_err(err)?;
+            }
+            Some(k) => {
+                tx.execute(
+                    "DELETE FROM events WHERE calendar_id = ?1 AND uid = ?2 AND recurrence_id = ?3",
+                    params![anchor.calendar_id, target.uid, k],
+                )
+                .map_err(err)?;
+                if let Some(master) = rows.iter().find(|r| r.recurrence_id.is_none()) {
+                    if !master.exdates.contains(k) {
+                        let mut row = master.clone();
+                        row.exdates.push(k.clone());
+                        row.exdates.sort();
+                        write_event(&tx, &row)?;
+                    }
+                }
+            }
+        }
+    }
+    tx.commit().map_err(err)
 }
 
 #[cfg(test)]
@@ -760,5 +909,104 @@ mod tests {
         let stored: Option<String> = db.lock_db().query_row("SELECT invite_method FROM mails WHERE id = 'legacy'", [], |r| r.get(0)).unwrap();
         assert_eq!(stored.as_deref(), Some("REQUEST"));
         assert_eq!(invitation_view_impl(&db, "missing", now()), Err("calendar.errors.notFound".to_string()));
+    }
+
+    #[test]
+    fn accepting_creates_the_event_with_my_answer_and_the_default_reminder() {
+        let (db, cal) = setup();
+        mail(&db, "m1", "robin@example.com", &ics("REQUEST", &[vevent("r1", 0, "20261020T070000Z", OPEN, &[])]));
+        let draft = respond_impl(&db, "m1", "accepted", &cal, Some("See you"), true, now()).unwrap().unwrap();
+        assert_eq!((draft.account_id.as_str(), draft.to.as_str()), ("acc", "robin@example.com"));
+        let flat = draft.ics.replace("\r\n ", "");
+        assert!(flat.contains("METHOD:REPLY") && flat.contains("PARTSTAT=ACCEPTED") && flat.contains("COMMENT:See you"));
+        let row = event(&db, "r1", None);
+        assert_eq!((row.calendar_id.as_str(), row.my_partstat.as_deref(), row.account_id.as_deref()), (cal.as_str(), Some("accepted"), Some("acc")));
+        assert_eq!(load_alarms(&db.lock_db(), &row.id).unwrap(), vec![15]);
+        let v = invitation_view_impl(&db, "m1", now()).unwrap().unwrap();
+        assert_eq!((v.event_id, v.my_partstat.as_deref()), (Some(row.id.clone()), Some("accepted")));
+    }
+
+    #[test]
+    fn declining_creates_nothing_but_is_remembered_and_later_dims_an_accepted_event() {
+        let (db, cal) = setup();
+        mail(&db, "m1", "robin@example.com", &ics("REQUEST", &[vevent("r1", 0, "20261020T070000Z", OPEN, &[])]));
+        assert_eq!(respond_impl(&db, "m1", "declined", &cal, None, false, now()).unwrap(), None);
+        assert_eq!(count(&db, "r1"), 0);
+        assert_eq!(invitation_view_impl(&db, "m1", now()).unwrap().unwrap().my_partstat.as_deref(), Some("declined"));
+        respond_impl(&db, "m1", "accepted", &cal, None, false, now()).unwrap();
+        respond_impl(&db, "m1", "accepted", &cal, None, false, now()).unwrap();
+        respond_impl(&db, "m1", "declined", &cal, None, false, now()).unwrap();
+        assert_eq!(count(&db, "r1"), 1);
+        assert_eq!(event(&db, "r1", None).my_partstat.as_deref(), Some("declined"));
+    }
+
+    #[test]
+    fn answers_cover_the_series_and_its_exceptions() {
+        let (db, cal) = setup();
+        let series = ics(
+            "REQUEST",
+            &[
+                vevent("s1", 0, "20261020T070000Z", OPEN, &["RRULE:FREQ=WEEKLY;COUNT=4"]),
+                vevent("s1", 0, "20261027T090000Z", OPEN, &["RECURRENCE-ID:20261027T070000Z"]),
+            ],
+        );
+        mail(&db, "m1", "robin@example.com", &series);
+        respond_impl(&db, "m1", "tentative", &cal, None, false, now()).unwrap();
+        let answers: Vec<Option<String>> = db
+            .lock_db()
+            .prepare("SELECT my_partstat FROM events WHERE uid = 's1'")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        assert_eq!(answers, vec![Some("tentative".to_string()), Some("tentative".to_string())]);
+    }
+
+    #[test]
+    fn answers_are_refused_for_wrong_input() {
+        let (db, cal) = setup();
+        known(&db, &cal, &ics("REQUEST", &[vevent("r1", 3, "20261020T070000Z", YES, &[])]), "accepted");
+        mail(&db, "old", "robin@example.com", &ics("REQUEST", &[vevent("r1", 2, "20261020T070000Z", OPEN, &[])]));
+        mail(&db, "cancel", "robin@example.com", &ics("CANCEL", &[vevent("r1", 4, "20261020T070000Z", OPEN, &[])]));
+        mail(&db, "anon", "robin@example.com", &ics("REQUEST", &[vec!["UID:a1".into(), "DTSTART:20261020T070000Z".into()]]));
+        let refused = |id: &str, partstat: &str, reply: bool| respond_impl(&db, id, partstat, &cal, None, reply, now()).unwrap_err();
+        assert_eq!(refused("old", "accepted", false), "calendar.invite.errors.outdated");
+        assert_eq!(refused("cancel", "accepted", false), "calendar.invite.errors.notRequest");
+        assert_eq!(refused("old", "maybe", false), "calendar.invite.errors.invalid");
+        assert_eq!(refused("anon", "accepted", true), "calendar.invite.errors.noOrganizer");
+    }
+
+    #[test]
+    fn answering_applies_an_update_the_sender_check_held_back() {
+        let (db, cal) = setup();
+        known(&db, &cal, &ics("REQUEST", &[vevent("r1", 0, "20261020T070000Z", YES, &[])]), "accepted");
+        mail(&db, "m2", "calendar-notification@google.com", &ics("REQUEST", &[vevent("r1", 1, "20261020T090000Z", YES, &[])]));
+        assert!(!process_mail_impl(&db, "m2").unwrap());
+        let v = invitation_view_impl(&db, "m2", now()).unwrap().unwrap();
+        assert!(v.updated && v.changes.time.is_some());
+        respond_impl(&db, "m2", "accepted", &cal, None, false, now()).unwrap();
+        let row = event(&db, "r1", None);
+        assert_eq!((row.dtstart.as_str(), row.sequence, row.my_partstat.as_deref()), ("2026-10-20T09:00:00", 1, Some("accepted")));
+    }
+
+    #[test]
+    fn published_events_are_added_and_cancelled_ones_removed() {
+        let (db, cal) = setup();
+        mail(&db, "pub", "robin@example.com", &ics("PUBLISH", &[vevent("p1", 0, "20261021T070000Z", OPEN, &[])]));
+        assert_eq!(add_published_impl(&db, "pub", &cal).unwrap().imported, 1);
+        assert!(invitation_view_impl(&db, "pub", now()).unwrap().unwrap().event_id.is_some());
+
+        known(&db, &cal, &ics("REQUEST", &[vevent("s1", 0, "20261020T070000Z", YES, &["RRULE:FREQ=WEEKLY;COUNT=4"])]), "accepted");
+        let one = ics("CANCEL", &[vec!["UID:s1".into(), "RECURRENCE-ID:20261027T070000Z".into(), "DTSTART:20261027T070000Z".into(), ROBIN.into()]]);
+        mail(&db, "one", "robin@example.com", &one);
+        process_mail_impl(&db, "one").unwrap();
+        remove_cancelled_impl(&db, "one").unwrap();
+        assert_eq!(count(&db, "s1"), 1);
+        assert_eq!(event(&db, "s1", None).exdates, vec!["2026-10-27T07:00:00".to_string()]);
+        mail(&db, "all", "robin@example.com", &ics("CANCEL", &[vec!["UID:s1".into(), ROBIN.into()]]));
+        remove_cancelled_impl(&db, "all").unwrap();
+        assert_eq!(count(&db, "s1"), 0);
+        assert_eq!(add_published_impl(&db, "all", &cal), Err("calendar.invite.errors.invalid".to_string()));
     }
 }
