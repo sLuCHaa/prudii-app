@@ -191,8 +191,10 @@ pub fn write_prop(name: &str, params: &[(&str, &str)], value: &str) -> String {
     fold_line(&line)
 }
 
-/// RFC 5545 DURATION in seconds, e.g. "-PT15M" → -900.
+/// RFC 5545 DURATION in seconds, e.g. "-PT15M" → -900. Lengths beyond a century
+/// only come from broken or hostile files.
 pub fn parse_duration(s: &str) -> Option<i64> {
+    const MAX_SECONDS: i64 = 100 * 366 * 86_400;
     let s = s.trim();
     let (sign, rest) = match s.as_bytes().first()? {
         b'-' => (-1, &s[1..]),
@@ -210,7 +212,7 @@ pub fn parse_duration(s: &str) -> Option<i64> {
             'W' | 'D' | 'H' | 'M' | 'S' => {
                 let n: i64 = num.parse().ok()?;
                 num.clear();
-                total += n * match (c, in_time) {
+                let unit = match (c, in_time) {
                     ('W', false) => 604_800,
                     ('D', false) => 86_400,
                     ('H', true) => 3_600,
@@ -218,11 +220,12 @@ pub fn parse_duration(s: &str) -> Option<i64> {
                     ('S', true) => 1,
                     _ => return None,
                 };
+                total = total.checked_add(n.checked_mul(unit)?)?;
             }
             _ => return None,
         }
     }
-    if !num.is_empty() {
+    if !num.is_empty() || total > MAX_SECONDS {
         return None;
     }
     Some(sign * total)
@@ -299,5 +302,14 @@ mod tests {
         assert_eq!(parse_duration("P1DT2H"), Some(93_600));
         assert_eq!(parse_duration("PT1D"), None);
         assert_eq!(parse_duration("15M"), None);
+    }
+
+    #[test]
+    fn durations_reject_overflow_and_absurd_lengths() {
+        assert_eq!(parse_duration("P9223372036854775807W"), None);
+        assert_eq!(parse_duration("PT9223372036854775807S"), None);
+        assert_eq!(parse_duration("P40000D"), None);
+        assert_eq!(parse_duration("P36000D"), Some(36_000 * 86_400));
+        assert_eq!(parse_duration("-PT15M"), Some(-900));
     }
 }

@@ -1480,4 +1480,64 @@ mod tests {
         prune_reminders_impl(&db).unwrap();
         assert!(sent_reminders_impl(&db).unwrap().contains(&key), "fresh entries survive pruning");
     }
+
+    const OVERRIDE_FEED: &str = "BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:standup@test
+DTSTART;TZID=Europe/Berlin:20261005T090000
+DTEND;TZID=Europe/Berlin:20261005T093000
+RRULE:FREQ=WEEKLY;COUNT=3
+SUMMARY:Standup
+END:VEVENT
+BEGIN:VEVENT
+UID:standup@test
+RECURRENCE-ID;TZID=Europe/Berlin:20261012T090000
+DTSTART;TZID=Europe/Berlin:20261012T110000
+DTEND;TZID=Europe/Berlin:20261012T113000
+SUMMARY:Standup (moved)
+END:VEVENT
+END:VCALENDAR
+";
+
+    #[test]
+    fn override_rows_from_files_replace_their_slot() {
+        let db = temp_db();
+        let c = cal(&db);
+        assert_eq!(import_ics_impl(&db, &c, OVERRIDE_FEED).unwrap().imported, 2);
+        let got: Vec<(String, String)> =
+            list(&db, "2026-10-01T00:00:00Z", "2026-10-25T00:00:00Z").into_iter().map(|o| (o.start, o.title)).collect();
+        assert_eq!(
+            got,
+            vec![
+                ("2026-10-05T07:00:00Z".to_string(), "Standup".to_string()),
+                ("2026-10-12T09:00:00Z".to_string(), "Standup (moved)".to_string()),
+                ("2026-10-19T07:00:00Z".to_string(), "Standup".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn absurd_durations_do_not_break_imports() {
+        let db = temp_db();
+        let c = cal(&db);
+        let text = "BEGIN:VCALENDAR
+BEGIN:VEVENT
+UID:long@test
+DTSTART:20261015T090000Z
+DURATION:P9223372036854775807W
+SUMMARY:Broken
+BEGIN:VALARM
+TRIGGER:-P9223372036854775807D
+ACTION:DISPLAY
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+";
+        assert_eq!(import_ics_impl(&db, &c, text).unwrap().imported, 1);
+        let occ = list(&db, "2026-10-15T00:00:00Z", "2026-10-16T00:00:00Z");
+        assert_eq!(occ.len(), 1);
+        assert_eq!(occ[0].start, "2026-10-15T09:00:00Z");
+        assert!(get_event_impl(&db, &occ[0].event_id).unwrap().alarms.is_empty());
+    }
 }

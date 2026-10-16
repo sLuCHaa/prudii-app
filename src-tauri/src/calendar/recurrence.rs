@@ -61,6 +61,15 @@ fn to_rrule_dt(tz: Tz, n: NaiveDateTime) -> DateTime<rrule::Tz> {
     wall_to_utc(&tz, n).with_timezone(&rrule::Tz::Tz(tz))
 }
 
+/// Lists denser than every five minutes stall expansion like sub-hourly frequencies do.
+fn too_dense(rule: &str) -> bool {
+    rule.split(';').any(|part| {
+        let (key, value) = part.split_once('=').unwrap_or((part, ""));
+        let count = value.split(',').filter(|v| !v.trim().is_empty()).count();
+        (key.eq_ignore_ascii_case("BYSECOND") && count > 1) || (key.eq_ignore_ascii_case("BYMINUTE") && count > 12)
+    })
+}
+
 /// The row's rule set, or None when it is not a series or its rule is unusable
 /// (such rows then behave like single events).
 fn rule_set(row: &EventRow) -> Option<RRuleSet> {
@@ -76,7 +85,7 @@ fn rule_set(row: &EventRow) -> Option<RRuleSet> {
         let text = normalize_until(rule.trim().trim_start_matches("RRULE:"), row.all_day, tz);
         match text.parse::<RRule<Unvalidated>>() {
             // Expansion walks from DTSTART on every query; minute steps over years stall it.
-            Ok(parsed) if matches!(parsed.get_freq(), Frequency::Secondly | Frequency::Minutely) => {
+            Ok(parsed) if matches!(parsed.get_freq(), Frequency::Secondly | Frequency::Minutely) || too_dense(&text) => {
                 log::warn!("ignoring sub-hourly RRULE {:?} on event {}", rule, row.id)
             }
             Ok(parsed) => match parsed.validate(dt_start) {
@@ -494,5 +503,17 @@ mod tests {
         assert_eq!(shift_until("FREQ=DAILY;UNTIL=20261026", true, d), "FREQ=DAILY;UNTIL=20261027");
         assert_eq!(shift_until("FREQ=DAILY;UNTIL=junk", true, d), "FREQ=DAILY;UNTIL=junk");
         assert_eq!(shift_until("FREQ=DAILY;COUNT=3", false, d), "FREQ=DAILY;COUNT=3");
+    }
+
+    #[test]
+    fn dense_minute_and_second_lists_fall_back_to_a_single_event() {
+        let minutes = (0..13).map(|m| (m * 4).to_string()).collect::<Vec<_>>().join(",");
+        let dense_rule = format!("FREQ=DAILY;BYHOUR=9;BYMINUTE={}", minutes);
+        let dense = row("2026-10-05T09:00:00", "2026-10-05T09:01:00", BERLIN, Some(dense_rule.as_str()));
+        assert_eq!(starts(&dense, "2026-10-05T00:00:00Z", "2026-10-08T00:00:00Z"), vec!["2026-10-05T07:00:00Z"]);
+        let seconds = row("2026-10-05T09:00:00", "2026-10-05T09:01:00", BERLIN, Some("FREQ=DAILY;BYSECOND=0,30"));
+        assert_eq!(starts(&seconds, "2026-10-05T00:00:00Z", "2026-10-08T00:00:00Z").len(), 1);
+        let fine = row("2026-10-05T09:00:00", "2026-10-05T09:15:00", BERLIN, Some("FREQ=DAILY;COUNT=2;BYHOUR=9;BYMINUTE=0,30"));
+        assert_eq!(starts(&fine, "2026-10-05T00:00:00Z", "2026-10-08T00:00:00Z"), vec!["2026-10-05T07:00:00Z", "2026-10-05T07:30:00Z"]);
     }
 }

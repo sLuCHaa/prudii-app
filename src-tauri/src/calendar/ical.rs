@@ -239,6 +239,15 @@ fn lower_or(p: Option<&str>, default: &str) -> String {
     p.map(|v| v.to_ascii_lowercase()).unwrap_or_else(|| default.to_string())
 }
 
+/// Feeds re-send UID-less events on every refresh; a stable stand-in keeps them one row.
+fn fallback_uid(c: &Component) -> String {
+    use sha2::{Digest, Sha256};
+    let value = |name: &str| c.prop(name).map(|p| p.value.as_str()).unwrap_or("");
+    let key = format!("{}|{}|{}", value("DTSTART"), value("SUMMARY"), value("RRULE"));
+    let hex: String = Sha256::digest(key.as_bytes()).iter().take(12).map(|b| format!("{:02x}", b)).collect();
+    format!("{}@prudii", hex)
+}
+
 fn parse_event(c: &Component, timezones: &[Component]) -> Option<ParsedEvent> {
     let start_prop = c.prop("DTSTART")?;
     let mut start_val = parse_one(start_prop.value.split(',').next()?)?;
@@ -294,7 +303,7 @@ fn parse_event(c: &Component, timezones: &[Component]) -> Option<ParsedEvent> {
             .text("UID")
             .map(|u| u.trim().to_string())
             .filter(|u| !u.is_empty())
-            .unwrap_or_else(|| format!("{}@prudii", uuid::Uuid::new_v4())),
+            .unwrap_or_else(|| fallback_uid(c)),
         recurrence_id,
         title: c.text("SUMMARY").unwrap_or_default(),
         description: c.text("DESCRIPTION").unwrap_or_default().trim_end().to_string(),
@@ -594,5 +603,21 @@ mod tests {
         let ics = event_to_ics(&ExportEvent { row: &row, alarms: &[], attendees: &[] }, chrono::Utc::now());
         assert!(ics.contains("DTSTART:20261020T120000Z\r\n"), "{ics}");
         assert!(ics.contains("DTEND:20261020T133000Z\r\n"));
+    }
+
+    #[test]
+    fn missing_uids_are_stable_across_fetches() {
+        let first = "BEGIN:VEVENT
+DTSTAMP:20261015T080000Z
+DTSTART:20261015T070000Z
+SUMMARY:Gym
+END:VEVENT
+";
+        let later = first.replace("DTSTAMP:20261015T080000Z", "DTSTAMP:20261016T120000Z");
+        let other = first.replace("SUMMARY:Gym", "SUMMARY:Swim");
+        let uid = |t: &str| parse_calendar(t).events[0].uid.clone();
+        assert_eq!(uid(first), uid(&later));
+        assert_ne!(uid(first), uid(&other));
+        assert!(uid(first).ends_with("@prudii"));
     }
 }
