@@ -681,6 +681,14 @@ fn switch_series_form(conn: &Connection, master: &mut EventRow, key: Option<&str
     Ok(())
 }
 
+/// Received invitations keep the organizer's SEQUENCE so later updates still
+/// compare against it; only events this app owns count their own edits.
+fn bump_sequence(ev: &mut EventRow) {
+    if ev.is_organizer || ev.organizer_email.is_none() {
+        ev.sequence += 1;
+    }
+}
+
 /// Standalone events and override rows: fields apply directly. Overrides never
 /// take a rule or a calendar of their own.
 fn update_single(conn: &Connection, mut ev: EventRow, patch: &EventPatch) -> Result<String, String> {
@@ -699,7 +707,7 @@ fn update_single(conn: &Connection, mut ev: EventRow, patch: &EventPatch) -> Res
             ev.calendar_id = cal.clone();
         }
     }
-    ev.sequence += 1;
+    bump_sequence(&mut ev);
     write_event(conn, &ev)?;
     if let Some(a) = &patch.alarms {
         set_alarms(conn, &ev.id, a)?;
@@ -773,7 +781,7 @@ fn update_all(conn: &Connection, mut master: EventRow, key: Option<&str>, patch:
         .map_err(err)?;
         master.calendar_id = cal.clone();
     }
-    master.sequence += 1;
+    bump_sequence(&mut master);
     write_event(conn, &master)?;
     if let Some(a) = &patch.alarms {
         set_alarms(conn, &master.id, a)?;
@@ -804,7 +812,7 @@ fn split_series(conn: &Connection, master: &mut EventRow, key: &str) -> Result<E
     }
     master.exdates.retain(|x| x.as_str() < key);
     master.rdates.retain(|x| x.as_str() < key);
-    master.sequence += 1;
+    bump_sequence(master);
     write_event(conn, master)?;
     write_event(conn, &tail)?;
     copy_children(conn, &master.id, &tail.id)?;
@@ -881,7 +889,7 @@ pub(crate) fn delete_event_impl(db: &Database, id: &str, occurrence_key: Option<
                     master.exdates.push(key);
                     master.exdates.sort();
                 }
-                master.sequence += 1;
+                bump_sequence(&mut master);
                 write_event(&tx, &master)?;
             }
             Scope::Following if key != master.dtstart => {
@@ -891,7 +899,7 @@ pub(crate) fn delete_event_impl(db: &Database, id: &str, occurrence_key: Option<
                 master.exdates.retain(|x| *x < key);
                 master.rdates.retain(|x| *x < key);
                 delete_overrides(&tx, &master.calendar_id, &master.uid, Some(&key))?;
-                master.sequence += 1;
+                bump_sequence(&mut master);
                 write_event(&tx, &master)?;
             }
             Scope::Following | Scope::All => {
@@ -1544,6 +1552,29 @@ mod tests {
         import_ics_impl(&db, &c, OUTLOOK).unwrap();
         let older = OUTLOOK.replace("SEQUENCE:2", "SEQUENCE:1");
         assert_eq!(import_ics_impl(&db, &c, &older).unwrap(), ImportResult { imported: 0, updated: 0, skipped: 1 });
+    }
+
+    const INVITED: &str = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:inv-1\r\nSEQUENCE:3\r\nDTSTART:20261020T070000Z\r\nDTEND:20261020T080000Z\r\nRRULE:FREQ=WEEKLY;COUNT=3\r\nSUMMARY:Review\r\nORGANIZER:mailto:boss@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+
+    #[test]
+    fn local_edits_of_a_received_invitation_keep_the_organizer_sequence() {
+        let db = temp_db();
+        let c = cal(&db);
+        import_ics_impl(&db, &c, INVITED).unwrap();
+        let id: String = db.lock_db().query_row("SELECT id FROM events WHERE uid = 'inv-1'", [], |r| r.get(0)).unwrap();
+        let renamed = update_event_impl(&db, &id, None, Scope::All, EventPatch { title: Some("Review (prep)".into()), ..Default::default() }).unwrap();
+        assert_eq!(renamed.event.sequence, 3);
+        delete_event_impl(&db, &id, Some("2026-10-27T07:00:00".into()), Scope::This).unwrap();
+        assert_eq!(get_event_impl(&db, &id).unwrap().event.sequence, 3);
+    }
+
+    #[test]
+    fn local_events_still_count_their_edits() {
+        let db = temp_db();
+        let c = cal(&db);
+        let d = create_event_impl(&db, input(&c, "Dentist", timed("2026-10-15T07:00:00Z", "2026-10-15T08:00:00Z"))).unwrap();
+        let renamed = update_event_impl(&db, &d.event.id, None, Scope::All, EventPatch { title: Some("Dentist!".into()), ..Default::default() }).unwrap();
+        assert_eq!(renamed.event.sequence, 1);
     }
 
     #[test]
