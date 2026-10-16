@@ -7,8 +7,7 @@ import { useCalendars, useCreateCalendar, useDeleteCalendar, useExportIcs, useIm
 import { useAppStore } from "../../stores/appStore";
 import { useDialog } from "../ui/DialogProvider";
 import { ContextMenu } from "../ui/ContextMenu";
-
-export const CALENDAR_COLORS = ["#3b82f6", "#ef4444", "#f59e0b", "#10b981", "#8b5cf6", "#ec4899", "#14b8a6", "#64748b"];
+import { CALENDAR_COLORS } from "../../lib/calendar/palette";
 
 export function CalendarList() {
   const { t } = useTranslation();

@@ -7,7 +7,8 @@ use crate::calendar::{
     Calendar, CalendarPatch, CalendarSettings, EventDetail, EventInput, EventPatch, EventTimes, ImportResult, Occurrence, Scope,
 };
 use crate::calendar::subscription::{self, feed_client, normalize_feed_url, KeyringLinks, LinkStore};
-use crate::calendar::SubscribeResult;
+use crate::calendar::bundle::{import_sources_impl, sources_from_path};
+use crate::calendar::{BundleImportResult, SubscribeResult};
 use crate::db::Database;
 use tauri::{AppHandle, Emitter, State};
 
@@ -167,6 +168,38 @@ pub fn import_ics(app: AppHandle, db: State<'_, Database>, calendar_id: String) 
         let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
         let result = import_ics_impl(&db, &calendar_id, &String::from_utf8_lossy(&bytes))?;
         changed(&app);
+        Ok(Some(result))
+    })
+}
+
+#[tauri::command(async)]
+pub fn import_calendar_files(app: AppHandle, db: State<'_, Database>, untitled_name: String) -> Result<Option<BundleImportResult>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    super::catch_panic(|| {
+        let (tx, rx) = std::sync::mpsc::channel();
+        app.dialog()
+            .file()
+            .add_filter("iCalendar", &["ics", "ical", "icalendar", "zip"])
+            .pick_files(move |picked| {
+                let _ = tx.send(picked);
+            });
+        let Some(picked) = rx.recv().map_err(|e| format!("Dialog error: {}", e))? else {
+            return Ok(None);
+        };
+        let (mut sources, mut failed) = (Vec::new(), Vec::new());
+        for file in picked {
+            if let Some(path) = file.as_path() {
+                let (s, f) = sources_from_path(path);
+                sources.extend(s);
+                failed.extend(f);
+            }
+        }
+        let mut result = import_sources_impl(&db, sources, &untitled_name);
+        failed.append(&mut result.failed);
+        result.failed = failed;
+        if !result.calendars.is_empty() {
+            changed(&app);
+        }
         Ok(Some(result))
     })
 }

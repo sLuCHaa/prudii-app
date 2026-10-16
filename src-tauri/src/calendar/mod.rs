@@ -1,5 +1,6 @@
 //! Local calendar: models, iCalendar mapping, recurrence expansion and storage.
 
+pub mod bundle;
 pub mod content_line;
 pub mod ical;
 pub mod meeting;
@@ -211,4 +212,26 @@ pub struct SubscribeResult {
     pub calendar: Calendar,
     /// Events mirrored by the first fetch.
     pub events: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct BundleCalendarResult {
+    pub calendar_id: String,
+    pub name: String,
+    pub created: bool,
+    pub imported: u32,
+    pub updated: u32,
+    pub skipped: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct BundleFailure {
+    pub file: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct BundleImportResult {
+    pub calendars: Vec<BundleCalendarResult>,
+    pub failed: Vec<BundleFailure>,
 }

@@ -1165,6 +1165,7 @@ pub fn run() {
             commands::calendar::get_calendar_settings,
             commands::calendar::update_calendar_settings,
             commands::calendar::import_ics,
+            commands::calendar::import_calendar_files,
             commands::calendar::export_ics,
             commands::calendar::subscribe_calendar,
             commands::calendar::refresh_subscription,
