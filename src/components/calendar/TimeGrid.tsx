@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { differenceInCalendarDays, format, isToday } from "date-fns";
 import type { EventTimes, Occurrence } from "../../types/calendar";
@@ -50,6 +50,19 @@ export function TimeGrid({ days, occurrences, tasks, workStart, workEnd, workDay
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = SCROLL_TO_HOUR * HOUR_HEIGHT;
+  }, []);
+
+  // The rows above end where the grid's scrollbar starts. A gutter reserved on a
+  // non-scrolling row takes the platform's wider width, so the columns drifted apart.
+  const [gutter, setGutter] = useState(0);
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const measure = () => setGutter(el.offsetWidth - el.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
@@ -193,23 +206,24 @@ export function TimeGrid({ days, occurrences, tasks, workStart, workEnd, workDay
 
   return (
     <div className="flex flex-col h-full min-h-0 select-none">
-      <div className="flex shrink-0 border-b border-border overflow-y-hidden [scrollbar-gutter:stable]">
-        <div className="w-14 shrink-0" />
-        {days.map((d) => (
-          <div key={isoDate(d)} className="flex-1 min-w-0 py-1.5 text-center">
-            <div className="text-[11px] uppercase tracking-wide text-text-tertiary">{format(d, "EEE", { locale: dateLocale() })}</div>
-            <div
-              className={`mx-auto mt-0.5 w-7 h-7 grid place-items-center rounded-full text-sm font-semibold ${
-                isToday(d) ? "bg-accent text-white" : "text-text"
-              }`}
-            >
-              {d.getDate()}
+      <div className="shrink-0 border-b-2 border-border bg-bg-secondary/40" style={{ paddingRight: gutter }}>
+        <div className="flex border-b border-border/60">
+          <div className="w-14 shrink-0" />
+          {days.map((d) => (
+            <div key={isoDate(d)} className="flex-1 min-w-0 border-l border-border py-1.5 text-center">
+              <div className="text-[11px] uppercase tracking-wide text-text-tertiary">{format(d, "EEE", { locale: dateLocale() })}</div>
+              <div
+                className={`mx-auto mt-0.5 w-7 h-7 grid place-items-center rounded-full text-sm font-semibold ${
+                  isToday(d) ? "bg-accent text-white" : "text-text"
+                }`}
+              >
+                {d.getDate()}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
+        <AllDayLane days={days} occurrences={occurrences} tasks={tasks} use24h={use24h} label={t("calendar.allDay")} handlers={handlers} />
       </div>
-
-      <AllDayLane days={days} occurrences={occurrences} tasks={tasks} use24h={use24h} label={t("calendar.allDay")} handlers={handlers} />
 
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto [scrollbar-gutter:stable]">
         <div className="relative flex" style={{ height: 24 * HOUR_HEIGHT }}>
@@ -232,7 +246,7 @@ export function TimeGrid({ days, occurrences, tasks, workStart, workEnd, workDay
                 className={`relative flex-1 min-w-0 border-l border-border ${workDays.includes(day.getDay()) ? "" : "bg-bg-secondary/40"}`}
               >
                 {HOURS.map((h) => (
-                  <div key={h} className="pointer-events-none absolute inset-x-0 border-t border-border/60" style={{ top: h * HOUR_HEIGHT }} />
+                  <div key={h} className="pointer-events-none absolute inset-x-0 border-t border-border/40" style={{ top: h * HOUR_HEIGHT }} />
                 ))}
                 <div
                   className="pointer-events-none absolute inset-x-0 bg-accent/[0.04]"
@@ -350,7 +364,7 @@ function AllDayLane({ days, occurrences, tasks, use24h, label, handlers }: AllDa
   const n = days.length;
 
   return (
-    <div className="flex shrink-0 border-b border-border overflow-y-hidden [scrollbar-gutter:stable]">
+    <div className="flex">
       <div className="w-14 shrink-0 pt-1.5 pr-2 text-right text-[10px] text-text-tertiary">{label}</div>
       <div className="relative flex flex-1" style={{ minHeight: height }}>
         {days.map((day) => {
