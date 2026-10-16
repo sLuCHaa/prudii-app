@@ -349,6 +349,98 @@ pub fn delete_password(account_id: &str) -> Result<()> {
     Ok(())
 }
 
+fn calendar_link_key(calendar_id: &str) -> String {
+    format!("calendar-subscription:{}", calendar_id)
+}
+
+fn seal(value: &str) -> Option<String> {
+    #[cfg(windows)]
+    {
+        dpapi::encrypt(value)
+    }
+    #[cfg(not(windows))]
+    {
+        Some(value.to_string())
+    }
+}
+
+fn unseal(stored: &str) -> Option<String> {
+    #[cfg(windows)]
+    {
+        if dpapi::is_encrypted(stored) {
+            return dpapi::decrypt(stored);
+        }
+    }
+    Some(stored.to_string())
+}
+
+/// Second copy of a subscription link, sealed like `accounts.stored_password`.
+pub(crate) fn link_to_db(conn: &Connection, calendar_id: &str, url: &str) -> bool {
+    let Some(sealed) = seal(url) else {
+        log::error!("[credentials] sealing a calendar link failed — not stored in the database");
+        return false;
+    };
+    matches!(
+        conn.execute("UPDATE calendars SET secret_link = ?1 WHERE id = ?2", rusqlite::params![sealed, calendar_id]),
+        Ok(1)
+    )
+}
+
+pub(crate) fn link_from_db(conn: &Connection, calendar_id: &str) -> Option<String> {
+    let stored: String = conn
+        .query_row(
+            "SELECT secret_link FROM calendars WHERE id = ?1 AND secret_link IS NOT NULL AND secret_link != ''",
+            rusqlite::params![calendar_id],
+            |r| r.get(0),
+        )
+        .ok()?;
+    unseal(&stored)
+}
+
+/// Same chain as passwords: session cache, OS keyring, then the database copy.
+pub fn store_calendar_link(calendar_id: &str, url: &str) -> Result<()> {
+    let key = calendar_link_key(calendar_id);
+    PASSWORD_CACHE.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone(), url.to_string());
+    let keyring_stored = match keyring::Entry::new(SERVICE_NAME, &key).and_then(|e| e.set_password(url)) {
+        Ok(()) => true,
+        Err(e) => {
+            log::warn!("[credentials] Keyring store failed for a calendar link: {}", e);
+            false
+        }
+    };
+    let db_stored = open_db().is_some_and(|conn| link_to_db(&conn, calendar_id, url));
+    if !keyring_stored && !db_stored {
+        anyhow::bail!("calendar link could not be persisted (keyring and database both failed)");
+    }
+    Ok(())
+}
+
+pub fn get_calendar_link(calendar_id: &str) -> Result<String> {
+    let key = calendar_link_key(calendar_id);
+    if let Some(url) = PASSWORD_CACHE.lock().unwrap_or_else(|e| e.into_inner()).get(&key) {
+        return Ok(url.clone());
+    }
+    let from_keyring = keyring::Entry::new(SERVICE_NAME, &key).and_then(|e| e.get_password()).ok();
+    let url = match from_keyring {
+        Some(url) => url,
+        None => open_db().and_then(|conn| link_from_db(&conn, calendar_id)).ok_or_else(|| anyhow::anyhow!("no stored calendar link"))?,
+    };
+    PASSWORD_CACHE.lock().unwrap_or_else(|e| e.into_inner()).insert(key, url.clone());
+    Ok(url)
+}
+
+/// The database copy goes with the calendar row.
+pub fn delete_calendar_link(calendar_id: &str) {
+    let key = calendar_link_key(calendar_id);
+    PASSWORD_CACHE.lock().unwrap_or_else(|e| e.into_inner()).remove(&key);
+    if let Ok(entry) = keyring::Entry::new(SERVICE_NAME, &key) {
+        match entry.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => {}
+            Err(e) => log::warn!("[credentials] Keyring delete failed for a calendar link: {}", e),
+        }
+    }
+}
+
 /// Indirection over the secret storage so backup code can be tested without an OS keyring.
 pub trait SecretStore {
     fn get(&self, account_id: &str) -> Result<String, String>;
@@ -365,5 +457,40 @@ impl SecretStore for KeyringStore {
 
     fn set(&self, account_id: &str, secret: &str) -> Result<(), String> {
         store_password(account_id, secret).map_err(|e| e.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn calendar_db() -> (crate::db::Database, String) {
+        let db = crate::db::Database::new(std::env::temp_dir().join(format!("prudii-test-{}", uuid::Uuid::new_v4()))).unwrap();
+        let id = uuid::Uuid::new_v4().to_string();
+        db.lock_db()
+            .execute("INSERT INTO calendars (id, name, color, source) VALUES (?1, 'Feed', '#10b981', 'subscription')", rusqlite::params![id])
+            .unwrap();
+        (db, id)
+    }
+
+    #[test]
+    fn calendar_links_round_trip_through_the_database_fallback() {
+        let (db, id) = calendar_db();
+        let conn = db.lock_db();
+        let url = "https://calendar.example.com/private-abc/basic.ics";
+        assert!(link_to_db(&conn, &id, url));
+        assert_eq!(link_from_db(&conn, &id).as_deref(), Some(url));
+        let stored: String = conn.query_row("SELECT secret_link FROM calendars WHERE id = ?1", rusqlite::params![id], |r| r.get(0)).unwrap();
+        if cfg!(windows) {
+            assert!(stored.starts_with("dpapi:"), "the fallback copy is sealed on Windows");
+        }
+    }
+
+    #[test]
+    fn links_for_unknown_calendars_are_not_stored() {
+        let (db, _) = calendar_db();
+        let conn = db.lock_db();
+        assert!(!link_to_db(&conn, "missing", "https://example.com/a.ics"));
+        assert_eq!(link_from_db(&conn, "missing"), None);
     }
 }
