@@ -8,6 +8,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import i18n from "../../lib/i18n";
 import { EditorToolbar } from "./EditorToolbar";
 import { cleanPastedHtml } from "./pasteCleanup";
+import { LinkClickGuard } from "./linkEditing";
 
 const DEFAULT_EDITOR_CLASSNAME = "prose prose-sm max-w-none focus:outline-none min-h-[200px] text-text";
 
@@ -52,6 +53,7 @@ export function useRichTextEditor({
         },
       }),
       Underline,
+      LinkClickGuard,
       Placeholder.configure({
         placeholder: placeholder ?? "",
       }),

@@ -3,9 +3,11 @@ import { useEditorState, type Editor } from "@tiptap/react";
 import { Bold, Italic, Strikethrough, List, ListOrdered, Quote, Code, Link2, Undo, Redo } from "lucide-react";
 import i18n from "../../lib/i18n";
 import { LinkDialog } from "./LinkDialog";
+import { selectLinkForEditing } from "./linkEditing";
 
 export function EditorToolbar({ editor, linkDialogOpen, setLinkDialogOpen }: { editor: Editor | null; linkDialogOpen: boolean; setLinkDialogOpen: (open: boolean) => void }) {
   const [linkDialogUrl, setLinkDialogUrl] = useState("");
+  const [linkDialogEditing, setLinkDialogEditing] = useState(false);
 
   // Tiptap 3 does not re-render on transactions, so isActive read during render goes stale.
   const state = useEditorState({
@@ -28,8 +30,10 @@ export function EditorToolbar({ editor, linkDialogOpen, setLinkDialogOpen }: { e
   if (!editor || !state) return null;
 
   const openLinkDialog = () => {
-    const previousUrl = editor.getAttributes("link").href || "";
-    setLinkDialogUrl(previousUrl);
+    selectLinkForEditing(editor);
+    const editing = editor.isActive("link");
+    setLinkDialogEditing(editing);
+    setLinkDialogUrl(editing ? editor.getAttributes("link").href || "" : "");
     setLinkDialogOpen(true);
   };
 
@@ -41,7 +45,6 @@ export function EditorToolbar({ editor, linkDialogOpen, setLinkDialogOpen }: { e
     editor.chain().focus().extendMarkRange("link").unsetLink().run();
   };
 
-  const hasExistingLink = state.link;
 
   const buttons = [
     { icon: Bold, action: () => editor.chain().focus().toggleBold().run(), active: state.bold, title: "Bold (Ctrl+B)" },
@@ -100,7 +103,7 @@ export function EditorToolbar({ editor, linkDialogOpen, setLinkDialogOpen }: { e
         onSubmit={handleLinkSubmit}
         onRemove={handleLinkRemove}
         initialUrl={linkDialogUrl}
-        hasExistingLink={hasExistingLink}
+        hasExistingLink={linkDialogEditing}
       />
     </>
   );
