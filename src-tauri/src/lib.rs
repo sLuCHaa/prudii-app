@@ -521,6 +521,7 @@ pub fn run() {
                 .path()
                 .app_data_dir()
                 .expect("Failed to get app data dir");
+            crate::calendar::set_app_handle(app.handle().clone());
 
             // Temp directory for PDF preview downloads (redirected from user Downloads)
             let temp_dir = app_data_dir.join("temp_previews");

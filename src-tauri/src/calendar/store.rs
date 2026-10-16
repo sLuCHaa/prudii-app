@@ -237,7 +237,7 @@ pub(crate) fn update_calendar_settings_impl(db: &Database, s: &CalendarSettings)
     write_setting(&conn, "calendar_work_days", &days.iter().map(|d| d.to_string()).collect::<Vec<_>>().join(","))
 }
 
-const EVENT_COLS: &str = "e.id, e.calendar_id, e.uid, e.recurrence_id, e.title, e.description, e.location, e.all_day, \
+pub(super) const EVENT_COLS: &str = "e.id, e.calendar_id, e.uid, e.recurrence_id, e.title, e.description, e.location, e.all_day, \
     e.dtstart, e.dtend, e.tzid, e.rrule, e.exdates, e.rdates, e.status, e.transparency, e.sequence, e.organizer_email, \
     e.organizer_name, e.is_organizer, e.my_partstat, e.account_id, e.ical_raw";
 
@@ -248,7 +248,7 @@ fn json_list(s: Option<String>) -> Vec<String> {
     s.and_then(|v| serde_json::from_str(&v).ok()).unwrap_or_default()
 }
 
-fn row_to_event(r: &rusqlite::Row) -> rusqlite::Result<EventRow> {
+pub(super) fn row_to_event(r: &rusqlite::Row) -> rusqlite::Result<EventRow> {
     Ok(EventRow {
         id: r.get(0)?,
         calendar_id: r.get(1)?,
@@ -300,7 +300,7 @@ fn find_slot(conn: &Connection, calendar_id: &str, uid: &str, recurrence_id: Opt
 }
 
 /// Inserts or overwrites a row by id, recomputing the derived range columns.
-fn write_event(conn: &Connection, ev: &EventRow) -> Result<(), String> {
+pub(super) fn write_event(conn: &Connection, ev: &EventRow) -> Result<(), String> {
     let (start_utc, range_end) = derive_range(ev).ok_or_else(|| "calendar.errors.invalidTimes".to_string())?;
     let exdates = serde_json::to_string(&ev.exdates).map_err(err)?;
     let rdates = serde_json::to_string(&ev.rdates).map_err(err)?;
@@ -329,7 +329,7 @@ fn write_event(conn: &Connection, ev: &EventRow) -> Result<(), String> {
     Ok(())
 }
 
-fn set_alarms(conn: &Connection, event_id: &str, alarms: &[i64]) -> Result<(), String> {
+pub(super) fn set_alarms(conn: &Connection, event_id: &str, alarms: &[i64]) -> Result<(), String> {
     conn.execute("DELETE FROM event_alarms WHERE event_id = ?1", params![event_id]).map_err(err)?;
     let mut list: Vec<i64> = alarms.iter().copied().filter(|m| (0..=MAX_ALARM_MINUTES).contains(m)).collect();
     list.sort_unstable();
@@ -373,7 +373,7 @@ fn load_attendees(conn: &Connection, event_id: &str) -> Result<Vec<Attendee>, St
     rows
 }
 
-fn set_attendees(conn: &Connection, event_id: &str, list: &[Attendee]) -> Result<(), String> {
+pub(super) fn set_attendees(conn: &Connection, event_id: &str, list: &[Attendee]) -> Result<(), String> {
     conn.execute("DELETE FROM event_attendees WHERE event_id = ?1", params![event_id]).map_err(err)?;
     for a in list {
         let role = if ROLES.contains(&a.role.as_str()) { a.role.as_str() } else { "req-participant" };

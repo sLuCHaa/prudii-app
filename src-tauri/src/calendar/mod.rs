@@ -4,6 +4,7 @@ pub mod bundle;
 pub mod content_line;
 pub mod ical;
 pub mod invite_mail;
+pub mod invite_store;
 pub mod itip;
 pub mod meeting;
 pub mod recurrence;
@@ -17,6 +18,20 @@ use serde::{Deserialize, Serialize};
 /// `calendars.source` of a read-only feed mirror.
 pub const SUBSCRIPTION: &str = "subscription";
 pub const REFRESH_CHOICES: [i64; 4] = [15, 60, 360, 1440];
+
+static APP: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
+
+/// Body parsing has no AppHandle; organizer updates it applies must still refresh open views.
+pub fn set_app_handle(app: tauri::AppHandle) {
+    let _ = APP.set(app);
+}
+
+pub fn notify_changed() {
+    if let Some(app) = APP.get() {
+        use tauri::Emitter;
+        let _ = app.emit("calendar-changed", ());
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Calendar {
