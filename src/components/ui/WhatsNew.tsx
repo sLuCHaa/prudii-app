@@ -66,16 +66,9 @@ function WhatsNewDialog({ release, onClose }: { release: WhatsNewRelease; onClos
   const { t } = useTranslation();
   const trapRef = useFocusTrap<HTMLDivElement>(true);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !e.defaultPrevented) onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
+  // Only the button closes it: a stray click or Escape would use up the one-time window.
   return (
-    <div className="fixed inset-0 modal-backdrop flex items-center justify-center z-100" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="fixed inset-0 modal-backdrop flex items-center justify-center z-100">
       <div
         ref={trapRef}
         role="dialog"

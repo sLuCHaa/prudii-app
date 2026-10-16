@@ -54,14 +54,30 @@ describe("WhatsNew", () => {
     expect(localStorage.getItem(SEEN_KEY)).toBe("1.6.11");
   });
 
-  it("marks the version as seen when closed", async () => {
+  it("stays open on Escape and on a click beside it", async () => {
     act(() => {
       root.render(createElement(DialogProvider, null, createElement(WhatsNew, { hasAccounts: true })));
     });
     await flush();
-    expect(document.getElementById("whats-new-title")).not.toBeNull();
     act(() => {
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    const backdrop = document.querySelector(".modal-backdrop") as HTMLElement;
+    act(() => {
+      backdrop.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(document.getElementById("whats-new-title")).not.toBeNull();
+    expect(localStorage.getItem(SEEN_KEY)).toBe("1.6.11");
+  });
+
+  it("marks the version as seen when confirmed", async () => {
+    act(() => {
+      root.render(createElement(DialogProvider, null, createElement(WhatsNew, { hasAccounts: true })));
+    });
+    await flush();
+    const button = document.querySelector('[aria-labelledby="whats-new-title"] button') as HTMLButtonElement;
+    act(() => {
+      button.click();
     });
     expect(document.getElementById("whats-new-title")).toBeNull();
     expect(localStorage.getItem(SEEN_KEY)).toBe("1.7.0");
