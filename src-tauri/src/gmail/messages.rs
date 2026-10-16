@@ -2,6 +2,7 @@
 
 use crate::db::Database;
 use crate::gmail::api::{self, GmailClient, GmailPayload};
+use crate::calendar::invite_mail::{choose, is_calendar_part, method_param, InviteCandidate};
 use anyhow::Result;
 
 /// Fetch the full body of a Gmail message and store it in the DB.
@@ -21,7 +22,8 @@ pub async fn fetch_message_body(
     let mut body_html = String::new();
     let mut attachments: Vec<AttachmentInfo> = Vec::new();
 
-    extract_body_parts(payload, &mut body_text, &mut body_html, &mut attachments);
+    let mut calendars: Vec<CalendarRef> = Vec::new();
+    extract_body_parts(payload, &mut body_text, &mut body_html, &mut attachments, &mut calendars);
 
     // Classified only now: an attachment part can sit ahead of the text/html part
     // in the payload tree, so the body is not complete until the walk has ended.
@@ -79,6 +81,18 @@ pub async fn fetch_message_body(
         }
     }
 
+    let mut invites: Vec<InviteCandidate> = Vec::new();
+    for c in &calendars {
+        let bytes = match (&c.data, &c.attachment_id) {
+            (Some(data), _) => api::decode_base64url(data).ok(),
+            (None, Some(id)) => client.get_attachment(gmail_id, id).await.ok(),
+            (None, None) => None,
+        };
+        if let Some(b) = bytes {
+            invites.push(InviteCandidate { text: String::from_utf8_lossy(&b).into_owned(), method_param: c.method_param.clone(), inline: true });
+        }
+    }
+
     // Download and save attachments BEFORE writing body to DB.
     // The dedup mechanism polls for non-empty body_text/body_html to detect completion,
     // so the body update must happen last to prevent premature cache hits while
@@ -131,6 +145,13 @@ pub async fn fetch_message_body(
             });
         }
 
+        invites.extend(
+            downloaded
+                .iter()
+                .filter(|a| is_calendar_part(a.mime_type.as_deref().unwrap_or(""), Some(&a.filename)))
+                .map(|a| InviteCandidate { text: String::from_utf8_lossy(&a.data).into_owned(), method_param: None, inline: false }),
+        );
+
         for att in &downloaded {
             let file_path = attach_dir.join(&att.filename);
             if let Err(e) = tokio::fs::write(&file_path, &att.data).await {
@@ -168,6 +189,8 @@ pub async fn fetch_message_body(
             }
         }
     }
+
+    crate::calendar::invite_store::store_invite(db, mail_id, choose(invites).as_ref());
 
     // Write body LAST — this is what the dedup mechanism polls for, so it must happen
     // after all attachments are saved to ensure they're available when the UI queries them.
@@ -334,18 +357,36 @@ struct AttachmentInfo {
     is_inline: bool,
 }
 
+/// An inline text/calendar part; Gmail hands larger ones out by attachment id.
+struct CalendarRef {
+    data: Option<String>,
+    attachment_id: Option<String>,
+    method_param: Option<String>,
+}
+
 /// Recursively extract text/html bodies and attachment info from a Gmail MIME payload.
 fn extract_body_parts(
     payload: &GmailPayload,
     body_text: &mut String,
     body_html: &mut String,
     attachments: &mut Vec<AttachmentInfo>,
+    calendars: &mut Vec<CalendarRef>,
 ) {
     let mime = payload.mime_type.as_deref().unwrap_or("");
     let filename = payload.filename.as_deref().unwrap_or("");
     let has_data = payload.body.as_ref().and_then(|b| b.data.as_ref()).map(|d| d.len()).unwrap_or(0);
     let has_parts = payload.parts.as_ref().map(|p| p.len()).unwrap_or(0);
     log::debug!("extract_body_parts: mime={} filename='{}' data_len={} parts={}", mime, filename, has_data, has_parts);
+
+    if filename.is_empty() && is_calendar_part(mime, None) {
+        let body = payload.body.as_ref();
+        calendars.push(CalendarRef {
+            data: body.and_then(|b| b.data.clone()).filter(|d| !d.is_empty()),
+            attachment_id: body.and_then(|b| b.attachment_id.clone()),
+            method_param: api::get_header(payload, "Content-Type").and_then(method_param),
+        });
+        return;
+    }
 
     if !filename.is_empty() || payload.body.as_ref().and_then(|b| b.attachment_id.as_ref()).is_some() {
         let body = payload.body.as_ref();
@@ -395,7 +436,7 @@ fn extract_body_parts(
 
     if let Some(ref parts) = payload.parts {
         for part in parts {
-            extract_body_parts(part, body_text, body_html, attachments);
+            extract_body_parts(part, body_text, body_html, attachments, calendars);
         }
     }
 }
@@ -475,5 +516,42 @@ mod move_plan_tests {
     fn moving_into_sent_or_draft_is_rejected_up_front() {
         assert!(plan_gmail_move("TRASH", "SENT").is_err());
         assert!(plan_gmail_move("INBOX", "DRAFT").is_err());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use base64::Engine;
+
+    fn b64(s: &str) -> String {
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(s)
+    }
+
+    #[test]
+    fn inline_calendar_parts_are_kept_apart_from_attachments() {
+        let payload: GmailPayload = serde_json::from_value(serde_json::json!({
+            "mimeType": "multipart/mixed",
+            "parts": [
+                { "mimeType": "multipart/alternative", "parts": [
+                    { "mimeType": "text/plain", "body": { "data": b64("You are invited.") } },
+                    { "mimeType": "text/calendar",
+                      "headers": [{ "name": "Content-Type", "value": "text/calendar; charset=\"UTF-8\"; method=REQUEST" }],
+                      "body": { "data": b64("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n") } },
+                    { "mimeType": "text/calendar", "filename": "", "body": { "attachmentId": "big-1", "size": 90000 } }
+                ]},
+                { "mimeType": "application/ics", "filename": "invite.ics", "body": { "attachmentId": "att-1", "size": 900 } }
+            ]
+        }))
+        .unwrap();
+        let (mut text, mut html, mut attachments, mut calendars) = (String::new(), String::new(), Vec::new(), Vec::new());
+        extract_body_parts(&payload, &mut text, &mut html, &mut attachments, &mut calendars);
+        assert_eq!(text, "You are invited.");
+        assert_eq!(calendars.len(), 2);
+        assert_eq!(calendars[0].method_param.as_deref(), Some("REQUEST"));
+        assert!(calendars[0].data.is_some());
+        assert_eq!(calendars[1].attachment_id.as_deref(), Some("big-1"));
+        assert_eq!(attachments.len(), 1);
+        assert_eq!(attachments[0].filename, "invite.ics");
     }
 }
