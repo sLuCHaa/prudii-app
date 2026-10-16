@@ -105,13 +105,14 @@ fn auto_update(conn: &Connection, mail: &MailInvite, p: &ParsedEvent) -> Result<
     }
     let me = itip::find_me(p, &mail.account_email);
     match rows.iter().find(|r| r.recurrence_id == p.recurrence_id) {
+        Some(slot) if slot.status == "cancelled" && p.sequence <= slot.sequence => Ok(false),
         Some(slot) if p.sequence >= slot.sequence => apply_update(conn, slot, p, &me),
         Some(_) => Ok(false),
         None => add_override(conn, anchor, p, &me),
     }
 }
 
-fn cancel_slot(conn: &Connection, master: &EventRow, key: &str) -> Result<bool, String> {
+fn cancel_slot(conn: &Connection, master: &EventRow, key: &str, sequence: i64) -> Result<bool, String> {
     let (Some((_, len)), Some(start)) = (slot_shape(master), key_to_naive(master.all_day, key)) else { return Ok(false) };
     let mut row = master.clone();
     row.id = uuid::Uuid::new_v4().to_string();
@@ -122,6 +123,7 @@ fn cancel_slot(conn: &Connection, master: &EventRow, key: &str) -> Result<bool, 
     row.dtstart = naive_to_key(master.all_day, start);
     row.dtend = naive_to_key(master.all_day, start + len);
     row.status = "cancelled".into();
+    row.sequence = master.sequence.max(sequence);
     if derive_range(&row).is_none() {
         return Ok(false);
     }
@@ -141,7 +143,7 @@ fn auto_cancel(conn: &Connection, mail: &MailInvite, target: &CancelTarget) -> R
     };
     if hit.is_empty() {
         return match &target.recurrence_id {
-            Some(k) if anchor.recurrence_id.is_none() && target.sequence >= anchor.sequence => cancel_slot(conn, anchor, k),
+            Some(k) if anchor.recurrence_id.is_none() && target.sequence >= anchor.sequence => cancel_slot(conn, anchor, k, target.sequence),
             _ => Ok(false),
         };
     }
@@ -149,6 +151,7 @@ fn auto_cancel(conn: &Connection, mail: &MailInvite, target: &CancelTarget) -> R
     for r in hit.into_iter().filter(|r| r.status != "cancelled" && target.sequence >= r.sequence) {
         let mut row = r.clone();
         row.status = "cancelled".into();
+        row.sequence = row.sequence.max(target.sequence);
         write_event(conn, &row)?;
         changed = true;
     }
@@ -429,5 +432,78 @@ mod tests {
         assert_eq!(event(&db, "r1", None).dtstart, "2026-10-20T09:00:00");
         store_invite(&db, "bare", None);
         assert_eq!(cols(), (None, None));
+    }
+
+    fn series(db: &Database, cal: &str) {
+        known(db, cal, &ics("REQUEST", &[vevent("s1", 0, "20261020T070000Z", YES, &["RRULE:FREQ=WEEKLY;COUNT=4"])]), "accepted");
+    }
+
+    fn cancel_all(seq: i64) -> String {
+        ics("CANCEL", &[vec!["UID:s1".into(), format!("SEQUENCE:{}", seq), ROBIN.into()]])
+    }
+
+    #[test]
+    fn an_older_update_arriving_after_a_cancellation_does_not_revive_the_series() {
+        let (db, cal) = setup();
+        series(&db, &cal);
+        mail(&db, "c1", "robin@example.com", &cancel_all(1));
+        mail(&db, "old", "robin@example.com", &ics("REQUEST", &[vevent("s1", 0, "20261020T080000Z", YES, &["RRULE:FREQ=WEEKLY;COUNT=4"])]));
+        assert!(process_mail_impl(&db, "c1").unwrap());
+        assert!(!process_mail_impl(&db, "old").unwrap());
+        assert_eq!(event(&db, "s1", None).status, "cancelled");
+        assert_eq!(event(&db, "s1", None).dtstart, "2026-10-20T07:00:00");
+    }
+
+    #[test]
+    fn a_cancellation_with_the_same_sequence_is_not_undone_by_an_update() {
+        let (db, cal) = setup();
+        series(&db, &cal);
+        mail(&db, "c1", "robin@example.com", &cancel_all(0));
+        mail(&db, "same", "robin@example.com", &ics("REQUEST", &[vevent("s1", 0, "20261020T080000Z", YES, &["RRULE:FREQ=WEEKLY;COUNT=4"])]));
+        assert!(process_mail_impl(&db, "c1").unwrap());
+        assert!(!process_mail_impl(&db, "same").unwrap());
+        assert_eq!(event(&db, "s1", None).status, "cancelled");
+    }
+
+    #[test]
+    fn an_older_update_does_not_revive_a_cancelled_slot() {
+        let (db, cal) = setup();
+        series(&db, &cal);
+        let cancel = ics(
+            "CANCEL",
+            &[vec!["UID:s1".into(), "SEQUENCE:1".into(), "RECURRENCE-ID:20261027T070000Z".into(), "DTSTART:20261027T070000Z".into(), ROBIN.into()]],
+        );
+        let older = ics("REQUEST", &[vevent("s1", 0, "20261027T090000Z", YES, &["RECURRENCE-ID:20261027T070000Z"])]);
+        mail(&db, "c1", "robin@example.com", &cancel);
+        mail(&db, "old", "robin@example.com", &older);
+        assert!(process_mail_impl(&db, "c1").unwrap());
+        assert!(!process_mail_impl(&db, "old").unwrap());
+        assert_eq!(event(&db, "s1", Some("2026-10-27T07:00:00")).status, "cancelled");
+    }
+
+    #[test]
+    fn a_newer_invitation_restores_a_cancelled_event() {
+        let (db, cal) = setup();
+        series(&db, &cal);
+        mail(&db, "c1", "robin@example.com", &cancel_all(1));
+        mail(&db, "new", "robin@example.com", &ics("REQUEST", &[vevent("s1", 2, "20261020T080000Z", YES, &["RRULE:FREQ=WEEKLY;COUNT=4"])]));
+        assert!(process_mail_impl(&db, "c1").unwrap());
+        assert!(process_mail_impl(&db, "new").unwrap());
+        assert_eq!(event(&db, "s1", None).status, "confirmed");
+        assert_eq!(event(&db, "s1", None).dtstart, "2026-10-20T08:00:00");
+    }
+
+    #[test]
+    fn a_changed_instance_of_a_known_series_becomes_an_override() {
+        let (db, cal) = setup();
+        series(&db, &cal);
+        let master = event(&db, "s1", None).id;
+        set_alarms(&db.lock_db(), &master, &[15]).unwrap();
+        mail(&db, "m2", "robin@example.com", &ics("REQUEST", &[vevent("s1", 0, "20261027T090000Z", YES, &["RECURRENCE-ID:20261027T070000Z"])]));
+        assert!(process_mail_impl(&db, "m2").unwrap());
+        assert_eq!(count(&db, "s1"), 2);
+        let o = event(&db, "s1", Some("2026-10-27T07:00:00"));
+        assert_eq!((o.dtstart.as_str(), o.my_partstat.as_deref()), ("2026-10-27T09:00:00", Some("accepted")));
+        assert_eq!(load_alarms(&db.lock_db(), &o.id).unwrap(), vec![15]);
     }
 }
