@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
-pub(crate) const SCHEMA_VERSION: u32 = 44;
+pub(crate) const SCHEMA_VERSION: u32 = 45;
 
 pub struct Database {
     pub conn: Mutex<Connection>,
@@ -702,6 +702,15 @@ impl Database {
             "ALTER TABLE calendars ADD COLUMN content_hash TEXT",
             "ALTER TABLE calendars ADD COLUMN secret_link TEXT",
             "ALTER TABLE calendars ADD COLUMN reminders_muted INTEGER NOT NULL DEFAULT 0",
+        ] {
+            let _ = conn.execute_batch(sql);
+        }
+
+        // Invitations (schema 45); "duplicate column" on re-runs is expected.
+        for sql in [
+            "ALTER TABLE mails ADD COLUMN invite_method TEXT",
+            "ALTER TABLE mails ADD COLUMN invite_ics TEXT",
+            "ALTER TABLE mails ADD COLUMN invite_partstat TEXT",
         ] {
             let _ = conn.execute_batch(sql);
         }

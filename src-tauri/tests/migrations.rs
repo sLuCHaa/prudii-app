@@ -213,7 +213,7 @@ fn calendar_tables_exist_with_unique_slots_and_cascade() {
     let conn = db.lock_db();
 
     let version: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
-    assert_eq!(version, 44);
+    assert_eq!(version, 45);
 
     conn.execute("INSERT INTO calendars (id, name, color) VALUES ('c1', 'Cal', '#3b82f6')", []).unwrap();
     let insert = |id: &str, rid: Option<&str>| {
@@ -253,10 +253,39 @@ fn subscription_columns_are_added_to_existing_calendars() {
     let db = Database::new(dir.clone()).unwrap();
     let conn = db.lock_db();
     let version: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
-    assert_eq!(version, 44);
+    assert_eq!(version, 45);
     let (muted, refresh): (i64, Option<i64>) =
         conn.query_row("SELECT reminders_muted, refresh_minutes FROM calendars WHERE id = 'c1'", [], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
     assert_eq!((muted, refresh), (0, None));
+    drop(conn);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn invite_columns_are_added_to_existing_mails() {
+    let dir = temp_dir("invite-columns");
+    {
+        let db = Database::new(dir.clone()).unwrap();
+        let conn = db.lock_db();
+        for col in ["invite_method", "invite_ics", "invite_partstat"] {
+            conn.execute_batch(&format!("ALTER TABLE mails DROP COLUMN {}", col)).unwrap();
+        }
+        conn.pragma_update(None, "user_version", 44).unwrap();
+    }
+    let db = Database::new(dir.clone()).unwrap();
+    let conn = db.lock_db();
+    let version: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
+    assert_eq!(version, 45);
+    let cols: Vec<String> = conn
+        .prepare("SELECT name FROM pragma_table_info('mails')")
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    for col in ["invite_method", "invite_ics", "invite_partstat"] {
+        assert!(cols.iter().any(|c| c == col), "{col} missing");
+    }
     drop(conn);
     let _ = std::fs::remove_dir_all(&dir);
 }
