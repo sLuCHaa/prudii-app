@@ -88,6 +88,9 @@ pub struct ParsedCalendar {
     pub method: Option<String>,
     pub name: Option<String>,
     pub events: Vec<ParsedEvent>,
+    /// False for anything without a VCALENDAR, e.g. a login page served instead of a feed.
+    pub has_calendar: bool,
+    pub color: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -350,6 +353,10 @@ pub fn parse_calendar(text: &str) -> ParsedCalendar {
     for root in parse_components(text) {
         match root.name.as_str() {
             "VCALENDAR" => {
+                cal.has_calendar = true;
+                if cal.color.is_none() {
+                    cal.color = root.text("X-APPLE-CALENDAR-COLOR");
+                }
                 if cal.method.is_none() {
                     cal.method = root.prop("METHOD").map(|p| p.value.trim().to_ascii_uppercase());
                 }
@@ -619,5 +626,14 @@ END:VEVENT
         assert_eq!(uid(first), uid(&later));
         assert_ne!(uid(first), uid(&other));
         assert!(uid(first).ends_with("@prudii"));
+    }
+
+    #[test]
+    fn notes_whether_a_calendar_was_found_and_its_color() {
+        let cal = parse_calendar("BEGIN:VCALENDAR\nX-WR-CALNAME:Team\nX-APPLE-CALENDAR-COLOR:#FF2968FF\nEND:VCALENDAR\n");
+        assert!(cal.has_calendar);
+        assert_eq!(cal.name.as_deref(), Some("Team"));
+        assert_eq!(cal.color.as_deref(), Some("#FF2968FF"));
+        assert!(!parse_calendar("<html><body>Sign in</body></html>").has_calendar);
     }
 }

@@ -1,7 +1,7 @@
 //! Calendar persistence. Every function takes `&Database` so it runs in tests
 //! without Tauri; `commands/calendar.rs` only adds events and file dialogs.
 
-use super::ical::{calendar_to_ics, parse_calendar, ExportEvent};
+use super::ical::{calendar_to_ics, parse_calendar, ExportEvent, ParsedCalendar};
 use super::recurrence::{
     derive_range, expand, is_series, key_to_naive, naive_to_key, rebound_until, rule_count, shift_key, shift_rrule_days, shift_until,
     slot_shape, slots_before, truncate_before, with_count, ExpandInput,
@@ -9,7 +9,7 @@ use super::recurrence::{
 use super::tz::{fmt_date, fmt_utc, fmt_wall, parse_date, parse_utc, row_tz, system_tz, system_tz_name, utc_to_wall, wall_to_utc};
 use super::{
     Attendee, Calendar, CalendarPatch, CalendarSettings, EventDetail, EventInput, EventPatch, EventRow, EventTimes,
-    ImportResult, Occurrence, Scope, REFRESH_CHOICES, SUBSCRIPTION,
+    FeedMeta, ImportResult, MirrorResult, Occurrence, Scope, REFRESH_CHOICES, SUBSCRIPTION,
 };
 use crate::db::Database;
 use chrono::{DateTime, Duration, NaiveDate, Utc};
@@ -942,6 +942,56 @@ pub(crate) fn import_ics_impl(db: &Database, calendar_id: &str, text: &str) -> R
     Ok(result)
 }
 
+/// Makes a subscription's events equal the feed's. Rows keep their ids by
+/// (uid, recurrence_id) so the reminder log and open views stay valid.
+pub(crate) fn mirror_ics_impl(db: &Database, calendar_id: &str, parsed: &ParsedCalendar, meta: &FeedMeta) -> Result<MirrorResult, String> {
+    if !parsed.has_calendar {
+        return Err("calendar.errors.notCalendar".into());
+    }
+    let conn = db.lock_db();
+    if !fetch_calendar(&conn, calendar_id)?.read_only {
+        return Err("calendar.errors.notFound".into());
+    }
+    let tx = conn.unchecked_transaction().map_err(err)?;
+    let mut result = MirrorResult::default();
+    let mut keep: HashSet<String> = HashSet::new();
+    for p in &parsed.events {
+        let existing = find_slot(&tx, calendar_id, &p.uid, p.recurrence_id.as_deref())?;
+        let id = existing.as_ref().map(|e| e.id.clone()).unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let row = p.to_row(id.clone(), calendar_id.to_string());
+        if derive_range(&row).is_none() {
+            result.skipped += 1;
+            continue;
+        }
+        write_event(&tx, &row)?;
+        set_alarms(&tx, &id, &p.alarms)?;
+        set_attendees(&tx, &id, &p.attendees.iter().map(Attendee::from).collect::<Vec<_>>())?;
+        keep.insert(id);
+        if existing.is_some() {
+            result.updated += 1;
+        } else {
+            result.imported += 1;
+        }
+    }
+    let stale: Vec<String> = {
+        let mut stmt = tx.prepare("SELECT id FROM events WHERE calendar_id = ?1").map_err(err)?;
+        let ids = stmt.query_map(params![calendar_id], |r| r.get::<_, String>(0)).map_err(err)?.collect::<Result<Vec<_>, _>>().map_err(err)?;
+        ids.into_iter().filter(|id| !keep.contains(id)).collect()
+    };
+    for id in &stale {
+        tx.execute("DELETE FROM events WHERE id = ?1", params![id]).map_err(err)?;
+    }
+    result.removed = stale.len() as u32;
+    let now = fmt_utc(Utc::now());
+    tx.execute(
+        "UPDATE calendars SET content_hash = ?1, sync_token = ?2, last_synced_at = ?3, last_attempt_at = ?3, last_error = NULL WHERE id = ?4",
+        params![meta.hash, meta.etag, now, calendar_id],
+    )
+    .map_err(err)?;
+    tx.commit().map_err(err)?;
+    Ok(result)
+}
+
 pub(crate) fn export_ics_impl(db: &Database, calendar_id: &str) -> Result<(String, String), String> {
     let conn = db.lock_db();
     let cal = fetch_calendar(&conn, calendar_id)?;
@@ -1679,5 +1729,105 @@ END:VCALENDAR
         assert!(occ.iter().find(|o| o.event_id == ev).unwrap().read_only);
         assert!(!occ.iter().find(|o| o.event_id == mine).unwrap().read_only);
         assert!(get_event_impl(&db, &ev).unwrap().read_only);
+    }
+
+    const EV_A: &str = "BEGIN:VEVENT\nUID:a@test\nDTSTART:20261015T090000Z\nDTEND:20261015T100000Z\nSUMMARY:A\n\
+BEGIN:VALARM\nTRIGGER:-PT10M\nACTION:DISPLAY\nEND:VALARM\nEND:VEVENT\n";
+    const EV_B: &str = "BEGIN:VEVENT\nUID:b@test\nDTSTART:20261016T090000Z\nDTEND:20261016T100000Z\nSUMMARY:B\nEND:VEVENT\n";
+
+    fn feed(events: &str) -> ParsedCalendar {
+        parse_calendar(&format!("BEGIN:VCALENDAR\nVERSION:2.0\n{}END:VCALENDAR\n", events))
+    }
+
+    fn meta(hash: &str) -> FeedMeta {
+        FeedMeta { etag: Some("\"v1\"".into()), hash: hash.into() }
+    }
+
+    fn feed_titles(db: &Database) -> Vec<(String, String)> {
+        list(db, "2026-10-01T00:00:00Z", "2026-11-01T00:00:00Z").into_iter().map(|o| (o.event_id, o.title)).collect()
+    }
+
+    #[test]
+    fn mirroring_adds_updates_and_removes_by_uid() {
+        let db = temp_db();
+        let sub = subscription_cal(&db);
+        let first = mirror_ics_impl(&db, &sub, &feed(&format!("{}{}", EV_A, EV_B)), &meta("h1")).unwrap();
+        assert_eq!(first, MirrorResult { imported: 2, updated: 0, removed: 0, skipped: 0 });
+        let id_a = feed_titles(&db).into_iter().find(|(_, t)| t == "A").unwrap().0;
+        let changed = EV_A.replace("SUMMARY:A", "SUMMARY:A2").replace("TRIGGER:-PT10M", "TRIGGER:-PT30M");
+        let second = mirror_ics_impl(&db, &sub, &feed(&changed), &meta("h2")).unwrap();
+        assert_eq!(second, MirrorResult { imported: 0, updated: 1, removed: 1, skipped: 0 });
+        assert_eq!(feed_titles(&db), vec![(id_a.clone(), "A2".to_string())]);
+        assert_eq!(get_event_impl(&db, &id_a).unwrap().alarms, vec![30]);
+        let conn = db.lock_db();
+        let (hash, etag, synced, error): (String, String, Option<String>, Option<String>) = conn
+            .query_row("SELECT content_hash, sync_token, last_synced_at, last_error FROM calendars WHERE id = ?1", params![sub], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+            })
+            .unwrap();
+        assert_eq!((hash.as_str(), etag.as_str(), error), ("h2", "\"v1\"", None));
+        assert!(synced.is_some());
+    }
+
+    #[test]
+    fn an_empty_calendar_empties_the_mirror_but_a_non_calendar_does_not() {
+        let db = temp_db();
+        let sub = subscription_cal(&db);
+        mirror_ics_impl(&db, &sub, &feed(EV_A), &meta("h1")).unwrap();
+        assert_eq!(mirror_ics_impl(&db, &sub, &feed(""), &meta("h2")).unwrap().removed, 1);
+        assert!(feed_titles(&db).is_empty());
+        mirror_ics_impl(&db, &sub, &feed(EV_A), &meta("h3")).unwrap();
+        let page = parse_calendar("<html><body>Sign in</body></html>");
+        assert_eq!(mirror_ics_impl(&db, &sub, &page, &meta("h4")).unwrap_err(), "calendar.errors.notCalendar");
+        assert_eq!(feed_titles(&db).len(), 1);
+    }
+
+    #[test]
+    fn override_rows_follow_the_feed() {
+        let db = temp_db();
+        let sub = subscription_cal(&db);
+        mirror_ics_impl(&db, &sub, &parse_calendar(OVERRIDE_FEED), &meta("h1")).unwrap();
+        let moved: Vec<String> = list(&db, "2026-10-12T00:00:00Z", "2026-10-13T00:00:00Z").into_iter().map(|o| o.start).collect();
+        assert_eq!(moved, vec!["2026-10-12T09:00:00Z"]);
+        let master_only = OVERRIDE_FEED.split("BEGIN:VEVENT\nUID:standup@test\nRECURRENCE-ID").next().unwrap().to_string() + "END:VCALENDAR\n";
+        assert_eq!(mirror_ics_impl(&db, &sub, &parse_calendar(&master_only), &meta("h2")).unwrap().removed, 1);
+        let back: Vec<String> = list(&db, "2026-10-12T00:00:00Z", "2026-10-13T00:00:00Z").into_iter().map(|o| o.start).collect();
+        assert_eq!(back, vec!["2026-10-12T07:00:00Z"]);
+    }
+
+    #[test]
+    fn uid_less_feeds_keep_their_rows() {
+        let db = temp_db();
+        let sub = subscription_cal(&db);
+        let ev = "BEGIN:VEVENT\nDTSTAMP:20261015T080000Z\nDTSTART:20261015T070000Z\nDTEND:20261015T080000Z\nSUMMARY:Gym\nEND:VEVENT\n";
+        mirror_ics_impl(&db, &sub, &feed(ev), &meta("h1")).unwrap();
+        let before = feed_titles(&db);
+        let again = ev.replace("DTSTAMP:20261015T080000Z", "DTSTAMP:20261016T090000Z");
+        assert_eq!(mirror_ics_impl(&db, &sub, &feed(&again), &meta("h2")).unwrap(), MirrorResult { imported: 0, updated: 1, removed: 0, skipped: 0 });
+        assert_eq!(feed_titles(&db), before);
+    }
+
+    #[test]
+    fn local_calendars_are_never_mirrored() {
+        let db = temp_db();
+        let local = cal(&db);
+        assert!(mirror_ics_impl(&db, &local, &feed(EV_A), &meta("h1")).is_err());
+    }
+
+    #[test]
+    fn large_feeds_mirror_in_reasonable_time() {
+        let db = temp_db();
+        let sub = subscription_cal(&db);
+        let base = parse_utc("2026-01-01T00:00:00Z").unwrap();
+        let events: String = (0..5000)
+            .map(|i| {
+                let start = (base + Duration::hours(i)).format("%Y%m%dT%H%M%SZ");
+                format!("BEGIN:VEVENT\nUID:bulk-{}@test\nDTSTART:{}\nDURATION:PT30M\nSUMMARY:Item {}\nEND:VEVENT\n", i, start, i)
+            })
+            .collect();
+        let parsed = feed(&events);
+        let started = std::time::Instant::now();
+        assert_eq!(mirror_ics_impl(&db, &sub, &parsed, &meta("h1")).unwrap().imported, 5000);
+        assert!(started.elapsed() < std::time::Duration::from_secs(10), "took {:?}", started.elapsed());
     }
 }

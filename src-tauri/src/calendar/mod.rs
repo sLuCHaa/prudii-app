@@ -189,3 +189,18 @@ pub struct ImportResult {
     pub updated: u32,
     pub skipped: u32,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct MirrorResult {
+    pub imported: u32,
+    pub updated: u32,
+    pub removed: u32,
+    pub skipped: u32,
+}
+
+/// What the fetch knew about the feed being mirrored.
+#[derive(Debug, Clone, Default)]
+pub struct FeedMeta {
+    pub etag: Option<String>,
+    pub hash: String,
+}
