@@ -96,8 +96,8 @@ fn apply_update(conn: &Connection, existing: &EventRow, p: &ParsedEvent, me: &Me
 }
 
 /// A changed instance of a known series becomes its own override row.
-fn add_override(conn: &Connection, master: &EventRow, p: &ParsedEvent, me: &Me) -> Result<bool, String> {
-    if master.recurrence_id.is_some() || p.recurrence_id.is_none() || superseded(master, p.sequence) {
+fn add_override(conn: &Connection, master: &EventRow, p: &ParsedEvent, series: i64, me: &Me) -> Result<bool, String> {
+    if master.recurrence_id.is_some() || p.recurrence_id.is_none() || superseded(master, series) {
         return Ok(false);
     }
     let mut row = p.to_row(uuid::Uuid::new_v4().to_string(), master.calendar_id.clone());
@@ -123,15 +123,25 @@ fn is_newer(p: &ParsedEvent, row: &EventRow) -> bool {
     p.sequence > row.sequence || (p.sequence == row.sequence && matches!(stamps, (Some(new), Some(old)) if new > old))
 }
 
-/// The exact slot an invitation names, else its series.
-fn slot_or_series<'a>(rows: &'a [EventRow], recurrence_id: &Option<String>) -> Option<&'a EventRow> {
-    rows.iter().find(|r| &r.recurrence_id == recurrence_id).or_else(|| rows.iter().find(|r| r.recurrence_id.is_none()))
+/// SEQUENCE is per component (RFC 5545), so carried instances count with the series they arrive with.
+fn series_sequence(p: &ParsedEvent, all: &[ParsedEvent]) -> i64 {
+    all.iter().find(|e| e.uid == p.uid && e.recurrence_id.is_none()).map_or(p.sequence, |m| m.sequence)
+}
+
+/// The stored slot an invitation names, else its series, with the SEQUENCE to judge it by.
+fn counterpart<'a>(rows: &'a [EventRow], p: &ParsedEvent, all: &[ParsedEvent]) -> Option<(&'a EventRow, i64)> {
+    match rows.iter().find(|r| r.recurrence_id == p.recurrence_id) {
+        Some(slot) => Some((slot, p.sequence)),
+        None => rows.iter().find(|r| r.recurrence_id.is_none()).map(|m| (m, series_sequence(p, all))),
+    }
 }
 
 /// A REQUEST carrying the series replaces the whole set (RFC 5546).
 fn drop_stale_instances(conn: &Connection, rows: &[EventRow], master: &ParsedEvent, all: &[ParsedEvent]) -> Result<(), String> {
     let carried = |rid: &Option<String>| all.iter().any(|e| e.uid == master.uid && &e.recurrence_id == rid);
-    for r in rows.iter().filter(|r| r.recurrence_id.is_some() && r.sequence <= master.sequence && !carried(&r.recurrence_id)) {
+    // As in `superseded`, a cancellation outranks an update of the same SEQUENCE.
+    let stale = |r: &EventRow| r.sequence < master.sequence || (r.status != "cancelled" && r.sequence == master.sequence);
+    for r in rows.iter().filter(|r| r.recurrence_id.is_some() && stale(r) && !carried(&r.recurrence_id)) {
         conn.execute("DELETE FROM events WHERE id = ?1", params![r.id]).map_err(err)?;
     }
     Ok(())
@@ -148,7 +158,7 @@ fn apply_request(conn: &Connection, rows: &[EventRow], p: &ParsedEvent, all: &[P
             }
             Ok(applied)
         }
-        None => add_override(conn, anchor, p, me),
+        None => add_override(conn, anchor, p, series_sequence(p, all), me),
     }
 }
 
@@ -354,9 +364,10 @@ fn build_view(conn: &Connection, mail_id: &str, mail: &MailInvite, now: DateTime
     let when = span_of(&slot);
     let rows = known_rows(conn, &p.uid)?;
     let exact = rows.iter().find(|r| r.recurrence_id == p.recurrence_id);
-    let anchor = slot_or_series(&rows, &p.recurrence_id);
+    let held = counterpart(&rows, p, &parsed.events);
+    let anchor = held.map(|(r, _)| r);
     // An applied cancellation is current; only a newer invitation outdates it.
-    let outdated = anchor.is_some_and(|r| if method == "CANCEL" { p.sequence < r.sequence } else { superseded(r, p.sequence) });
+    let outdated = held.is_some_and(|(r, seq)| if method == "CANCEL" { seq < r.sequence } else { superseded(r, seq) });
     let base = match exact.filter(|r| r.sequence < p.sequence) {
         Some(r) => Some(snapshot(r)),
         None => previous_version(conn, mail_id, &mail.account_id, p)?.map(|e| snapshot(&e.to_row(String::new(), String::new()))),
@@ -466,7 +477,7 @@ pub(crate) fn respond_impl(
         return Err("calendar.invite.errors.noOrganizer".into());
     }
     let rows = known_rows(&conn, &p.uid)?;
-    if slot_or_series(&rows, &p.recurrence_id).is_some_and(|r| superseded(r, p.sequence)) {
+    if counterpart(&rows, &p, &parsed.events).is_some_and(|(r, seq)| superseded(r, seq)) {
         return Err("calendar.invite.errors.outdated".into());
     }
     let me = itip::find_me(&p, &mail.account_email);
@@ -1234,5 +1245,62 @@ mod tests {
         assert!(invitation_view_impl(&db, "j", now()).unwrap().unwrap().updated);
         respond_impl(&db, "j", "accepted", &cal, None, false, now()).unwrap();
         assert_eq!(event(&db, "r1", None).dtstart, "2026-10-20T09:00:00");
+    }
+
+    fn carried_exception(from: &str) {
+        let weekly = |seq: i64| vevent("s1", seq, "20261020T070000Z", YES, &["RRULE:FREQ=WEEKLY;COUNT=4"]);
+        let moved = |seq: i64, rid: &str, start: &str| vevent("s1", seq, start, YES, &[rid]);
+        let full = ics("REQUEST", &[weekly(2), moved(1, "RECURRENCE-ID:20261027T070000Z", "20261027T090000Z")]);
+        let older = ics("REQUEST", &[weekly(1), moved(1, "RECURRENCE-ID:20261103T070000Z", "20261103T100000Z")]);
+        let expected = vec!["2026-10-20T07:00:00Z", "2026-10-27T09:00:00Z", "2026-11-03T07:00:00Z", "2026-11-10T07:00:00Z"];
+        let starts = |db: &Database| -> Vec<String> {
+            list_occurrences_impl(db, "2026-10-19T00:00:00Z", "2026-11-16T00:00:00Z", None).unwrap().into_iter().map(|o| o.start).collect()
+        };
+        let robin = from.starts_with("robin");
+        let (db, cal) = setup();
+        series(&db, &cal);
+        mail(&db, "m2", from, &full);
+        mail(&db, "old", from, &older);
+        assert_eq!(process_mail_impl(&db, "m2").unwrap(), robin);
+        if !robin {
+            assert!(!invitation_view_impl(&db, "m2", now()).unwrap().unwrap().outdated);
+            respond_impl(&db, "m2", "accepted", &cal, None, false, now()).unwrap();
+        }
+        assert_eq!(count(&db, "s1"), 2);
+        assert_eq!(starts(&db), expected);
+        if robin {
+            assert!(!process_mail_impl(&db, "old").unwrap());
+        } else {
+            assert_eq!(respond_impl(&db, "old", "accepted", &cal, None, false, now()), Err("calendar.invite.errors.outdated".to_string()));
+        }
+        assert!(invitation_view_impl(&db, "old", now()).unwrap().unwrap().outdated);
+        assert_eq!(starts(&db), expected);
+    }
+
+    #[test]
+    fn exceptions_count_with_the_series_they_arrive_with() {
+        carried_exception("robin@example.com");
+    }
+
+    #[test]
+    fn answering_keeps_the_exceptions_a_series_carries() {
+        carried_exception("calendar-notification@google.com");
+    }
+
+    #[test]
+    fn an_older_series_update_with_the_same_sequence_keeps_a_cancelled_instance() {
+        let (db, cal) = setup();
+        series(&db, &cal);
+        let cancel = ics(
+            "CANCEL",
+            &[vec!["UID:s1".into(), "SEQUENCE:1".into(), "RECURRENCE-ID:20261027T070000Z".into(), "DTSTART:20261027T070000Z".into(), ROBIN.into()]],
+        );
+        mail(&db, "c1", "robin@example.com", &cancel);
+        mail(&db, "m1", "robin@example.com", &ics("REQUEST", &[vevent("s1", 1, "20261020T070000Z", YES, &["RRULE:FREQ=WEEKLY;COUNT=4", "LOCATION:Room 2"])]));
+        assert!(process_mail_impl(&db, "c1").unwrap());
+        assert!(process_mail_impl(&db, "m1").unwrap());
+        assert_eq!(event(&db, "s1", None).location, "Room 2");
+        assert_eq!(count(&db, "s1"), 2);
+        assert_eq!(event(&db, "s1", Some("2026-10-27T07:00:00")).status, "cancelled");
     }
 }
