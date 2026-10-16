@@ -134,6 +134,7 @@ pub async fn send_mail(app: AppHandle, db: State<'_, Database>, request: SendMai
             in_reply_to: request.in_reply_to,
             references: request.references,
             attachments,
+            calendar_part: None,
         };
 
         (config, message)

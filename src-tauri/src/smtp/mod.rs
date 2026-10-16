@@ -29,6 +29,13 @@ pub struct EmailAttachment {
     pub content_id: Option<String>,
 }
 
+/// iMIP payload: the text/calendar alternative plus an invite.ics copy for
+/// clients that only list attachments.
+pub struct CalendarPart {
+    pub method: String,
+    pub ics: String,
+}
+
 pub struct EmailMessage {
     pub to: Vec<String>,
     pub cc: Vec<String>,
@@ -39,6 +46,7 @@ pub struct EmailMessage {
     pub in_reply_to: Option<String>,
     pub references: Option<String>,
     pub attachments: Vec<EmailAttachment>,
+    pub calendar_part: Option<CalendarPart>,
 }
 
 /// Build the `Message-ID` header value for an outgoing mail.
@@ -181,34 +189,49 @@ fn build_lettre_message(config: &SmtpConfig, message: &EmailMessage) -> Result<M
         Related(MultiPart),
     }
 
-    let text_part = SinglePart::builder().header(ContentType::TEXT_PLAIN).body(message.body_text.clone());
+    let text_part = || SinglePart::builder().header(ContentType::TEXT_PLAIN).body(message.body_text.clone());
+    let calendar = message.calendar_part.as_ref().map(calendar_body_part).transpose()?;
+    let mut files: Vec<SinglePart> = regular.iter().map(|a| attachment_part(&a.name, &a.mime_type, a.data.clone())).collect();
+    if let Some(c) = &message.calendar_part {
+        files.push(attachment_part("invite.ics", "application/ics", c.ics.clone().into_bytes()));
+    }
 
-    let email = if !regular.is_empty() {
-        let body_part = match html_side {
-            Some(HtmlSide::Single(html_part)) => MultiPart::alternative().singlepart(text_part).singlepart(html_part),
-            Some(HtmlSide::Related(related)) => MultiPart::alternative().singlepart(text_part).multipart(related),
-            None => MultiPart::alternative().singlepart(text_part),
-        };
-
-        let mut mixed = MultiPart::mixed().multipart(body_part);
-        for att in &regular {
-            mixed = mixed.singlepart(attachment_part(&att.name, &att.mime_type, att.data.clone()));
-        }
-
-        email_builder.multipart(mixed).context("Failed to build email message")?
+    let alternative = if html_side.is_none() && calendar.is_none() {
+        None
     } else {
+        let mut alt = MultiPart::alternative().singlepart(text_part());
         match html_side {
-            Some(HtmlSide::Single(html_part)) => email_builder.multipart(
-                MultiPart::alternative().singlepart(text_part).singlepart(html_part),
-            ).context("Failed to build email message")?,
-            Some(HtmlSide::Related(related)) => email_builder.multipart(
-                MultiPart::alternative().singlepart(text_part).multipart(related),
-            ).context("Failed to build email message")?,
-            None => email_builder.body(message.body_text.clone()).context("Failed to build email message")?,
+            Some(HtmlSide::Single(html_part)) => alt = alt.singlepart(html_part),
+            Some(HtmlSide::Related(related)) => alt = alt.multipart(related),
+            None => {}
         }
+        if let Some(cal) = calendar {
+            alt = alt.singlepart(cal);
+        }
+        Some(alt)
     };
 
+    let email = match (alternative, files.is_empty()) {
+        (Some(alt), true) => email_builder.multipart(alt),
+        (None, true) => email_builder.body(message.body_text.clone()),
+        (alt, false) => {
+            let mut mixed = MultiPart::mixed()
+                .multipart(alt.unwrap_or_else(|| MultiPart::alternative().singlepart(text_part())));
+            for file in files {
+                mixed = mixed.singlepart(file);
+            }
+            email_builder.multipart(mixed)
+        }
+    }
+    .context("Failed to build email message")?;
+
     Ok(email)
+}
+
+fn calendar_body_part(part: &CalendarPart) -> Result<SinglePart> {
+    let content_type = ContentType::parse(&format!("text/calendar; method={}; charset=UTF-8", part.method))
+        .map_err(|e| anyhow::anyhow!("Invalid calendar method {}: {}", part.method, e))?;
+    Ok(SinglePart::builder().header(content_type).body(part.ics.clone()))
 }
 
 /// Send an email via SMTP. Returns the raw RFC822 message bytes on success
@@ -327,6 +350,7 @@ mod tests {
             in_reply_to: None,
             references: None,
             attachments,
+            calendar_part: None,
         }
     }
 
@@ -402,6 +426,7 @@ mod tests {
                 data: b"<root/>".to_vec(),
                 content_id: None,
             }],
+            calendar_part: None,
         };
 
         let raw = String::from_utf8_lossy(&build_message(config(), message).unwrap()).to_string();
@@ -427,6 +452,7 @@ mod tests {
             in_reply_to: None,
             references: None,
             attachments: vec![],
+            calendar_part: None,
         };
 
         let raw = String::from_utf8_lossy(&build_message(config(), message).unwrap()).to_string();
@@ -447,5 +473,31 @@ mod tests {
             generate_message_id("user@example.com"),
             "every mail needs its own id"
         );
+    }
+
+    const REPLY_ICS: &str = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nMETHOD:REPLY\r\nBEGIN:VEVENT\r\nUID:a\r\nDTSTART:20261020T070000Z\r\nATTENDEE;PARTSTAT=ACCEPTED:mailto:sender@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+
+    #[test]
+    fn a_calendar_reply_carries_the_method_alternative_and_an_invite_file() {
+        let message = EmailMessage {
+            calendar_part: Some(CalendarPart { method: "REPLY".into(), ics: REPLY_ICS.into() }),
+            ..message_with(None, vec![])
+        };
+        let raw = build_message(config(), message).unwrap();
+        let text = String::from_utf8_lossy(&raw).replace("\r\n ", " ").replace("\r\n\t", " ");
+        assert!(text.contains("multipart/mixed"), "{text}");
+        assert!(text.contains("multipart/alternative"), "{text}");
+        assert!(text.contains("text/calendar") && text.contains("method=REPLY"), "{text}");
+        assert!(text.contains("filename=\"invite.ics\""), "{text}");
+        let parsed = mail_parser::MessageParser::default().parse(&raw[..]).unwrap();
+        let candidates = crate::calendar::invite_mail::candidates_from_message(&parsed);
+        assert_eq!(candidates.iter().map(|c| c.inline).collect::<Vec<_>>(), vec![true, false]);
+        assert_eq!(crate::calendar::invite_mail::choose(candidates).map(|f| f.method).as_deref(), Some("REPLY"));
+    }
+
+    #[test]
+    fn plain_mails_stay_single_part() {
+        let raw = String::from_utf8_lossy(&build_message(config(), message_with(None, vec![])).unwrap()).to_string();
+        assert!(!raw.contains("multipart/"), "{raw}");
     }
 }
