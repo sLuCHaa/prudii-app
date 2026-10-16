@@ -12,6 +12,7 @@ import { CalendarView } from "../calendar/CalendarView";
 import { AgendaRail } from "../calendar/AgendaRail";
 import { OfflineBanner } from "./OfflineBanner";
 import { UpdateBanner } from "../ui/UpdateBanner";
+import { WhatsNew } from "../ui/WhatsNew";
 import { WelcomeScreen } from "../accounts/WelcomeScreen";
 import { useAppStore } from "../../stores/appStore";
 import { openComposeWindow } from "../../lib/composeWindow";
@@ -252,6 +253,7 @@ export function AppLayout() {
 
       {showAccountWizard && <AccountWizard />}
       {showSettings && <SettingsPanel />}
+      {accounts !== undefined && <WhatsNew hasAccounts={accounts.length > 0} />}
     </>
   );
 }
