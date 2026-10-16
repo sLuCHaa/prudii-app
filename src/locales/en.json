@@ -185,6 +185,13 @@
     "linkRemove": "Remove link",
     "linkUpdate": "Update",
     "linkInsertBtn": "Insert",
+    "linkErrors": {
+      "spaces": "A link can’t contain spaces.",
+      "scheme": "This kind of link isn’t allowed.",
+      "domain": "Enter a full address, e.g. example.com.",
+      "email": "That isn’t a valid email address.",
+      "phone": "That isn’t a valid phone number."
+    },
     "replyIntro": "On {{date}}, {{from}} wrote:",
     "forwardHeaderTitle": "---------- Forwarded message ----------",
     "forwardHeaderFrom": "From:",

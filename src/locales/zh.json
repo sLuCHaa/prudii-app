@@ -184,6 +184,13 @@
     "linkRemove": "移除链接",
     "linkUpdate": "更新",
     "linkInsertBtn": "插入",
+    "linkErrors": {
+      "spaces": "链接不能包含空格。",
+      "scheme": "不允许此类链接。",
+      "domain": "请输入完整地址，例如 example.com。",
+      "email": "这不是有效的电子邮件地址。",
+      "phone": "这不是有效的电话号码。"
+    },
     "replyIntro": "在 {{date}}，{{from}} 写道：",
     "forwardHeaderTitle": "---------- 转发邮件 ----------",
     "forwardHeaderFrom": "发件人：",

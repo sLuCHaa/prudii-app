@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "motion/react";
-import { X, ExternalLink, Link2, Unlink } from "lucide-react";
+import { X, ExternalLink, Link2, Unlink, AlertTriangle } from "lucide-react";
 import i18n from "../../lib/i18n";
+import { checkLink } from "../../lib/linkChecker";
+import { normalizeLinkInput } from "./linkInput";
 
 export function LinkDialog({
   isOpen,
@@ -28,15 +30,14 @@ export function LinkDialog({
     }
   }, [isOpen, initialUrl]);
 
+  const result = normalizeLinkInput(url);
+  const problem = !result.ok && result.reason !== "empty" ? result.reason : null;
+  const warnings = result.ok && /^https?:/i.test(result.href) ? checkLink(result.href).warnings : [];
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (url.trim()) {
-      let finalUrl = url.trim();
-      if (!/^https?:\/\//i.test(finalUrl)) {
-        finalUrl = "https://" + finalUrl;
-      }
-      onSubmit(finalUrl);
-    }
+    if (!result.ok) return;
+    onSubmit(result.href);
     onClose();
   }
 
@@ -83,9 +84,25 @@ export function LinkDialog({
                 autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="off"
-                className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-border bg-bg-secondary text-sm text-text placeholder:text-text-secondary focus:border-accent focus:ring-1 focus:ring-accent"
+                aria-invalid={!!problem}
+                aria-describedby={problem || warnings.length > 0 ? "link-dialog-hint" : undefined}
+                className={`w-full pl-10 pr-4 py-2.5 rounded-lg border bg-bg-secondary text-sm text-text placeholder:text-text-secondary focus:ring-1 ${problem ? "border-danger focus:border-danger focus:ring-danger" : "border-border focus:border-accent focus:ring-accent"}`}
               />
             </div>
+            {problem && (
+              <p id="link-dialog-hint" className="mt-2 text-xs text-danger">
+                {i18n.t(`compose.linkErrors.${problem}`)}
+              </p>
+            )}
+            {!problem && warnings.length > 0 && (
+              <div id="link-dialog-hint" className="mt-2 flex gap-2 rounded-lg bg-warning/10 px-3 py-2 text-xs text-text-secondary">
+                <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0 text-warning" />
+                <div className="min-w-0">
+                  <p className="font-medium text-text">{i18n.t("linkCheck.suspiciousLink")}</p>
+                  <p>{warnings.map((w) => i18n.t(`linkCheck.${w.type}`)).join(" · ")}</p>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="px-4 py-3 border-t border-border bg-bg-secondary flex items-center justify-between">
@@ -114,7 +131,7 @@ export function LinkDialog({
               </button>
               <button
                 type="submit"
-                disabled={!url.trim()}
+                disabled={!result.ok}
                 className="px-4 py-1.5 rounded-lg text-sm font-medium bg-accent text-white hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {hasExistingLink ? i18n.t("compose.linkUpdate") : i18n.t("compose.linkInsertBtn")}

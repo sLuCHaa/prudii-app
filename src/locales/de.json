@@ -185,6 +185,13 @@
     "linkRemove": "Link entfernen",
     "linkUpdate": "Aktualisieren",
     "linkInsertBtn": "Einfügen",
+    "linkErrors": {
+      "spaces": "Ein Link darf keine Leerzeichen enthalten.",
+      "scheme": "Diese Art von Link ist nicht erlaubt.",
+      "domain": "Bitte eine vollständige Adresse eingeben, z. B. firma.de.",
+      "email": "Das ist keine gültige E-Mail-Adresse.",
+      "phone": "Das ist keine gültige Telefonnummer."
+    },
     "replyIntro": "Am {{date}} schrieb {{from}}:",
     "forwardHeaderTitle": "---------- Weitergeleitete Nachricht ----------",
     "forwardHeaderFrom": "Von:",

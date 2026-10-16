@@ -185,6 +185,13 @@
     "linkRemove": "Remover link",
     "linkUpdate": "Atualizar",
     "linkInsertBtn": "Inserir",
+    "linkErrors": {
+      "spaces": "Um link não pode conter espaços.",
+      "scheme": "Este tipo de link não é permitido.",
+      "domain": "Digite um endereço completo, por ex. empresa.com.",
+      "email": "Este não é um endereço de e-mail válido.",
+      "phone": "Este não é um número de telefone válido."
+    },
     "replyIntro": "Em {{date}}, {{from}} escreveu:",
     "forwardHeaderTitle": "---------- Mensagem encaminhada ----------",
     "forwardHeaderFrom": "De:",
