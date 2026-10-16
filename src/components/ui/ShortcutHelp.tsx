@@ -42,6 +42,7 @@ const SHORTCUTS: { groupKey: string; items: { keys: string; descKey: string; hid
       { keys: "c", descKey: "newMessage" },
       { keys: "Mod+N", descKey: "newMessage" },
       { keys: "Mod+Enter", descKey: "send" },
+      { keys: "Mod+K", descKey: "insertLink" },
       { keys: "Mod+W", descKey: "closeCompose" },
     ],
   },

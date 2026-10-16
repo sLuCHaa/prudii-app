@@ -183,6 +183,21 @@
     "linkEdit": "Editar enlace",
     "linkInsert": "Insertar enlace",
     "linkRemove": "Eliminar enlace",
+    "linkText": "Texto que se mostrará",
+    "linkTextPlaceholder": "Opcional: si no, se muestra la dirección",
+    "toolbar": {
+      "bold": "Negrita",
+      "italic": "Cursiva",
+      "underline": "Subrayado",
+      "strike": "Tachado",
+      "clearFormatting": "Borrar formato",
+      "bulletList": "Lista con viñetas",
+      "orderedList": "Lista numerada",
+      "quote": "Cita",
+      "codeBlock": "Bloque de código",
+      "undo": "Deshacer",
+      "redo": "Rehacer"
+    },
     "linkUpdate": "Actualizar",
     "linkInsertBtn": "Insertar",
     "linkErrors": {
@@ -961,7 +976,8 @@
       "syncAll": "Sincronizar todas las cuentas",
       "fullscreen": "Pantalla completa",
       "send": "Enviar mensaje",
-      "closeCompose": "Cerrar borrador"
+      "closeCompose": "Cerrar borrador",
+      "insertLink": "Insertar enlace (en el editor)"
     }
   },
   "tracking": {

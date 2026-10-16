@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "motion/react";
-import { X, ExternalLink, Link2, Unlink, AlertTriangle } from "lucide-react";
+import { X, ExternalLink, Link2, Unlink, AlertTriangle, Type } from "lucide-react";
 import i18n from "../../lib/i18n";
 import { checkLink } from "../../lib/linkChecker";
 import { normalizeLinkInput } from "./linkInput";
@@ -12,20 +12,25 @@ export function LinkDialog({
   onRemove,
   initialUrl,
   hasExistingLink,
+  askText = false,
 }: {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (url: string) => void;
+  onSubmit: (url: string, text: string) => void;
   onRemove: () => void;
   initialUrl: string;
   hasExistingLink: boolean;
+  /** Nothing is selected, so the link needs its own text. */
+  askText?: boolean;
 }) {
   const [url, setUrl] = useState(initialUrl);
+  const [text, setText] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
       setUrl(initialUrl);
+      setText("");
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [isOpen, initialUrl]);
@@ -37,7 +42,7 @@ export function LinkDialog({
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!result.ok) return;
-    onSubmit(result.href);
+    onSubmit(result.href, askText ? text : "");
     onClose();
   }
 
@@ -102,6 +107,25 @@ export function LinkDialog({
                   <p>{warnings.map((w) => i18n.t(`linkCheck.${w.type}`)).join(" · ")}</p>
                 </div>
               </div>
+            )}
+            {askText && (
+              <>
+                <label htmlFor="link-dialog-text" className="block text-xs font-medium text-text-secondary mt-4 mb-2">
+                  {i18n.t("compose.linkText")}
+                </label>
+                <div className="relative">
+                  <Type className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-tertiary" />
+                  <input
+                    id="link-dialog-text"
+                    type="text"
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    placeholder={i18n.t("compose.linkTextPlaceholder")}
+                    autoComplete="off"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-border bg-bg-secondary text-sm text-text placeholder:text-text-secondary focus:border-accent focus:ring-1 focus:ring-accent"
+                  />
+                </div>
+              </>
             )}
           </div>
 

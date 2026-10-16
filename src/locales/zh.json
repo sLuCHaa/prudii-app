@@ -182,6 +182,21 @@
     "linkEdit": "编辑链接",
     "linkInsert": "插入链接",
     "linkRemove": "移除链接",
+    "linkText": "显示文字",
+    "linkTextPlaceholder": "可选，留空则显示地址",
+    "toolbar": {
+      "bold": "粗体",
+      "italic": "斜体",
+      "underline": "下划线",
+      "strike": "删除线",
+      "clearFormatting": "清除格式",
+      "bulletList": "项目符号列表",
+      "orderedList": "编号列表",
+      "quote": "引用",
+      "codeBlock": "代码块",
+      "undo": "撤销",
+      "redo": "重做"
+    },
     "linkUpdate": "更新",
     "linkInsertBtn": "插入",
     "linkErrors": {
@@ -960,7 +975,8 @@
       "syncAll": "同步所有账户",
       "fullscreen": "切换全屏",
       "send": "发送邮件",
-      "closeCompose": "关闭草稿"
+      "closeCompose": "关闭草稿",
+      "insertLink": "插入链接（编辑器中）"
     }
   },
   "tracking": {

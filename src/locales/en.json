@@ -183,6 +183,21 @@
     "linkEdit": "Edit link",
     "linkInsert": "Insert link",
     "linkRemove": "Remove link",
+    "linkText": "Text to display",
+    "linkTextPlaceholder": "Optional – the address is shown otherwise",
+    "toolbar": {
+      "bold": "Bold",
+      "italic": "Italic",
+      "underline": "Underline",
+      "strike": "Strikethrough",
+      "clearFormatting": "Clear formatting",
+      "bulletList": "Bulleted list",
+      "orderedList": "Numbered list",
+      "quote": "Quote",
+      "codeBlock": "Code block",
+      "undo": "Undo",
+      "redo": "Redo"
+    },
     "linkUpdate": "Update",
     "linkInsertBtn": "Insert",
     "linkErrors": {
@@ -961,7 +976,8 @@
       "syncAll": "Sync all accounts",
       "fullscreen": "Toggle fullscreen",
       "send": "Send message",
-      "closeCompose": "Close draft"
+      "closeCompose": "Close draft",
+      "insertLink": "Insert link (in the editor)"
     }
   },
   "tracking": {

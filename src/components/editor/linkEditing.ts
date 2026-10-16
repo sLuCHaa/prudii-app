@@ -1,4 +1,5 @@
 import { Extension, type Editor } from "@tiptap/core";
+import { isMacOS } from "../../lib/platform";
 
 interface GuardStorage {
   onClick: ((event: MouseEvent) => void) | null;
@@ -36,45 +37,62 @@ export interface LinkMenuTarget {
   y: number;
 }
 
-const linkMenuOwners = new WeakMap<Editor, (target: LinkMenuTarget) => void>();
+export interface LinkActionHandlers {
+  openMenu: (target: LinkMenuTarget) => void;
+  openDialog: () => void;
+}
 
-/** Shows `open`'s menu for right-clicked links until the returned cleanup runs. */
-export function onLinkContextMenu(editor: Editor, open: (target: LinkMenuTarget) => void) {
-  linkMenuOwners.set(editor, open);
+const linkActionOwners = new WeakMap<Editor, LinkActionHandlers>();
+
+/** Routes right-clicks on links and Mod+K to `handlers` until the returned cleanup runs. */
+export function onLinkActions(editor: Editor, handlers: LinkActionHandlers) {
+  linkActionOwners.set(editor, handlers);
   return () => {
-    if (linkMenuOwners.get(editor) === open) linkMenuOwners.delete(editor);
+    if (linkActionOwners.get(editor) === handlers) linkActionOwners.delete(editor);
   };
 }
 
-interface MenuStorage {
+interface ActionStorage {
   onContextMenu: ((event: MouseEvent) => void) | null;
+  onKeyDown: ((event: KeyboardEvent) => void) | null;
 }
 
-export const LinkContextMenu = Extension.create<Record<string, never>, MenuStorage>({
-  name: "linkContextMenu",
+export const LinkActions = Extension.create<Record<string, never>, ActionStorage>({
+  name: "linkActions",
   addStorage() {
-    return { onContextMenu: null };
+    return { onContextMenu: null, onKeyDown: null };
   },
   onCreate() {
     const editor = this.editor;
     const onContextMenu = (event: MouseEvent) => {
-      const open = linkMenuOwners.get(editor);
+      const owner = linkActionOwners.get(editor);
       const anchor = (event.target as Element | null)?.closest?.("a");
-      if (!open || !editor.isEditable || !anchor) return;
+      if (!owner || !editor.isEditable || !anchor) return;
       editor.chain().setTextSelection(editor.view.posAtDOM(anchor, 0)).extendMarkRange("link").run();
       const href = editor.getAttributes("link").href;
       if (typeof href !== "string" || !href) return;
       event.preventDefault();
-      open({ href, x: event.clientX, y: event.clientY });
+      owner.openMenu({ href, x: event.clientX, y: event.clientY });
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      const owner = linkActionOwners.get(editor);
+      const mod = isMacOS ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+      if (!owner || !editor.isEditable || !mod || event.shiftKey || event.altKey || event.key.toLowerCase() !== "k") return;
+      event.preventDefault();
+      // The main window's command palette listens for the same keys on window.
+      event.stopPropagation();
+      owner.openDialog();
     };
     this.storage.onContextMenu = onContextMenu;
+    this.storage.onKeyDown = onKeyDown;
     editor.view.dom.addEventListener("contextmenu", onContextMenu);
+    editor.view.dom.addEventListener("keydown", onKeyDown);
   },
   onDestroy() {
-    const onContextMenu = this.storage.onContextMenu;
-    if (!onContextMenu) return;
+    const { onContextMenu, onKeyDown } = this.storage;
     try {
-      this.editor.view.dom.removeEventListener("contextmenu", onContextMenu);
+      if (onContextMenu) this.editor.view.dom.removeEventListener("contextmenu", onContextMenu);
+      if (onKeyDown) this.editor.view.dom.removeEventListener("keydown", onKeyDown);
     } catch {
       // The view is already gone; its listeners went with it.
     }
@@ -91,4 +109,19 @@ export function selectLinkForEditing(editor: Editor) {
     editor.commands.setTextSelection({ from, to });
   }
   if (editor.isActive("link")) editor.commands.extendMarkRange("link");
+}
+
+/** Without a selection there is no text to carry the link, so it brings its own. */
+export function applyLink(editor: Editor, href: string, text: string) {
+  if (!editor.state.selection.empty || editor.isActive("link")) {
+    editor.chain().focus().extendMarkRange("link").setLink({ href }).run();
+    return;
+  }
+  const label = text.trim() || href.replace(/^(mailto|tel):/i, "");
+  editor
+    .chain()
+    .focus()
+    .insertContent({ type: "text", text: label, marks: [{ type: "link", attrs: { href } }] })
+    .unsetMark("link")
+    .run();
 }

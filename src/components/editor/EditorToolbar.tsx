@@ -1,21 +1,29 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useEditorState, type Editor } from "@tiptap/react";
-import { Bold, Italic, Strikethrough, List, ListOrdered, Quote, Code, Link2, Undo, Redo, Pencil, ExternalLink, Copy, Unlink } from "lucide-react";
+import { Bold, Italic, Strikethrough, RemoveFormatting, List, ListOrdered, Quote, Code, Link2, Undo, Redo, Pencil, ExternalLink, Copy, Unlink } from "lucide-react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import i18n from "../../lib/i18n";
+import { isMacOS } from "../../lib/platform";
+import { formatShortcut } from "../../lib/shortcuts";
 import type { MenuEntry } from "../../lib/menuModel";
 import { useOpenCheckedLink } from "../../hooks/useOpenCheckedLink";
 import { ContextMenu } from "../ui/ContextMenu";
 import { LinkDialog } from "./LinkDialog";
-import { onLinkContextMenu, selectLinkForEditing, type LinkMenuTarget } from "./linkEditing";
+import { clearTextFormatting } from "./formatting";
+import { applyLink, onLinkActions, selectLinkForEditing, type LinkMenuTarget } from "./linkEditing";
+
+function label(text: string, keys?: string) {
+  return keys ? `${text} (${formatShortcut(keys, isMacOS)})` : text;
+}
+
+const toolbarLabel = (action: string, keys?: string) => label(i18n.t(`compose.toolbar.${action}`), keys);
 
 export function EditorToolbar({ editor, linkDialogOpen, setLinkDialogOpen }: { editor: Editor | null; linkDialogOpen: boolean; setLinkDialogOpen: (open: boolean) => void }) {
   const [linkDialogUrl, setLinkDialogUrl] = useState("");
   const [linkDialogEditing, setLinkDialogEditing] = useState(false);
+  const [linkDialogAskText, setLinkDialogAskText] = useState(false);
   const [linkMenu, setLinkMenu] = useState<LinkMenuTarget | null>(null);
   const openCheckedLink = useOpenCheckedLink();
-
-  useEffect(() => (editor ? onLinkContextMenu(editor, setLinkMenu) : undefined), [editor]);
 
   // Tiptap 3 does not re-render on transactions, so isActive read during render goes stale.
   const state = useEditorState({
@@ -35,18 +43,25 @@ export function EditorToolbar({ editor, linkDialogOpen, setLinkDialogOpen }: { e
     }),
   });
 
-  if (!editor || !state) return null;
-
-  const openLinkDialog = () => {
+  const openLinkDialog = useCallback(() => {
+    if (!editor) return;
     selectLinkForEditing(editor);
     const editing = editor.isActive("link");
     setLinkDialogEditing(editing);
+    setLinkDialogAskText(!editing && editor.state.selection.empty);
     setLinkDialogUrl(editing ? editor.getAttributes("link").href || "" : "");
     setLinkDialogOpen(true);
-  };
+  }, [editor, setLinkDialogOpen]);
 
-  const handleLinkSubmit = (url: string) => {
-    editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
+  useEffect(
+    () => (editor ? onLinkActions(editor, { openMenu: setLinkMenu, openDialog: openLinkDialog }) : undefined),
+    [editor, openLinkDialog],
+  );
+
+  if (!editor || !state) return null;
+
+  const handleLinkSubmit = (url: string, text: string) => {
+    applyLink(editor, url, text);
   };
 
   const handleLinkRemove = () => {
@@ -64,20 +79,21 @@ export function EditorToolbar({ editor, linkDialogOpen, setLinkDialogOpen }: { e
   ];
 
   const buttons = [
-    { icon: Bold, action: () => editor.chain().focus().toggleBold().run(), active: state.bold, title: "Bold (Ctrl+B)" },
-    { icon: Italic, action: () => editor.chain().focus().toggleItalic().run(), active: state.italic, title: "Italic (Ctrl+I)" },
-    { icon: () => <span className="font-serif underline text-xs">U</span>, action: () => editor.chain().focus().toggleUnderline().run(), active: state.underline, title: "Underline (Ctrl+U)" },
-    { icon: Strikethrough, action: () => editor.chain().focus().toggleStrike().run(), active: state.strike, title: "Strikethrough" },
+    { icon: Bold, action: () => editor.chain().focus().toggleBold().run(), active: state.bold, title: toolbarLabel("bold", "Mod+B") },
+    { icon: Italic, action: () => editor.chain().focus().toggleItalic().run(), active: state.italic, title: toolbarLabel("italic", "Mod+I") },
+    { icon: () => <span className="font-serif underline text-xs">U</span>, action: () => editor.chain().focus().toggleUnderline().run(), active: state.underline, title: toolbarLabel("underline", "Mod+U") },
+    { icon: Strikethrough, action: () => editor.chain().focus().toggleStrike().run(), active: state.strike, title: toolbarLabel("strike", "Mod+Shift+S") },
+    { icon: RemoveFormatting, action: () => clearTextFormatting(editor), active: false, title: toolbarLabel("clearFormatting") },
     { type: "divider" as const },
-    { icon: List, action: () => editor.chain().focus().toggleBulletList().run(), active: state.bulletList, title: "Bullet List" },
-    { icon: ListOrdered, action: () => editor.chain().focus().toggleOrderedList().run(), active: state.orderedList, title: "Numbered List" },
+    { icon: List, action: () => editor.chain().focus().toggleBulletList().run(), active: state.bulletList, title: toolbarLabel("bulletList", "Mod+Shift+8") },
+    { icon: ListOrdered, action: () => editor.chain().focus().toggleOrderedList().run(), active: state.orderedList, title: toolbarLabel("orderedList", "Mod+Shift+7") },
     { type: "divider" as const },
-    { icon: Quote, action: () => editor.chain().focus().toggleBlockquote().run(), active: state.blockquote, title: "Quote" },
-    { icon: Code, action: () => editor.chain().focus().toggleCodeBlock().run(), active: state.codeBlock, title: "Code Block" },
-    { icon: Link2, action: openLinkDialog, active: state.link, title: i18n.t("compose.linkInsert") },
+    { icon: Quote, action: () => editor.chain().focus().toggleBlockquote().run(), active: state.blockquote, title: toolbarLabel("quote") },
+    { icon: Code, action: () => editor.chain().focus().toggleCodeBlock().run(), active: state.codeBlock, title: toolbarLabel("codeBlock") },
+    { icon: Link2, action: openLinkDialog, active: state.link, title: label(i18n.t("compose.linkInsert"), "Mod+K") },
     { type: "divider" as const },
-    { icon: Undo, action: () => editor.chain().focus().undo().run(), active: false, disabled: !state.canUndo, title: "Undo (Ctrl+Z)" },
-    { icon: Redo, action: () => editor.chain().focus().redo().run(), active: false, disabled: !state.canRedo, title: "Redo (Ctrl+Y)" },
+    { icon: Undo, action: () => editor.chain().focus().undo().run(), active: false, disabled: !state.canUndo, title: toolbarLabel("undo", "Mod+Z") },
+    { icon: Redo, action: () => editor.chain().focus().redo().run(), active: false, disabled: !state.canRedo, title: toolbarLabel("redo", isMacOS ? "Mod+Shift+Z" : "Mod+Y") },
   ];
 
   return (
@@ -121,6 +137,7 @@ export function EditorToolbar({ editor, linkDialogOpen, setLinkDialogOpen }: { e
         onRemove={handleLinkRemove}
         initialUrl={linkDialogUrl}
         hasExistingLink={linkDialogEditing}
+        askText={linkDialogAskText}
       />
 
       {linkMenu && (

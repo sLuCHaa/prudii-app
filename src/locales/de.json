@@ -183,6 +183,21 @@
     "linkEdit": "Link bearbeiten",
     "linkInsert": "Link einfügen",
     "linkRemove": "Link entfernen",
+    "linkText": "Anzeigetext",
+    "linkTextPlaceholder": "Optional – sonst wird die Adresse angezeigt",
+    "toolbar": {
+      "bold": "Fett",
+      "italic": "Kursiv",
+      "underline": "Unterstrichen",
+      "strike": "Durchgestrichen",
+      "clearFormatting": "Formatierung entfernen",
+      "bulletList": "Aufzählung",
+      "orderedList": "Nummerierte Liste",
+      "quote": "Zitat",
+      "codeBlock": "Codeblock",
+      "undo": "Rückgängig",
+      "redo": "Wiederholen"
+    },
     "linkUpdate": "Aktualisieren",
     "linkInsertBtn": "Einfügen",
     "linkErrors": {
@@ -961,7 +976,8 @@
       "syncAll": "Alle Konten abrufen",
       "fullscreen": "Vollbild umschalten",
       "send": "Nachricht senden",
-      "closeCompose": "Entwurf schließen"
+      "closeCompose": "Entwurf schließen",
+      "insertLink": "Link einfügen (im Editor)"
     }
   },
   "tracking": {
