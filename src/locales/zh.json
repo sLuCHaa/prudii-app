@@ -184,6 +184,7 @@
     "linkRemove": "移除链接",
     "linkText": "显示文字",
     "linkTextPlaceholder": "可选，留空则显示地址",
+    "cut": "剪切",
     "toolbar": {
       "bold": "粗体",
       "italic": "斜体",

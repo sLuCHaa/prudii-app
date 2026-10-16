@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, beforeAll } from "vitest";
 import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
@@ -39,8 +39,25 @@ function press(el: Element, init: KeyboardEventInit) {
   return ev;
 }
 
+const noop = () => {};
+
 function showMenu(e: Editor, seen: LinkMenuTarget[]) {
-  return onLinkActions(e, { openMenu: (target) => seen.push(target), openDialog: () => {} });
+  return onLinkActions(e, { openMenu: (target) => seen.push(target), openDialog: noop, openSelectionMenu: noop });
+}
+
+function rightPress(el: Element) {
+  el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, button: 2 }));
+}
+
+function selectText(el: Element, from: number, to: number) {
+  const text = el.firstChild!;
+  document.getSelection()!.setBaseAndExtent(text, from, text, to);
+}
+
+function selectionMenus(e: Editor) {
+  const seen: { x: number; y: number }[] = [];
+  onLinkActions(e, { openMenu: noop, openDialog: noop, openSelectionMenu: (at) => seen.push(at) });
+  return seen;
 }
 
 describe("LinkClickGuard", () => {
@@ -99,6 +116,57 @@ describe("link context menu", () => {
   });
 });
 
+describe("selection context menu", () => {
+  beforeAll(() => {
+    Object.defineProperty(document, "elementFromPoint", { configurable: true, value: () => null });
+  });
+
+  it("offers the app menu when right-clicking text the user selected", async () => {
+    const e = make("<p>hallo welt</p>");
+    await created();
+    const seen = selectionMenus(e);
+    const p = e.view.dom.querySelector("p")!;
+    selectText(p, 6, 10);
+    rightPress(p);
+    const ev = rightClick(p);
+    expect(ev.defaultPrevented).toBe(true);
+    expect(seen).toEqual([{ x: 40, y: 50 }]);
+  });
+
+  it("keeps the native menu without a selection", async () => {
+    const e = make("<p>hallo welt</p>");
+    await created();
+    const seen = selectionMenus(e);
+    const p = e.view.dom.querySelector("p")!;
+    selectText(p, 3, 3);
+    rightPress(p);
+    expect(rightClick(p).defaultPrevented).toBe(false);
+    expect(seen).toEqual([]);
+  });
+
+  it("keeps the native menu when the right-click itself selects a word for spelling suggestions", async () => {
+    const e = make("<p>hallo welt</p>");
+    await created();
+    const seen = selectionMenus(e);
+    const p = e.view.dom.querySelector("p")!;
+    selectText(p, 3, 3);
+    rightPress(p);
+    selectText(p, 6, 10);
+    expect(rightClick(p).defaultPrevented).toBe(false);
+    expect(seen).toEqual([]);
+  });
+
+  it("keeps the native menu when it was opened from the keyboard", async () => {
+    const e = make("<p>hallo welt</p>");
+    await created();
+    const seen = selectionMenus(e);
+    const p = e.view.dom.querySelector("p")!;
+    selectText(p, 6, 10);
+    expect(rightClick(p).defaultPrevented).toBe(false);
+    expect(seen).toEqual([]);
+  });
+});
+
 describe("link shortcut", () => {
   it("opens the link dialog on Ctrl+K and keeps the command palette out of it", async () => {
     const e = make(LINKED);
@@ -107,7 +175,7 @@ describe("link shortcut", () => {
     let palette = 0;
     const onWindow = () => palette++;
     window.addEventListener("keydown", onWindow);
-    onLinkActions(e, { openMenu: () => {}, openDialog: () => dialogs++ });
+    onLinkActions(e, { openMenu: noop, openDialog: () => dialogs++, openSelectionMenu: noop });
     const ev = press(e.view.dom, { key: "k", ctrlKey: true });
     window.removeEventListener("keydown", onWindow);
     expect([dialogs, palette, ev.defaultPrevented]).toEqual([1, 0, true]);
@@ -117,7 +185,7 @@ describe("link shortcut", () => {
     const e = make(LINKED);
     await created();
     let dialogs = 0;
-    onLinkActions(e, { openMenu: () => {}, openDialog: () => dialogs++ });
+    onLinkActions(e, { openMenu: noop, openDialog: () => dialogs++, openSelectionMenu: noop });
     press(e.view.dom, { key: "K", ctrlKey: true, shiftKey: true });
     press(e.view.dom, { key: "k" });
     expect(dialogs).toBe(0);
@@ -126,7 +194,7 @@ describe("link shortcut", () => {
   it("leaves Ctrl+K to the app when nobody owns the link dialog", async () => {
     const e = make(LINKED);
     await created();
-    onLinkActions(e, { openMenu: () => {}, openDialog: () => {} })();
+    onLinkActions(e, { openMenu: noop, openDialog: noop, openSelectionMenu: noop })();
     expect(press(e.view.dom, { key: "k", ctrlKey: true }).defaultPrevented).toBe(false);
   });
 });

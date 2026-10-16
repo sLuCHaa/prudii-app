@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useEditorState, type Editor } from "@tiptap/react";
-import { Bold, Italic, Strikethrough, RemoveFormatting, List, ListOrdered, Quote, Code, Link2, Undo, Redo, Pencil, ExternalLink, Copy, Unlink } from "lucide-react";
+import { Bold, Italic, Strikethrough, RemoveFormatting, List, ListOrdered, Quote, Code, Link2, Undo, Redo, Pencil, ExternalLink, Copy, Unlink, Scissors } from "lucide-react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import i18n from "../../lib/i18n";
 import { isMacOS } from "../../lib/platform";
@@ -9,8 +9,9 @@ import type { MenuEntry } from "../../lib/menuModel";
 import { useOpenCheckedLink } from "../../hooks/useOpenCheckedLink";
 import { ContextMenu } from "../ui/ContextMenu";
 import { LinkDialog } from "./LinkDialog";
+import { copySelection } from "./clipboard";
 import { clearTextFormatting } from "./formatting";
-import { applyLink, onLinkActions, selectLinkForEditing, type LinkMenuTarget } from "./linkEditing";
+import { applyLink, onLinkActions, selectLinkForEditing } from "./linkEditing";
 
 function label(text: string, keys?: string) {
   return keys ? `${text} (${formatShortcut(keys, isMacOS)})` : text;
@@ -22,7 +23,7 @@ export function EditorToolbar({ editor, linkDialogOpen, setLinkDialogOpen }: { e
   const [linkDialogUrl, setLinkDialogUrl] = useState("");
   const [linkDialogEditing, setLinkDialogEditing] = useState(false);
   const [linkDialogAskText, setLinkDialogAskText] = useState(false);
-  const [linkMenu, setLinkMenu] = useState<LinkMenuTarget | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; href?: string } | null>(null);
   const openCheckedLink = useOpenCheckedLink();
 
   // Tiptap 3 does not re-render on transactions, so isActive read during render goes stale.
@@ -54,7 +55,7 @@ export function EditorToolbar({ editor, linkDialogOpen, setLinkDialogOpen }: { e
   }, [editor, setLinkDialogOpen]);
 
   useEffect(
-    () => (editor ? onLinkActions(editor, { openMenu: setLinkMenu, openDialog: openLinkDialog }) : undefined),
+    () => (editor ? onLinkActions(editor, { openMenu: setMenu, openDialog: openLinkDialog, openSelectionMenu: setMenu }) : undefined),
     [editor, openLinkDialog],
   );
 
@@ -76,6 +77,14 @@ export function EditorToolbar({ editor, linkDialogOpen, setLinkDialogOpen }: { e
     { kind: "item", id: "copyLink", label: i18n.t("mailDetail.bodyMenu.copyLink"), icon: <Copy className="w-4 h-4" />, onSelect: () => { writeText(href).catch(() => {}); } },
     { kind: "separator" },
     { kind: "item", id: "removeLink", label: i18n.t("compose.linkRemove"), icon: <Unlink className="w-4 h-4" />, danger: true, onSelect: handleLinkRemove },
+  ];
+
+  const selectionMenuEntries = (): MenuEntry[] => [
+    { kind: "item", id: "insertLink", label: i18n.t("compose.linkInsert"), icon: <Link2 className="w-4 h-4" />, onSelect: openLinkDialog },
+    { kind: "item", id: "cut", label: i18n.t("compose.cut"), icon: <Scissors className="w-4 h-4" />, onSelect: () => copySelection(editor, true) },
+    { kind: "item", id: "copy", label: i18n.t("mailDetail.bodyMenu.copy"), icon: <Copy className="w-4 h-4" />, onSelect: () => copySelection(editor, false) },
+    { kind: "separator" },
+    { kind: "item", id: "clearFormatting", label: i18n.t("compose.toolbar.clearFormatting"), icon: <RemoveFormatting className="w-4 h-4" />, onSelect: () => clearTextFormatting(editor) },
   ];
 
   const buttons = [
@@ -140,8 +149,13 @@ export function EditorToolbar({ editor, linkDialogOpen, setLinkDialogOpen }: { e
         askText={linkDialogAskText}
       />
 
-      {linkMenu && (
-        <ContextMenu entries={linkMenuEntries(linkMenu.href)} x={linkMenu.x} y={linkMenu.y} onClose={() => setLinkMenu(null)} />
+      {menu && (
+        <ContextMenu
+          entries={menu.href ? linkMenuEntries(menu.href) : selectionMenuEntries()}
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+        />
       )}
     </>
   );

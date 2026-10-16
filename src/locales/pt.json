@@ -185,6 +185,7 @@
     "linkRemove": "Remover link",
     "linkText": "Texto a exibir",
     "linkTextPlaceholder": "Opcional – caso contrário, o endereço é exibido",
+    "cut": "Recortar",
     "toolbar": {
       "bold": "Negrito",
       "italic": "Itálico",

@@ -40,6 +40,15 @@ export interface LinkMenuTarget {
 export interface LinkActionHandlers {
   openMenu: (target: LinkMenuTarget) => void;
   openDialog: () => void;
+  openSelectionMenu: (at: { x: number; y: number }) => void;
+}
+
+type SelectedRange = [Node | null, number, Node | null, number];
+
+function selectedRange(editor: Editor): SelectedRange | null {
+  const sel = document.getSelection();
+  if (!sel || sel.isCollapsed || !sel.anchorNode || !editor.view.dom.contains(sel.anchorNode)) return null;
+  return [sel.anchorNode, sel.anchorOffset, sel.focusNode, sel.focusOffset];
 }
 
 const linkActionOwners = new WeakMap<Editor, LinkActionHandlers>();
@@ -53,6 +62,7 @@ export function onLinkActions(editor: Editor, handlers: LinkActionHandlers) {
 }
 
 interface ActionStorage {
+  onMouseDown: ((event: MouseEvent) => void) | null;
   onContextMenu: ((event: MouseEvent) => void) | null;
   onKeyDown: ((event: KeyboardEvent) => void) | null;
 }
@@ -60,19 +70,34 @@ interface ActionStorage {
 export const LinkActions = Extension.create<Record<string, never>, ActionStorage>({
   name: "linkActions",
   addStorage() {
-    return { onContextMenu: null, onKeyDown: null };
+    return { onMouseDown: null, onContextMenu: null, onKeyDown: null };
   },
   onCreate() {
     const editor = this.editor;
+    let pressed: SelectedRange | null = null;
+    const onMouseDown = (event: MouseEvent) => {
+      const secondary = event.button === 2 || (isMacOS && event.button === 0 && event.ctrlKey);
+      pressed = secondary ? selectedRange(editor) : null;
+    };
     const onContextMenu = (event: MouseEvent) => {
       const owner = linkActionOwners.get(editor);
+      const before = pressed;
+      pressed = null;
+      if (!owner || !editor.isEditable) return;
       const anchor = (event.target as Element | null)?.closest?.("a");
-      if (!owner || !editor.isEditable || !anchor) return;
-      editor.chain().setTextSelection(editor.view.posAtDOM(anchor, 0)).extendMarkRange("link").run();
-      const href = editor.getAttributes("link").href;
-      if (typeof href !== "string" || !href) return;
+      if (anchor) {
+        editor.chain().setTextSelection(editor.view.posAtDOM(anchor, 0)).extendMarkRange("link").run();
+        const href = editor.getAttributes("link").href;
+        if (typeof href !== "string" || !href) return;
+        event.preventDefault();
+        owner.openMenu({ href, x: event.clientX, y: event.clientY });
+        return;
+      }
+      // A right-click on a misspelled word selects it for the native suggestions; only a selection made beforehand gets the app menu.
+      const now = selectedRange(editor);
+      if (!before || !now || before.some((part, i) => part !== now[i])) return;
       event.preventDefault();
-      owner.openMenu({ href, x: event.clientX, y: event.clientY });
+      owner.openSelectionMenu({ x: event.clientX, y: event.clientY });
     };
     const onKeyDown = (event: KeyboardEvent) => {
       const owner = linkActionOwners.get(editor);
@@ -83,14 +108,18 @@ export const LinkActions = Extension.create<Record<string, never>, ActionStorage
       event.stopPropagation();
       owner.openDialog();
     };
+    this.storage.onMouseDown = onMouseDown;
     this.storage.onContextMenu = onContextMenu;
     this.storage.onKeyDown = onKeyDown;
+    // Capture phase: the selection has to be read before anything reacts to the press.
+    editor.view.dom.addEventListener("mousedown", onMouseDown, true);
     editor.view.dom.addEventListener("contextmenu", onContextMenu);
     editor.view.dom.addEventListener("keydown", onKeyDown);
   },
   onDestroy() {
-    const { onContextMenu, onKeyDown } = this.storage;
+    const { onMouseDown, onContextMenu, onKeyDown } = this.storage;
     try {
+      if (onMouseDown) this.editor.view.dom.removeEventListener("mousedown", onMouseDown, true);
       if (onContextMenu) this.editor.view.dom.removeEventListener("contextmenu", onContextMenu);
       if (onKeyDown) this.editor.view.dom.removeEventListener("keydown", onKeyDown);
     } catch {

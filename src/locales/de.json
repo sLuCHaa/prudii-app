@@ -185,6 +185,7 @@
     "linkRemove": "Link entfernen",
     "linkText": "Anzeigetext",
     "linkTextPlaceholder": "Optional – sonst wird die Adresse angezeigt",
+    "cut": "Ausschneiden",
     "toolbar": {
       "bold": "Fett",
       "italic": "Kursiv",

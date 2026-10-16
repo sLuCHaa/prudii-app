@@ -21,6 +21,7 @@ const KEYS = [
   "compose.toolbar.redo",
   "compose.linkText",
   "compose.linkTextPlaceholder",
+  "compose.cut",
   "shortcuts.desc.insertLink",
 ];
 
