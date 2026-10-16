@@ -102,6 +102,9 @@ pub fn sources_from_path(path: &Path) -> (Vec<Source>, Vec<BundleFailure>) {
 /// `X-APPLE-CALENDAR-COLOR` as `#rrggbb`; Apple appends an alpha byte.
 pub fn feed_color(raw: Option<&str>) -> Option<String> {
     let hex = raw?.trim().strip_prefix('#')?;
+    if !hex.is_ascii() {
+        return None;
+    }
     let rgb = match hex.len() {
         6 => hex,
         8 => &hex[..6],
@@ -251,6 +254,8 @@ SUMMARY:Dinner\nEND:VEVENT\nEND:VCALENDAR\n";
         assert_eq!(feed_color(Some("red")), None);
         assert_eq!(feed_color(Some("#12")), None);
         assert_eq!(feed_color(None), None);
+        assert_eq!(feed_color(Some("#aaaaaéa")), None);
+        assert_eq!(feed_color(Some("#ééé")), None);
     }
 
     #[test]
