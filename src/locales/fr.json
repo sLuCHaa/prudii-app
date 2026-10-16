@@ -1478,7 +1478,8 @@
       "notCalendar": "Aucune donnée de calendrier trouvée.",
       "readOnly": "Les calendriers abonnés ne peuvent pas être modifiés.",
       "linkMissing": "Le lien de cet abonnement est manquant — veuillez le saisir à nouveau.",
-      "linkStoreFailed": "Le lien n’a pas pu être enregistré de façon sécurisée."
+      "linkStoreFailed": "Le lien n’a pas pu être enregistré de façon sécurisée.",
+      "subscriptionBusy": "Ce calendrier est en cours de mise à jour — réessayez dans un instant."
     }
   }
 }

@@ -16,7 +16,7 @@ export function refreshLabelKey(minutes: number): string {
 
 /** A quick check before the backend validates the link for real. */
 export function looksLikeFeedLink(text: string): boolean {
-  return /^(https|webcals?):\/\/[^\s/]+\.[^\s/]+/i.test(text.trim());
+  return /^(https|webcals?):\/\/[^\s/]+/i.test(text.trim());
 }
 
 export type SyncState = { kind: "never" } | { kind: "ok"; at: Date } | { kind: "error"; error: string; lastOk: Date | null };

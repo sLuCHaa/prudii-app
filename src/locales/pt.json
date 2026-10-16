@@ -1478,7 +1478,8 @@
       "notCalendar": "Nenhum dado de calendário encontrado.",
       "readOnly": "Calendários assinados não podem ser editados.",
       "linkMissing": "O link desta assinatura está faltando — insira-o novamente.",
-      "linkStoreFailed": "Não foi possível guardar o link com segurança."
+      "linkStoreFailed": "Não foi possível guardar o link com segurança.",
+      "subscriptionBusy": "Este calendário está sendo atualizado — tente novamente em instantes."
     }
   }
 }

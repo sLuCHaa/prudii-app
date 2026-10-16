@@ -1475,7 +1475,8 @@
       "notCalendar": "未找到日历数据。",
       "readOnly": "订阅的日历无法编辑。",
       "linkMissing": "此订阅的链接缺失，请重新输入。",
-      "linkStoreFailed": "无法安全地保存链接。"
+      "linkStoreFailed": "无法安全地保存链接。",
+      "subscriptionBusy": "此日历正在更新，请稍后再试。"
     }
   }
 }

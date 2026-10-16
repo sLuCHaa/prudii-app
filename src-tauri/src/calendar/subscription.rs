@@ -56,7 +56,7 @@ pub enum FetchOutcome {
 pub fn build_feed_client(timeout: StdDuration) -> reqwest::Client {
     let _ = rustls::crypto::ring::default_provider().install_default();
     let policy = reqwest::redirect::Policy::custom(|attempt| {
-        if attempt.previous().len() >= MAX_REDIRECTS || attempt.url().scheme() != "https" {
+        if attempt.previous().len() > MAX_REDIRECTS || attempt.url().scheme() != "https" {
             attempt.error("refusing an insecure or endless redirect")
         } else {
             attempt.follow()
@@ -65,6 +65,7 @@ pub fn build_feed_client(timeout: StdDuration) -> reqwest::Client {
     reqwest::Client::builder()
         .timeout(timeout)
         .redirect(policy)
+        .referer(false)
         .user_agent(concat!("Prudii/", env!("CARGO_PKG_VERSION")))
         .build()
         .expect("failed to build the calendar feed HTTP client")
@@ -100,9 +101,17 @@ pub async fn fetch_feed(client: &reqwest::Client, url: &str, etag: Option<&str>)
     Ok(FetchOutcome::Body { text: String::from_utf8_lossy(&body).into_owned(), etag })
 }
 
+/// DTSTAMP is skipped: some servers regenerate it on every fetch.
 pub fn content_hash(text: &str) -> String {
     use sha2::{Digest, Sha256};
-    Sha256::digest(text.as_bytes()).iter().map(|b| format!("{:02x}", b)).collect()
+    let mut hasher = Sha256::new();
+    for line in text.split_inclusive('\n') {
+        let head = line.get(..8).unwrap_or("").to_ascii_uppercase();
+        if !(head.starts_with("DTSTAMP:") || head.starts_with("DTSTAMP;")) {
+            hasher.update(line.as_bytes());
+        }
+    }
+    hasher.finalize().iter().map(|b| format!("{:02x}", b)).collect()
 }
 
 /// The feed's own name, else the host without `www.`.
@@ -267,8 +276,8 @@ fn insert_subscription(db: &Database, name: &str, color: &str, refresh_minutes: 
     let next: f64 = conn.query_row("SELECT COALESCE(MAX(sort_order), -1) + 1 FROM calendars", [], |r| r.get(0)).map_err(db_err)?;
     let id = uuid::Uuid::new_v4().to_string();
     conn.execute(
-        "INSERT INTO calendars (id, name, color, is_default, sort_order, source, refresh_minutes) VALUES (?1, ?2, ?3, 0, ?4, ?5, ?6)",
-        params![id, name, color, next, SUBSCRIPTION, refresh_minutes],
+        "INSERT INTO calendars (id, name, color, is_default, sort_order, source, refresh_minutes, last_attempt_at) VALUES (?1, ?2, ?3, 0, ?4, ?5, ?6, ?7)",
+        params![id, name, color, next, SUBSCRIPTION, refresh_minutes, fmt_utc(Utc::now())],
     )
     .map_err(db_err)?;
     fetch_calendar(&conn, &id)
@@ -363,6 +372,9 @@ pub(crate) async fn update_url_impl(
     url: &str,
 ) -> Result<Calendar, String> {
     ensure_subscription(db, id)?;
+    let Some(_claim) = InFlight::claim(id) else {
+        return Err("calendar.errors.subscriptionBusy".into());
+    };
     let (text, etag) = fetch_body(client, url).await?;
     let parsed = parse_calendar(&text);
     if !parsed.has_calendar {
@@ -666,6 +678,35 @@ DTSTART:20261016T090000Z\r\nDTEND:20261016T100000Z\r\nSUMMARY:Two\r\nEND:VEVENT\
         update_url_impl(&db, &links, &client(), &sub.id, &new_url).await.unwrap();
         assert_eq!(links.get(&sub.id).unwrap(), new_url);
         assert_eq!(titles(&db, &sub.id), vec!["Tres", "Uno"]);
+    }
+
+    #[tokio::test]
+    async fn changing_the_link_waits_for_a_running_refresh() {
+        let db = temp_db();
+        let links = MemoryLinks::default();
+        let (base, _) = serve(vec![ok(FEED, "\"v1\"")]);
+        let sub = subscribe_impl(&db, &links, &client(), &format!("{}/a.ics", base), "#ef4444", 60).await.unwrap().calendar;
+        let held = InFlight::claim(&sub.id).unwrap();
+        let err = update_url_impl(&db, &links, &client(), &sub.id, &format!("{}/b.ics", base)).await.unwrap_err();
+        assert_eq!(err, "calendar.errors.subscriptionBusy");
+        drop(held);
+    }
+
+    #[test]
+    fn new_subscriptions_count_as_just_attempted() {
+        let db = temp_db();
+        let cal = insert_subscription(&db, "Team", "#ef4444", 60).unwrap();
+        let states = subscription_states(&db).unwrap();
+        assert!(states.iter().find(|s| s.id == cal.id).unwrap().last_attempt_at.is_some());
+    }
+
+    #[test]
+    fn content_hashes_ignore_dtstamp_lines() {
+        let a = "BEGIN:VEVENT\r\nDTSTAMP:20261015T090000Z\r\nSUMMARY:One\r\nEND:VEVENT\r\n";
+        let b = "BEGIN:VEVENT\r\ndtstamp;VALUE=DATE-TIME:20261016T101010Z\r\nSUMMARY:One\r\nEND:VEVENT\r\n";
+        let c = "BEGIN:VEVENT\r\nDTSTAMP:20261015T090000Z\r\nSUMMARY:Two\r\nEND:VEVENT\r\n";
+        assert_eq!(content_hash(a), content_hash(b));
+        assert_ne!(content_hash(a), content_hash(c));
     }
 
     #[tokio::test]

@@ -1478,7 +1478,8 @@
       "notCalendar": "Keine Kalenderdaten gefunden.",
       "readOnly": "Abonnierte Kalender können nicht bearbeitet werden.",
       "linkMissing": "Der Link dieses Abos fehlt – bitte neu eingeben.",
-      "linkStoreFailed": "Der Link konnte nicht sicher gespeichert werden."
+      "linkStoreFailed": "Der Link konnte nicht sicher gespeichert werden.",
+      "subscriptionBusy": "Dieser Kalender wird gerade aktualisiert – bitte gleich noch einmal versuchen."
     }
   }
 }

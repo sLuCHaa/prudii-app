@@ -1478,7 +1478,8 @@
       "notCalendar": "No calendar data found.",
       "readOnly": "Subscribed calendars can’t be edited.",
       "linkMissing": "The link of this subscription is missing — please enter it again.",
-      "linkStoreFailed": "The link could not be stored securely."
+      "linkStoreFailed": "The link could not be stored securely.",
+      "subscriptionBusy": "This calendar is updating right now — try again in a moment."
     }
   }
 }

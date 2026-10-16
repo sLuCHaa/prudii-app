@@ -15,6 +15,7 @@ describe("looksLikeFeedLink", () => {
     expect(looksLikeFeedLink("webcal://p01-caldav.icloud.com/published/2/abc")).toBe(true);
     expect(looksLikeFeedLink("  https://calendar.google.com/calendar/ical/x/basic.ics ")).toBe(true);
     expect(looksLikeFeedLink("WEBCALS://example.com/cal.ics")).toBe(true);
+    expect(looksLikeFeedLink("https://nas/calendar.ics")).toBe(true);
   });
 
   it("rejects plain http, bare words and empty hosts", () => {
