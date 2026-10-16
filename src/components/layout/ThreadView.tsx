@@ -24,8 +24,7 @@ import { isMacOS, isWindows } from "../../lib/platform";
 import { MAIL_LINK_BRIDGE, MAIL_LINK_BRIDGE_CSP_HASH, relayBridgeKey, parseBridgeContextMenu, type BridgeContextMenu } from "../../lib/mailLinkBridge";
 import { MailBodyContextMenu } from "./MailBodyContextMenu";
 import { detectCause, causeMessage } from "../../lib/errorToast";
-import { checkLink } from "../../lib/linkChecker";
-import { cleanMailUrl, openMailUrl } from "../../lib/trackingParams";
+import { openMailUrl } from "../../lib/trackingParams";
 import { ContactAvatar } from "../ui/ContactAvatar";
 import { FlagPicker } from "../ui/FlagPicker";
 import type { MailFlag } from "../../types";
@@ -50,6 +49,7 @@ import { useTranslation } from "react-i18next";
 import { ImageLightbox, type ImageLightboxItem } from "./ImageLightbox";
 import { formatFileSize } from "../../lib/fileSize";
 import { useMailFrameFit } from "../../hooks/useMailFrameFit";
+import { useOpenCheckedLink } from "../../hooks/useOpenCheckedLink";
 
 function getFileIcon(mimeType: string | null) {
   if (!mimeType) return File;
@@ -1558,26 +1558,14 @@ export function ThreadView({ mail }: ThreadViewProps) {
     openCompose("forward", targetMail);
   }, [openCompose]);
 
+  const openCheckedLink = useOpenCheckedLink();
   const handleLinkClick = useCallback((href: string) => {
     if (href.startsWith("mailto:")) {
       useAppStore.getState().openMailto(href);
       return;
     }
-    const cleaned = cleanMailUrl(href);
-    const result = checkLink(cleaned);
-    if (result.safe) {
-      openUrl(cleaned).catch(() => {});
-      return;
-    }
-    const warningLines = result.warnings.map((w) => `• ${t(`linkCheck.${w.type}`)}: ${w.detail}`).join("\n");
-    dialog.danger({
-      title: t("linkCheck.suspiciousLink"),
-      message: `${t("linkCheck.warningMessage")}\n\n${warningLines}\n\n${cleaned}`,
-      confirmLabel: t("linkCheck.openAnyway"),
-    }).then((confirmed) => {
-      if (confirmed) openUrl(cleaned).catch(() => {});
-    });
-  }, [dialog, t]);
+    openCheckedLink(href);
+  }, [openCheckedLink]);
 
   const handleUnsubscribe = useCallback(async () => {
     const confirmed = await dialog.danger({
