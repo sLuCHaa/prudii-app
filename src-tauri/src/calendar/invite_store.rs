@@ -2,31 +2,46 @@
 //! view and the user's answers. Pure iTIP lives in `itip.rs`.
 
 use super::ical::{parse_calendar, ParsedEvent};
-use super::invite_mail::FoundInvite;
+use super::invite_mail::{choose, is_calendar_part, FoundInvite, InviteCandidate};
 use super::itip::{self, CancelTarget, Me};
-use super::recurrence::{derive_range, key_to_naive, naive_to_key, slot_shape};
-use super::store::{load_alarms, row_to_event, set_alarms, set_attendees, write_event, EVENT_COLS};
-use super::{Attendee, EventRow, SUBSCRIPTION};
+use super::meeting::find_meeting_link;
+use super::recurrence::{derive_range, expand, key_to_naive, naive_to_key, slot_shape, ExpandInput};
+use super::store::{load_alarms, occurrences_in, row_to_event, set_alarms, set_attendees, write_event, EVENT_COLS};
+use super::tz::{parse_utc, system_tz};
+use super::{Attendee, EventRow, InvitationView, InviteChanges, Occurrence, TextChange, TimeChange, TimeSpan, SUBSCRIPTION};
 use crate::db::Database;
+use chrono::{DateTime, Duration, Utc};
 use rusqlite::{params, Connection, OptionalExtension};
+use std::collections::HashSet;
 
 fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
 
 struct MailInvite {
+    account_id: String,
     account_email: String,
     from_email: String,
     method: Option<String>,
     ics: Option<String>,
+    partstat: Option<String>,
 }
 
 fn load_mail(conn: &Connection, mail_id: &str) -> Result<MailInvite, String> {
     conn.query_row(
-        "SELECT a.email, m.from_email, m.invite_method, m.invite_ics
+        "SELECT m.account_id, a.email, m.from_email, m.invite_method, m.invite_ics, m.invite_partstat
          FROM mails m JOIN accounts a ON a.id = m.account_id WHERE m.id = ?1",
         params![mail_id],
-        |r| Ok(MailInvite { account_email: r.get(0)?, from_email: r.get(1)?, method: r.get(2)?, ics: r.get(3)? }),
+        |r| {
+            Ok(MailInvite {
+                account_id: r.get(0)?,
+                account_email: r.get(1)?,
+                from_email: r.get(2)?,
+                method: r.get(3)?,
+                ics: r.get(4)?,
+                partstat: r.get(5)?,
+            })
+        },
     )
     .optional()
     .map_err(err)?
@@ -206,13 +221,178 @@ pub(crate) fn store_invite(db: &Database, mail_id: &str, found: Option<&FoundInv
     }
 }
 
+const CONFLICT_TITLES: usize = 3;
+// Kept invite files of mails read before detection existed; real ones are a few KB.
+const MAX_LEGACY_BYTES: u64 = 1024 * 1024;
+
+fn span_of(o: &Occurrence) -> TimeSpan {
+    TimeSpan { all_day: o.all_day, start: o.start.clone(), end: o.end.clone() }
+}
+
+fn slots(row: &EventRow, from: DateTime<Utc>, to: DateTime<Utc>) -> Vec<Occurrence> {
+    let none: HashSet<String> = HashSet::new();
+    let input = ExpandInput { color: "", has_attendees: false, read_only: false, skip_keys: &none };
+    expand(row, from, to, system_tz(), &input)
+}
+
+fn first_slot(row: &EventRow) -> Option<Occurrence> {
+    let start = parse_utc(&derive_range(row)?.0)?;
+    slots(row, start - Duration::days(1), start + Duration::days(2)).into_iter().next()
+}
+
+fn shown_slot(row: &EventRow, now: DateTime<Utc>) -> Option<Occurrence> {
+    slots(row, now, now + Duration::days(400)).into_iter().next().or_else(|| first_slot(row))
+}
+
+struct Snapshot {
+    title: String,
+    location: String,
+    span: Option<TimeSpan>,
+}
+
+fn snapshot(row: &EventRow) -> Snapshot {
+    Snapshot { title: row.title.clone(), location: row.location.clone(), span: first_slot(row).map(|o| span_of(&o)) }
+}
+
+fn diff(old: &Snapshot, new: &Snapshot) -> InviteChanges {
+    let text = |a: &str, b: &str| (a.trim() != b.trim()).then(|| TextChange { old: a.trim().to_string(), new: b.trim().to_string() });
+    InviteChanges {
+        time: match (&old.span, &new.span) {
+            (Some(a), Some(b)) if a != b => Some(TimeChange { old: a.clone(), new: b.clone() }),
+            _ => None,
+        },
+        location: text(&old.location, &new.location),
+        title: text(&old.title, &new.title),
+    }
+}
+
+/// The newest earlier version of the same event among this account's invitations.
+fn previous_version(conn: &Connection, mail_id: &str, account_id: &str, p: &ParsedEvent) -> Result<Option<ParsedEvent>, String> {
+    // Stored texts are folded; a long UID only has its start on the UID line.
+    let probe: String = p.uid.chars().take(40).collect();
+    let mut stmt = conn
+        .prepare("SELECT invite_ics FROM mails WHERE account_id = ?1 AND id != ?2 AND invite_method = 'REQUEST' AND instr(invite_ics, ?3) > 0")
+        .map_err(err)?;
+    let texts: Vec<String> = stmt.query_map(params![account_id, mail_id, probe], |r| r.get(0)).map_err(err)?.collect::<Result<_, _>>().map_err(err)?;
+    Ok(texts
+        .iter()
+        .flat_map(|t| parse_calendar(t).events)
+        .filter(|e| e.uid == p.uid && e.recurrence_id == p.recurrence_id && e.sequence < p.sequence)
+        .max_by_key(|e| e.sequence))
+}
+
+fn conflicts(conn: &Connection, when: &TimeSpan, own: &HashSet<String>, now: DateTime<Utc>) -> Result<(Vec<String>, usize), String> {
+    if when.all_day {
+        return Ok((Vec::new(), 0));
+    }
+    let (Some(s), Some(e)) = (parse_utc(&when.start), parse_utc(&when.end)) else { return Ok((Vec::new(), 0)) };
+    if e <= now || e <= s {
+        return Ok((Vec::new(), 0));
+    }
+    let titles: Vec<String> = occurrences_in(conn, s, e, None)?
+        .into_iter()
+        .filter(|o| !o.all_day && o.status != "cancelled" && o.my_partstat.as_deref() != Some("declined") && !own.contains(&o.event_id))
+        .filter(|o| matches!((parse_utc(&o.start), parse_utc(&o.end)), (Some(os), Some(oe)) if os < e && oe > s))
+        .map(|o| o.title)
+        .collect();
+    let count = titles.len();
+    Ok((titles.into_iter().take(CONFLICT_TITLES).collect(), count))
+}
+
+fn build_view(conn: &Connection, mail_id: &str, mail: &MailInvite, now: DateTime<Utc>) -> Result<Option<InvitationView>, String> {
+    let (Some(method), Some(ics)) = (mail.method.as_deref(), mail.ics.as_deref()) else { return Ok(None) };
+    if method == "REPLY" {
+        return Ok(None);
+    }
+    let parsed = parse_calendar(ics);
+    let Some(p) = itip::primary_event(&parsed) else { return Ok(None) };
+    let invite_row = p.to_row(String::new(), String::new());
+    let Some(slot) = shown_slot(&invite_row, now) else { return Ok(None) };
+    let when = span_of(&slot);
+    let rows = known_rows(conn, &p.uid)?;
+    let exact = rows.iter().find(|r| r.recurrence_id == p.recurrence_id);
+    let anchor = exact.or_else(|| rows.iter().find(|r| r.recurrence_id.is_none()));
+    let base = match exact.filter(|r| r.sequence < p.sequence) {
+        Some(r) => Some(snapshot(r)),
+        None => previous_version(conn, mail_id, &mail.account_id, p)?.map(|e| snapshot(&e.to_row(String::new(), String::new()))),
+    };
+    let own: HashSet<String> = rows.iter().map(|r| r.id.clone()).collect();
+    let (titles, conflict_count) = conflicts(conn, &when, &own, now)?;
+    Ok(Some(InvitationView {
+        mail_id: mail_id.to_string(),
+        method: method.to_string(),
+        uid: p.uid.clone(),
+        recurrence_id: p.recurrence_id.clone(),
+        title: p.title.clone(),
+        location: p.location.clone(),
+        description: p.description.clone(),
+        when,
+        tzid: p.tzid.clone(),
+        rrule: p.rrule.clone(),
+        organizer_name: p.organizer_name.clone(),
+        organizer_email: p.organizer_email.clone(),
+        attendee_count: p.attendees.len(),
+        meeting_link: find_meeting_link(&[p.location.as_str(), p.description.as_str()]),
+        organizer_is_me: same(p.organizer_email.as_deref(), &mail.account_email),
+        my_partstat: anchor.and_then(|r| r.my_partstat.clone()).or_else(|| mail.partstat.clone()),
+        rsvp: itip::find_me(p, &mail.account_email).rsvp,
+        event_id: anchor.map(|r| r.id.clone()),
+        calendar_id: anchor.map(|r| r.calendar_id.clone()),
+        stored_status: anchor.map(|r| r.status.clone()),
+        outdated: exact.is_some_and(|r| p.sequence < r.sequence),
+        updated: method == "REQUEST" && base.is_some(),
+        changes: base.map(|b| diff(&b, &snapshot(&invite_row))).unwrap_or_default(),
+        conflicts: titles,
+        conflict_count,
+        event_count: parsed.events.len(),
+    }))
+}
+
+/// Mails whose body was stored before detection existed keep the invitation as a file.
+fn legacy_invite(db: &Database, mail_id: &str) -> Option<FoundInvite> {
+    let files: Vec<(String, Option<String>, Option<String>)> = {
+        let conn = db.lock_db();
+        let mut stmt = conn.prepare("SELECT filename, mime_type, local_path FROM attachments WHERE mail_id = ?1").ok()?;
+        let rows = stmt.query_map(params![mail_id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).ok()?.filter_map(Result::ok).collect();
+        rows
+    };
+    let candidates = files
+        .into_iter()
+        .filter(|(name, mime, _)| is_calendar_part(mime.as_deref().unwrap_or(""), Some(name)))
+        .filter_map(|(name, _, path)| {
+            let path = std::path::PathBuf::from(path?);
+            if std::fs::metadata(&path).ok()?.len() > MAX_LEGACY_BYTES {
+                return None;
+            }
+            let text = std::fs::read_to_string(&path).ok()?;
+            Some(InviteCandidate { text, method_param: None, inline: name == "unnamed" })
+        })
+        .collect();
+    choose(candidates)
+}
+
+pub(crate) fn invitation_view_impl(db: &Database, mail_id: &str, now: DateTime<Utc>) -> Result<Option<InvitationView>, String> {
+    let unchecked = {
+        let conn = db.lock_db();
+        load_mail(&conn, mail_id)?.ics.is_none()
+    };
+    if unchecked {
+        let Some(found) = legacy_invite(db, mail_id) else { return Ok(None) };
+        store_invite(db, mail_id, Some(&found));
+    }
+    let conn = db.lock_db();
+    let mail = load_mail(&conn, mail_id)?;
+    build_view(&conn, mail_id, &mail, now)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::calendar::content_line::fold_line;
     use crate::calendar::ical::parse_calendar;
-    use crate::calendar::store::{import_ics_impl, list_calendars_impl, load_alarms, mirror_ics_impl, update_event_impl};
-    use crate::calendar::{EventPatch, FeedMeta, Scope};
+    use crate::calendar::store::{create_event_impl, import_ics_impl, list_calendars_impl, load_alarms, mirror_ics_impl, update_event_impl};
+    use crate::calendar::{EventInput, EventPatch, EventTimes, FeedMeta, Scope};
+    use chrono::TimeZone;
 
     const ROBIN: &str = "ORGANIZER;CN=Robin:mailto:robin@example.com";
     const OPEN: &str = "ATTENDEE;CN=Sam;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:sam@example.com";
@@ -505,5 +685,80 @@ mod tests {
         let o = event(&db, "s1", Some("2026-10-27T07:00:00"));
         assert_eq!((o.dtstart.as_str(), o.my_partstat.as_deref()), ("2026-10-27T09:00:00", Some("accepted")));
         assert_eq!(load_alarms(&db.lock_db(), &o.id).unwrap(), vec![15]);
+    }
+
+    fn now() -> DateTime<Utc> {
+        Utc.with_ymd_and_hms(2026, 10, 16, 0, 0, 0).unwrap()
+    }
+
+    #[test]
+    fn a_new_request_shows_time_conflicts_and_my_rsvp() {
+        let (db, cal) = setup();
+        let times = EventTimes { all_day: false, start: "2026-10-20T07:30:00Z".into(), end: "2026-10-20T08:30:00Z".into() };
+        create_event_impl(
+            &db,
+            EventInput { calendar_id: cal.clone(), title: "Dentist".into(), description: String::new(), location: String::new(), times, rrule: None, alarms: vec![] },
+        )
+        .unwrap();
+        mail(&db, "m1", "robin@example.com", &ics("REQUEST", &[vevent("r1", 0, "20261020T070000Z", OPEN, &["LOCATION:https://meet.google.com/abc-defg-hij"])]));
+        let v = invitation_view_impl(&db, "m1", now()).unwrap().unwrap();
+        assert_eq!((v.method.as_str(), v.title.as_str()), ("REQUEST", "Review"));
+        assert_eq!(v.when, TimeSpan { all_day: false, start: "2026-10-20T07:00:00Z".into(), end: "2026-10-20T08:00:00Z".into() });
+        assert_eq!(v.tzid.as_deref(), Some("UTC"));
+        assert_eq!((v.event_id.clone(), v.my_partstat.clone(), v.rsvp, v.outdated, v.updated), (None, None, true, false, false));
+        assert_eq!((v.conflicts.clone(), v.conflict_count), (vec!["Dentist".to_string()], 1));
+        assert_eq!(v.organizer_email.as_deref(), Some("robin@example.com"));
+        assert_eq!(v.meeting_link.as_deref(), Some("https://meet.google.com/abc-defg-hij"));
+        assert_eq!((v.attendee_count, v.event_count, v.organizer_is_me), (1, 1, false));
+    }
+
+    #[test]
+    fn an_update_lists_changes_against_the_earlier_invitation() {
+        let (db, _) = setup();
+        let uid = format!("040000008200E00074C5B7101A82E008{}", "0".repeat(80));
+        mail(&db, "m1", "robin@example.com", &ics("REQUEST", &[vevent(&uid, 0, "20261020T070000Z", OPEN, &["LOCATION:Room 1"])]));
+        mail(&db, "m2", "robin@example.com", &ics("REQUEST", &[vevent(&uid, 1, "20261020T080000Z", OPEN, &["LOCATION:Room 2"])]));
+        let v = invitation_view_impl(&db, "m2", now()).unwrap().unwrap();
+        assert!(v.updated);
+        let time = v.changes.time.unwrap();
+        assert_eq!((time.old.start.as_str(), time.new.start.as_str()), ("2026-10-20T07:00:00Z", "2026-10-20T08:00:00Z"));
+        assert_eq!(v.changes.location, Some(TextChange { old: "Room 1".into(), new: "Room 2".into() }));
+        assert_eq!(v.changes.title, None);
+        assert!(!invitation_view_impl(&db, "m1", now()).unwrap().unwrap().updated);
+    }
+
+    #[test]
+    fn outdated_requests_replies_and_my_own_echoes() {
+        let (db, cal) = setup();
+        known(&db, &cal, &ics("REQUEST", &[vevent("r1", 3, "20261020T070000Z", YES, &[])]), "accepted");
+        mail(&db, "old", "robin@example.com", &ics("REQUEST", &[vevent("r1", 2, "20261020T070000Z", OPEN, &[])]));
+        let v = invitation_view_impl(&db, "old", now()).unwrap().unwrap();
+        assert!(v.outdated);
+        assert_eq!(v.my_partstat.as_deref(), Some("accepted"));
+        mail(&db, "reply", "kim@example.com", &ics("REPLY", &[vevent("r1", 3, "20261020T070000Z", YES, &[])]));
+        assert_eq!(invitation_view_impl(&db, "reply", now()).unwrap(), None);
+        let mine = ics("REQUEST", &[vec!["UID:o1".into(), "DTSTART:20261020T070000Z".into(), "ORGANIZER:mailto:sam@example.com".into()]]);
+        mail(&db, "echo", "sam@example.com", &mine);
+        assert!(invitation_view_impl(&db, "echo", now()).unwrap().unwrap().organizer_is_me);
+    }
+
+    #[test]
+    fn mails_from_before_detection_fall_back_to_the_saved_invite_file() {
+        let (db, _) = setup();
+        let path = db.data_dir.join("legacy-invite.ics");
+        std::fs::write(&path, ics("REQUEST", &[vevent("r1", 0, "20261020T070000Z", OPEN, &[])])).unwrap();
+        {
+            let conn = db.lock_db();
+            conn.execute("INSERT INTO mails (id, account_id, folder_id, from_email) VALUES ('legacy', 'acc', 'inbox', 'robin@example.com')", []).unwrap();
+            conn.execute(
+                "INSERT INTO attachments (id, mail_id, filename, mime_type, local_path) VALUES ('a1', 'legacy', 'unnamed', 'text/calendar', ?1)",
+                params![path.to_string_lossy()],
+            )
+            .unwrap();
+        }
+        assert_eq!(invitation_view_impl(&db, "legacy", now()).unwrap().unwrap().title, "Review");
+        let stored: Option<String> = db.lock_db().query_row("SELECT invite_method FROM mails WHERE id = 'legacy'", [], |r| r.get(0)).unwrap();
+        assert_eq!(stored.as_deref(), Some("REQUEST"));
+        assert_eq!(invitation_view_impl(&db, "missing", now()), Err("calendar.errors.notFound".to_string()));
     }
 }

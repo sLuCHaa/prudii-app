@@ -252,3 +252,64 @@ pub struct BundleImportResult {
     pub calendars: Vec<BundleCalendarResult>,
     pub failed: Vec<BundleFailure>,
 }
+
+/// Timed: UTC instants; all-day: dates, end exclusive — as in `Occurrence`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TimeSpan {
+    pub all_day: bool,
+    pub start: String,
+    pub end: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TextChange {
+    pub old: String,
+    pub new: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TimeChange {
+    pub old: TimeSpan,
+    pub new: TimeSpan,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct InviteChanges {
+    pub time: Option<TimeChange>,
+    pub location: Option<TextChange>,
+    pub title: Option<TextChange>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InvitationView {
+    pub mail_id: String,
+    pub method: String,
+    pub uid: String,
+    pub recurrence_id: Option<String>,
+    pub title: String,
+    pub location: String,
+    pub description: String,
+    /// The next slot still ahead, else the first one.
+    pub when: TimeSpan,
+    pub tzid: Option<String>,
+    pub rrule: Option<String>,
+    pub organizer_name: Option<String>,
+    pub organizer_email: Option<String>,
+    pub attendee_count: usize,
+    pub meeting_link: Option<String>,
+    pub organizer_is_me: bool,
+    /// From the calendar row, else the answer given on this mail.
+    pub my_partstat: Option<String>,
+    /// False when the organizer asked for no reply.
+    pub rsvp: bool,
+    pub event_id: Option<String>,
+    pub calendar_id: Option<String>,
+    pub stored_status: Option<String>,
+    pub outdated: bool,
+    pub updated: bool,
+    pub changes: InviteChanges,
+    /// Up to three overlapping titles; `conflict_count` counts all.
+    pub conflicts: Vec<String>,
+    pub conflict_count: usize,
+    pub event_count: usize,
+}
