@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cardMode, conflictLine, originalTime, replyMail, statusKey } from "./invitation";
+import { cardMode, conflictLine, originalTime, repliesByDefault, replyMail, statusKey } from "./invitation";
 
 const t = (key: string, opts?: Record<string, unknown>) => (opts ? `${key}|${JSON.stringify(opts)}` : key);
 
@@ -11,9 +11,18 @@ describe("cardMode", () => {
   });
   it("shows cancellations, publications and anything else", () => {
     expect(cardMode({ ...v, method: "CANCEL" })).toBe("cancel");
+    expect(cardMode({ ...v, method: "CANCEL", outdated: true })).toBe("outdated");
     expect(cardMode({ ...v, method: "PUBLISH" })).toBe("publish");
     expect(cardMode({ ...v, method: "COUNTER" })).toBe("info");
     expect(cardMode({ ...v, organizer_is_me: true })).toBe("info");
+  });
+});
+
+describe("repliesByDefault", () => {
+  it("follows RSVP only when there is an organizer to answer", () => {
+    expect(repliesByDefault({ rsvp: true, organizer_email: "robin@example.com" })).toBe(true);
+    expect(repliesByDefault({ rsvp: false, organizer_email: "robin@example.com" })).toBe(false);
+    expect(repliesByDefault({ rsvp: true, organizer_email: null })).toBe(false);
   });
 });
 

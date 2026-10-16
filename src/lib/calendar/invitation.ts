@@ -7,10 +7,15 @@ export const ANSWERS: InviteAnswer[] = ["accepted", "tentative", "declined"];
 export type CardMode = "request" | "outdated" | "cancel" | "publish" | "info";
 
 export function cardMode(v: Pick<InvitationView, "method" | "outdated" | "organizer_is_me">): CardMode {
-  if (v.method === "CANCEL") return "cancel";
+  if (v.method === "CANCEL") return v.outdated ? "outdated" : "cancel";
   if (v.method === "PUBLISH") return "publish";
   if (v.method !== "REQUEST" || v.organizer_is_me) return "info";
   return v.outdated ? "outdated" : "request";
+}
+
+/** Without an organizer the backend refuses to send a reply. */
+export function repliesByDefault(v: Pick<InvitationView, "rsvp" | "organizer_email">): boolean {
+  return v.rsvp && !!v.organizer_email;
 }
 
 export function replyMail(t: Translate, answer: InviteAnswer, title: string, comment: string | null): { subject: string; body: string } {

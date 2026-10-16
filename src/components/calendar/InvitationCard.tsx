@@ -9,7 +9,7 @@ import { useAppStore } from "../../stores/appStore";
 import { occurrenceRange } from "../../lib/calendar/dates";
 import { formatOccurrenceTime, formatSpan } from "../../lib/calendar/format";
 import { describeRrule } from "../../lib/calendar/rrule";
-import { ANSWERS, cardMode, conflictLine, originalTime, replyMail, statusKey } from "../../lib/calendar/invitation";
+import { ANSWERS, cardMode, conflictLine, originalTime, repliesByDefault, replyMail, statusKey } from "../../lib/calendar/invitation";
 import { dateLocale } from "../../lib/dateUtils";
 import type { MenuEntry } from "../../lib/menuModel";
 import { ContextMenu } from "../ui/ContextMenu";
@@ -78,10 +78,13 @@ function Card({ view }: { view: InvitationView }) {
   const { start } = occurrenceRange(view.when);
   const allDay = t("calendar.allDay");
   const original = originalTime(view.when, view.tzid, Intl.DateTimeFormat().resolvedOptions().timeZone, i18n.language, use24h);
-  const conflicts = mode === "cancel" ? null : conflictLine(t, view.conflicts, view.conflict_count);
+  const cancellation = view.method === "CANCEL";
+  const conflicts = cancellation ? null : conflictLine(t, view.conflicts, view.conflict_count);
   const organizer = view.organizer_name || view.organizer_email;
   const status = statusKey(view.my_partstat);
-  const join = mode === "cancel" ? null : view.meeting_link;
+  const join = cancellation ? null : view.meeting_link;
+  const canReply = !!view.organizer_email;
+  const reply = repliesByDefault(view);
   const canPickCalendar = (mode === "request" || mode === "publish") && !view.calendar_id && writable.length > 1;
 
   function answer(a: InviteAnswer, sendReply: boolean, note: string | null) {
@@ -98,11 +101,15 @@ function Card({ view }: { view: InvitationView }) {
     );
   }
 
-  const menuEntries = (a: InviteAnswer): MenuEntry[] => [
-    { kind: "item", id: "send", label: t("calendar.invite.sendReply"), selected: view.rsvp, onSelect: () => answer(a, true, null) },
-    { kind: "item", id: "comment", label: t("calendar.invite.withComment"), onSelect: () => { setComment(""); setCommenting(a); } },
-    { kind: "item", id: "none", label: t("calendar.invite.noReply"), selected: !view.rsvp, onSelect: () => answer(a, false, null) },
-  ];
+  const menuEntries = (a: InviteAnswer): MenuEntry[] => {
+    const none: MenuEntry = { kind: "item", id: "none", label: t("calendar.invite.noReply"), selected: !reply, onSelect: () => answer(a, false, null) };
+    if (!canReply) return [none];
+    return [
+      { kind: "item", id: "send", label: t("calendar.invite.sendReply"), selected: reply, onSelect: () => answer(a, true, null) },
+      { kind: "item", id: "comment", label: t("calendar.invite.withComment"), onSelect: () => { setComment(""); setCommenting(a); } },
+      none,
+    ];
+  };
 
   return (
     <div className="mb-3 rounded-xl border border-border bg-bg-secondary/60 p-3.5">
@@ -165,7 +172,7 @@ function Card({ view }: { view: InvitationView }) {
                   type="button"
                   disabled={busy || !calendarId}
                   aria-pressed={current}
-                  onClick={() => answer(a, view.rsvp, null)}
+                  onClick={() => answer(a, reply, null)}
                   className="px-3 py-1.5 hover:bg-hover disabled:opacity-50"
                 >
                   {t(ANSWER_LABELS[a])}
@@ -173,7 +180,7 @@ function Card({ view }: { view: InvitationView }) {
                 <button
                   type="button"
                   disabled={busy || !calendarId}
-                  aria-label={t("calendar.invite.answerOptions")}
+                  aria-label={`${t("calendar.invite.answerOptions")}: ${t(ANSWER_LABELS[a])}`}
                   aria-haspopup="menu"
                   onClick={(e) => {
                     const r = e.currentTarget.getBoundingClientRect();
