@@ -10,7 +10,7 @@ use super::store::{
     ensure_writable, get_calendar_settings_impl, import_ics_impl, load_alarms, occurrences_in, row_to_event, set_alarms, set_attendees,
     write_event, EVENT_COLS,
 };
-use super::tz::{parse_utc, system_tz};
+use super::tz::{fmt_utc, parse_utc, system_tz};
 use super::{Attendee, EventRow, ImportResult, InvitationView, InviteChanges, Occurrence, TextChange, TimeChange, TimeSpan, SUBSCRIPTION};
 use crate::db::Database;
 use chrono::{DateTime, Duration, Utc};
@@ -551,6 +551,33 @@ pub(crate) fn remove_cancelled_impl(db: &Database, mail_id: &str) -> Result<(), 
     tx.commit().map_err(err)
 }
 
+/// Mails whose updates should land without being opened: unread bodies in the
+/// inbox from people tied to my upcoming events.
+pub(crate) fn relevant_unfetched_mails_impl(db: &Database, account_id: &str, now: DateTime<Utc>, limit: usize) -> Result<Vec<String>, String> {
+    let conn = db.lock_db();
+    let mut stmt = conn
+        .prepare(
+            "SELECT m.id FROM mails m JOIN folders f ON f.id = m.folder_id
+             WHERE m.account_id = ?1 AND f.folder_type = 'inbox' AND m.body_text = '' AND m.body_html = ''
+               AND m.from_email != '' AND LOWER(m.from_email) IN (
+                 SELECT LOWER(e.organizer_email) FROM events e JOIN calendars c ON c.id = e.calendar_id
+                  WHERE c.source != ?2 AND e.is_organizer = 0 AND e.organizer_email IS NOT NULL
+                    AND (e.range_end_utc IS NULL OR e.range_end_utc >= ?3)
+                 UNION
+                 SELECT LOWER(a.email) FROM event_attendees a JOIN events e ON e.id = a.event_id JOIN calendars c ON c.id = e.calendar_id
+                  WHERE c.source != ?2 AND e.is_organizer = 1 AND (e.range_end_utc IS NULL OR e.range_end_utc >= ?3))
+             ORDER BY m.date DESC LIMIT ?4",
+        )
+        .map_err(err)?;
+    let since = fmt_utc(now - Duration::days(1));
+    let ids = stmt
+        .query_map(params![account_id, SUBSCRIPTION, since, limit as i64], |r| r.get(0))
+        .map_err(err)?
+        .collect::<Result<Vec<String>, _>>()
+        .map_err(err);
+    ids
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1048,5 +1075,32 @@ mod tests {
         assert_eq!(respond_impl(&db, "orig", "accepted", &cal, None, false, now()), Err("calendar.invite.errors.outdated".to_string()));
         assert_eq!(event(&db, "r1", None).status, "cancelled");
         assert!(invitation_view_impl(&db, "orig", now()).unwrap().unwrap().outdated);
+    }
+
+    #[test]
+    fn unread_mails_from_organizers_of_upcoming_events_are_picked() {
+        let (db, cal) = setup();
+        known(&db, &cal, &ics("REQUEST", &[vevent("r1", 0, "20261020T070000Z", YES, &[])]), "accepted");
+        known(&db, &cal, &ics("REQUEST", &[vec!["UID:past".into(), "DTSTART:20250101T070000Z".into(), "ORGANIZER:mailto:old@example.com".into()]]), "accepted");
+        {
+            let conn = db.lock_db();
+            conn.execute("INSERT INTO folders (id, account_id, name, folder_type, path) VALUES ('arch', 'acc', 'Archive', 'archive', 'Archive')", []).unwrap();
+            for (id, folder, from, body, date) in [
+                ("a", "inbox", "ROBIN@example.com", "", "2026-10-15T10:00:00Z"),
+                ("b", "inbox", "robin@example.com", "loaded", "2026-10-15T11:00:00Z"),
+                ("c", "arch", "robin@example.com", "", "2026-10-15T12:00:00Z"),
+                ("d", "inbox", "old@example.com", "", "2026-10-15T13:00:00Z"),
+                ("e", "inbox", "stranger@example.com", "", "2026-10-15T14:00:00Z"),
+                ("f", "inbox", "robin@example.com", "", "2026-10-15T15:00:00Z"),
+            ] {
+                conn.execute(
+                    "INSERT INTO mails (id, account_id, folder_id, from_email, body_text, date) VALUES (?1, 'acc', ?2, ?3, ?4, ?5)",
+                    params![id, folder, from, body, date],
+                )
+                .unwrap();
+            }
+        }
+        assert_eq!(relevant_unfetched_mails_impl(&db, "acc", now(), 20).unwrap(), vec!["f".to_string(), "a".to_string()]);
+        assert_eq!(relevant_unfetched_mails_impl(&db, "acc", now(), 1).unwrap(), vec!["f".to_string()]);
     }
 }
