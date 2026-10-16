@@ -10,6 +10,10 @@ pub mod windows_zones;
 
 use serde::{Deserialize, Serialize};
 
+/// `calendars.source` of a read-only feed mirror.
+pub const SUBSCRIPTION: &str = "subscription";
+pub const REFRESH_CHOICES: [i64; 4] = [15, 60, 360, 1440];
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Calendar {
     pub id: String,
@@ -19,6 +23,11 @@ pub struct Calendar {
     pub visible: bool,
     pub sort_order: f64,
     pub source: String,
+    pub refresh_minutes: Option<i64>,
+    pub last_synced_at: Option<String>,
+    pub last_error: Option<String>,
+    pub reminders_muted: bool,
+    pub read_only: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -33,6 +42,10 @@ pub struct CalendarPatch {
     pub sort_order: Option<f64>,
     #[serde(default)]
     pub is_default: Option<bool>,
+    #[serde(default)]
+    pub reminders_muted: Option<bool>,
+    #[serde(default)]
+    pub refresh_minutes: Option<i64>,
 }
 
 /// One `events` row. Times are wall clock in `tzid` ("2026-10-15T09:00:00"; floating

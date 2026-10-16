@@ -9,7 +9,7 @@ use super::recurrence::{
 use super::tz::{fmt_date, fmt_utc, fmt_wall, parse_date, parse_utc, row_tz, system_tz, system_tz_name, utc_to_wall, wall_to_utc};
 use super::{
     Attendee, Calendar, CalendarPatch, CalendarSettings, EventDetail, EventInput, EventPatch, EventRow, EventTimes,
-    ImportResult, Occurrence, Scope,
+    ImportResult, Occurrence, Scope, REFRESH_CHOICES, SUBSCRIPTION,
 };
 use crate::db::Database;
 use chrono::{DateTime, Duration, NaiveDate, Utc};
@@ -24,9 +24,11 @@ fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
 
-const CAL_SELECT: &str = "SELECT id, name, color, is_default, visible, sort_order, source FROM calendars";
+const CAL_SELECT: &str = "SELECT id, name, color, is_default, visible, sort_order, source, refresh_minutes, last_synced_at, \
+    last_error, reminders_muted FROM calendars";
 
 fn row_to_calendar(r: &rusqlite::Row) -> rusqlite::Result<Calendar> {
+    let source: String = r.get(6)?;
     Ok(Calendar {
         id: r.get(0)?,
         name: r.get(1)?,
@@ -34,7 +36,12 @@ fn row_to_calendar(r: &rusqlite::Row) -> rusqlite::Result<Calendar> {
         is_default: r.get::<_, i64>(3)? != 0,
         visible: r.get::<_, i64>(4)? != 0,
         sort_order: r.get(5)?,
-        source: r.get(6)?,
+        read_only: source == SUBSCRIPTION,
+        source,
+        refresh_minutes: r.get(7)?,
+        last_synced_at: r.get(8)?,
+        last_error: r.get(9)?,
+        reminders_muted: r.get::<_, i64>(10)? != 0,
     })
 }
 
@@ -44,7 +51,7 @@ fn fetch_calendars(conn: &Connection) -> Result<Vec<Calendar>, String> {
     rows
 }
 
-fn fetch_calendar(conn: &Connection, id: &str) -> Result<Calendar, String> {
+pub(crate) fn fetch_calendar(conn: &Connection, id: &str) -> Result<Calendar, String> {
     conn.query_row(&format!("{} WHERE id = ?1", CAL_SELECT), params![id], row_to_calendar)
         .optional()
         .map_err(err)?
@@ -83,13 +90,17 @@ pub(crate) fn create_calendar_impl(db: &Database, name: &str, color: &str) -> Re
     }
     let color = if is_valid_color(color) { color } else { DEFAULT_COLOR };
     let conn = db.lock_db();
-    let (count, next): (i64, f64) = conn
-        .query_row("SELECT COUNT(*), COALESCE(MAX(sort_order), -1) + 1 FROM calendars", [], |r| Ok((r.get(0)?, r.get(1)?)))
+    let (has_default, next): (bool, f64) = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM calendars WHERE is_default = 1), COALESCE(MAX(sort_order), -1) + 1 FROM calendars",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
         .map_err(err)?;
     let id = uuid::Uuid::new_v4().to_string();
     conn.execute(
         "INSERT INTO calendars (id, name, color, is_default, sort_order) VALUES (?1, ?2, ?3, ?4, ?5)",
-        params![id, name, color, (count == 0) as i64, next],
+        params![id, name, color, (!has_default) as i64, next],
     )
     .map_err(err)?;
     fetch_calendar(&conn, &id)
@@ -97,7 +108,13 @@ pub(crate) fn create_calendar_impl(db: &Database, name: &str, color: &str) -> Re
 
 pub(crate) fn update_calendar_impl(db: &Database, id: &str, patch: CalendarPatch) -> Result<Calendar, String> {
     let conn = db.lock_db();
-    ensure_calendar(&conn, id)?;
+    let cal = fetch_calendar(&conn, id)?;
+    if patch.is_default == Some(true) && cal.read_only {
+        return Err("calendar.errors.readOnly".into());
+    }
+    if patch.refresh_minutes.is_some_and(|m| !cal.read_only || !REFRESH_CHOICES.contains(&m)) {
+        return Err("calendar.errors.invalidSettings".into());
+    }
     let tx = conn.unchecked_transaction().map_err(err)?;
     if let Some(name) = patch.name.as_deref().map(str::trim) {
         if name.is_empty() {
@@ -117,28 +134,42 @@ pub(crate) fn update_calendar_impl(db: &Database, id: &str, patch: CalendarPatch
     if patch.is_default == Some(true) {
         tx.execute("UPDATE calendars SET is_default = CASE WHEN id = ?1 THEN 1 ELSE 0 END", params![id]).map_err(err)?;
     }
+    if let Some(muted) = patch.reminders_muted {
+        tx.execute("UPDATE calendars SET reminders_muted = ?1 WHERE id = ?2", params![muted as i64, id]).map_err(err)?;
+    }
+    if let Some(minutes) = patch.refresh_minutes {
+        tx.execute("UPDATE calendars SET refresh_minutes = ?1 WHERE id = ?2", params![minutes, id]).map_err(err)?;
+    }
     tx.execute("UPDATE calendars SET updated_at = datetime('now') WHERE id = ?1", params![id]).map_err(err)?;
     tx.commit().map_err(err)?;
     fetch_calendar(&conn, id)
 }
 
-pub(crate) fn delete_calendar_impl(db: &Database, id: &str) -> Result<(), String> {
+/// Returns the deleted calendar so the caller can drop a subscription's stored link.
+pub(crate) fn delete_calendar_impl(db: &Database, id: &str) -> Result<Calendar, String> {
     let conn = db.lock_db();
     let cal = fetch_calendar(&conn, id)?;
-    let count: i64 = conn.query_row("SELECT COUNT(*) FROM calendars", [], |r| r.get(0)).map_err(err)?;
-    if count <= 1 {
-        return Err("calendar.errors.lastCalendar".into());
+    if !cal.read_only {
+        let locals: i64 = conn
+            .query_row("SELECT COUNT(*) FROM calendars WHERE source != ?1", params![SUBSCRIPTION], |r| r.get(0))
+            .map_err(err)?;
+        if locals <= 1 {
+            return Err("calendar.errors.lastCalendar".into());
+        }
     }
     let tx = conn.unchecked_transaction().map_err(err)?;
     tx.execute("DELETE FROM calendars WHERE id = ?1", params![id]).map_err(err)?;
     if cal.is_default {
         tx.execute(
-            "UPDATE calendars SET is_default = 1 WHERE id = (SELECT id FROM calendars ORDER BY sort_order, created_at LIMIT 1)",
-            [],
+            "UPDATE calendars SET is_default = 1 WHERE id = (
+                SELECT id FROM calendars WHERE source != ?1 ORDER BY sort_order, created_at LIMIT 1
+             )",
+            params![SUBSCRIPTION],
         )
         .map_err(err)?;
     }
-    tx.commit().map_err(err)
+    tx.commit().map_err(err)?;
+    Ok(cal)
 }
 
 fn read_setting(conn: &Connection, key: &str) -> Option<String> {
@@ -918,11 +949,11 @@ pub(crate) fn export_ics_impl(db: &Database, calendar_id: &str) -> Result<(Strin
 /// (event id, occurrence start as listed, minutes before)
 pub type SentKey = (String, String, i64);
 
-/// Occurrences around `now` in every calendar (hidden ones still remind), with their alarms.
+/// Occurrences around `now` in every unmuted calendar (hidden ones still remind), with their alarms.
 pub(crate) fn reminder_candidates_impl(db: &Database, now: DateTime<Utc>) -> Result<Vec<(Occurrence, Vec<i64>)>, String> {
     let conn = db.lock_db();
     let ids: Vec<String> = {
-        let mut stmt = conn.prepare("SELECT id FROM calendars").map_err(err)?;
+        let mut stmt = conn.prepare("SELECT id FROM calendars WHERE reminders_muted = 0").map_err(err)?;
         let rows = stmt.query_map([], |r| r.get(0)).map_err(err)?.collect::<Result<Vec<String>, _>>().map_err(err)?;
         rows
     };
@@ -983,6 +1014,18 @@ mod tests {
 
     pub(super) fn cal(db: &Database) -> String {
         list_calendars_impl(db, "Mine").unwrap().remove(0).id
+    }
+
+    pub(super) fn subscription_cal(db: &Database) -> String {
+        cal(db);
+        let id = uuid::Uuid::new_v4().to_string();
+        db.lock_db()
+            .execute(
+                "INSERT INTO calendars (id, name, color, source, refresh_minutes, sort_order) VALUES (?1, 'Feed', '#10b981', 'subscription', 60, 5)",
+                params![id],
+            )
+            .unwrap();
+        id
     }
 
     pub(super) fn zoned_row(db: &Database, calendar_id: &str, tz: &str, dtstart: &str, dtend: &str, rrule: Option<&str>) -> String {
@@ -1539,5 +1582,63 @@ END:VCALENDAR
         assert_eq!(occ.len(), 1);
         assert_eq!(occ[0].start, "2026-10-15T09:00:00Z");
         assert!(get_event_impl(&db, &occ[0].event_id).unwrap().alarms.is_empty());
+    }
+
+    #[test]
+    fn muted_calendars_do_not_remind() {
+        let db = temp_db();
+        let c = cal(&db);
+        let now = Utc::now();
+        create_event_impl(
+            &db,
+            EventInput { alarms: vec![10], ..input(&c, "Call", timed(&fmt_utc(now + Duration::minutes(5)), &fmt_utc(now + Duration::minutes(35)))) },
+        )
+        .unwrap();
+        assert_eq!(reminder_candidates_impl(&db, now).unwrap().len(), 1);
+        let muted = update_calendar_impl(&db, &c, CalendarPatch { reminders_muted: Some(true), ..Default::default() }).unwrap();
+        assert!(muted.reminders_muted);
+        assert!(reminder_candidates_impl(&db, now).unwrap().is_empty());
+    }
+
+    #[test]
+    fn subscriptions_take_only_known_intervals_and_never_become_default() {
+        let db = temp_db();
+        let local = cal(&db);
+        let sub = subscription_cal(&db);
+        let listed = list_calendars_impl(&db, "Mine").unwrap();
+        let feed = listed.iter().find(|c| c.id == sub).unwrap();
+        assert!(feed.read_only);
+        assert_eq!(feed.refresh_minutes, Some(60));
+        assert!(!listed.iter().find(|c| c.id == local).unwrap().read_only);
+        let set = |id: &str, patch: CalendarPatch| update_calendar_impl(&db, id, patch);
+        assert_eq!(set(&sub, CalendarPatch { refresh_minutes: Some(360), ..Default::default() }).unwrap().refresh_minutes, Some(360));
+        assert_eq!(set(&sub, CalendarPatch { refresh_minutes: Some(7), ..Default::default() }).unwrap_err(), "calendar.errors.invalidSettings");
+        assert_eq!(set(&local, CalendarPatch { refresh_minutes: Some(60), ..Default::default() }).unwrap_err(), "calendar.errors.invalidSettings");
+        assert_eq!(set(&sub, CalendarPatch { is_default: Some(true), ..Default::default() }).unwrap_err(), "calendar.errors.readOnly");
+    }
+
+    #[test]
+    fn the_last_local_calendar_stays_even_beside_subscriptions() {
+        let db = temp_db();
+        let local = cal(&db);
+        let sub = subscription_cal(&db);
+        assert_eq!(delete_calendar_impl(&db, &local).unwrap_err(), "calendar.errors.lastCalendar");
+        let second = create_calendar_impl(&db, "Work", "#ef4444").unwrap();
+        assert!(!second.is_default);
+        delete_calendar_impl(&db, &local).unwrap();
+        let after = list_calendars_impl(&db, "Mine").unwrap();
+        assert!(after.iter().find(|c| c.id == second.id).unwrap().is_default, "the default moves to a local calendar");
+        assert!(!after.iter().find(|c| c.id == sub).unwrap().is_default);
+        assert!(delete_calendar_impl(&db, &sub).unwrap().read_only);
+    }
+
+    #[test]
+    fn a_first_local_calendar_beside_subscriptions_becomes_default() {
+        let db = temp_db();
+        let id = uuid::Uuid::new_v4().to_string();
+        db.lock_db()
+            .execute("INSERT INTO calendars (id, name, color, source, refresh_minutes) VALUES (?1, 'Feed', '#10b981', 'subscription', 60)", params![id])
+            .unwrap();
+        assert!(create_calendar_impl(&db, "Mine", "#3b82f6").unwrap().is_default);
     }
 }

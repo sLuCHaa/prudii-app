@@ -51,7 +51,7 @@ pub fn update_calendar(app: AppHandle, db: State<'_, Database>, id: String, patc
 #[tauri::command(async)]
 pub fn delete_calendar(app: AppHandle, db: State<'_, Database>, id: String) -> Result<(), String> {
     super::catch_panic(|| {
-        delete_calendar_impl(&db, &id)?;
+        let _ = delete_calendar_impl(&db, &id)?;
         changed(&app);
         Ok(())
     })

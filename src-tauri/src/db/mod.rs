@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
-pub(crate) const SCHEMA_VERSION: u32 = 43;
+pub(crate) const SCHEMA_VERSION: u32 = 44;
 
 pub struct Database {
     pub conn: Mutex<Connection>,
@@ -691,6 +691,19 @@ impl Database {
             );"
         ) {
             log::error!("calendar schema migration failed: {}", e);
+        }
+
+        // Subscriptions (schema 44); "duplicate column" on re-runs is expected.
+        for sql in [
+            "ALTER TABLE calendars ADD COLUMN refresh_minutes INTEGER",
+            "ALTER TABLE calendars ADD COLUMN last_attempt_at TEXT",
+            "ALTER TABLE calendars ADD COLUMN last_synced_at TEXT",
+            "ALTER TABLE calendars ADD COLUMN last_error TEXT",
+            "ALTER TABLE calendars ADD COLUMN content_hash TEXT",
+            "ALTER TABLE calendars ADD COLUMN secret_link TEXT",
+            "ALTER TABLE calendars ADD COLUMN reminders_muted INTEGER NOT NULL DEFAULT 0",
+        ] {
+            let _ = conn.execute_batch(sql);
         }
 
         // Only bump version AFTER all migrations have run

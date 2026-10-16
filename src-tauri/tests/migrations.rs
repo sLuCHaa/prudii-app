@@ -213,7 +213,7 @@ fn calendar_tables_exist_with_unique_slots_and_cascade() {
     let conn = db.lock_db();
 
     let version: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
-    assert_eq!(version, 43);
+    assert_eq!(version, 44);
 
     conn.execute("INSERT INTO calendars (id, name, color) VALUES ('c1', 'Cal', '#3b82f6')", []).unwrap();
     let insert = |id: &str, rid: Option<&str>| {
@@ -234,6 +234,29 @@ fn calendar_tables_exist_with_unique_slots_and_cascade() {
     let alarms: i64 = conn.query_row("SELECT COUNT(*) FROM event_alarms", [], |r| r.get(0)).unwrap();
     assert_eq!((events, alarms), (0, 0), "events and alarms cascade with their calendar");
 
+    drop(conn);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn subscription_columns_are_added_to_existing_calendars() {
+    let dir = temp_dir("calendar-subscriptions");
+    {
+        let db = Database::new(dir.clone()).unwrap();
+        let conn = db.lock_db();
+        for col in ["refresh_minutes", "last_attempt_at", "last_synced_at", "last_error", "content_hash", "secret_link", "reminders_muted"] {
+            conn.execute_batch(&format!("ALTER TABLE calendars DROP COLUMN {}", col)).unwrap();
+        }
+        conn.pragma_update(None, "user_version", 43).unwrap();
+        conn.execute("INSERT INTO calendars (id, name, color) VALUES ('c1', 'Cal', '#3b82f6')", []).unwrap();
+    }
+    let db = Database::new(dir.clone()).unwrap();
+    let conn = db.lock_db();
+    let version: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
+    assert_eq!(version, 44);
+    let (muted, refresh): (i64, Option<i64>) =
+        conn.query_row("SELECT reminders_muted, refresh_minutes FROM calendars WHERE id = 'c1'", [], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+    assert_eq!((muted, refresh), (0, None));
     drop(conn);
     let _ = std::fs::remove_dir_all(&dir);
 }
