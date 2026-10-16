@@ -5,6 +5,7 @@ pub mod ical;
 pub mod meeting;
 pub mod recurrence;
 pub mod store;
+pub mod subscription;
 pub mod tz;
 pub mod windows_zones;
 
