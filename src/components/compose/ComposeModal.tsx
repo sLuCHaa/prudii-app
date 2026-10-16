@@ -11,6 +11,7 @@ import { EditorContent } from "@tiptap/react";
 import TiptapImage from "@tiptap/extension-image";
 import { Node } from "@tiptap/core";
 import { useRichTextEditor } from "../editor/RichTextEditor";
+import { setComposeBody } from "./composeBody";
 import { EditorToolbar } from "../editor/EditorToolbar";
 import { useTranslation } from "react-i18next";
 import i18n from "../../lib/i18n";
@@ -739,7 +740,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
             if (cancelled) return;
             const body = updated.body_html || updated.body_text || "";
             if (body && editor) {
-              editor.commands.setContent(body);
+              setComposeBody(editor, body);
             }
           })
           .catch(() => {});
@@ -817,7 +818,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       }
     }
 
-    editor.commands.setContent(content);
+    setComposeBody(editor, content);
 
     // Fallback: if reply/forward originalMail has no body, fetch it and update editor
     if (originalMail && (mode === "reply" || mode === "replyAll" || mode === "forward") && !originalMail.body_html && !originalMail.body_text) {
@@ -832,9 +833,9 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
           void withResolvedInlineImages(updated).then((m) => { if (m && !cancelled) setQuotedHtml(quoteOf(m)); });
           if (isReply && composeAiReplyText) {
             const aiHtml = `<p>${composeAiReplyText.replace(/\n/g, '<br>')}</p>`;
-            editor.commands.setContent(`${aiHtml}${sig}`);
+            setComposeBody(editor, `${aiHtml}${sig}`);
           } else {
-            editor.commands.setContent(`<p></p>${sig}`);
+            setComposeBody(editor, `<p></p>${sig}`);
           }
         })
         .catch(() => {});
@@ -878,7 +879,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       })),
     );
     setQuotedHtml(restoreSnapshot.quotedHtml || "");
-    editor.commands.setContent(restoreSnapshot.bodyHtml);
+    setComposeBody(editor, restoreSnapshot.bodyHtml);
     // Clear snapshot so it doesn't re-apply
     useAppStore.getState().clearUndoSend();
   }, [isOpen, editor, restoreSnapshot]);
@@ -975,9 +976,9 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     const sigRegex = /<div data-type="signature">[\s\S]*?<\/div>/;
 
     if (sigRegex.test(html)) {
-      editor.commands.setContent(html.replace(sigRegex, newSig));
+      setComposeBody(editor, html.replace(sigRegex, newSig));
     } else if (newSig) {
-      editor.commands.setContent(html + newSig);
+      setComposeBody(editor, html + newSig);
     }
   }
 
