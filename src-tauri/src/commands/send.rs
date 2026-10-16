@@ -51,59 +51,111 @@ fn decode_attachments(attachments: Option<Vec<SendAttachment>>) -> Result<Vec<Em
         .collect()
 }
 
+struct SendAccount {
+    id: String,
+    email: String,
+    display_name: String,
+    smtp_host: String,
+    smtp_port: i32,
+    smtp_security: String,
+    imap_host: String,
+    imap_port: i32,
+    auth_type: String,
+    provider: String,
+    /// (folder id, IMAP path); the id lets the sent copy show up before the next sync.
+    sent_folder: Option<(String, String)>,
+}
+
+fn load_send_account(db: &Database, account_id: &str) -> Result<SendAccount, String> {
+    let conn = db.lock_db();
+    let mut account = conn
+        .query_row(
+            "SELECT email, display_name, smtp_host, smtp_port, COALESCE(smtp_security, 'ssl'), imap_host, imap_port, auth_type, provider FROM accounts WHERE id = ?1",
+            rusqlite::params![account_id],
+            |row| {
+                Ok(SendAccount {
+                    id: account_id.to_string(),
+                    email: row.get(0)?,
+                    display_name: row.get(1)?,
+                    smtp_host: row.get(2)?,
+                    smtp_port: row.get(3)?,
+                    smtp_security: row.get(4)?,
+                    imap_host: row.get(5)?,
+                    imap_port: row.get(6)?,
+                    auth_type: row.get(7)?,
+                    provider: row.get(8)?,
+                    sent_folder: None,
+                })
+            },
+        )
+        .map_err(|e| format!("Account not found: {}", e))?;
+    account.sent_folder = conn
+        .query_row(
+            "SELECT id, path FROM folders WHERE account_id = ?1 AND folder_type = 'sent'",
+            rusqlite::params![account_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .ok();
+    Ok(account)
+}
+
+fn smtp_config(account: &SendAccount, credential: &str) -> Result<SmtpConfig, String> {
+    if account.smtp_security != "ssl" && account.smtp_security != "starttls" {
+        return Err(format!("Invalid SMTP security mode: '{}'. Must be 'ssl' or 'starttls'.", account.smtp_security));
+    }
+    // Ports are cast to u16; out-of-range values would wrap silently.
+    if !(1..=65535).contains(&account.smtp_port) {
+        return Err(format!("Invalid SMTP port: {}. Must be 1-65535.", account.smtp_port));
+    }
+    if !(1..=65535).contains(&account.imap_port) {
+        return Err(format!("Invalid IMAP port: {}. Must be 1-65535.", account.imap_port));
+    }
+    Ok(SmtpConfig {
+        host: account.smtp_host.clone(),
+        port: account.smtp_port as u16,
+        security: account.smtp_security.clone(),
+        email: account.email.clone(),
+        password: credential.to_string(),
+        auth_type: account.auth_type.clone(),
+        display_name: account.display_name.clone(),
+    })
+}
+
+/// The mail has left the building; this only archives a copy. It needs the
+/// account's IMAP session, which a running sync can hold for a minute, so it
+/// must not keep the caller waiting.
+fn spawn_sent_copy(app: &AppHandle, account: SendAccount, credential: String, raw: Vec<u8>) {
+    let is_gmail_imap = account.imap_host.contains("gmail.com") || account.imap_host.contains("googlemail.com");
+    let bg_app = app.clone();
+    let key = account.id.clone();
+    crate::task_registry::spawn_for_account(&key, async move {
+        save_sent_copy(
+            bg_app,
+            account.id,
+            account.imap_host,
+            account.imap_port as u16,
+            account.email,
+            credential,
+            account.auth_type,
+            account.sent_folder,
+            raw,
+            is_gmail_imap,
+        )
+        .await;
+    });
+}
+
 #[tauri::command]
 pub async fn send_mail(app: AppHandle, db: State<'_, Database>, request: SendMailRequest) -> Result<(), String> {
-    // Get account details, before any await
-    let (account_id, email, display_name, smtp_host, smtp_port, smtp_security, imap_host, imap_port, auth_type, provider, sent_folder) = {
-        let conn = db.lock_db();
-        let (email, display_name, smtp_host, smtp_port, smtp_security, imap_host, imap_port, auth_type, provider): (String, String, String, i32, String, String, i32, String, String) = conn
-            .query_row(
-                "SELECT email, display_name, smtp_host, smtp_port, COALESCE(smtp_security, 'ssl'), imap_host, imap_port, auth_type, provider FROM accounts WHERE id = ?1",
-                rusqlite::params![request.account_id],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?, row.get(6)?, row.get(7)?, row.get(8)?)),
-            )
-            .map_err(|e| format!("Account not found: {}", e))?;
-
-        // Find the Sent folder (id + path). The id lets us insert the sent copy into
-        // the local DB right after APPEND so it shows up without waiting for a sync.
-        let sent_folder: Option<(String, String)> = conn
-            .query_row(
-                "SELECT id, path FROM folders WHERE account_id = ?1 AND folder_type = 'sent'",
-                rusqlite::params![request.account_id],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .ok();
-
-        (request.account_id.clone(), email, display_name, smtp_host, smtp_port, smtp_security, imap_host, imap_port, auth_type, provider, sent_folder)
-    };
+    let account = load_send_account(&db, &request.account_id)?;
 
     // Resolve credential (password or OAuth access_token)
-    let credential = credentials::resolve_credential(&account_id, &auth_type, &provider)
+    let credential = credentials::resolve_credential(&account.id, &account.auth_type, &account.provider)
         .await
         .map_err(|e| format!("Failed to retrieve credentials: {}", e))?;
 
     let (config, message) = {
-        if smtp_security != "ssl" && smtp_security != "starttls" {
-            return Err(format!("Invalid SMTP security mode: '{}'. Must be 'ssl' or 'starttls'.", smtp_security));
-        }
-
-        // Validate port ranges (prevent silent truncation when casting i32 -> u16)
-        if !(1..=65535).contains(&smtp_port) {
-            return Err(format!("Invalid SMTP port: {}. Must be 1-65535.", smtp_port));
-        }
-        if !(1..=65535).contains(&imap_port) {
-            return Err(format!("Invalid IMAP port: {}. Must be 1-65535.", imap_port));
-        }
-
-        let config = SmtpConfig {
-            host: smtp_host,
-            port: smtp_port as u16,
-            security: smtp_security,
-            email: email.clone(),
-            password: credential.clone(),
-            auth_type: auth_type.clone(),
-            display_name: display_name.clone(),
-        };
+        let config = smtp_config(&account, &credential)?;
 
         let attachments = decode_attachments(request.attachments)?;
 
@@ -140,8 +192,8 @@ pub async fn send_mail(app: AppHandle, db: State<'_, Database>, request: SendMai
         (config, message)
     };
 
-    let is_gmail_api = provider == "google" && auth_type == "oauth";
-    let is_outlook_api = provider == "microsoft" && auth_type == "oauth";
+    let is_gmail_api = account.provider == "google" && account.auth_type == "oauth";
+    let is_outlook_api = account.provider == "microsoft" && account.auth_type == "oauth";
 
     if is_gmail_api {
         // Build the RFC 2822 message using the same SMTP builder
@@ -211,30 +263,32 @@ pub async fn send_mail(app: AppHandle, db: State<'_, Database>, request: SendMai
             .await
             .map_err(|e| format!("Failed to send email: {}", e))?;
 
-        let is_gmail_imap = imap_host.contains("gmail.com") || imap_host.contains("googlemail.com");
-
-        // The mail has left the building — everything below only archives a copy.
-        // It needs the account's IMAP session, which a running sync can hold for
-        // a minute, so it must not keep the caller (and its toast) waiting.
-        let bg_app = app.clone();
-        let bg_account_id = account_id.clone();
-        crate::task_registry::spawn_for_account(&account_id, async move {
-            save_sent_copy(
-                bg_app,
-                bg_account_id,
-                imap_host,
-                imap_port as u16,
-                email,
-                credential,
-                auth_type,
-                sent_folder,
-                message_bytes,
-                is_gmail_imap,
-            )
-            .await;
-        });
+        spawn_sent_copy(&app, account, credential, message_bytes);
     }
 
+    Ok(())
+}
+
+/// Sends a generated mail (iMIP replies) from `account_id`: no composer, no undo
+/// window, no draft. SMTP accounts still get their Sent copy.
+pub(crate) async fn send_calendar_mail(app: &AppHandle, account_id: &str, message: EmailMessage) -> Result<(), String> {
+    let account = load_send_account(&app.state::<Database>(), account_id)?;
+    let credential = credentials::resolve_credential(&account.id, &account.auth_type, &account.provider)
+        .await
+        .map_err(|e| format!("Failed to retrieve credentials: {}", e))?;
+    let config = smtp_config(&account, &credential)?;
+    if account.auth_type == "oauth" && account.provider == "google" {
+        let raw = smtp::build_message(config, message).map_err(|e| format!("Failed to build email: {}", e))?;
+        let client = crate::gmail::api::GmailClient::new(&credential);
+        return crate::gmail::messages::send_message(&client, &raw).await.map_err(|e| format!("Gmail send failed: {}", e));
+    }
+    if account.auth_type == "oauth" && account.provider == "microsoft" {
+        let raw = smtp::build_message(config, message).map_err(|e| format!("Failed to build email: {}", e))?;
+        let client = crate::outlook::api::OutlookClient::new(&credential);
+        return client.send_mime(&raw).await.map_err(|e| format!("Outlook send failed: {}", e));
+    }
+    let raw = smtp::send_mail(config, message).await.map_err(|e| format!("Failed to send email: {}", e))?;
+    spawn_sent_copy(app, account, credential, raw);
     Ok(())
 }
 
@@ -809,4 +863,30 @@ pub async fn run_scheduled_check(app: &AppHandle) -> Result<i32, String> {
     }
 
     Ok(count)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn send_accounts_load_with_their_sent_folder_and_validate_ports() {
+        let db = Database::new(std::env::temp_dir().join(format!("prudii-send-{}", Uuid::new_v4()))).unwrap();
+        {
+            let conn = db.lock_db();
+            conn.execute(
+                "INSERT INTO accounts (id, email, display_name, provider, imap_host, smtp_host, smtp_port) VALUES ('acc', 'sam@example.com', 'Sam', 'imap', 'imap.example.com', 'smtp.example.com', 465)",
+                [],
+            )
+            .unwrap();
+            conn.execute("INSERT INTO folders (id, account_id, name, folder_type, path) VALUES ('sent', 'acc', 'Sent', 'sent', 'Sent')", []).unwrap();
+        }
+        let account = load_send_account(&db, "acc").unwrap();
+        assert_eq!(account.sent_folder, Some(("sent".to_string(), "Sent".to_string())));
+        assert_eq!(account.smtp_security, "ssl");
+        let config = smtp_config(&account, "secret").unwrap();
+        assert_eq!((config.host.as_str(), config.port, config.display_name.as_str()), ("smtp.example.com", 465, "Sam"));
+        assert!(smtp_config(&SendAccount { smtp_port: 0, ..account }, "secret").is_err());
+        assert!(load_send_account(&db, "missing").is_err());
+    }
 }

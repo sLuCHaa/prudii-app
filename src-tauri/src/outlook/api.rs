@@ -21,6 +21,12 @@ fn percent_encode_query(value: &str) -> String {
     out
 }
 
+/// Body of a MIME `sendMail`: the whole RFC 822 message, base64 encoded.
+pub fn mime_send_body(raw: &[u8]) -> String {
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD.encode(raw)
+}
+
 /// Lightweight Graph API client wrapping a reqwest client + access token.
 pub struct OutlookClient {
     http: reqwest::Client,
@@ -668,6 +674,41 @@ impl OutlookClient {
         }
     }
 
+    /// Sends a complete MIME message; the JSON message shape cannot carry an
+    /// iMIP text/calendar part. Graph files it under Sent Items.
+    pub async fn send_mime(&self, raw: &[u8]) -> Result<()> {
+        let url = format!("{}/sendMail", BASE_URL);
+        let body = mime_send_body(raw);
+
+        let mut attempt = 0u32;
+        loop {
+            let resp = self.http
+                .post(&url)
+                .header("Authorization", self.auth_header())
+                .header("Content-Type", "text/plain")
+                .body(body.clone())
+                .send()
+                .await
+                .context("send_mime request failed")?;
+
+            let status = resp.status();
+            if status.is_success() {
+                return Ok(());
+            }
+
+            attempt += 1;
+            if Self::is_retryable(status) && attempt <= 3 {
+                let delay = std::time::Duration::from_millis(1000 * 2u64.pow(attempt - 1));
+                log::warn!("send_mime: {} on attempt {}, retrying in {:?}", status, attempt, delay);
+                tokio::time::sleep(delay).await;
+                continue;
+            }
+
+            let text = resp.text().await.unwrap_or_default();
+            bail!("send_mime failed ({}): {}", status, text);
+        }
+    }
+
     /// Reply to a message via Graph API. Handles threading automatically.
     pub async fn reply_mail(&self, original_graph_id: &str, payload: &ReplyPayload) -> Result<()> {
         let url = format!("{}/messages/{}/reply", BASE_URL, original_graph_id);
@@ -909,4 +950,14 @@ pub struct SendAttachment {
 #[serde(rename_all = "camelCase")]
 pub struct ReplyPayload {
     pub message: SendMessage,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::mime_send_body;
+
+    #[test]
+    fn mime_sends_carry_the_whole_message_base64_encoded() {
+        assert_eq!(mime_send_body(b"Subject: Hi\r\n\r\nBody"), "U3ViamVjdDogSGkNCg0KQm9keQ==");
+    }
 }
