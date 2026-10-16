@@ -4,6 +4,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import { CalendarDays, ListChecks, MailCheck, Rss, Sparkles, type LucideIcon } from "lucide-react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { Button } from "./Button";
+import { useDialog } from "./DialogProvider";
 import { displayVersion, pendingRelease, readSeen, RELEASES, SEEN_KEY, type WhatsNewIcon, type WhatsNewRelease, type WhatsNewTone } from "../../lib/whatsNew";
 
 const ICONS: Record<WhatsNewIcon, LucideIcon> = { calendar: CalendarDays, mail: MailCheck, rss: Rss, tasks: ListChecks };
@@ -33,6 +34,8 @@ function writeSeen(version: string) {
 
 export function WhatsNew({ hasAccounts }: { hasAccounts: boolean }) {
   const [shown, setShown] = useState<{ release: WhatsNewRelease; current: string } | null>(null);
+  // Startup prompts (e.g. restoring drafts after an update relaunch) go first; one Escape must not close both.
+  const { isOpen: dialogOpen } = useDialog();
 
   useEffect(() => {
     let cancelled = false;
@@ -56,7 +59,7 @@ export function WhatsNew({ hasAccounts }: { hasAccounts: boolean }) {
     setShown(null);
   }, [shown]);
 
-  return shown ? <WhatsNewDialog release={shown.release} onClose={close} /> : null;
+  return shown && !dialogOpen ? <WhatsNewDialog release={shown.release} onClose={close} /> : null;
 }
 
 function WhatsNewDialog({ release, onClose }: { release: WhatsNewRelease; onClose: () => void }) {
@@ -65,7 +68,7 @@ function WhatsNewDialog({ release, onClose }: { release: WhatsNewRelease; onClos
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && !e.defaultPrevented) onClose();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
