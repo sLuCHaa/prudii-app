@@ -48,7 +48,7 @@ export function CalendarSettingsPanel() {
       <Section icon={CalendarDays} title={t("calendar.settings.defaultCalendar")}>
         <Select
           value={calendars.find((c) => c.is_default)?.id ?? ""}
-          options={calendars.map((c) => ({ value: c.id, label: c.name, icon: <span className="h-2.5 w-2.5 rounded-full" style={{ background: c.color }} /> }))}
+          options={calendars.filter((c) => !c.read_only).map((c) => ({ value: c.id, label: c.name, icon: <span className="h-2.5 w-2.5 rounded-full" style={{ background: c.color }} /> }))}
           onChange={(id) => updateCalendar.mutate({ id, patch: { is_default: true } })}
           ariaLabel={t("calendar.settings.defaultCalendar")}
         />
