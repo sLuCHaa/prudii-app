@@ -244,10 +244,11 @@ DTSTART:20261016T090000Z\r\nDTEND:20261016T100000Z\r\nSUMMARY:Two\r\nEND:VEVENT\
 
     #[tokio::test]
     async fn redirects_to_plain_http_are_refused() {
-        let (base, _) = serve(vec![]);
+        let (base, target_seen) = serve(vec![ok(FEED, "\"v1\"")]);
         let (redirector, _) = serve(vec![format!("HTTP/1.1 302 Found\r\nLocation: {}/cal.ics\r\nConnection: close\r\n\r\n", base)]);
         let err = fetch_feed(&client(), &format!("{}/start", redirector), None).await.unwrap_err();
         assert_eq!(err, "calendar.errors.feedUnreachable");
+        assert!(target_seen.lock().unwrap().is_empty());
     }
 
     #[tokio::test]
