@@ -808,7 +808,6 @@ export async function updateCalendarSettings(settings: CalendarSettings): Promis
   return invoke("update_calendar_settings", { settings });
 }
 
-/** Opens the native file picker; null when the user cancels. */
 export async function getMailInvitation(mailId: string): Promise<InvitationView | null> {
   return invoke("get_mail_invitation", { mailId });
 }
@@ -825,6 +824,7 @@ export async function removeCancelledEvent(mailId: string): Promise<void> {
   return invoke("remove_cancelled_event", { mailId });
 }
 
+/** Opens the native file picker; null when the user cancels. */
 export async function importIcs(calendarId: string): Promise<ImportResult | null> {
   return invoke("import_ics", { calendarId });
 }

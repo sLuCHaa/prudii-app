@@ -17,9 +17,7 @@ export function replyMail(t: Translate, answer: InviteAnswer, title: string, com
   const name = title.trim() || t("calendar.untitled");
   const text = t(`calendar.invite.replyBody.${answer}`, { title: name });
   const note = comment?.trim();
-  return { subject: t(`calendar.invite.replySubject.${answer}`, { title: name }), body: note ? `${text}
-
-${note}` : text };
+  return { subject: t(`calendar.invite.replySubject.${answer}`, { title: name }), body: note ? `${text}\n\n${note}` : text };
 }
 
 /** The organizer's wall clock, only when it reads differently from the viewer's. */

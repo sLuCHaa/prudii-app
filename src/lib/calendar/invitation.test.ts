@@ -59,6 +59,6 @@ describe("conflictLine", () => {
   it("names the overlapping events and counts the rest", () => {
     expect(conflictLine(t, [], 0)).toBeNull();
     expect(conflictLine(t, ["A", ""], 2)).toBe('calendar.invite.conflicts|{"titles":"A, calendar.untitled"}');
-    expect(conflictLine(t, ["A", "B", "C"], 5)).toContain('"titles":"A, B, C calendar.more|');
+    expect(conflictLine(t, ["A", "B", "C"], 5)).toBe('calendar.invite.conflicts|{"titles":"A, B, C calendar.more|{\\"count\\":2}"}');
   });
 });
