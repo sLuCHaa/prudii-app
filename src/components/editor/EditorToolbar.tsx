@@ -1,13 +1,21 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useEditorState, type Editor } from "@tiptap/react";
-import { Bold, Italic, Strikethrough, List, ListOrdered, Quote, Code, Link2, Undo, Redo } from "lucide-react";
+import { Bold, Italic, Strikethrough, List, ListOrdered, Quote, Code, Link2, Undo, Redo, Pencil, ExternalLink, Copy, Unlink } from "lucide-react";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import i18n from "../../lib/i18n";
+import type { MenuEntry } from "../../lib/menuModel";
+import { useOpenCheckedLink } from "../../hooks/useOpenCheckedLink";
+import { ContextMenu } from "../ui/ContextMenu";
 import { LinkDialog } from "./LinkDialog";
-import { selectLinkForEditing } from "./linkEditing";
+import { onLinkContextMenu, selectLinkForEditing, type LinkMenuTarget } from "./linkEditing";
 
 export function EditorToolbar({ editor, linkDialogOpen, setLinkDialogOpen }: { editor: Editor | null; linkDialogOpen: boolean; setLinkDialogOpen: (open: boolean) => void }) {
   const [linkDialogUrl, setLinkDialogUrl] = useState("");
   const [linkDialogEditing, setLinkDialogEditing] = useState(false);
+  const [linkMenu, setLinkMenu] = useState<LinkMenuTarget | null>(null);
+  const openCheckedLink = useOpenCheckedLink();
+
+  useEffect(() => (editor ? onLinkContextMenu(editor, setLinkMenu) : undefined), [editor]);
 
   // Tiptap 3 does not re-render on transactions, so isActive read during render goes stale.
   const state = useEditorState({
@@ -45,6 +53,15 @@ export function EditorToolbar({ editor, linkDialogOpen, setLinkDialogOpen }: { e
     editor.chain().focus().extendMarkRange("link").unsetLink().run();
   };
 
+  const linkMenuEntries = (href: string): MenuEntry[] => [
+    { kind: "item", id: "editLink", label: i18n.t("compose.linkEdit"), icon: <Pencil className="w-4 h-4" />, onSelect: openLinkDialog },
+    ...(/^https?:/i.test(href)
+      ? [{ kind: "item" as const, id: "openLink", label: i18n.t("mailDetail.bodyMenu.openLink"), icon: <ExternalLink className="w-4 h-4" />, onSelect: () => openCheckedLink(href) }]
+      : []),
+    { kind: "item", id: "copyLink", label: i18n.t("mailDetail.bodyMenu.copyLink"), icon: <Copy className="w-4 h-4" />, onSelect: () => { writeText(href).catch(() => {}); } },
+    { kind: "separator" },
+    { kind: "item", id: "removeLink", label: i18n.t("compose.linkRemove"), icon: <Unlink className="w-4 h-4" />, danger: true, onSelect: handleLinkRemove },
+  ];
 
   const buttons = [
     { icon: Bold, action: () => editor.chain().focus().toggleBold().run(), active: state.bold, title: "Bold (Ctrl+B)" },
@@ -105,6 +122,10 @@ export function EditorToolbar({ editor, linkDialogOpen, setLinkDialogOpen }: { e
         initialUrl={linkDialogUrl}
         hasExistingLink={linkDialogEditing}
       />
+
+      {linkMenu && (
+        <ContextMenu entries={linkMenuEntries(linkMenu.href)} x={linkMenu.x} y={linkMenu.y} onClose={() => setLinkMenu(null)} />
+      )}
     </>
   );
 }

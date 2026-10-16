@@ -30,6 +30,57 @@ export const LinkClickGuard = Extension.create<Record<string, never>, GuardStora
   },
 });
 
+export interface LinkMenuTarget {
+  href: string;
+  x: number;
+  y: number;
+}
+
+const linkMenuOwners = new WeakMap<Editor, (target: LinkMenuTarget) => void>();
+
+/** Shows `open`'s menu for right-clicked links until the returned cleanup runs. */
+export function onLinkContextMenu(editor: Editor, open: (target: LinkMenuTarget) => void) {
+  linkMenuOwners.set(editor, open);
+  return () => {
+    if (linkMenuOwners.get(editor) === open) linkMenuOwners.delete(editor);
+  };
+}
+
+interface MenuStorage {
+  onContextMenu: ((event: MouseEvent) => void) | null;
+}
+
+export const LinkContextMenu = Extension.create<Record<string, never>, MenuStorage>({
+  name: "linkContextMenu",
+  addStorage() {
+    return { onContextMenu: null };
+  },
+  onCreate() {
+    const editor = this.editor;
+    const onContextMenu = (event: MouseEvent) => {
+      const open = linkMenuOwners.get(editor);
+      const anchor = (event.target as Element | null)?.closest?.("a");
+      if (!open || !editor.isEditable || !anchor) return;
+      editor.chain().setTextSelection(editor.view.posAtDOM(anchor, 0)).extendMarkRange("link").run();
+      const href = editor.getAttributes("link").href;
+      if (typeof href !== "string" || !href) return;
+      event.preventDefault();
+      open({ href, x: event.clientX, y: event.clientY });
+    };
+    this.storage.onContextMenu = onContextMenu;
+    editor.view.dom.addEventListener("contextmenu", onContextMenu);
+  },
+  onDestroy() {
+    const onContextMenu = this.storage.onContextMenu;
+    if (!onContextMenu) return;
+    try {
+      this.editor.view.dom.removeEventListener("contextmenu", onContextMenu);
+    } catch {
+      // The view is already gone; its listeners went with it.
+    }
+  },
+});
+
 export function selectLinkForEditing(editor: Editor) {
   const { state } = editor;
   let { from, to } = state.selection;

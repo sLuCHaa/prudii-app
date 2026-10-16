@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
-import { LinkClickGuard, selectLinkForEditing } from "./linkEditing";
+import { LinkClickGuard, LinkContextMenu, onLinkContextMenu, selectLinkForEditing, type LinkMenuTarget } from "./linkEditing";
 
 let editor: Editor;
 let host: HTMLElement;
@@ -17,7 +17,7 @@ function make(html: string) {
   document.body.appendChild(host);
   editor = new Editor({
     element: host,
-    extensions: [StarterKit.configure({ heading: false, link: false, underline: false }), Link.configure({ openOnClick: false }), LinkClickGuard],
+    extensions: [StarterKit.configure({ heading: false, link: false, underline: false }), Link.configure({ openOnClick: false }), LinkClickGuard, LinkContextMenu],
     content: html,
   });
   return editor;
@@ -25,10 +25,18 @@ function make(html: string) {
 
 const LINKED = '<p>hallo <a href="https://a.de">welt</a> ende</p>';
 
+const created = () => new Promise((r) => setTimeout(r, 0));
+
+function rightClick(el: Element) {
+  const ev = new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 40, clientY: 50 });
+  el.dispatchEvent(ev);
+  return ev;
+}
+
 describe("LinkClickGuard", () => {
   it("keeps a click on a link inside the editor from opening it", async () => {
     const e = make(LINKED);
-    await new Promise((r) => setTimeout(r, 0));
+    await created();
     let opened = false;
     const opener = (ev: MouseEvent) => {
       if (!ev.defaultPrevented) opened = true;
@@ -38,6 +46,47 @@ describe("LinkClickGuard", () => {
     a.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }));
     window.removeEventListener("click", opener);
     expect(opened).toBe(false);
+  });
+});
+
+describe("LinkContextMenu", () => {
+  it("replaces the native menu on a link and selects the whole link", async () => {
+    const e = make(LINKED);
+    await created();
+    const seen: LinkMenuTarget[] = [];
+    onLinkContextMenu(e, (target) => seen.push(target));
+    const ev = rightClick(e.view.dom.querySelector("a")!);
+    expect(ev.defaultPrevented).toBe(true);
+    expect(seen).toEqual([{ href: "https://a.de", x: 40, y: 50 }]);
+    expect([e.state.selection.from, e.state.selection.to]).toEqual([7, 11]);
+  });
+
+  it("finds the link from formatted text inside it", async () => {
+    const e = make('<p>hallo <a href="https://a.de">we<strong>lt</strong></a> ende</p>');
+    await created();
+    const seen: LinkMenuTarget[] = [];
+    onLinkContextMenu(e, (target) => seen.push(target));
+    rightClick(e.view.dom.querySelector("strong")!);
+    expect(seen.map((s) => s.href)).toEqual(["https://a.de"]);
+    expect([e.state.selection.from, e.state.selection.to]).toEqual([7, 11]);
+  });
+
+  it("keeps the native menu on plain text", async () => {
+    const e = make(LINKED);
+    await created();
+    const seen: LinkMenuTarget[] = [];
+    onLinkContextMenu(e, (target) => seen.push(target));
+    const ev = rightClick(e.view.dom.querySelector("p")!);
+    expect(ev.defaultPrevented).toBe(false);
+    expect(seen).toEqual([]);
+  });
+
+  it("keeps the native menu when nobody shows the link menu", async () => {
+    const e = make(LINKED);
+    await created();
+    const stop = onLinkContextMenu(e, () => {});
+    stop();
+    expect(rightClick(e.view.dom.querySelector("a")!).defaultPrevented).toBe(false);
   });
 });
 
