@@ -397,10 +397,18 @@ pub(crate) fn link_from_db(conn: &Connection, calendar_id: &str) -> Option<Strin
     unseal(&stored)
 }
 
-/// Same chain as passwords: session cache, OS keyring, then the database copy.
+/// Only the database copy is certain to survive a restart.
+fn require_db_copy(db_stored: bool) -> Result<()> {
+    if db_stored {
+        Ok(())
+    } else {
+        anyhow::bail!("calendar link could not be persisted (database copy failed)")
+    }
+}
+
+/// Same chain as passwords, but the database copy must succeed.
 pub fn store_calendar_link(calendar_id: &str, url: &str) -> Result<()> {
     let key = calendar_link_key(calendar_id);
-    PASSWORD_CACHE.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone(), url.to_string());
     let keyring_stored = match keyring::Entry::new(SERVICE_NAME, &key).and_then(|e| e.set_password(url)) {
         Ok(()) => true,
         Err(e) => {
@@ -409,9 +417,11 @@ pub fn store_calendar_link(calendar_id: &str, url: &str) -> Result<()> {
         }
     };
     let db_stored = open_db().is_some_and(|conn| link_to_db(&conn, calendar_id, url));
-    if !keyring_stored && !db_stored {
-        anyhow::bail!("calendar link could not be persisted (keyring and database both failed)");
+    if !keyring_stored {
+        log::warn!("[credentials] calendar link relies on the database copy alone");
     }
+    require_db_copy(db_stored)?;
+    PASSWORD_CACHE.lock().unwrap_or_else(|e| e.into_inner()).insert(key, url.to_string());
     Ok(())
 }
 
@@ -484,6 +494,12 @@ mod tests {
         if cfg!(windows) {
             assert!(stored.starts_with("dpapi:"), "the fallback copy is sealed on Windows");
         }
+    }
+
+    #[test]
+    fn link_storage_requires_the_database_copy() {
+        assert!(require_db_copy(true).is_ok());
+        assert!(require_db_copy(false).is_err());
     }
 
     #[test]
