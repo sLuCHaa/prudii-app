@@ -47,13 +47,24 @@ pub fn choose(candidates: Vec<InviteCandidate>) -> Option<FoundInvite> {
     sorted.sort_by_key(|c| !c.inline);
     sorted.into_iter().filter(|c| c.text.len() <= MAX_ICS_BYTES).find_map(|c| {
         let parsed = parse_calendar(&c.text);
-        let has_event = !parsed.events.is_empty() || c.text.to_ascii_uppercase().contains("BEGIN:VEVENT");
+        let has_event = !parsed.events.is_empty() || has_vevent(&c.text);
         if !parsed.has_calendar || !has_event {
             return None;
         }
         let method = parsed.method.or(c.method_param).unwrap_or_else(|| "PUBLISH".into());
         Some(FoundInvite { method, ics: c.text })
     })
+}
+
+/// A VEVENT without DTSTART is dropped by `parse_calendar`, but a CANCEL may still omit it.
+fn has_vevent(text: &str) -> bool {
+    super::content_line::parse_components(text.strip_prefix('\u{feff}').unwrap_or(text))
+        .iter()
+        .any(|root| match root.name.as_str() {
+            "VEVENT" => true,
+            "VCALENDAR" => root.children.iter().any(|c| c.name == "VEVENT"),
+            _ => false,
+        })
 }
 
 fn part_mime(part: &MessagePart) -> String {
@@ -140,6 +151,19 @@ mod tests {
         assert_eq!(choose(vec![cand("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", None, true)]), None);
         let huge = format!("{}X-PAD:{}\r\n", REQUEST, "x".repeat(MAX_ICS_BYTES));
         assert_eq!(choose(vec![cand(&huge, None, true)]), None);
+    }
+
+    #[test]
+    fn accepts_a_cancellation_whose_event_has_no_start() {
+        let cancel = "BEGIN:VCALENDAR\r\nMETHOD:CANCEL\r\nBEGIN:VEVENT\r\nUID:a\r\nSEQUENCE:3\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+        let found = choose(vec![cand(cancel, None, true)]).unwrap();
+        assert_eq!(found.method, "CANCEL");
+    }
+
+    #[test]
+    fn a_vevent_marker_inside_a_property_is_not_an_event() {
+        let note = "BEGIN:VCALENDAR\r\nMETHOD:REQUEST\r\nX-NOTE:see BEGIN:VEVENT\r\nBEGIN:VTODO\r\nUID:t\r\nDESCRIPTION:BEGIN:VEVENT\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
+        assert_eq!(choose(vec![cand(note, None, true)]), None);
     }
 
     #[test]
