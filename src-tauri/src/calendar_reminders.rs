@@ -100,6 +100,7 @@ mod tests {
             my_partstat: None,
             is_organizer: false,
             has_attendees: false,
+            read_only: false,
         }
     }
 

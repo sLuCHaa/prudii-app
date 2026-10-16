@@ -121,6 +121,7 @@ fn rule_set(row: &EventRow) -> Option<RRuleSet> {
 pub struct ExpandInput<'a> {
     pub color: &'a str,
     pub has_attendees: bool,
+    pub read_only: bool,
     /// Slots of a series that override rows replace.
     pub skip_keys: &'a HashSet<String>,
 }
@@ -169,6 +170,7 @@ pub fn expand(row: &EventRow, from: DateTime<Utc>, to: DateTime<Utc>, sys_tz: Tz
                 my_partstat: row.my_partstat.clone(),
                 is_organizer: row.is_organizer,
                 has_attendees: input.has_attendees,
+                read_only: input.read_only,
             })
         })
         .collect()
@@ -362,7 +364,7 @@ mod tests {
     }
 
     fn run_skipping(r: &EventRow, from: &str, to: &str, skip: &HashSet<String>) -> Vec<Occurrence> {
-        let input = ExpandInput { color: "#000000", has_attendees: false, skip_keys: skip };
+        let input = ExpandInput { color: "#000000", has_attendees: false, read_only: false, skip_keys: skip };
         expand(r, parse_utc(from).unwrap(), parse_utc(to).unwrap(), chrono_tz::Europe::Berlin, &input)
     }
 

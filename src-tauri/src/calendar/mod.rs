@@ -93,6 +93,7 @@ pub struct EventDetail {
     pub alarms: Vec<i64>,
     pub attendees: Vec<Attendee>,
     pub calendar_color: String,
+    pub read_only: bool,
 }
 
 /// One concrete slot as the views render it. Timed: `start`/`end` are UTC instants;
@@ -116,6 +117,7 @@ pub struct Occurrence {
     pub my_partstat: Option<String>,
     pub is_organizer: bool,
     pub has_attendees: bool,
+    pub read_only: bool,
 }
 
 /// Times as the UI sends them: UTC instants for timed events, local dates

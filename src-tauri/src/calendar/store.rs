@@ -62,6 +62,14 @@ fn ensure_calendar(conn: &Connection, id: &str) -> Result<(), String> {
     fetch_calendar(conn, id).map(|_| ())
 }
 
+/// Subscribed calendars mirror their feed; only the feed may change them.
+pub(crate) fn ensure_writable(conn: &Connection, calendar_id: &str) -> Result<(), String> {
+    if fetch_calendar(conn, calendar_id)?.read_only {
+        return Err("calendar.errors.readOnly".into());
+    }
+    Ok(())
+}
+
 pub(crate) fn is_valid_color(c: &str) -> bool {
     c.len() == 7 && c.starts_with('#') && c[1..].chars().all(|ch| ch.is_ascii_hexdigit())
 }
@@ -388,8 +396,10 @@ fn copy_children(conn: &Connection, from_id: &str, to_id: &str) -> Result<(), St
 
 fn detail_of(conn: &Connection, id: &str) -> Result<EventDetail, String> {
     let event = fetch_event(conn, id)?;
-    let calendar_color = fetch_calendar(conn, &event.calendar_id).map(|c| c.color).unwrap_or_else(|_| DEFAULT_COLOR.to_string());
-    Ok(EventDetail { alarms: load_alarms(conn, id)?, attendees: load_attendees(conn, id)?, calendar_color, event })
+    let (calendar_color, read_only) = fetch_calendar(conn, &event.calendar_id)
+        .map(|c| (c.color, c.read_only))
+        .unwrap_or_else(|_| (DEFAULT_COLOR.to_string(), false));
+    Ok(EventDetail { alarms: load_alarms(conn, id)?, attendees: load_attendees(conn, id)?, calendar_color, read_only, event })
 }
 
 fn clean_rule(rule: Option<String>) -> Option<String> {
@@ -416,7 +426,7 @@ fn times_to_frame(times: &EventTimes, tzid: Option<&str>) -> Result<(String, Str
 
 pub(crate) fn create_event_impl(db: &Database, input: EventInput) -> Result<EventDetail, String> {
     let conn = db.lock_db();
-    ensure_calendar(&conn, &input.calendar_id)?;
+    ensure_writable(&conn, &input.calendar_id)?;
     let tzid = if input.times.all_day { None } else { Some(system_tz_name()) };
     let (dtstart, dtend) = times_to_frame(&input.times, tzid.as_deref())?;
     let id = uuid::Uuid::new_v4().to_string();
@@ -482,15 +492,15 @@ pub(crate) fn occurrences_in(
 ) -> Result<Vec<Occurrence>, String> {
     let filter = if calendar_ids.is_some() { "e.calendar_id IN (SELECT value FROM json_each(?3))" } else { "c.visible = 1" };
     let sql = format!(
-        "SELECT {}, c.color, (SELECT COUNT(*) FROM event_attendees a WHERE a.event_id = e.id)
+        "SELECT {}, c.color, (SELECT COUNT(*) FROM event_attendees a WHERE a.event_id = e.id), c.source = '{}'
          FROM events e JOIN calendars c ON c.id = e.calendar_id
          WHERE {} AND e.start_utc < ?1 AND (e.range_end_utc IS NULL OR e.range_end_utc > ?2)",
-        EVENT_COLS, filter
+        EVENT_COLS, SUBSCRIPTION, filter
     );
     let mut stmt = conn.prepare(&sql).map_err(err)?;
-    let map = |r: &rusqlite::Row| Ok((row_to_event(r)?, r.get::<_, String>(23)?, r.get::<_, i64>(24)?));
+    let map = |r: &rusqlite::Row| Ok((row_to_event(r)?, r.get::<_, String>(23)?, r.get::<_, i64>(24)?, r.get::<_, i64>(25)? != 0));
     let (to_s, from_s) = (fmt_utc(to), fmt_utc(from));
-    let rows: Vec<(EventRow, String, i64)> = match calendar_ids {
+    let rows: Vec<(EventRow, String, i64, bool)> = match calendar_ids {
         Some(ids) => {
             let json = serde_json::to_string(ids).map_err(err)?;
             stmt.query_map(params![to_s, from_s, json], map)
@@ -503,9 +513,10 @@ pub(crate) fn occurrences_in(
 
     let sys = system_tz();
     let mut out = Vec::new();
-    for (ev, color, attendees) in &rows {
+    for (ev, color, attendees, read_only) in &rows {
         let skip = if is_series(ev) { override_keys(conn, &ev.calendar_id, &ev.uid)? } else { HashSet::new() };
-        out.extend(expand(ev, from, to, sys, &ExpandInput { color, has_attendees: *attendees > 0, skip_keys: &skip }));
+        let input = ExpandInput { color, has_attendees: *attendees > 0, read_only: *read_only, skip_keys: &skip };
+        out.extend(expand(ev, from, to, sys, &input));
     }
     out.sort_by_key(|o| occurrence_instant(o, sys));
     Ok(out)
@@ -823,6 +834,10 @@ pub(crate) fn update_event_impl(db: &Database, id: &str, occurrence_key: Option<
     let conn = db.lock_db();
     let tx = conn.unchecked_transaction().map_err(err)?;
     let target = fetch_event(&tx, id)?;
+    ensure_writable(&tx, &target.calendar_id)?;
+    if let Some(cal) = &patch.calendar_id {
+        ensure_writable(&tx, cal)?;
+    }
     let result_id = match resolve_series(&tx, &target, occurrence_key)? {
         None => update_single(&tx, target, &patch)?,
         Some((mut master, key, existing)) => match scope {
@@ -852,6 +867,7 @@ pub(crate) fn delete_event_impl(db: &Database, id: &str, occurrence_key: Option<
     let conn = db.lock_db();
     let tx = conn.unchecked_transaction().map_err(err)?;
     let target = fetch_event(&tx, id)?;
+    ensure_writable(&tx, &target.calendar_id)?;
     match resolve_series(&tx, &target, occurrence_key)? {
         None => {
             tx.execute("DELETE FROM events WHERE id = ?1", params![target.id]).map_err(err)?;
@@ -893,7 +909,7 @@ pub(crate) fn import_ics_impl(db: &Database, calendar_id: &str, text: &str) -> R
         return Err("calendar.errors.noEvents".into());
     }
     let conn = db.lock_db();
-    ensure_calendar(&conn, calendar_id)?;
+    ensure_writable(&conn, calendar_id)?;
     let tx = conn.unchecked_transaction().map_err(err)?;
     let mut result = ImportResult::default();
     for p in &parsed.events {
@@ -1640,5 +1656,28 @@ END:VCALENDAR
             .execute("INSERT INTO calendars (id, name, color, source, refresh_minutes) VALUES (?1, 'Feed', '#10b981', 'subscription', 60)", params![id])
             .unwrap();
         assert!(create_calendar_impl(&db, "Mine", "#3b82f6").unwrap().is_default);
+    }
+
+    #[test]
+    fn subscribed_calendars_reject_every_write() {
+        let db = temp_db();
+        let local = cal(&db);
+        let sub = subscription_cal(&db);
+        let ev = zoned_row(&db, &sub, "Europe/Berlin", "2026-10-15T09:00:00", "2026-10-15T10:00:00", None);
+        let ro = "calendar.errors.readOnly";
+        let times = timed("2026-10-15T08:00:00Z", "2026-10-15T09:00:00Z");
+        assert_eq!(create_event_impl(&db, input(&sub, "x", times.clone())).unwrap_err(), ro);
+        let rename = EventPatch { title: Some("y".into()), ..Default::default() };
+        assert_eq!(update_event_impl(&db, &ev, None, Scope::All, rename).unwrap_err(), ro);
+        assert_eq!(move_occurrence_impl(&db, &ev, None, times.clone(), Scope::All).unwrap_err(), ro);
+        assert_eq!(delete_event_impl(&db, &ev, None, Scope::All).unwrap_err(), ro);
+        assert_eq!(import_ics_impl(&db, &sub, OVERRIDE_FEED).unwrap_err(), ro);
+        let mine = create_event_impl(&db, input(&local, "Mine", times)).unwrap().event.id;
+        let into_feed = EventPatch { calendar_id: Some(sub.clone()), ..Default::default() };
+        assert_eq!(update_event_impl(&db, &mine, None, Scope::All, into_feed).unwrap_err(), ro);
+        let occ = list(&db, "2026-10-15T00:00:00Z", "2026-10-16T00:00:00Z");
+        assert!(occ.iter().find(|o| o.event_id == ev).unwrap().read_only);
+        assert!(!occ.iter().find(|o| o.event_id == mine).unwrap().read_only);
+        assert!(get_event_impl(&db, &ev).unwrap().read_only);
     }
 }
