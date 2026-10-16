@@ -1310,7 +1310,12 @@
       "isDefault": "Default calendar",
       "import": "Import…",
       "export": "Export…",
-      "delete": "Delete calendar"
+      "delete": "Delete calendar",
+      "refreshNow": "Refresh now",
+      "refreshEvery": "Refresh",
+      "changeLink": "Change link…",
+      "muteReminders": "Mute reminders",
+      "unsubscribe": "Remove subscription"
     },
     "deleteCalendarTitle": "Delete calendar?",
     "deleteCalendarMessage": "“{{name}}” and all its events will be deleted.",
@@ -1409,6 +1414,53 @@
       "from": "From",
       "to": "To"
     },
+    "add": {
+      "title": "Add calendar",
+      "importFiles": "Import from files…",
+      "subscribe": "Subscribe to calendar…"
+    },
+    "refresh": {
+      "m15": "Every 15 minutes",
+      "h1": "Every hour",
+      "h6": "Every 6 hours",
+      "d1": "Daily"
+    },
+    "subscribe": {
+      "title": "Subscribe to calendar",
+      "changeTitle": "Change link",
+      "link": "Link",
+      "linkPlaceholder": "https://… or webcal://…",
+      "color": "Color",
+      "refresh": "Refresh",
+      "help": "Where do I find the link?",
+      "helpGoogle": "Google Calendar: Settings → select the calendar → “Secret address in iCal format”",
+      "helpIcloud": "iCloud: share the calendar → “Public Calendar” → copy link",
+      "helpOutlook": "Outlook: Settings → Calendar → Shared calendars → “Publish a calendar” → ICS link",
+      "privacy": "Prudii fetches this link at the chosen interval. Anyone who knows the link can read the calendar.",
+      "submit": "Subscribe",
+      "save": "Save",
+      "done": "Subscribed to “{{name}}” ({{events}})",
+      "linkSaved": "Link updated"
+    },
+    "subscription": {
+      "readOnly": "Subscribed · read-only",
+      "viewTitle": "Event",
+      "updatedAgo": "Updated {{ago}}",
+      "neverUpdated": "Not updated yet",
+      "refreshed": "Calendar updated",
+      "lastSuccess": "Last successful update {{ago}}",
+      "removeTitle": "Remove subscription?",
+      "removeMessage": "“{{name}}” and its events will be removed from Prudii. The calendar at its source stays as it is."
+    },
+    "import": {
+      "untitled": "Imported calendar",
+      "events_one": "{{count}} event",
+      "events_other": "{{count}} events",
+      "bundleDone_one": "{{count}} calendar imported ({{events}})",
+      "bundleDone_other": "{{count}} calendars imported ({{events}})",
+      "bundleFailed": "Not imported: {{files}}",
+      "moreFiles": "+{{count}} more"
+    },
     "errors": {
       "lastCalendar": "The last calendar cannot be deleted.",
       "emptyName": "Please enter a name.",
@@ -1417,7 +1469,16 @@
       "invalidRange": "Invalid date range.",
       "noEvents": "The file contains no events.",
       "fileTooLarge": "The file is too large.",
-      "invalidSettings": "These settings are not valid."
+      "invalidSettings": "These settings are not valid.",
+      "invalidUrl": "That is not a valid calendar link.",
+      "httpsOnly": "Only encrypted links (https or webcal) are supported.",
+      "feedUnreachable": "The calendar could not be reached.",
+      "feedNotFound": "The link is invalid or no longer shared.",
+      "feedForbidden": "Access to this calendar was denied.",
+      "notCalendar": "No calendar data found.",
+      "readOnly": "Subscribed calendars can’t be edited.",
+      "linkMissing": "The link of this subscription is missing — please enter it again.",
+      "linkStoreFailed": "The link could not be stored securely."
     }
   }
 }

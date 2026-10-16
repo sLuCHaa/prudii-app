@@ -1310,7 +1310,12 @@
       "isDefault": "Calendário padrão",
       "import": "Importar…",
       "export": "Exportar…",
-      "delete": "Excluir calendário"
+      "delete": "Excluir calendário",
+      "refreshNow": "Atualizar agora",
+      "refreshEvery": "Atualização",
+      "changeLink": "Alterar link…",
+      "muteReminders": "Silenciar lembretes",
+      "unsubscribe": "Remover assinatura"
     },
     "deleteCalendarTitle": "Excluir calendário?",
     "deleteCalendarMessage": "“{{name}}” e todos os seus eventos serão excluídos.",
@@ -1409,6 +1414,53 @@
       "from": "De",
       "to": "Até"
     },
+    "add": {
+      "title": "Adicionar calendário",
+      "importFiles": "Importar de arquivos…",
+      "subscribe": "Assinar calendário…"
+    },
+    "refresh": {
+      "m15": "A cada 15 minutos",
+      "h1": "A cada hora",
+      "h6": "A cada 6 horas",
+      "d1": "Diariamente"
+    },
+    "subscribe": {
+      "title": "Assinar calendário",
+      "changeTitle": "Alterar link",
+      "link": "Link",
+      "linkPlaceholder": "https://… ou webcal://…",
+      "color": "Cor",
+      "refresh": "Atualização",
+      "help": "Onde encontro o link?",
+      "helpGoogle": "Google Agenda: Configurações → escolha a agenda → “Endereço secreto no formato iCal”",
+      "helpIcloud": "iCloud: compartilhe o calendário → “Calendário público” → copie o link",
+      "helpOutlook": "Outlook: Configurações → Calendário → Calendários compartilhados → “Publicar um calendário” → link ICS",
+      "privacy": "O Prudii consulta este link no intervalo escolhido. Qualquer pessoa que conheça o link pode ler o calendário.",
+      "submit": "Assinar",
+      "save": "Salvar",
+      "done": "Assinatura de “{{name}}” ativa ({{events}})",
+      "linkSaved": "Link atualizado"
+    },
+    "subscription": {
+      "readOnly": "Assinado · somente leitura",
+      "viewTitle": "Evento",
+      "updatedAgo": "Atualizado {{ago}}",
+      "neverUpdated": "Ainda não atualizado",
+      "refreshed": "Calendário atualizado",
+      "lastSuccess": "Última atualização bem-sucedida {{ago}}",
+      "removeTitle": "Remover assinatura?",
+      "removeMessage": "“{{name}}” e seus eventos serão removidos do Prudii. O calendário na origem não muda."
+    },
+    "import": {
+      "untitled": "Calendário importado",
+      "events_one": "{{count}} evento",
+      "events_other": "{{count}} eventos",
+      "bundleDone_one": "{{count}} calendário importado ({{events}})",
+      "bundleDone_other": "{{count}} calendários importados ({{events}})",
+      "bundleFailed": "Não importado: {{files}}",
+      "moreFiles": "+{{count}} mais"
+    },
     "errors": {
       "lastCalendar": "O último calendário não pode ser excluído.",
       "emptyName": "Informe um nome.",
@@ -1417,7 +1469,16 @@
       "invalidRange": "Intervalo de datas inválido.",
       "noEvents": "O arquivo não contém eventos.",
       "fileTooLarge": "O arquivo é grande demais.",
-      "invalidSettings": "Estas configurações não são válidas."
+      "invalidSettings": "Estas configurações não são válidas.",
+      "invalidUrl": "Este não é um link de calendário válido.",
+      "httpsOnly": "Somente links criptografados (https ou webcal) são suportados.",
+      "feedUnreachable": "Não foi possível acessar o calendário.",
+      "feedNotFound": "O link é inválido ou não está mais compartilhado.",
+      "feedForbidden": "O acesso a este calendário foi negado.",
+      "notCalendar": "Nenhum dado de calendário encontrado.",
+      "readOnly": "Calendários assinados não podem ser editados.",
+      "linkMissing": "O link desta assinatura está faltando — insira-o novamente.",
+      "linkStoreFailed": "Não foi possível guardar o link com segurança."
     }
   }
 }

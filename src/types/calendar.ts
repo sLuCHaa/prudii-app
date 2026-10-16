@@ -6,6 +6,12 @@ export interface Calendar {
   visible: boolean;
   sort_order: number;
   source: string;
+  refresh_minutes: number | null;
+  last_synced_at: string | null;
+  last_error: string | null;
+  reminders_muted: boolean;
+  /** Subscribed feed mirror: never edited, never a target. */
+  read_only: boolean;
 }
 
 export interface CalendarPatch {
@@ -14,6 +20,8 @@ export interface CalendarPatch {
   visible?: boolean;
   sort_order?: number;
   is_default?: boolean;
+  reminders_muted?: boolean;
+  refresh_minutes?: number;
 }
 
 export interface EventRow {
@@ -56,6 +64,7 @@ export interface EventDetail {
   alarms: number[];
   attendees: Attendee[];
   calendar_color: string;
+  read_only: boolean;
 }
 
 /** Timed: `start`/`end` are UTC instants; all-day: local dates, end exclusive. */
@@ -76,6 +85,7 @@ export interface Occurrence {
   my_partstat: string | null;
   is_organizer: boolean;
   has_attendees: boolean;
+  read_only: boolean;
 }
 
 /** Timed: ISO instants (`Date.toISOString()`); all-day: `YYYY-MM-DD`, end exclusive. */
@@ -136,3 +146,29 @@ export interface EventDraft {
 export type EventEditorTarget =
   | { mode: "edit"; eventId: string; occurrenceKey: string | null; occurrence?: Occurrence }
   | { mode: "new"; draft: EventDraft };
+
+export interface SubscribeResult {
+  calendar: Calendar;
+  events: number;
+}
+
+export interface BundleCalendarResult {
+  calendar_id: string;
+  name: string;
+  created: boolean;
+  imported: number;
+  updated: number;
+  skipped: number;
+}
+
+export interface BundleFailure {
+  /** File name, or `archive.zip/entry.ics`. */
+  file: string;
+  /** A `calendar.errors.*` key. */
+  reason: string;
+}
+
+export interface BundleImportResult {
+  calendars: BundleCalendarResult[];
+  failed: BundleFailure[];
+}

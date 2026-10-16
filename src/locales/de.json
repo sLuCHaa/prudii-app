@@ -1310,7 +1310,12 @@
       "isDefault": "Standardkalender",
       "import": "Importieren…",
       "export": "Exportieren…",
-      "delete": "Kalender löschen"
+      "delete": "Kalender löschen",
+      "refreshNow": "Jetzt aktualisieren",
+      "refreshEvery": "Aktualisierung",
+      "changeLink": "Link ändern…",
+      "muteReminders": "Erinnerungen stumm",
+      "unsubscribe": "Abo entfernen"
     },
     "deleteCalendarTitle": "Kalender löschen?",
     "deleteCalendarMessage": "„{{name}}“ und alle seine Termine werden gelöscht.",
@@ -1409,6 +1414,53 @@
       "from": "Von",
       "to": "Bis"
     },
+    "add": {
+      "title": "Kalender hinzufügen",
+      "importFiles": "Aus Dateien importieren…",
+      "subscribe": "Kalender abonnieren…"
+    },
+    "refresh": {
+      "m15": "Alle 15 Minuten",
+      "h1": "Stündlich",
+      "h6": "Alle 6 Stunden",
+      "d1": "Täglich"
+    },
+    "subscribe": {
+      "title": "Kalender abonnieren",
+      "changeTitle": "Link ändern",
+      "link": "Link",
+      "linkPlaceholder": "https://… oder webcal://…",
+      "color": "Farbe",
+      "refresh": "Aktualisierung",
+      "help": "Wo finde ich den Link?",
+      "helpGoogle": "Google Kalender: Einstellungen → Kalender auswählen → „Geheime Adresse im iCal-Format“",
+      "helpIcloud": "iCloud: Kalender teilen → „Öffentlicher Kalender“ → Link kopieren",
+      "helpOutlook": "Outlook: Einstellungen → Kalender → Freigegebene Kalender → „Kalender veröffentlichen“ → ICS-Link",
+      "privacy": "Prudii ruft diesen Link im gewählten Takt ab. Wer den Link kennt, kann den Kalender lesen.",
+      "submit": "Abonnieren",
+      "save": "Speichern",
+      "done": "„{{name}}“ abonniert ({{events}})",
+      "linkSaved": "Link aktualisiert"
+    },
+    "subscription": {
+      "readOnly": "Abonniert · nur lesbar",
+      "viewTitle": "Termin",
+      "updatedAgo": "Aktualisiert {{ago}}",
+      "neverUpdated": "Noch nicht aktualisiert",
+      "refreshed": "Kalender aktualisiert",
+      "lastSuccess": "Zuletzt erfolgreich {{ago}}",
+      "removeTitle": "Abo entfernen?",
+      "removeMessage": "„{{name}}“ und seine Termine werden aus Prudii entfernt. Der Kalender an der Quelle bleibt unverändert."
+    },
+    "import": {
+      "untitled": "Importierter Kalender",
+      "events_one": "{{count}} Termin",
+      "events_other": "{{count}} Termine",
+      "bundleDone_one": "{{count}} Kalender importiert ({{events}})",
+      "bundleDone_other": "{{count}} Kalender importiert ({{events}})",
+      "bundleFailed": "Nicht importiert: {{files}}",
+      "moreFiles": "+{{count}} weitere"
+    },
     "errors": {
       "lastCalendar": "Der letzte Kalender kann nicht gelöscht werden.",
       "emptyName": "Bitte gib einen Namen ein.",
@@ -1417,7 +1469,16 @@
       "invalidRange": "Ungültiger Zeitraum.",
       "noEvents": "Die Datei enthält keine Termine.",
       "fileTooLarge": "Die Datei ist zu groß.",
-      "invalidSettings": "Diese Einstellungen sind ungültig."
+      "invalidSettings": "Diese Einstellungen sind ungültig.",
+      "invalidUrl": "Das ist kein gültiger Kalender-Link.",
+      "httpsOnly": "Nur verschlüsselte Links (https oder webcal) werden unterstützt.",
+      "feedUnreachable": "Der Kalender ist nicht erreichbar.",
+      "feedNotFound": "Der Link ist ungültig oder nicht mehr freigegeben.",
+      "feedForbidden": "Der Zugriff auf diesen Kalender wurde verweigert.",
+      "notCalendar": "Keine Kalenderdaten gefunden.",
+      "readOnly": "Abonnierte Kalender können nicht bearbeitet werden.",
+      "linkMissing": "Der Link dieses Abos fehlt – bitte neu eingeben.",
+      "linkStoreFailed": "Der Link konnte nicht sicher gespeichert werden."
     }
   }
 }

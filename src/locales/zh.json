@@ -1309,7 +1309,12 @@
       "isDefault": "默认日历",
       "import": "导入…",
       "export": "导出…",
-      "delete": "删除日历"
+      "delete": "删除日历",
+      "refreshNow": "立即刷新",
+      "refreshEvery": "刷新频率",
+      "changeLink": "更改链接…",
+      "muteReminders": "静音提醒",
+      "unsubscribe": "取消订阅"
     },
     "deleteCalendarTitle": "删除日历？",
     "deleteCalendarMessage": "“{{name}}”及其所有日程都将被删除。",
@@ -1408,6 +1413,51 @@
       "from": "从",
       "to": "到"
     },
+    "add": {
+      "title": "添加日历",
+      "importFiles": "从文件导入…",
+      "subscribe": "订阅日历…"
+    },
+    "refresh": {
+      "m15": "每 15 分钟",
+      "h1": "每小时",
+      "h6": "每 6 小时",
+      "d1": "每天"
+    },
+    "subscribe": {
+      "title": "订阅日历",
+      "changeTitle": "更改链接",
+      "link": "链接",
+      "linkPlaceholder": "https://… 或 webcal://…",
+      "color": "颜色",
+      "refresh": "刷新频率",
+      "help": "在哪里找到链接？",
+      "helpGoogle": "Google 日历：设置 → 选择日历 → “iCal 格式的私密地址”",
+      "helpIcloud": "iCloud：共享日历 → “公开日历” → 拷贝链接",
+      "helpOutlook": "Outlook：设置 → 日历 → 共享日历 → “发布日历” → ICS 链接",
+      "privacy": "Prudii 会按所选频率获取此链接。任何知道该链接的人都能读取此日历。",
+      "submit": "订阅",
+      "save": "保存",
+      "done": "已订阅“{{name}}”（{{events}}）",
+      "linkSaved": "链接已更新"
+    },
+    "subscription": {
+      "readOnly": "已订阅 · 只读",
+      "viewTitle": "日程",
+      "updatedAgo": "{{ago}}更新",
+      "neverUpdated": "尚未更新",
+      "refreshed": "日历已更新",
+      "lastSuccess": "上次成功更新：{{ago}}",
+      "removeTitle": "取消订阅？",
+      "removeMessage": "“{{name}}”及其日程将从 Prudii 中移除。源日历不受影响。"
+    },
+    "import": {
+      "untitled": "导入的日历",
+      "events_other": "{{count}} 个日程",
+      "bundleDone_other": "已导入 {{count}} 个日历（{{events}}）",
+      "bundleFailed": "未导入：{{files}}",
+      "moreFiles": "另外 {{count}} 个"
+    },
     "errors": {
       "lastCalendar": "无法删除最后一个日历。",
       "emptyName": "请输入名称。",
@@ -1416,7 +1466,16 @@
       "invalidRange": "日期范围无效。",
       "noEvents": "文件中没有日程。",
       "fileTooLarge": "文件过大。",
-      "invalidSettings": "这些设置无效。"
+      "invalidSettings": "这些设置无效。",
+      "invalidUrl": "这不是有效的日历链接。",
+      "httpsOnly": "仅支持加密链接（https 或 webcal）。",
+      "feedUnreachable": "无法访问该日历。",
+      "feedNotFound": "链接无效或已不再共享。",
+      "feedForbidden": "访问此日历被拒绝。",
+      "notCalendar": "未找到日历数据。",
+      "readOnly": "订阅的日历无法编辑。",
+      "linkMissing": "此订阅的链接缺失，请重新输入。",
+      "linkStoreFailed": "无法安全地保存链接。"
     }
   }
 }

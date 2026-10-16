@@ -10,7 +10,7 @@ function occ(start: string, end: string, allDay = false): Occurrence {
   return {
     event_id: "e", calendar_id: "c", color: "#000", title: "T", location: "", description: "", all_day: allDay,
     start, end, occurrence_key: start, is_recurring: false, is_override: false, status: "confirmed",
-    my_partstat: null, is_organizer: false, has_attendees: false,
+    my_partstat: null, is_organizer: false, has_attendees: false, read_only: false,
   };
 }
 

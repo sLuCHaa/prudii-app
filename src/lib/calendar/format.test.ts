@@ -5,7 +5,7 @@ import type { Occurrence } from "../../types/calendar";
 const base: Occurrence = {
   event_id: "e", calendar_id: "c", color: "#000", title: "T", location: "", description: "", all_day: false,
   start: "", end: "", occurrence_key: "", is_recurring: false, is_override: false, status: "confirmed",
-  my_partstat: null, is_organizer: false, has_attendees: false,
+  my_partstat: null, is_organizer: false, has_attendees: false, read_only: false,
 };
 
 describe("formatOccurrenceTime", () => {

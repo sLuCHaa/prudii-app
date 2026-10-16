@@ -2,8 +2,8 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClie
 import { useTranslation } from "react-i18next";
 import {
   countTodayOccurrences, createCalendar, createEvent, deleteCalendar, deleteEvent, exportIcs, getCalendarSettings, getEvent,
-  importIcs, listCalendars, listOccurrences, moveOccurrence, searchEvents, tasksInRange, updateCalendar, updateCalendarSettings,
-  updateEvent,
+  importCalendarFiles, importIcs, listCalendars, listOccurrences, moveOccurrence, refreshSubscription, searchEvents, subscribeCalendar, tasksInRange, updateCalendar, updateCalendarSettings,
+  updateEvent, updateSubscriptionUrl,
 } from "../lib/tauri";
 import type { CalendarPatch, CalendarSettings, EditScope, EventInput, EventPatch, EventTimes } from "../types/calendar";
 import { useAppStore } from "../stores/appStore";
@@ -119,4 +119,35 @@ export function useImportIcs() {
 
 export function useExportIcs() {
   return useMutation({ mutationFn: (calendarId: string) => exportIcs(calendarId), onError: calendarErrorToast });
+}
+
+export function useImportCalendarFiles() {
+  return useCalendarMutation((untitledName: string) => importCalendarFiles(untitledName));
+}
+
+/** No error toast: the dialog shows the reason next to the link field. */
+export function useSubscribeCalendar() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { url: string; color: string; refreshMinutes: number }) => subscribeCalendar(v.url, v.color, v.refreshMinutes),
+    onSuccess: () => invalidateCalendarQueries(queryClient),
+  });
+}
+
+export function useUpdateSubscriptionUrl() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: string; url: string }) => updateSubscriptionUrl(v.id, v.url),
+    onSuccess: () => invalidateCalendarQueries(queryClient),
+  });
+}
+
+/** Invalidates on failure too: the calendar's status changed either way. */
+export function useRefreshSubscription() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => refreshSubscription(id),
+    onSettled: () => invalidateCalendarQueries(queryClient),
+    onError: calendarErrorToast,
+  });
 }

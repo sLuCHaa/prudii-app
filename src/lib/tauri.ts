@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Calendar, CalendarPatch, CalendarSettings, EditScope, EventDetail, EventInput, EventPatch, EventTimes, ImportResult, Occurrence } from "../types/calendar";
+import type { BundleImportResult, Calendar, CalendarPatch, CalendarSettings, EditScope, EventDetail, EventInput, EventPatch, EventTimes, ImportResult, Occurrence, SubscribeResult } from "../types/calendar";
 import type { Account, AiResponse, Assignment, Attachment, AttachmentWithContext, AppConfig, AppSettings, BackupOptions, BulkSaveResult, ChecklistItem, Contact, CreateAccountRequest, CreateRuleRequest, CreateTaskInput, EmailTemplate, Folder, InboxSplit, LicenseInfo, Mail, MailRule, OAuthResult, OllamaStatus, RestorePreview, ScheduledMail, SearchResult, SendMailRequest, SieveSupport, Task, TaskAttachment, TaskDetail, TaskStatus, TeamSnapshot, UnsubscribeResult, UpdateTaskPatch, VacationSettings, VacationState } from "../types";
 import { prefers24HourClock } from "./localeDefaults";
 
@@ -816,6 +816,26 @@ export async function importIcs(calendarId: string): Promise<ImportResult | null
 /** Opens the native save dialog; false when the user cancels. */
 export async function exportIcs(calendarId: string): Promise<boolean> {
   return invoke("export_ics", { calendarId });
+}
+
+export async function importCalendarFiles(untitledName: string): Promise<BundleImportResult | null> {
+  return invoke("import_calendar_files", { untitledName });
+}
+
+export async function subscribeCalendar(url: string, color: string, refreshMinutes: number): Promise<SubscribeResult> {
+  return invoke("subscribe_calendar", { url, color, refreshMinutes });
+}
+
+export async function refreshSubscription(id: string): Promise<Calendar> {
+  return invoke("refresh_subscription", { id });
+}
+
+export async function getSubscriptionUrl(id: string): Promise<string> {
+  return invoke("get_subscription_url", { id });
+}
+
+export async function updateSubscriptionUrl(id: string, url: string): Promise<Calendar> {
+  return invoke("update_subscription_url", { id, url });
 }
 
 export async function tasksInRange(from: string, to: string): Promise<Task[]> {
