@@ -68,12 +68,12 @@ pub async fn resolve_stale_graph_id(
     Ok(Some(found.id))
 }
 
-/// Fetch the full body of an Outlook message and store it in the DB.
 /// Graph types meeting requests, cancellations and responses as eventMessage subtypes.
 fn is_event_message(odata_type: Option<&str>) -> bool {
     odata_type.is_some_and(|t| t.to_ascii_lowercase().contains("eventmessage"))
 }
 
+/// Fetch the full body of an Outlook message and store it in the DB.
 pub async fn fetch_message_body(
     client: &OutlookClient,
     graph_id: &str,

@@ -1,5 +1,4 @@
-//! iTIP without the database: who "I" am in an invitation, which event a mail is
-//! about, what a CANCEL names, and the REPLY sent back.
+//! iTIP without the database, so it stays testable on plain text.
 
 use super::content_line::{escape_text, fold_line, parse_components, write_prop, Component};
 use super::ical::{parse_calendar, ParsedCalendar, ParsedEvent};
@@ -64,8 +63,7 @@ pub fn primary_event(cal: &ParsedCalendar) -> Option<&ParsedEvent> {
     cal.events.iter().find(|e| e.recurrence_id.is_none()).or_else(|| cal.events.first())
 }
 
-/// RFC 5546 lets a CANCEL omit DTSTART, which the event parser needs; such
-/// events still cancel by UID.
+/// RFC 5546 lets a CANCEL omit DTSTART, which the event parser requires.
 pub fn cancel_targets(ics: &str) -> Vec<CancelTarget> {
     let mut out: Vec<CancelTarget> = parse_calendar(ics)
         .events
@@ -103,8 +101,7 @@ fn timezones(ics: &str) -> Vec<Component> {
         .collect()
 }
 
-/// iMIP REPLY: the organizer's identifiers and times verbatim (with the zones
-/// they name) and only my ATTENDEE with the new answer.
+/// Identifiers and times stay verbatim so the organizer's client matches the reply.
 pub fn build_reply(ics: &str, event: &ParsedEvent, me: &Me, partstat: &str, comment: Option<&str>, dtstamp: DateTime<Utc>) -> String {
     let src = vevent(event);
     let mut body = String::from("BEGIN:VEVENT\r\n");

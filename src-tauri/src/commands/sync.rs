@@ -480,10 +480,10 @@ fn dedup_archive_folder(
     Ok(deleted)
 }
 
-/// Internal sync logic — runs inside a spawned background task.
-/// Communicates all progress and errors via events (never returns errors to IPC).
 const INVITE_SCAN_LIMIT: usize = 20;
 
+/// Internal sync logic — runs inside a spawned background task.
+/// Communicates all progress and errors via events (never returns errors to IPC).
 async fn do_sync_account(app: AppHandle, account: Account, account_id: String, credential: String, auth_type: String) {
     // Atomic check-and-claim of the per-account sync lock.
     {
@@ -515,8 +515,7 @@ async fn do_sync_account(app: AppHandle, account: Account, account_id: String, c
         crate::contacts::update_contacts_incremental(&conn);
     }
 
-    // Organizer updates should reach the calendar without the mail being opened;
-    // the body fetch detects and applies them.
+    // Organizer updates should reach the calendar without the mail being opened.
     let pending = {
         let db = app.state::<Database>();
         crate::calendar::invite_store::relevant_unfetched_mails_impl(&db, &account_id, chrono::Utc::now(), INVITE_SCAN_LIMIT).unwrap_or_default()

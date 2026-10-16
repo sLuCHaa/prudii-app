@@ -29,8 +29,7 @@ pub struct EmailAttachment {
     pub content_id: Option<String>,
 }
 
-/// iMIP payload: the text/calendar alternative plus an invite.ics copy for
-/// clients that only list attachments.
+/// Also attached as invite.ics for clients that only list attachments.
 pub struct CalendarPart {
     pub method: String,
     pub ics: String,

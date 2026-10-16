@@ -674,8 +674,7 @@ impl OutlookClient {
         }
     }
 
-    /// Sends a complete MIME message; the JSON message shape cannot carry an
-    /// iMIP text/calendar part. Graph files it under Sent Items.
+    /// The JSON message shape cannot carry an iMIP text/calendar part.
     pub async fn send_mime(&self, raw: &[u8]) -> Result<()> {
         let url = format!("{}/sendMail", BASE_URL);
         let body = mime_send_body(raw);

@@ -681,8 +681,7 @@ fn switch_series_form(conn: &Connection, master: &mut EventRow, key: Option<&str
     Ok(())
 }
 
-/// Received invitations keep the organizer's SEQUENCE so later updates still
-/// compare against it; only events this app owns count their own edits.
+/// Received invitations keep the organizer's SEQUENCE so later updates still compare against it.
 fn bump_sequence(ev: &mut EventRow) {
     if ev.is_organizer || ev.organizer_email.is_none() {
         ev.sequence += 1;

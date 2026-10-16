@@ -3,13 +3,11 @@
 use super::ical::parse_calendar;
 use mail_parser::{Message, MessagePart, MimeHeaders, PartType};
 
-/// One calendar body found in a mail.
 #[derive(Debug, Clone, PartialEq)]
 pub struct InviteCandidate {
     pub text: String,
-    /// `method=` of the part's Content-Type, upper-case.
+    /// Content-Type `method=`, upper-case.
     pub method_param: Option<String>,
-    /// Part of the message body rather than a file attachment.
     pub inline: bool,
 }
 

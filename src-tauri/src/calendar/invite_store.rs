@@ -1,5 +1,4 @@
-//! Invitations stored on mails: organizer updates applied on arrival, the card's
-//! view and the user's answers. Pure iTIP lives in `itip.rs`.
+//! Invitations stored on mails; pure iTIP lives in `itip.rs`.
 
 use super::ical::{parse_calendar, ParsedEvent};
 use super::invite_mail::{choose, is_calendar_part, FoundInvite, InviteCandidate};
@@ -83,8 +82,7 @@ fn next_partstat(current: &Option<String>, me: &Me) -> Option<String> {
     }
 }
 
-/// Overwrites `existing` with the organizer's version; calendar, account and
-/// reminders stay. False when the new times are unusable.
+/// Calendar, account and reminders survive the organizer's version.
 fn apply_update(conn: &Connection, existing: &EventRow, p: &ParsedEvent, me: &Me) -> Result<bool, String> {
     let mut row = p.to_row(existing.id.clone(), existing.calendar_id.clone());
     row.account_id = existing.account_id.clone();
@@ -212,8 +210,7 @@ fn auto_cancel(conn: &Connection, mail: &MailInvite, target: &CancelTarget) -> R
     Ok(changed)
 }
 
-/// Updates and cancellations take effect when the mail is read, but only from the
-/// organizer the stored event names; anything else waits for the user's answer.
+/// Only the organizer the stored event names may change it unasked.
 pub(crate) fn process_mail_impl(db: &Database, mail_id: &str) -> Result<bool, String> {
     let conn = db.lock_db();
     let mail = load_mail(&conn, mail_id)?;
@@ -443,8 +440,7 @@ pub struct ReplyDraft {
     pub ics: String,
 }
 
-/// Saves my answer (declining a new invitation creates nothing) and prepares the
-/// REPLY. The answer is stored before anything is sent.
+/// The answer is stored before anything is sent.
 pub(crate) fn respond_impl(
     db: &Database,
     mail_id: &str,
@@ -584,8 +580,7 @@ pub(crate) fn remove_cancelled_impl(db: &Database, mail_id: &str) -> Result<(), 
     tx.commit().map_err(err)
 }
 
-/// Mails whose updates should land without being opened: unread bodies in the
-/// inbox from people tied to my upcoming events.
+/// Updates from people tied to my upcoming events should land without being opened.
 pub(crate) fn relevant_unfetched_mails_impl(db: &Database, account_id: &str, now: DateTime<Utc>, limit: usize) -> Result<Vec<String>, String> {
     let conn = db.lock_db();
     let mut stmt = conn
@@ -630,7 +625,6 @@ mod tests {
         Database::new(std::env::temp_dir().join(format!("prudii-invite-{}", uuid::Uuid::new_v4()))).unwrap()
     }
 
-    /// Account `acc` (Sam@Example.com), its inbox and the default calendar.
     fn setup() -> (Database, String) {
         let db = temp_db();
         {
@@ -657,7 +651,6 @@ mod tests {
         lines.iter().map(|l| fold_line(l)).collect()
     }
 
-    /// One VEVENT by Robin: one hour from `start` (UTC), my ATTENDEE line, extra lines.
     fn vevent(uid: &str, seq: i64, start: &str, me: &str, extra: &[&str]) -> Vec<String> {
         let mut v = vec![
             format!("UID:{}", uid),
@@ -682,7 +675,6 @@ mod tests {
             .unwrap();
     }
 
-    /// The invitation as if accepted earlier: imported, answered, tied to `acc`.
     fn known(db: &Database, cal: &str, text: &str, partstat: &str) {
         import_ics_impl(db, cal, text).unwrap();
         db.lock_db()

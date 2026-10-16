@@ -121,9 +121,7 @@ fn smtp_config(account: &SendAccount, credential: &str) -> Result<SmtpConfig, St
     })
 }
 
-/// The mail has left the building; this only archives a copy. It needs the
-/// account's IMAP session, which a running sync can hold for a minute, so it
-/// must not keep the caller waiting.
+/// Detached: a running sync can hold the IMAP session for a minute.
 fn spawn_sent_copy(app: &AppHandle, account: SendAccount, credential: String, raw: Vec<u8>) {
     let is_gmail_imap = account.imap_host.contains("gmail.com") || account.imap_host.contains("googlemail.com");
     let bg_app = app.clone();
@@ -269,8 +267,7 @@ pub async fn send_mail(app: AppHandle, db: State<'_, Database>, request: SendMai
     Ok(())
 }
 
-/// Sends a generated mail (iMIP replies) from `account_id`: no composer, no undo
-/// window, no draft. SMTP accounts still get their Sent copy.
+/// Generated mails (iMIP replies) have no composer, undo window or draft.
 pub(crate) async fn send_calendar_mail(app: &AppHandle, account_id: &str, message: EmailMessage) -> Result<(), String> {
     let account = load_send_account(&app.state::<Database>(), account_id)?;
     let credential = credentials::resolve_credential(&account.id, &account.auth_type, &account.provider)
