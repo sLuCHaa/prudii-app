@@ -1281,10 +1281,6 @@
         "title": "Calendário",
         "text": "Visualizações de mês, semana, dia e agenda com lembretes."
       },
-      "invitations": {
-        "title": "Convites",
-        "text": "Aceite ou recuse diretamente no e-mail."
-      },
       "subscriptions": {
         "title": "Assinaturas e importação",
         "text": "Importe sua exportação do Google e links webcal."

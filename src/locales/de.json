@@ -1281,10 +1281,6 @@
         "title": "Kalender",
         "text": "Monat, Woche, Tag und Agenda mit Erinnerungen."
       },
-      "invitations": {
-        "title": "Einladungen",
-        "text": "Zusagen oder absagen direkt in der Mail."
-      },
       "subscriptions": {
         "title": "Abos und Import",
         "text": "Google-Export und webcal-Links übernehmen."

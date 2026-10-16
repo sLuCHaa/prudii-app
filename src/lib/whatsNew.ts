@@ -20,7 +20,6 @@ export const RELEASES: WhatsNewRelease[] = [
     version: "1.7.0",
     items: [
       { icon: "calendar", tone: "blue", key: "whatsNew.v1_7_0.calendar" },
-      { icon: "mail", tone: "green", key: "whatsNew.v1_7_0.invitations" },
       { icon: "rss", tone: "amber", key: "whatsNew.v1_7_0.subscriptions" },
       { icon: "tasks", tone: "violet", key: "whatsNew.v1_7_0.tasks" },
     ],

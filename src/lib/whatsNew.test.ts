@@ -69,7 +69,6 @@ describe("RELEASES", () => {
     const r = RELEASES.find((x) => x.version === "1.7.0");
     expect(r?.items.map((i) => i.key)).toEqual([
       "whatsNew.v1_7_0.calendar",
-      "whatsNew.v1_7_0.invitations",
       "whatsNew.v1_7_0.subscriptions",
       "whatsNew.v1_7_0.tasks",
     ]);

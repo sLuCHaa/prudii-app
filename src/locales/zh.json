@@ -1280,10 +1280,6 @@
         "title": "日历",
         "text": "月、周、日和日程视图，并支持提醒。"
       },
-      "invitations": {
-        "title": "邀请",
-        "text": "直接在邮件中接受或拒绝。"
-      },
       "subscriptions": {
         "title": "订阅与导入",
         "text": "导入 Google 导出文件和 webcal 链接。"
