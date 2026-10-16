@@ -286,7 +286,7 @@ pub async fn respond_invitation(
     reply_subject: String,
     reply_body: String,
 ) -> Result<(), String> {
-    let draft = respond_impl(&db, &mail_id, &partstat, &calendar_id, comment.as_deref(), send_reply, chrono::Utc::now())?;
+    let draft = super::catch_panic(|| respond_impl(&db, &mail_id, &partstat, &calendar_id, comment.as_deref(), send_reply, chrono::Utc::now()))?;
     changed(&app);
     let Some(draft) = draft else { return Ok(()) };
     let message = EmailMessage {

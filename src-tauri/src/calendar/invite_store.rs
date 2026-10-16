@@ -28,12 +28,13 @@ struct MailInvite {
     method: Option<String>,
     ics: Option<String>,
     partstat: Option<String>,
+    folder_type: Option<String>,
 }
 
 fn load_mail(conn: &Connection, mail_id: &str) -> Result<MailInvite, String> {
     conn.query_row(
-        "SELECT m.account_id, a.email, m.from_email, m.invite_method, m.invite_ics, m.invite_partstat
-         FROM mails m JOIN accounts a ON a.id = m.account_id WHERE m.id = ?1",
+        "SELECT m.account_id, a.email, m.from_email, m.invite_method, m.invite_ics, m.invite_partstat, f.folder_type
+         FROM mails m JOIN accounts a ON a.id = m.account_id LEFT JOIN folders f ON f.id = m.folder_id WHERE m.id = ?1",
         params![mail_id],
         |r| {
             Ok(MailInvite {
@@ -43,6 +44,7 @@ fn load_mail(conn: &Connection, mail_id: &str) -> Result<MailInvite, String> {
                 method: r.get(3)?,
                 ics: r.get(4)?,
                 partstat: r.get(5)?,
+                folder_type: r.get(6)?,
             })
         },
     )
@@ -219,6 +221,10 @@ pub(crate) fn process_mail_impl(db: &Database, mail_id: &str) -> Result<bool, St
     if method != "REQUEST" && method != "CANCEL" {
         return Ok(false);
     }
+    // The provider's spam verdict outranks the sender check.
+    if matches!(mail.folder_type.as_deref(), Some("spam" | "trash")) {
+        return Ok(false);
+    }
     let tx = conn.unchecked_transaction().map_err(err)?;
     let mut changed = false;
     if method == "REQUEST" {
@@ -252,10 +258,12 @@ pub(crate) fn store_invite(db: &Database, mail_id: &str, found: Option<&FoundInv
     if found.is_none() {
         return;
     }
-    match process_mail_impl(db, mail_id) {
-        Ok(true) => super::notify_changed(),
-        Ok(false) => {}
-        Err(e) => log::warn!("invitation of {} not applied: {}", mail_id, e),
+    // Runs inside body fetches, whose body write must still happen.
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| process_mail_impl(db, mail_id))) {
+        Ok(Ok(true)) => super::notify_changed(),
+        Ok(Ok(false)) => {}
+        Ok(Err(e)) => log::warn!("invitation of {} not applied: {}", mail_id, e),
+        Err(_) => log::error!("invitation of {} not applied: processing panicked", mail_id),
     }
 }
 
@@ -1213,5 +1221,26 @@ mod tests {
         mail(&db, "m1", "robin@example.com", &ics("REQUEST", &[vevent("r1", 1, "20261020T080000Z", YES, &[])]));
         assert!(process_mail_impl(&db, "m1").unwrap());
         assert!(invitation_view_impl(&db, "c0", now()).unwrap().unwrap().outdated);
+    }
+
+    #[test]
+    fn junk_and_trash_wait_for_my_answer() {
+        let (db, cal) = setup();
+        known(&db, &cal, &ics("REQUEST", &[vevent("r1", 0, "20261020T070000Z", YES, &[])]), "accepted");
+        {
+            let conn = db.lock_db();
+            conn.execute("INSERT INTO folders (id, account_id, name, folder_type, path) VALUES ('junk', 'acc', 'Junk', 'spam', 'Junk')", []).unwrap();
+            conn.execute("INSERT INTO folders (id, account_id, name, folder_type, path) VALUES ('bin', 'acc', 'Trash', 'trash', 'Trash')", []).unwrap();
+        }
+        mail(&db, "j", "robin@example.com", &ics("REQUEST", &[vevent("r1", 1, "20261020T090000Z", YES, &[])]));
+        mail(&db, "t", "robin@example.com", &ics("CANCEL", &[vevent("r1", 2, "20261020T090000Z", YES, &[])]));
+        db.lock_db().execute("UPDATE mails SET folder_id = CASE id WHEN 'j' THEN 'junk' ELSE 'bin' END WHERE id IN ('j', 't')", []).unwrap();
+        assert!(!process_mail_impl(&db, "j").unwrap());
+        assert!(!process_mail_impl(&db, "t").unwrap());
+        let row = event(&db, "r1", None);
+        assert_eq!((row.dtstart.as_str(), row.status.as_str()), ("2026-10-20T07:00:00", "confirmed"));
+        assert!(invitation_view_impl(&db, "j", now()).unwrap().unwrap().updated);
+        respond_impl(&db, "j", "accepted", &cal, None, false, now()).unwrap();
+        assert_eq!(event(&db, "r1", None).dtstart, "2026-10-20T09:00:00");
     }
 }
