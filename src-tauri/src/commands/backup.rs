@@ -1,6 +1,6 @@
 use crate::calendar::store::{is_valid_color, DEFAULT_COLOR};
 use crate::calendar::subscription::{KeyringLinks, LinkStore};
-use crate::calendar::SUBSCRIPTION;
+use crate::calendar::{REFRESH_CHOICES, SUBSCRIPTION};
 use crate::credentials::SecretStore;
 use crate::db::Database;
 use crate::models::{BackupIncludes, BackupManifest, BackupOptions, BackupProgress, BackupStats, RestorePreview};
@@ -1181,6 +1181,11 @@ pub(crate) fn import_calendar_rows<R: Read + Seek>(
         if !cal.get("reminders_muted").is_some_and(|v| v.is_i64() || v.is_boolean()) {
             cal.insert("reminders_muted".into(), 0.into());
         }
+        if cal.get("source").and_then(|s| s.as_str()) == Some(SUBSCRIPTION)
+            && !cal.get("refresh_minutes").and_then(|v| v.as_i64()).is_some_and(|m| REFRESH_CHOICES.contains(&m))
+        {
+            cal.insert("refresh_minutes".into(), 60.into());
+        }
     }
     let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
     insert_json_rows(&tx, "calendars", CALENDAR_COLUMNS, &parsed[0], insert_or)?;
@@ -1196,6 +1201,12 @@ pub(crate) fn import_calendar_rows<R: Read + Seek>(
         "UPDATE calendars SET is_default = CASE WHEN id = (
             SELECT id FROM calendars ORDER BY source = ?1, is_default DESC, sort_order, created_at LIMIT 1
          ) THEN 1 ELSE 0 END",
+        rusqlite::params![SUBSCRIPTION],
+    )
+    .map_err(|e| e.to_string())?;
+    // Restored events may be stale, so the next tick must re-mirror the feed.
+    tx.execute(
+        "UPDATE calendars SET last_attempt_at = NULL, content_hash = NULL, sync_token = NULL WHERE source = ?1",
         rusqlite::params![SUBSCRIPTION],
     )
     .map_err(|e| e.to_string())?;
@@ -2528,6 +2539,47 @@ mod calendar_roundtrip {
         assert_eq!(row["reminders_muted"], 0);
         assert!(row.get("secret_link").is_none());
         assert!(!serde_json::to_string(&rows).unwrap().contains("secret.ics"));
+    }
+
+    #[test]
+    fn restored_subscriptions_refresh_from_scratch() {
+        let db_a = temp_db();
+        let sub = add_subscription(&db_a);
+        let (_, bytes) = export(&db_a);
+        let db_b = temp_db();
+        list_calendars_impl(&db_b, "Work").unwrap();
+        db_b.lock_db()
+            .execute(
+                "INSERT INTO calendars (id, name, color, source, refresh_minutes, content_hash, sync_token, last_attempt_at)
+                 VALUES (?1, 'Team', '#10b981', 'subscription', 360, 'h1', '\"v1\"', '2026-10-16T10:00:00Z')",
+                rusqlite::params![sub],
+            )
+            .unwrap();
+        import_calendar_rows(&db_b.lock_db(), &mut zip::ZipArchive::new(Cursor::new(bytes)).unwrap(), false).unwrap();
+        let state: (Option<String>, Option<String>, Option<String>) = db_b
+            .lock_db()
+            .query_row("SELECT content_hash, sync_token, last_attempt_at FROM calendars WHERE id = ?1", rusqlite::params![sub], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+            })
+            .unwrap();
+        assert_eq!(state, (None, None, None));
+    }
+
+    #[test]
+    fn restored_subscriptions_only_keep_known_refresh_intervals() {
+        let row = |id: &str, minutes: i64| {
+            serde_json::json!({ "id": id, "name": id, "color": "#10b981", "is_default": 0, "visible": 1, "sort_order": 0, "source": "subscription", "refresh_minutes": minutes, "created_at": "2026-01-01 00:00:00", "updated_at": "2026-01-01 00:00:00" })
+        };
+        let rows = serde_json::json!([row("c-odd", 7), row("c-ok", 360)]);
+        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        zip.start_file("calendars.json", zip::write::SimpleFileOptions::default()).unwrap();
+        zip.write_all(rows.to_string().as_bytes()).unwrap();
+        let bytes = zip.finish().unwrap().into_inner();
+        let db = temp_db();
+        import_calendar_rows(&db.lock_db(), &mut zip::ZipArchive::new(Cursor::new(bytes)).unwrap(), false).unwrap();
+        let minutes = |id: &str| list_calendars_impl(&db, "").unwrap().into_iter().find(|c| c.id == id).unwrap().refresh_minutes;
+        assert_eq!(minutes("c-odd"), Some(60));
+        assert_eq!(minutes("c-ok"), Some(360));
     }
 
     #[test]
