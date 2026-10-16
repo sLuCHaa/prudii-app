@@ -4,6 +4,7 @@ pub mod bundle;
 pub mod content_line;
 pub mod ical;
 pub mod invite_mail;
+pub mod itip;
 pub mod meeting;
 pub mod recurrence;
 pub mod store;
