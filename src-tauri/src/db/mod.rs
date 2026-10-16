@@ -711,6 +711,7 @@ impl Database {
             "ALTER TABLE mails ADD COLUMN invite_method TEXT",
             "ALTER TABLE mails ADD COLUMN invite_ics TEXT",
             "ALTER TABLE mails ADD COLUMN invite_partstat TEXT",
+            "CREATE INDEX IF NOT EXISTS idx_mails_invites ON mails(account_id) WHERE invite_method = 'REQUEST'",
         ] {
             let _ = conn.execute_batch(sql);
         }

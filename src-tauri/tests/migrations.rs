@@ -267,6 +267,7 @@ fn invite_columns_are_added_to_existing_mails() {
     {
         let db = Database::new(dir.clone()).unwrap();
         let conn = db.lock_db();
+        conn.execute_batch("DROP INDEX IF EXISTS idx_mails_invites").unwrap();
         for col in ["invite_method", "invite_ics", "invite_partstat"] {
             conn.execute_batch(&format!("ALTER TABLE mails DROP COLUMN {}", col)).unwrap();
         }
@@ -286,6 +287,14 @@ fn invite_columns_are_added_to_existing_mails() {
     for col in ["invite_method", "invite_ics", "invite_partstat"] {
         assert!(cols.iter().any(|c| c == col), "{col} missing");
     }
+    let index: Vec<String> = conn
+        .prepare("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'idx_mails_invites'")
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    assert!(index.iter().any(|sql| sql.contains("WHERE invite_method = 'REQUEST'")), "idx_mails_invites missing: {index:?}");
     drop(conn);
     let _ = std::fs::remove_dir_all(&dir);
 }
