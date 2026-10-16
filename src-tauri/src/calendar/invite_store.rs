@@ -112,6 +112,11 @@ fn add_override(conn: &Connection, master: &EventRow, p: &ParsedEvent, me: &Me) 
     Ok(true)
 }
 
+/// The stored slot is newer than this invitation (or cancelled at the same version).
+fn superseded(row: &EventRow, sequence: i64) -> bool {
+    sequence < row.sequence || (row.status == "cancelled" && sequence <= row.sequence)
+}
+
 fn auto_update(conn: &Connection, mail: &MailInvite, p: &ParsedEvent) -> Result<bool, String> {
     if same(p.organizer_email.as_deref(), &mail.account_email) {
         return Ok(false);
@@ -123,9 +128,8 @@ fn auto_update(conn: &Connection, mail: &MailInvite, p: &ParsedEvent) -> Result<
     }
     let me = itip::find_me(p, &mail.account_email);
     match rows.iter().find(|r| r.recurrence_id == p.recurrence_id) {
-        Some(slot) if slot.status == "cancelled" && p.sequence <= slot.sequence => Ok(false),
-        Some(slot) if p.sequence >= slot.sequence => apply_update(conn, slot, p, &me),
-        Some(_) => Ok(false),
+        Some(slot) if superseded(slot, p.sequence) => Ok(false),
+        Some(slot) => apply_update(conn, slot, p, &me),
         None => add_override(conn, anchor, p, &me),
     }
 }
@@ -342,7 +346,7 @@ fn build_view(conn: &Connection, mail_id: &str, mail: &MailInvite, now: DateTime
         event_id: anchor.map(|r| r.id.clone()),
         calendar_id: anchor.map(|r| r.calendar_id.clone()),
         stored_status: anchor.map(|r| r.status.clone()),
-        outdated: exact.is_some_and(|r| p.sequence < r.sequence),
+        outdated: exact.is_some_and(|r| superseded(r, p.sequence)),
         updated: method == "REQUEST" && base.is_some(),
         changes: base.map(|b| diff(&b, &snapshot(&invite_row))).unwrap_or_default(),
         conflicts: titles,
@@ -425,7 +429,7 @@ pub(crate) fn respond_impl(
         return Err("calendar.invite.errors.noOrganizer".into());
     }
     let rows = known_rows(&conn, &p.uid)?;
-    if rows.iter().any(|r| r.recurrence_id == p.recurrence_id && p.sequence < r.sequence) {
+    if rows.iter().any(|r| r.recurrence_id == p.recurrence_id && superseded(r, p.sequence)) {
         return Err("calendar.invite.errors.outdated".into());
     }
     let me = itip::find_me(&p, &mail.account_email);
@@ -457,7 +461,7 @@ pub(crate) fn respond_impl(
         Some(anchor) => {
             for e in &ours {
                 match rows.iter().find(|r| r.recurrence_id == e.recurrence_id) {
-                    Some(r) if e.sequence >= r.sequence => {
+                    Some(r) if !superseded(r, e.sequence) => {
                         apply_update(&tx, r, e, &me)?;
                     }
                     Some(_) => {}
@@ -507,20 +511,30 @@ pub(crate) fn remove_cancelled_impl(db: &Database, mail_id: &str) -> Result<(), 
         _ => return Err("calendar.invite.errors.invalid".into()),
     };
     let tx = conn.unchecked_transaction().map_err(err)?;
+    let (mut named, mut applied) = (false, false);
     for target in itip::cancel_targets(&ics) {
         let rows = known_rows(&tx, &target.uid)?;
-        let Some(anchor) = rows.first() else { continue };
+        if rows.is_empty() {
+            continue;
+        }
         match &target.recurrence_id {
             None => {
-                tx.execute("DELETE FROM events WHERE calendar_id = ?1 AND uid = ?2", params![anchor.calendar_id, target.uid]).map_err(err)?;
+                named = true;
+                for r in rows.iter().filter(|r| target.sequence >= r.sequence) {
+                    tx.execute("DELETE FROM events WHERE id = ?1", params![r.id]).map_err(err)?;
+                    applied = true;
+                }
             }
             Some(k) => {
-                tx.execute(
-                    "DELETE FROM events WHERE calendar_id = ?1 AND uid = ?2 AND recurrence_id = ?3",
-                    params![anchor.calendar_id, target.uid, k],
-                )
-                .map_err(err)?;
-                if let Some(master) = rows.iter().find(|r| r.recurrence_id.is_none()) {
+                let slot = rows.iter().find(|r| r.recurrence_id.as_deref() == Some(k.as_str()));
+                let master = rows.iter().find(|r| r.recurrence_id.is_none());
+                named |= slot.is_some() || master.is_some();
+                if let Some(r) = slot.filter(|r| target.sequence >= r.sequence) {
+                    tx.execute("DELETE FROM events WHERE id = ?1", params![r.id]).map_err(err)?;
+                    applied = true;
+                }
+                if let Some(master) = master.filter(|m| target.sequence >= m.sequence) {
+                    applied = true;
                     if !master.exdates.contains(k) {
                         let mut row = master.clone();
                         row.exdates.push(k.clone());
@@ -530,6 +544,9 @@ pub(crate) fn remove_cancelled_impl(db: &Database, mail_id: &str) -> Result<(), 
                 }
             }
         }
+    }
+    if named && !applied {
+        return Err("calendar.invite.errors.outdated".into());
     }
     tx.commit().map_err(err)
 }
@@ -1008,5 +1025,28 @@ mod tests {
         remove_cancelled_impl(&db, "all").unwrap();
         assert_eq!(count(&db, "s1"), 0);
         assert_eq!(add_published_impl(&db, "all", &cal), Err("calendar.invite.errors.invalid".to_string()));
+    }
+
+    #[test]
+    fn an_older_cancellation_removes_nothing() {
+        let (db, cal) = setup();
+        known(&db, &cal, &ics("REQUEST", &[vevent("r1", 3, "20261020T070000Z", YES, &[])]), "accepted");
+        mail(&db, "c1", "robin@example.com", &ics("CANCEL", &[vevent("r1", 1, "20261020T070000Z", OPEN, &[])]));
+        assert_eq!(remove_cancelled_impl(&db, "c1"), Err("calendar.invite.errors.outdated".to_string()));
+        assert_eq!(count(&db, "r1"), 1);
+    }
+
+    #[test]
+    fn answering_a_cancelled_event_is_refused_and_the_card_is_outdated() {
+        let (db, cal) = setup();
+        let request = ics("REQUEST", &[vevent("r1", 0, "20261020T070000Z", YES, &[])]);
+        known(&db, &cal, &request, "accepted");
+        mail(&db, "orig", "robin@example.com", &request);
+        mail(&db, "c0", "robin@example.com", &ics("CANCEL", &[vevent("r1", 0, "20261020T070000Z", OPEN, &[])]));
+        assert!(process_mail_impl(&db, "c0").unwrap());
+        assert_eq!(event(&db, "r1", None).status, "cancelled");
+        assert_eq!(respond_impl(&db, "orig", "accepted", &cal, None, false, now()), Err("calendar.invite.errors.outdated".to_string()));
+        assert_eq!(event(&db, "r1", None).status, "cancelled");
+        assert!(invitation_view_impl(&db, "orig", now()).unwrap().unwrap().outdated);
     }
 }
