@@ -19,6 +19,7 @@ import { TimeField } from "../ui/TimeField";
 import { SPRING_SNAPPY, TRANSITION_INSTANT } from "../motion/tokens";
 import { AlarmEditor } from "./AlarmEditor";
 import { RecurrenceEditor } from "./RecurrenceEditor";
+import { EventReadOnlyBody } from "./EventReadOnlyBody";
 import { useEventActions } from "./useEventActions";
 
 const INPUT = "h-9 px-3 rounded-lg border border-border bg-bg-secondary text-sm text-text outline-none focus:border-accent";
@@ -113,6 +114,7 @@ export function EventDrawer({ target, onClose }: EventDrawerProps) {
   const create = useCreateEvent();
   const update = useUpdateEvent();
   const actions = useEventActions();
+  const readOnly = target.mode === "edit" && !!detail?.read_only;
   const [form, setForm] = useState<FormState | null>(null);
   const initial = useRef<FormState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -122,7 +124,8 @@ export function EventDrawer({ target, onClose }: EventDrawerProps) {
     if (form) return;
     let next: FormState | null = null;
     if (target.mode === "new") {
-      const calendarId = target.draft.calendarId ?? calendars.find((c) => c.is_default)?.id ?? calendars[0]?.id;
+      const calendarId =
+        target.draft.calendarId ?? calendars.find((c) => c.is_default && !c.read_only)?.id ?? calendars.find((c) => !c.read_only)?.id;
       if (!calendarId || !settings) return;
       const times = target.draft.times;
       next = {
@@ -207,7 +210,7 @@ export function EventDrawer({ target, onClose }: EventDrawerProps) {
   }
 
   async function save() {
-    if (!form || saving) return;
+    if (!form || saving || readOnly) return;
     if (!timesValid(form)) {
       setError(t("calendar.drawer.endBeforeStart"));
       return;
@@ -261,7 +264,9 @@ export function EventDrawer({ target, onClose }: EventDrawerProps) {
 
   const calendar = calendars.find((c) => c.id === form?.calendarId);
   const join = form ? findMeetingLink(form.location, form.description) : null;
-  const heading = t(target.mode === "new" ? "calendar.drawer.newTitle" : "calendar.drawer.editTitle");
+  const heading = readOnly
+    ? t("calendar.subscription.viewTitle")
+    : t(target.mode === "new" ? "calendar.drawer.newTitle" : "calendar.drawer.editTitle");
 
   return (
     <>
@@ -296,7 +301,9 @@ export function EventDrawer({ target, onClose }: EventDrawerProps) {
           </button>
         </div>
 
-        {!form ? (
+        {readOnly && detail && occurrence ? (
+          <EventReadOnlyBody occurrence={occurrence} detail={detail} calendarName={calendar?.name} />
+        ) : !form ? (
           <div className="space-y-3 p-5">
             <Skeleton height="2.5rem" rounded="lg" />
             <Skeleton height="8rem" rounded="lg" />
@@ -340,7 +347,7 @@ export function EventDrawer({ target, onClose }: EventDrawerProps) {
             <Field icon={CalendarDays} label={t("calendar.drawer.calendar")}>
               <Select
                 value={form.calendarId}
-                options={calendars.map((c) => ({
+                options={calendars.filter((c) => !c.read_only || c.id === form.calendarId).map((c) => ({
                   value: c.id,
                   label: c.name,
                   icon: <span className="h-2.5 w-2.5 rounded-full" style={{ background: c.color }} />,
@@ -393,7 +400,7 @@ export function EventDrawer({ target, onClose }: EventDrawerProps) {
         )}
 
         <div className="flex shrink-0 items-center gap-2 border-t border-border px-5 py-3">
-          {target.mode === "edit" && occurrence && (
+          {!readOnly && target.mode === "edit" && occurrence && (
             <button
               type="button"
               onClick={async () => {
@@ -406,17 +413,25 @@ export function EventDrawer({ target, onClose }: EventDrawerProps) {
             </button>
           )}
           <div className="ml-auto flex gap-2">
-            <button type="button" onClick={onClose} className="rounded-lg px-3 py-1.5 text-xs text-text-secondary hover:bg-hover">
-              {t("common.cancel")}
-            </button>
-            <button
-              type="button"
-              onClick={() => void save()}
-              disabled={!form || saving}
-              className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-50"
-            >
-              {t(target.mode === "new" ? "calendar.drawer.create" : "calendar.drawer.save")}
-            </button>
+            {readOnly ? (
+              <button type="button" onClick={onClose} className="rounded-lg px-3 py-1.5 text-xs text-text-secondary hover:bg-hover">
+                {t("common.close")}
+              </button>
+            ) : (
+              <>
+                <button type="button" onClick={onClose} className="rounded-lg px-3 py-1.5 text-xs text-text-secondary hover:bg-hover">
+                  {t("common.cancel")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void save()}
+                  disabled={!form || saving}
+                  className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-50"
+                >
+                  {t(target.mode === "new" ? "calendar.drawer.create" : "calendar.drawer.save")}
+                </button>
+              </>
+            )}
           </div>
         </div>
         {actions.dialogs}

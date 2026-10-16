@@ -2,7 +2,7 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { motion, useReducedMotion } from "motion/react";
 import { format } from "date-fns";
-import { AlignLeft, CalendarDays, MapPin, Pencil, Repeat, Trash2, Video } from "lucide-react";
+import { AlignLeft, CalendarDays, Link2, MapPin, Pencil, Repeat, Trash2, Video } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { ReactNode } from "react";
 import type { Occurrence } from "../../types/calendar";
@@ -98,24 +98,31 @@ export function EventPopover({ occurrence: o, anchor, calendarName, onClose, onE
             {t("calendar.join")}
           </button>
         )}
-        <div className="ml-auto flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => onEdit(o)}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs text-text-secondary hover:bg-hover"
-          >
-            <Pencil className="w-3.5 h-3.5" />
-            {t("calendar.edit")}
-          </button>
-          <button
-            type="button"
-            onClick={() => onDelete(o)}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs text-danger hover:bg-danger/10"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            {t("calendar.delete")}
-          </button>
-        </div>
+        {o.read_only ? (
+          <span className="ml-auto flex items-center gap-1 text-xs text-text-tertiary">
+            <Link2 className="w-3.5 h-3.5" />
+            {t("calendar.subscription.readOnly")}
+          </span>
+        ) : (
+          <div className="ml-auto flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => onEdit(o)}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs text-text-secondary hover:bg-hover"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              {t("calendar.edit")}
+            </button>
+            <button
+              type="button"
+              onClick={() => onDelete(o)}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs text-danger hover:bg-danger/10"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              {t("calendar.delete")}
+            </button>
+          </div>
+        )}
       </div>
     </motion.div>,
     document.body,

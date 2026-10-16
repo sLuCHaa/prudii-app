@@ -13,6 +13,7 @@ export function useEventActions() {
   const move = useMoveOccurrence();
 
   async function deleteOccurrence(o: Occurrence): Promise<boolean> {
+    if (o.read_only) return false;
     let chosen: EditScope | null = "all";
     if (o.is_recurring) {
       chosen = await scope.prompt("delete");
@@ -34,6 +35,7 @@ export function useEventActions() {
   }
 
   async function moveOccurrence(o: Occurrence, times: EventTimes): Promise<void> {
+    if (o.read_only) return;
     const chosen = o.is_recurring ? await scope.prompt("edit") : "all";
     if (!chosen) return;
     move.mutate({ id: o.event_id, occurrenceKey: o.occurrence_key, times, scope: chosen });

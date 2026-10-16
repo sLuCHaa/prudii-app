@@ -81,7 +81,7 @@ export function CalendarView() {
   const actions = useEventActions();
   const createEvent = useCreateEvent();
   const updateTask = useUpdateTask();
-  const defaultCalendar = calendars.find((c) => c.is_default) ?? calendars[0];
+  const defaultCalendar = calendars.find((c) => c.is_default && !c.read_only) ?? calendars.find((c) => !c.read_only);
 
   useEffect(() => setAgendaDays(AGENDA_DAYS), [anchorIso, view]);
   const extendAgenda = useCallback(() => setAgendaDays((d) => Math.min(d + AGENDA_DAYS, MAX_AGENDA_DAYS)), []);

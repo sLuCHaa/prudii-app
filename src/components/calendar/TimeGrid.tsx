@@ -130,7 +130,7 @@ export function TimeGrid({ days, occurrences, tasks, workStart, workEnd, workDay
       const h = hit(e.clientX, e.clientY);
       if (!d || !h) return;
       if (d.kind === "create") setDrag({ ...d, currentMin: h.min });
-      else if (d.kind === "move") setDrag({ ...d, dayIdx: h.dayIdx, min: h.min, moved: d.moved || (far(d, e) && (h.dayIdx !== d.originDayIdx || h.min !== d.originMin)) });
+      else if (d.kind === "move") setDrag({ ...d, dayIdx: h.dayIdx, min: h.min, moved: !d.occ.read_only && (d.moved || (far(d, e) && (h.dayIdx !== d.originDayIdx || h.min !== d.originMin))) });
       else setDrag({ ...d, dayIdx: h.dayIdx, endMin: h.min, moved: d.moved || far(d, e) });
     }
     function onUp() {
@@ -319,7 +319,7 @@ function TimedBlock({ occurrence: o, seg, place, use24h, faded, untitled, onPoin
           {formatTime(start, use24h)} – {formatTime(end, use24h)}
         </div>
       )}
-      <div onPointerDown={onResizeDown} className="absolute inset-x-0 bottom-0 h-1.5 cursor-ns-resize" />
+      {!o.read_only && <div onPointerDown={onResizeDown} className="absolute inset-x-0 bottom-0 h-1.5 cursor-ns-resize" />}
     </div>
   );
 }

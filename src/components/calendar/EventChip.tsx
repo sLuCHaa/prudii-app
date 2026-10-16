@@ -21,7 +21,7 @@ export function EventChip({ occurrence: o, variant, use24h, onOpen, spanDays }: 
   return (
     <button
       type="button"
-      draggable
+      draggable={!o.read_only}
       onDragStart={(e) => {
         const id = occurrenceId(o);
         let grabbed: string | undefined;
