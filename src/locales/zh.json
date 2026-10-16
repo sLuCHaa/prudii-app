@@ -1271,6 +1271,29 @@
     "noMatchesDesc": "没有任务符合你的搜索或筛选。",
     "clearFilters": "清除筛选"
   },
+  "whatsNew": {
+    "title": "Prudii {{version}} 新功能",
+    "subtitle": "自上次更新以来的新变化。",
+    "done": "知道了",
+    "v1_7_0": {
+      "calendar": {
+        "title": "日历",
+        "text": "月、周、日和日程视图，并支持提醒。"
+      },
+      "invitations": {
+        "title": "邀请",
+        "text": "直接在邮件中接受或拒绝。"
+      },
+      "subscriptions": {
+        "title": "订阅与导入",
+        "text": "导入 Google 导出文件和 webcal 链接。"
+      },
+      "tasks": {
+        "title": "日历中的任务",
+        "text": "到期任务显示在日程旁边。"
+      }
+    }
+  },
   "calendar": {
     "title": "日历",
     "defaultName": "我的日历",

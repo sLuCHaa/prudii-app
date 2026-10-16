@@ -1272,6 +1272,29 @@
     "noMatchesDesc": "Keine Aufgabe passt zu deiner Suche oder deinem Filter.",
     "clearFilters": "Filter zurücksetzen"
   },
+  "whatsNew": {
+    "title": "Neu in Prudii {{version}}",
+    "subtitle": "Das hat sich seit deinem letzten Update getan.",
+    "done": "Verstanden",
+    "v1_7_0": {
+      "calendar": {
+        "title": "Kalender",
+        "text": "Monat, Woche, Tag und Agenda mit Erinnerungen."
+      },
+      "invitations": {
+        "title": "Einladungen",
+        "text": "Zusagen oder absagen direkt in der Mail."
+      },
+      "subscriptions": {
+        "title": "Abos und Import",
+        "text": "Google-Export und webcal-Links übernehmen."
+      },
+      "tasks": {
+        "title": "Aufgaben im Kalender",
+        "text": "Fällige Aufgaben neben deinen Terminen."
+      }
+    }
+  },
   "calendar": {
     "title": "Kalender",
     "defaultName": "Mein Kalender",

@@ -1272,6 +1272,29 @@
     "noMatchesDesc": "Aucune tâche ne correspond à ta recherche ou à ton filtre.",
     "clearFilters": "Effacer les filtres"
   },
+  "whatsNew": {
+    "title": "Nouveautés de Prudii {{version}}",
+    "subtitle": "Voici ce qui a changé depuis votre dernière mise à jour.",
+    "done": "Compris",
+    "v1_7_0": {
+      "calendar": {
+        "title": "Calendrier",
+        "text": "Vues mois, semaine, jour et agenda avec rappels."
+      },
+      "invitations": {
+        "title": "Invitations",
+        "text": "Acceptez ou refusez directement dans l’e-mail."
+      },
+      "subscriptions": {
+        "title": "Abonnements et import",
+        "text": "Importez votre export Google et vos liens webcal."
+      },
+      "tasks": {
+        "title": "Tâches dans le calendrier",
+        "text": "Les tâches à échéance à côté de vos événements."
+      }
+    }
+  },
   "calendar": {
     "title": "Calendrier",
     "defaultName": "Mon calendrier",
