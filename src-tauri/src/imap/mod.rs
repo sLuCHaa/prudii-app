@@ -1452,6 +1452,7 @@ pub async fn store_body_and_attachments(db: &Database, mail_id: &str, body_bytes
             };
             s.replace('\n', " ").replace('\r', "")
         };
+        let invite = crate::calendar::invite_mail::choose(crate::calendar::invite_mail::candidates_from_message(&msg));
         let attach_dir = db.data_dir.join("attachments").join(mail_id);
         let _ = tokio::fs::create_dir_all(&attach_dir).await;
 
@@ -1460,6 +1461,10 @@ pub async fn store_body_and_attachments(db: &Database, mail_id: &str, body_bytes
         let mut real_attachment_count: u32 = 0;
 
         for part in msg.attachments() {
+            // The invitation itself, not a file the sender attached.
+            if crate::calendar::invite_mail::is_inline_calendar(part) {
+                continue;
+            }
             let raw_filename = part.attachment_name().unwrap_or("unnamed").to_string();
             let filename = unique_filename(&raw_filename, &mut processed_filenames);
 
@@ -1525,6 +1530,7 @@ pub async fn store_body_and_attachments(db: &Database, mail_id: &str, body_bytes
             }
         }
 
+        crate::calendar::invite_store::store_invite(db, mail_id, invite.as_ref());
         let conn = db.lock_db();
         conn.execute(
             "UPDATE mails SET body_text = ?1, body_html = ?2, snippet = ?3, has_attachments = ?4 WHERE id = ?5",
@@ -1605,7 +1611,6 @@ pub async fn backfill_folder_bodies(
     .context(format!("Failed to examine folder: {}", folder_path))?;
     log::debug!("backfill_folder_bodies EXAMINE '{}' took {:?}", folder_path, t_examine.elapsed());
 
-    let parser = MessageParser::default();
     let mut processed: u32 = 0;
 
     for chunk in mails.chunks(200) {
@@ -1647,93 +1652,7 @@ pub async fn backfill_folder_bodies(
                 None => continue,
             };
 
-            if let Some(msg) = parser.parse(body_bytes) {
-                let body_text = msg.body_text(0).unwrap_or_default().to_string();
-                let mut body_html = msg.body_html(0).unwrap_or_default().to_string();
-                let snippet = {
-                    let s = if body_text.len() > 200 {
-                        let mut end = 200;
-                        while end > 0 && !body_text.is_char_boundary(end) { end -= 1; }
-                        &body_text[..end]
-                    } else {
-                        &body_text
-                    };
-                    s.replace('\n', " ").replace('\r', "")
-                };
-                let attach_dir = db.data_dir.join("attachments").join(mail_id);
-                let _ = tokio::fs::create_dir_all(&attach_dir).await;
-
-                let mut processed_filenames = std::collections::HashSet::new();
-                // Same rule as fetch_mail_body: only non-inline parts count.
-                let mut real_attachment_count: u32 = 0;
-
-                for part in msg.attachments() {
-                    let filename = unique_filename(
-                        part.attachment_name().unwrap_or("unnamed"),
-                        &mut processed_filenames,
-                    );
-
-                    let safe_name = sanitize_filename(&filename);
-                    let mime_type = part.content_type().map(|ct: &mail_parser::ContentType| {
-                        let sub = ct.subtype().unwrap_or("octet-stream");
-                        format!("{}/{}", ct.ctype(), sub)
-                    });
-                    let raw_cid = part.content_id().map(|s| s.to_string());
-                    let content_id = raw_cid.map(|s| s.trim_matches(|c| c == '<' || c == '>').to_string());
-                    let has_real_filename = part.attachment_name().is_some_and(|n| n != "unnamed");
-                    let declared_inline = part.content_disposition().map(|cd| cd.ctype() == "inline");
-                    let is_inline = is_body_part(
-                        &filename,
-                        mime_type.as_deref(),
-                        content_id.as_deref(),
-                        declared_inline,
-                        has_real_filename,
-                        &body_html,
-                    );
-                    let sender_declared_inline = declared_inline == Some(true);
-                    if !is_inline {
-                        real_attachment_count += 1;
-                    }
-                    let data = part.contents();
-                    let size = data.len() as i64;
-
-                    if data.len() > 50 * 1024 * 1024 {
-                        log::warn!("Skipping oversized attachment '{}' ({} bytes) in backfill", filename, data.len());
-                        continue;
-                    }
-
-                    // Always replace CID references in HTML regardless of is_inline flag.
-                    // Many clients (e.g. Outlook) mark inline images as Content-Disposition: attachment
-                    // while still referencing them via cid: in the HTML body.
-                    let file_path = attach_dir.join(&safe_name);
-                    if tokio::fs::write(&file_path, data).await.is_ok() {
-                        if let Some(ref cid) = content_id {
-                            let url = format!("file://{}", file_path.to_string_lossy());
-                            body_html = body_html.replace(&format!("cid:{}", cid), &url);
-                        }
-                        let path_str = file_path.to_string_lossy().to_string();
-                        let conn = db.lock_db();
-                        let existing: Option<String> = conn.query_row(
-                            "SELECT id FROM attachments WHERE mail_id = ?1 AND filename = ?2",
-                            rusqlite::params![mail_id, filename],
-                            |row| row.get(0),
-                        ).ok();
-                        let att_id = existing.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-                        if let Err(e) = conn.execute(
-                            "INSERT OR REPLACE INTO attachments (id, mail_id, filename, mime_type, size_bytes, content_id, is_inline, local_path, declared_inline) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-                            rusqlite::params![att_id, mail_id, filename, mime_type, size, content_id, is_inline as i32, path_str, sender_declared_inline as i32],
-                        ) {
-                            log::error!("Failed to insert attachment '{}' for mail {}: {}", filename, mail_id, e);
-                        }
-                    }
-                }
-
-                let conn = db.lock_db();
-                let _ = conn.execute(
-                    "UPDATE mails SET body_text = ?1, body_html = ?2, snippet = ?3, has_attachments = ?4 WHERE id = ?5",
-                    rusqlite::params![body_text, body_html, snippet, (real_attachment_count > 0) as i32, mail_id],
-                );
-
+            if store_body_and_attachments(db, mail_id, body_bytes).await.is_ok() {
                 processed += 1;
             }
         }
@@ -2576,5 +2495,73 @@ mod header_batch_tests {
         ).unwrap();
         assert_eq!(rows, 1);
         assert_eq!(uid, Some(42), "existing row got the server UID");
+    }
+}
+
+#[cfg(test)]
+mod invite_tests {
+    use super::store_body_and_attachments;
+    use crate::db::Database;
+    use base64::Engine;
+
+    const ICS: &str = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nMETHOD:REQUEST\r\nBEGIN:VEVENT\r\nUID:review-1@example.com\r\nDTSTART:20261020T070000Z\r\nDTEND:20261020T080000Z\r\nSUMMARY:Review\r\nORGANIZER:mailto:robin@example.com\r\nATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:sam@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+
+    fn fixture() -> Database {
+        let db = Database::new(std::env::temp_dir().join(format!("prudii-invite-imap-{}", uuid::Uuid::new_v4()))).expect("temp db");
+        {
+            let conn = db.lock_db();
+            conn.execute(
+                "INSERT INTO accounts (id, email, display_name, provider, imap_host, smtp_host) VALUES ('acc', 'sam@example.com', 'Sam', 'imap', 'imap.example.com', 'smtp.example.com')",
+                [],
+            )
+            .unwrap();
+            conn.execute("INSERT INTO folders (id, account_id, name, folder_type, path) VALUES ('inbox', 'acc', 'INBOX', 'inbox', 'INBOX')", []).unwrap();
+            conn.execute("INSERT INTO mails (id, account_id, folder_id, uid, from_email) VALUES ('m1', 'acc', 'inbox', 1, 'robin@example.com')", []).unwrap();
+        }
+        db
+    }
+
+    fn invitation(with_file: bool) -> Vec<u8> {
+        let file = if with_file {
+            format!(
+                "--mixed\r\nContent-Type: application/ics; name=\"invite.ics\"\r\nContent-Disposition: attachment; filename=\"invite.ics\"\r\nContent-Transfer-Encoding: base64\r\n\r\n{}\r\n",
+                base64::engine::general_purpose::STANDARD.encode(ICS)
+            )
+        } else {
+            String::new()
+        };
+        format!(
+            "From: Robin <robin@example.com>\r\nTo: sam@example.com\r\nSubject: Invitation: Review\r\nMessage-ID: <review-1@example.com>\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"mixed\"\r\n\r\n--mixed\r\nContent-Type: multipart/alternative; boundary=\"alt\"\r\n\r\n--alt\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\nYou are invited.\r\n--alt\r\nContent-Type: text/calendar; charset=UTF-8; method=REQUEST\r\n\r\n{}\r\n--alt--\r\n{}--mixed--\r\n",
+            ICS, file
+        )
+        .into_bytes()
+    }
+
+    fn state(db: &Database) -> (Option<String>, Vec<String>, i64) {
+        let conn = db.lock_db();
+        let method: Option<String> = conn.query_row("SELECT invite_method FROM mails WHERE id = 'm1'", [], |r| r.get(0)).unwrap();
+        let files: Vec<String> = conn
+            .prepare("SELECT filename FROM attachments WHERE mail_id = 'm1' ORDER BY filename")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        let has: i64 = conn.query_row("SELECT has_attachments FROM mails WHERE id = 'm1'", [], |r| r.get(0)).unwrap();
+        (method, files, has)
+    }
+
+    #[tokio::test]
+    async fn an_inline_invitation_is_recorded_but_not_listed_as_a_file() {
+        let db = fixture();
+        store_body_and_attachments(&db, "m1", &invitation(false)).await.unwrap();
+        assert_eq!(state(&db), (Some("REQUEST".to_string()), vec![], 0));
+    }
+
+    #[tokio::test]
+    async fn an_attached_invite_file_stays_visible() {
+        let db = fixture();
+        store_body_and_attachments(&db, "m1", &invitation(true)).await.unwrap();
+        assert_eq!(state(&db), (Some("REQUEST".to_string()), vec!["invite.ics".to_string()], 1));
     }
 }
