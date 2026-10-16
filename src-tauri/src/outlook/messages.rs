@@ -69,6 +69,11 @@ pub async fn resolve_stale_graph_id(
 }
 
 /// Fetch the full body of an Outlook message and store it in the DB.
+/// Graph types meeting requests, cancellations and responses as eventMessage subtypes.
+fn is_event_message(odata_type: Option<&str>) -> bool {
+    odata_type.is_some_and(|t| t.to_ascii_lowercase().contains("eventmessage"))
+}
+
 pub async fn fetch_message_body(
     client: &OutlookClient,
     graph_id: &str,
@@ -166,6 +171,7 @@ pub async fn fetch_message_body(
     // The dedup mechanism polls for non-empty body_text/body_html to detect completion,
     // so the body update must happen last to prevent premature cache hits while
     // attachments are still being downloaded.
+    let mut has_ics_attachment = false;
     let mut has_real_attachments = has_attachments_from_body;
     if has_attachments_from_body {
         let attachments = client.list_attachments(graph_id).await?;
@@ -226,6 +232,8 @@ pub async fn fetch_message_body(
                 });
             }
 
+            has_ics_attachment = downloaded.iter().any(|a| crate::calendar::invite_mail::is_calendar_part(a.mime_type.as_deref().unwrap_or(""), Some(&a.filename)));
+
             for att in &downloaded {
                 let file_path = attach_dir.join(&att.filename);
                 if let Err(e) = tokio::fs::write(&file_path, &att.data).await {
@@ -265,6 +273,20 @@ pub async fn fetch_message_body(
             has_real_attachments = downloaded.iter().any(|a| !a.is_inline);
         }
     }
+
+    // Graph's JSON has no calendar part; the MIME source does.
+    let invite = if is_event_message(msg.odata_type.as_deref()) || has_ics_attachment {
+        match client.get_message_raw(graph_id).await {
+            Ok(raw) => crate::calendar::invite_mail::find_in_mime(raw.as_bytes()),
+            Err(e) => {
+                log::warn!("fetch_message_body {}: invitation source unavailable: {}", graph_id, e);
+                None
+            }
+        }
+    } else {
+        None
+    };
+    crate::calendar::invite_store::store_invite(db, mail_id, invite.as_ref());
 
     // Write body LAST — this is what the dedup mechanism polls for, so it must happen
     // after all attachments are saved to ensure they're available when the UI queries them.
@@ -537,5 +559,21 @@ fn sanitize_filename(name: &str) -> String {
         "attachment".to_string()
     } else {
         clean
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_event_message;
+    use crate::outlook::api::GraphMessage;
+
+    #[test]
+    fn meeting_mails_are_recognised_by_their_graph_type() {
+        let msg: GraphMessage =
+            serde_json::from_value(serde_json::json!({ "id": "AAMk", "@odata.type": "#microsoft.graph.eventMessageRequest" })).unwrap();
+        assert!(is_event_message(msg.odata_type.as_deref()));
+        assert!(is_event_message(Some("#microsoft.graph.eventMessageResponse")));
+        assert!(!is_event_message(Some("#microsoft.graph.message")));
+        assert!(!is_event_message(None));
     }
 }

@@ -776,6 +776,9 @@ pub struct GraphMessage {
     pub importance: Option<String>,
     pub parent_folder_id: Option<String>,
     pub internet_message_headers: Option<Vec<GraphInternetMessageHeader>>,
+    /// "#microsoft.graph.eventMessageRequest" and siblings for meeting mails.
+    #[serde(rename = "@odata.type")]
+    pub odata_type: Option<String>,
     /// Present in delta responses when a message was removed.
     #[serde(rename = "@removed")]
     pub removed: Option<serde_json::Value>,
