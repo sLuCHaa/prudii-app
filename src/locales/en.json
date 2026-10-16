@@ -227,6 +227,9 @@
     "savedAgo": "Auto-saved {{time}}",
     "attachmentsSize": "Total: {{size}}",
     "attachmentsSizeWarning": "approaching 25 MB limit",
+    "attachmentReminderTitle": "Forgot the attachment?",
+    "attachmentReminderMessage": "Your message mentions an attachment, but no file is attached. Send it anyway?",
+    "sendWithoutAttachment": "Send without attachment",
     "tooManyWindowsTitle": "Maximum of 5 drafts at once",
     "tooManyWindowsMessage": "Close an open compose window to open a new one."
   },

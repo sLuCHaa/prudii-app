@@ -227,6 +227,9 @@
     "savedAgo": "Automatisch gesichert {{time}}",
     "attachmentsSize": "Gesamt: {{size}}",
     "attachmentsSizeWarning": "nähert sich dem 25-MB-Limit",
+    "attachmentReminderTitle": "Anhang vergessen?",
+    "attachmentReminderMessage": "In deiner Nachricht ist von einem Anhang die Rede, aber es ist keine Datei angehängt. Trotzdem senden?",
+    "sendWithoutAttachment": "Ohne Anhang senden",
     "tooManyWindowsTitle": "Maximal 5 Entwürfe gleichzeitig",
     "tooManyWindowsMessage": "Schließe ein offenes Verfassen-Fenster, um ein neues zu öffnen."
   },

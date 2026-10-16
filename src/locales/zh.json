@@ -226,6 +226,9 @@
     "savedAgo": "已自动保存 {{time}}",
     "attachmentsSize": "合计：{{size}}",
     "attachmentsSizeWarning": "接近 25 MB 限制",
+    "attachmentReminderTitle": "忘记添加附件？",
+    "attachmentReminderMessage": "邮件中提到了附件，但没有添加任何文件。是否仍要发送？",
+    "sendWithoutAttachment": "不带附件发送",
     "tooManyWindowsTitle": "最多同时打开 5 个草稿",
     "tooManyWindowsMessage": "请先关闭一个写信窗口，再打开新的窗口。"
   },

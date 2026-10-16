@@ -231,6 +231,9 @@
     "savedAgo": "Автосохранение {{time}}",
     "attachmentsSize": "Итого: {{size}}",
     "attachmentsSizeWarning": "близко к лимиту 25 МБ",
+    "attachmentReminderTitle": "Забыли вложение?",
+    "attachmentReminderMessage": "В письме упоминается вложение, но файл не прикреплён. Отправить всё равно?",
+    "sendWithoutAttachment": "Отправить без вложения",
     "tooManyWindowsTitle": "Не более 5 черновиков одновременно",
     "tooManyWindowsMessage": "Закройте одно окно написания, чтобы открыть новое."
   },

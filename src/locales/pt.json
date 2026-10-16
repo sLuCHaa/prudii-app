@@ -227,6 +227,9 @@
     "savedAgo": "Salvo automaticamente {{time}}",
     "attachmentsSize": "Total: {{size}}",
     "attachmentsSizeWarning": "a aproximar o limite de 25 MB",
+    "attachmentReminderTitle": "Esqueceu o anexo?",
+    "attachmentReminderMessage": "A mensagem menciona um anexo, mas nenhum arquivo foi anexado. Deseja enviá-la mesmo assim?",
+    "sendWithoutAttachment": "Enviar sem anexo",
     "tooManyWindowsTitle": "No máximo 5 rascunhos ao mesmo tempo",
     "tooManyWindowsMessage": "Feche uma janela de redação aberta para abrir outra."
   },

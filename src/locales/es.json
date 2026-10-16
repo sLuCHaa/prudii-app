@@ -227,6 +227,9 @@
     "savedAgo": "Guardado automáticamente {{time}}",
     "attachmentsSize": "Total: {{size}}",
     "attachmentsSizeWarning": "cerca del límite de 25 MB",
+    "attachmentReminderTitle": "¿Olvidaste el adjunto?",
+    "attachmentReminderMessage": "Tu mensaje menciona un archivo adjunto, pero no has adjuntado ningún archivo. ¿Quieres enviarlo de todos modos?",
+    "sendWithoutAttachment": "Enviar sin adjunto",
     "tooManyWindowsTitle": "Máximo 5 borradores a la vez",
     "tooManyWindowsMessage": "Cierra una ventana de redacción abierta para abrir otra."
   },

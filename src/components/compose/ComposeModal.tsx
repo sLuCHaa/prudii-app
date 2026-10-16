@@ -12,6 +12,7 @@ import TiptapImage from "@tiptap/extension-image";
 import { Node } from "@tiptap/core";
 import { useRichTextEditor } from "../editor/RichTextEditor";
 import { setComposeBody } from "./composeBody";
+import { needsAttachmentReminder } from "./attachmentReminder";
 import { EditorToolbar } from "../editor/EditorToolbar";
 import { useTranslation } from "react-i18next";
 import i18n from "../../lib/i18n";
@@ -1124,6 +1125,14 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     return { bodyHtml, bodyText };
   }
 
+  function confirmMissingAttachment() {
+    return dialog.confirm({
+      title: t("compose.attachmentReminderTitle"),
+      message: t("compose.attachmentReminderMessage"),
+      confirmLabel: t("compose.sendWithoutAttachment"),
+    });
+  }
+
   async function handleSend(): Promise<boolean> {
     const pendingTo = toFieldRef.current?.commitPending() ?? null;
     const pendingCc = ccFieldRef.current?.commitPending() ?? null;
@@ -1165,6 +1174,8 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       });
       if (!confirmed) return false;
     }
+
+    if (needsAttachmentReminder(editor, attachments.length) && !(await confirmMissingAttachment())) return false;
 
     const recipientCount = [...effTo, ...effCc, ...effBcc].reduce(
       (n, chip) => n + parseRecipients(chip).length, 0,
@@ -1368,6 +1379,8 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       });
       if (!confirmed) return;
     }
+
+    if (needsAttachmentReminder(editor, attachments.length) && !(await confirmMissingAttachment())) return;
 
     // A scheduled mail goes out unattended — an incomplete attachment must stop it
     // here, where the user is still around to fix it.

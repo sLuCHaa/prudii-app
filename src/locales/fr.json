@@ -227,6 +227,9 @@
     "savedAgo": "Sauvegarde automatique {{time}}",
     "attachmentsSize": "Total : {{size}}",
     "attachmentsSizeWarning": "proche de la limite de 25 Mo",
+    "attachmentReminderTitle": "Pièce jointe oubliée ?",
+    "attachmentReminderMessage": "Votre message mentionne une pièce jointe, mais aucun fichier n'est joint. Voulez-vous l'envoyer quand même ?",
+    "sendWithoutAttachment": "Envoyer sans pièce jointe",
     "tooManyWindowsTitle": "5 brouillons maximum à la fois",
     "tooManyWindowsMessage": "Fermez une fenêtre de rédaction pour en ouvrir une nouvelle."
   },
