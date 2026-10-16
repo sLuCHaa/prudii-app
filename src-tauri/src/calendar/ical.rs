@@ -350,7 +350,7 @@ pub fn parse_calendar(text: &str) -> ParsedCalendar {
     let mut cal = ParsedCalendar::default();
     let mut timezones = Vec::new();
     let mut vevents = Vec::new();
-    for root in parse_components(text) {
+    for root in parse_components(text.strip_prefix('\u{feff}').unwrap_or(text)) {
         match root.name.as_str() {
             "VCALENDAR" => {
                 cal.has_calendar = true;
@@ -505,6 +505,15 @@ mod tests {
     const GOOGLE: &str = include_str!("fixtures/google_weekly.ics");
     const OUTLOOK: &str = include_str!("fixtures/outlook_windows_tz.ics");
     const APPLE: &str = include_str!("fixtures/apple_allday.ics");
+
+    #[test]
+    fn a_leading_byte_order_mark_is_ignored() {
+        let text = "\u{feff}BEGIN:VCALENDAR\nX-WR-CALNAME:Team\nBEGIN:VEVENT\nUID:a\nDTSTART:20261015T090000Z\nEND:VEVENT\nEND:VCALENDAR\n";
+        let cal = parse_calendar(text);
+        assert!(cal.has_calendar);
+        assert_eq!(cal.name.as_deref(), Some("Team"));
+        assert_eq!(cal.events.len(), 1);
+    }
 
     #[test]
     fn parses_a_google_weekly_invitation() {

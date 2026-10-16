@@ -578,6 +578,15 @@ DTSTART:20261016T090000Z\r\nDTEND:20261016T100000Z\r\nSUMMARY:Two\r\nEND:VEVENT\
     }
 
     #[tokio::test]
+    async fn feeds_with_a_byte_order_mark_subscribe() {
+        let db = temp_db();
+        let links = MemoryLinks::default();
+        let (base, _) = serve(vec![ok(&format!("\u{feff}{}", FEED), "\"v1\"")]);
+        let result = subscribe_impl(&db, &links, &client(), &format!("{}/team.ics", base), "#ef4444", 60).await.unwrap();
+        assert_eq!(result.events, 2);
+    }
+
+    #[tokio::test]
     async fn failed_subscriptions_leave_nothing_behind() {
         let db = temp_db();
         let (base, _) = serve(vec![
