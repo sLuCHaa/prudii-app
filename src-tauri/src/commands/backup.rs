@@ -1,4 +1,6 @@
 use crate::calendar::store::{is_valid_color, DEFAULT_COLOR};
+use crate::calendar::subscription::{KeyringLinks, LinkStore};
+use crate::calendar::SUBSCRIPTION;
 use crate::credentials::SecretStore;
 use crate::db::Database;
 use crate::models::{BackupIncludes, BackupManifest, BackupOptions, BackupProgress, BackupStats, RestorePreview};
@@ -400,7 +402,8 @@ fn do_create_backup_inner(
         if options.include_credentials {
             let store = crate::credentials::KeyringStore;
             let passphrase = options.passphrase.as_deref().unwrap_or("");
-            export_credentials(&store, &accounts, &mut zip, passphrase, &zip_options)?;
+            let links = if options.include_calendar { calendar_link_entries(&db, &KeyringLinks) } else { Vec::new() };
+            export_credentials(&store, &accounts, &links, &mut zip, passphrase, &zip_options)?;
         }
 
         // Mail Rules (bundled with accounts)
@@ -1063,8 +1066,11 @@ pub(crate) fn extract_task_files<R: Read + Seek>(
     Ok(())
 }
 
+// `secret_link` and `last_attempt_at` stay behind: the link only travels encrypted, and a
+// restored subscription should refresh on the next tick.
 const CALENDAR_COLUMNS: &[&str] = &[
     "id", "name", "color", "is_default", "visible", "sort_order", "source", "account_id", "remote_id", "sync_token", "created_at", "updated_at",
+    "refresh_minutes", "last_synced_at", "last_error", "content_hash", "reminders_muted",
 ];
 const EVENT_COLUMNS: &[&str] = &[
     "id", "calendar_id", "uid", "recurrence_id", "title", "description", "location", "all_day", "dtstart", "dtend", "tzid",
@@ -1172,6 +1178,9 @@ pub(crate) fn import_calendar_rows<R: Read + Seek>(
         if !cal.get("color").and_then(|c| c.as_str()).is_some_and(is_valid_color) {
             cal.insert("color".into(), DEFAULT_COLOR.into());
         }
+        if !cal.get("reminders_muted").is_some_and(|v| v.is_i64() || v.is_boolean()) {
+            cal.insert("reminders_muted".into(), 0.into());
+        }
     }
     let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
     insert_json_rows(&tx, "calendars", CALENDAR_COLUMNS, &parsed[0], insert_or)?;
@@ -1185,9 +1194,9 @@ pub(crate) fn import_calendar_rows<R: Read + Seek>(
     // A merge can bring a second default calendar along; the first one wins.
     tx.execute(
         "UPDATE calendars SET is_default = CASE WHEN id = (
-            SELECT id FROM calendars ORDER BY is_default DESC, sort_order, created_at LIMIT 1
+            SELECT id FROM calendars ORDER BY source = ?1, is_default DESC, sort_order, created_at LIMIT 1
          ) THEN 1 ELSE 0 END",
-        [],
+        rusqlite::params![SUBSCRIPTION],
     )
     .map_err(|e| e.to_string())?;
     tx.commit().map_err(|e| e.to_string())?;
@@ -1201,19 +1210,25 @@ const SHORT_PASSPHRASE_KEY: &str = "backup.passphraseTooShort";
 const NOTHING_SELECTED_KEY: &str = "backup.nothingSelected";
 const NEWER_VERSION_KEY: &str = "backup.newerVersion";
 
-/// One account's stored secret inside the encrypted `credentials.enc` payload.
-#[derive(serde::Serialize, serde::Deserialize)]
+/// One stored secret inside the encrypted `credentials.enc` payload: an account's
+/// password or token, or (with `kind`) a calendar subscription's link.
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) struct CredentialEntry {
     pub account_id: String,
     pub email: String,
     pub secret: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
 }
+
+pub(crate) const CALENDAR_LINK_KIND: &str = "calendar-subscription";
 
 /// Encrypts the secrets of the exported accounts into `credentials.enc`.
 /// An account without a readable secret is skipped so the rest of the backup still succeeds.
 pub(crate) fn export_credentials<W: Write + Seek>(
     store: &dyn SecretStore,
     accounts: &[serde_json::Value],
+    extra: &[CredentialEntry],
     zip: &mut zip::ZipWriter<W>,
     passphrase: &str,
     opts: &zip::write::SimpleFileOptions,
@@ -1230,10 +1245,12 @@ pub(crate) fn export_credentials<W: Write + Seek>(
                 account_id: account_id.to_string(),
                 email: email.to_string(),
                 secret,
+                kind: None,
             }),
             Err(e) => log::warn!("[backup] Skipping credentials for account {}: {}", account_id, e),
         }
     }
+    entries.extend(extra.iter().cloned());
 
     let plaintext = serde_json::to_vec(&entries).map_err(|e| e.to_string())?;
     let envelope = crate::crypto::encrypt_with_passphrase(&plaintext, passphrase)?;
@@ -1270,6 +1287,9 @@ pub(crate) fn restore_credentials(
 ) -> Vec<String> {
     let mut restored = Vec::new();
     for entry in entries {
+        if entry.kind.is_some() {
+            continue;
+        }
         if !imported_account_ids.iter().any(|id| id == &entry.account_id) {
             continue;
         }
@@ -1279,6 +1299,47 @@ pub(crate) fn restore_credentials(
         }
     }
     restored
+}
+
+pub(crate) fn subscription_ids(conn: &rusqlite::Connection) -> Vec<String> {
+    let Ok(mut stmt) = conn.prepare("SELECT id FROM calendars WHERE source = ?1 ORDER BY sort_order") else { return Vec::new() };
+    stmt.query_map(rusqlite::params![SUBSCRIPTION], |r| r.get(0)).map(|rows| rows.filter_map(Result::ok).collect()).unwrap_or_default()
+}
+
+/// Subscription links travel next to the account secrets, encrypted with the same passphrase.
+pub(crate) fn calendar_link_entries(db: &Database, links: &dyn LinkStore) -> Vec<CredentialEntry> {
+    let calendars: Vec<(String, String)> = {
+        let conn = db.lock_db();
+        let Ok(mut stmt) = conn.prepare("SELECT id, name FROM calendars WHERE source = ?1") else { return Vec::new() };
+        stmt.query_map(rusqlite::params![SUBSCRIPTION], |r| Ok((r.get(0)?, r.get(1)?)))
+            .map(|rows| rows.filter_map(Result::ok).collect())
+            .unwrap_or_default()
+    };
+    calendars
+        .into_iter()
+        .filter_map(|(id, name)| match links.get(&id) {
+            Ok(url) => Some(CredentialEntry { account_id: id, email: name, secret: url, kind: Some(CALENDAR_LINK_KIND.into()) }),
+            Err(e) => {
+                log::warn!("[backup] Skipping the link of calendar {}: {}", id, e);
+                None
+            }
+        })
+        .collect()
+}
+
+/// Stores restored links for subscriptions that exist after the restore; returns how many.
+pub(crate) fn restore_calendar_links(links: &dyn LinkStore, entries: &[CredentialEntry], calendar_ids: &[String]) -> usize {
+    entries
+        .iter()
+        .filter(|e| e.kind.as_deref() == Some(CALENDAR_LINK_KIND) && calendar_ids.contains(&e.account_id))
+        .filter(|e| match links.set(&e.account_id, &e.secret) {
+            Ok(()) => true,
+            Err(err) => {
+                log::warn!("[backup] Storing the link of calendar {} failed: {}", e.account_id, err);
+                false
+            }
+        })
+        .count()
 }
 
 #[tauri::command]
@@ -1946,6 +2007,10 @@ fn do_restore_backup_inner(
             let conn = db.lock_db();
             import_calendar_rows(&conn, &mut archive, is_replace)?
         };
+        if let Some(entries) = &credentials {
+            let ids = subscription_ids(&db.lock_db());
+            restore_calendar_links(&KeyringLinks, entries, &ids);
+        }
     }
 
     if !accounts_needing_passwords.is_empty() {
@@ -2242,7 +2307,7 @@ mod credentials_roundtrip {
             .compression_method(zip::CompressionMethod::Deflated);
         let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
         let exported =
-            export_credentials(store, &accounts_json(), &mut zip, passphrase, &zip_options).unwrap();
+            export_credentials(store, &accounts_json(), &[], &mut zip, passphrase, &zip_options).unwrap();
         (exported, zip.finish().unwrap().into_inner())
     }
 
@@ -2430,5 +2495,102 @@ mod calendar_roundtrip {
         import_calendar_rows(&db_b.lock_db(), &mut zip::ZipArchive::new(Cursor::new(bytes)).unwrap(), false).unwrap();
         let rows: i64 = db_b.lock_db().query_row("SELECT COUNT(*) FROM event_alarms WHERE event_id = 'ev1'", [], |r| r.get(0)).unwrap();
         assert_eq!(rows, 1);
+    }
+
+    use crate::calendar::subscription::{LinkStore, MemoryLinks};
+
+    fn add_subscription(db: &Database) -> String {
+        list_calendars_impl(db, "Work").unwrap();
+        let id = uuid::Uuid::new_v4().to_string();
+        let conn = db.lock_db();
+        conn.execute(
+            "INSERT INTO calendars (id, name, color, source, refresh_minutes, content_hash) VALUES (?1, 'Team', '#10b981', 'subscription', 360, 'h1')",
+            rusqlite::params![id],
+        )
+        .unwrap();
+        assert!(crate::credentials::link_to_db(&conn, &id, "https://example.com/secret.ics"));
+        id
+    }
+
+    fn calendars_json(bytes: Vec<u8>) -> Vec<serde_json::Value> {
+        let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+        serde_json::from_str(&read_zip_json(&mut archive, "calendars.json").unwrap().unwrap()).unwrap()
+    }
+
+    #[test]
+    fn calendar_exports_keep_settings_but_never_the_link_copy() {
+        let db = temp_db();
+        let sub = add_subscription(&db);
+        let (_, bytes) = export(&db);
+        let rows = calendars_json(bytes);
+        let row = rows.iter().find(|r| r["id"] == sub.as_str()).unwrap();
+        assert_eq!(row["refresh_minutes"], 360);
+        assert_eq!(row["reminders_muted"], 0);
+        assert!(row.get("secret_link").is_none());
+        assert!(!serde_json::to_string(&rows).unwrap().contains("secret.ics"));
+    }
+
+    #[test]
+    fn old_backups_without_subscription_columns_restore() {
+        let old = serde_json::json!([{ "id": "c-old", "name": "Old", "color": "#3b82f6", "is_default": 1, "visible": 1, "sort_order": 0, "source": "local", "created_at": "2026-01-01 00:00:00", "updated_at": "2026-01-01 00:00:00" }]);
+        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        zip.start_file("calendars.json", zip::write::SimpleFileOptions::default()).unwrap();
+        zip.write_all(old.to_string().as_bytes()).unwrap();
+        let bytes = zip.finish().unwrap().into_inner();
+        let db = temp_db();
+        import_calendar_rows(&db.lock_db(), &mut zip::ZipArchive::new(Cursor::new(bytes)).unwrap(), false).unwrap();
+        let restored = list_calendars_impl(&db, "").unwrap().into_iter().find(|c| c.id == "c-old").unwrap();
+        assert!(!restored.reminders_muted);
+        assert_eq!(restored.refresh_minutes, None);
+    }
+
+    #[test]
+    fn restoring_without_a_default_flag_never_makes_a_subscription_default() {
+        let rows = serde_json::json!([
+            { "id": "c-sub", "name": "Team", "color": "#10b981", "is_default": 0, "visible": 1, "sort_order": 0, "source": "subscription", "created_at": "2026-01-01 00:00:00", "updated_at": "2026-01-01 00:00:00" },
+            { "id": "c-loc", "name": "Mine", "color": "#3b82f6", "is_default": 0, "visible": 1, "sort_order": 1, "source": "local", "created_at": "2026-01-01 00:00:00", "updated_at": "2026-01-01 00:00:00" }
+        ]);
+        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        zip.start_file("calendars.json", zip::write::SimpleFileOptions::default()).unwrap();
+        zip.write_all(rows.to_string().as_bytes()).unwrap();
+        let bytes = zip.finish().unwrap().into_inner();
+        let db = temp_db();
+        import_calendar_rows(&db.lock_db(), &mut zip::ZipArchive::new(Cursor::new(bytes)).unwrap(), false).unwrap();
+        let defaults: Vec<String> =
+            list_calendars_impl(&db, "").unwrap().into_iter().filter(|c| c.is_default).map(|c| c.id).collect();
+        assert_eq!(defaults, vec!["c-loc".to_string()]);
+    }
+
+    #[test]
+    fn subscription_links_ride_in_the_encrypted_credentials() {
+        let db_a = temp_db();
+        let sub = add_subscription(&db_a);
+        let links_a = MemoryLinks::default();
+        links_a.set(&sub, "https://example.com/secret.ics").unwrap();
+        let extra = calendar_link_entries(&db_a, &links_a);
+        assert_eq!(extra.len(), 1);
+
+        let opts = zip::write::SimpleFileOptions::default();
+        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        let accounts = vec![serde_json::json!({ "id": "acc-1", "email": "one@example.com" })];
+        struct NoSecrets;
+        impl SecretStore for NoSecrets {
+            fn get(&self, _: &str) -> Result<String, String> {
+                Err("none".into())
+            }
+            fn set(&self, _: &str, _: &str) -> Result<(), String> {
+                Ok(())
+            }
+        }
+        assert_eq!(export_credentials(&NoSecrets, &accounts, &extra, &mut zip, "a good long passphrase", &opts).unwrap(), 1);
+        let bytes = zip.finish().unwrap().into_inner();
+        let entries = read_credentials(&mut zip::ZipArchive::new(Cursor::new(bytes)).unwrap(), "a good long passphrase").unwrap().unwrap();
+
+        assert!(restore_credentials(&NoSecrets, &entries, std::slice::from_ref(&sub)).is_empty(), "calendar links are not account secrets");
+        let links_b = MemoryLinks::default();
+        assert_eq!(restore_calendar_links(&links_b, &entries, &[]), 0);
+        assert_eq!(restore_calendar_links(&links_b, &entries, std::slice::from_ref(&sub)), 1);
+        assert_eq!(links_b.get(&sub).unwrap(), "https://example.com/secret.ics");
+        assert_eq!(subscription_ids(&db_a.lock_db()), vec![sub]);
     }
 }
