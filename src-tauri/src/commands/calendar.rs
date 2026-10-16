@@ -9,6 +9,9 @@ use crate::calendar::{
 use crate::calendar::subscription::{self, feed_client, normalize_feed_url, KeyringLinks, LinkStore};
 use crate::calendar::bundle::{import_sources_impl, sources_from_path};
 use crate::calendar::{BundleImportResult, SubscribeResult};
+use crate::calendar::invite_store::{add_published_impl, invitation_view_impl, remove_cancelled_impl, respond_impl};
+use crate::calendar::InvitationView;
+use crate::smtp::{CalendarPart, EmailMessage};
 use crate::db::Database;
 use tauri::{AppHandle, Emitter, State};
 
@@ -262,6 +265,64 @@ pub async fn update_subscription_url(app: AppHandle, db: State<'_, Database>, id
     let result = subscription::update_url_impl(&db, &KeyringLinks, feed_client(), &id, &url).await?;
     changed(&app);
     Ok(result)
+}
+
+#[tauri::command(async)]
+pub fn get_mail_invitation(db: State<'_, Database>, mail_id: String) -> Result<Option<InvitationView>, String> {
+    super::catch_panic(|| invitation_view_impl(&db, &mail_id, chrono::Utc::now()))
+}
+
+/// The answer is saved before sending; a failed send leaves it saved and says so.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn respond_invitation(
+    app: AppHandle,
+    db: State<'_, Database>,
+    mail_id: String,
+    partstat: String,
+    calendar_id: String,
+    send_reply: bool,
+    comment: Option<String>,
+    reply_subject: String,
+    reply_body: String,
+) -> Result<(), String> {
+    let draft = respond_impl(&db, &mail_id, &partstat, &calendar_id, comment.as_deref(), send_reply, chrono::Utc::now())?;
+    changed(&app);
+    let Some(draft) = draft else { return Ok(()) };
+    let message = EmailMessage {
+        to: vec![draft.to],
+        cc: vec![],
+        bcc: vec![],
+        subject: reply_subject,
+        body_text: reply_body,
+        body_html: None,
+        in_reply_to: None,
+        references: None,
+        attachments: vec![],
+        calendar_part: Some(CalendarPart { method: "REPLY".into(), ics: draft.ics }),
+    };
+    crate::commands::send::send_calendar_mail(&app, &draft.account_id, message).await.map_err(|e| {
+        log::warn!("invitation reply for {} not sent: {}", mail_id, e);
+        "calendar.invite.errors.sendFailed".to_string()
+    })
+}
+
+#[tauri::command(async)]
+pub fn add_published_event(app: AppHandle, db: State<'_, Database>, mail_id: String, calendar_id: String) -> Result<ImportResult, String> {
+    super::catch_panic(|| {
+        let result = add_published_impl(&db, &mail_id, &calendar_id)?;
+        changed(&app);
+        Ok(result)
+    })
+}
+
+#[tauri::command(async)]
+pub fn remove_cancelled_event(app: AppHandle, db: State<'_, Database>, mail_id: String) -> Result<(), String> {
+    super::catch_panic(|| {
+        remove_cancelled_impl(&db, &mail_id)?;
+        changed(&app);
+        Ok(())
+    })
 }
 
 #[cfg(test)]
