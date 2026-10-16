@@ -1498,6 +1498,7 @@
       "moreFiles": "и ещё {{count}}"
     },
     "invite": {
+      "inDevelopment": "В разработке",
       "accept": "Принять",
       "tentative": "Под вопросом",
       "decline": "Отклонить",

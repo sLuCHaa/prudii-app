@@ -1462,6 +1462,7 @@
       "moreFiles": "+{{count}} de plus"
     },
     "invite": {
+      "inDevelopment": "En développement",
       "accept": "Accepter",
       "tentative": "Peut-être",
       "decline": "Refuser",

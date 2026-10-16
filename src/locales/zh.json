@@ -1459,6 +1459,7 @@
       "moreFiles": "另外 {{count}} 个"
     },
     "invite": {
+      "inDevelopment": "开发中",
       "accept": "接受",
       "tentative": "暂定",
       "decline": "拒绝",

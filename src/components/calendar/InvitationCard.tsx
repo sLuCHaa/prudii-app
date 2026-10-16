@@ -118,9 +118,14 @@ function Card({ view }: { view: InvitationView }) {
           {mode === "cancel" ? <CalendarX className="h-[18px] w-[18px]" /> : <CalendarClock className="h-[18px] w-[18px]" />}
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className={`break-words text-sm font-semibold ${mode === "cancel" ? "text-text-tertiary line-through" : "text-text"}`}>
-            {view.title || t("calendar.untitled")}
-          </h3>
+          <div className="flex items-start justify-between gap-2">
+            <h3 className={`min-w-0 break-words text-sm font-semibold ${mode === "cancel" ? "text-text-tertiary line-through" : "text-text"}`}>
+              {view.title || t("calendar.untitled")}
+            </h3>
+            <span className="mt-px shrink-0 whitespace-nowrap rounded bg-warning/10 px-1.5 py-0.5 text-[10px] font-bold uppercase text-warning">
+              {t("calendar.invite.inDevelopment")}
+            </span>
+          </div>
           <p className="mt-0.5 text-xs text-text-secondary">
             {format(start, "PPPP", { locale: dateLocale() })} · {formatOccurrenceTime(view.when, use24h, allDay)}
           </p>
