@@ -44,6 +44,7 @@ import { useMailTasks, useLinkMailToTask } from "../../hooks/useTasks";
 import { LinkedTaskChip } from "../tasks/MailTaskChip";
 import { TaskPickerDialog } from "../tasks/TaskPickerDialog";
 import { CreateTaskFromMail } from "../tasks/CreateTaskFromMail";
+import { InvitationCard } from "../calendar/InvitationCard";
 import type { Mail, Attachment, MailAddress } from "../../types";
 import { useTranslation } from "react-i18next";
 import { ImageLightbox, type ImageLightboxItem } from "./ImageLightbox";
@@ -782,6 +783,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
 
   const notices = (
     <>
+      <InvitationCard mailId={displayMail.id} enabled={!!hasBody} />
       {hasExternalImages && !allowExternalImages && (
         <div className="flex items-center justify-between gap-3 px-4 py-2 mb-2 bg-bg-secondary border border-border rounded-lg text-xs text-text-secondary">
           <div className="flex items-center gap-2">
