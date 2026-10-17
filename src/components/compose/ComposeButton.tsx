@@ -7,7 +7,7 @@ import gsap from "gsap";
 import { prefersReducedMotion } from "../motion/tokens";
 
 const ACTIVE = "tactile-filled text-on-accent border transition-[color,background-color,border-color,box-shadow,transform,filter] duration-150 ease-out active:duration-0";
-const INACTIVE = "bg-border/50 text-text-tertiary opacity-50 cursor-default";
+const INACTIVE = "border border-transparent bg-border/50 text-text-tertiary opacity-50 cursor-default";
 // Particles fly beyond the button onto the sidebar, so they take the accent rather than white.
 const PARTICLE_COLORS = ["var(--c-accent)", "color-mix(in srgb, var(--c-accent) 60%, white)", "color-mix(in srgb, var(--c-accent) 75%, black)"];
 

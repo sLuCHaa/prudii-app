@@ -157,10 +157,14 @@ describe("shape audit", () => {
 
   it("gives the compose button the tactile look and press in both states", () => {
     const src = sourceOf("compose/ComposeButton.tsx");
-    expect(src).toMatch(/const ACTIVE = "[^"]*\btactile-filled\b[^"]*\btext-on-accent\b/);
+    const active = src.match(/const ACTIVE = "([^"]*)"/)?.[1] ?? "";
+    const inactive = src.match(/const INACTIVE = "([^"]*)"/)?.[1] ?? "";
+    for (const token of ["tactile-filled", "text-on-accent", "border", "active:duration-0"]) expect(active.split(" ")).toContain(token);
+    expect(inactive).not.toMatch(/tactile-/);
+    expect(inactive.split(" ")).toContain("border");
     const buttons = classStrings().filter(({ file, cls }) => file.endsWith("ComposeButton.tsx") && cls.includes("items-center justify-center"));
     expect(buttons.filter(({ cls }) => !cls.includes("? ACTIVE : INACTIVE") || /\boverflow-hidden\b/.test(cls))).toEqual([]);
-    expect(src).not.toMatch(/elastic\.out|glowRef/);
+    expect(src).not.toMatch(/elastic\.out|glowRef|buttonRef/);
   });
 
   it("shapes the send split button with control corners", () => {
