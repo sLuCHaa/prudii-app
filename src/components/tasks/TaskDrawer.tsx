@@ -136,7 +136,7 @@ function DuePopover({
       role="dialog"
       aria-label={t("tasks.due")}
       data-due-popover
-      className="absolute top-full left-0 mt-2 z-30 w-80 max-w-full p-2 rounded-2xl bg-surface border border-border shadow-lg"
+      className="absolute top-full left-0 mt-2 z-30 w-80 max-w-full p-2 rounded-2xl bg-surface border border-border shadow-lg inset-shadow-edge"
     >
       <div className="grid grid-cols-2 gap-1.5 mb-2">
         {quick.map((q) => (
@@ -393,7 +393,7 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
       >
         <div className={`h-[3px] shrink-0 transition-colors duration-300 ${stripeClass}`} />
 
-        <div className="shrink-0 grid gap-3 px-5 pt-4 pb-3">
+        <div className="shrink-0 grid gap-3 px-5 pt-4 pb-3 inset-shadow-edge">
           <div className="flex items-center justify-between gap-2">
             {!isNew && task ? (
               <StatusSegment status={task.status} onChange={(status) => patchTask(task.id, { status })} />

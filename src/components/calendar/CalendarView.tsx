@@ -194,10 +194,10 @@ export function CalendarView() {
             {t("calendar.today")}
           </button>
           <div className="flex items-center">
-            <button type="button" onClick={() => navigate(-1)} aria-label={t("calendar.previous")} className="grid h-7 w-7 place-items-center rounded-lg text-text-secondary hover:bg-hover">
+            <button type="button" onClick={() => navigate(-1)} aria-label={t("calendar.previous")} className="grid h-7 w-7 place-items-center rounded-control text-text-secondary hover:bg-hover">
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <button type="button" onClick={() => navigate(1)} aria-label={t("calendar.next")} className="grid h-7 w-7 place-items-center rounded-lg text-text-secondary hover:bg-hover">
+            <button type="button" onClick={() => navigate(1)} aria-label={t("calendar.next")} className="grid h-7 w-7 place-items-center rounded-control text-text-secondary hover:bg-hover">
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>

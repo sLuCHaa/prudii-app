@@ -28,7 +28,7 @@ export function PrivacyBadge() {
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="inline-flex items-center justify-center w-11 h-full rounded-sm hover:bg-hover transition-colors text-text-secondary"
+        className="inline-flex items-center justify-center w-11 h-full hover:bg-hover transition-colors text-text-secondary"
         title={t("privacy.badge")}
         aria-label={t("privacy.badge")}
       >

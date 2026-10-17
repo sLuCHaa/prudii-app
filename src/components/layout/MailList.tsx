@@ -1937,7 +1937,7 @@ export function MailList() {
                   invalidate: invalidateMailQueries,
                 });
               }}
-              className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-secondary hover:text-accent"
+              className="p-1.5 rounded-control hover:bg-hover transition-colors text-text-secondary hover:text-accent"
               title={t("mailList.markAllRead")}
               aria-label={t("mailList.markAllRead")}
             >
@@ -1953,7 +1953,7 @@ export function MailList() {
                   invalidate: invalidateMailQueries,
                 });
               }}
-              className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-secondary hover:text-accent"
+              className="p-1.5 rounded-control hover:bg-hover transition-colors text-text-secondary hover:text-accent"
               title={t("mailList.markAllUnread")}
               aria-label={t("mailList.markAllUnread")}
             >
@@ -1969,7 +1969,7 @@ export function MailList() {
                   invalidate: invalidateMailQueries,
                 });
               }}
-              className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-secondary hover:text-warning"
+              className="p-1.5 rounded-control hover:bg-hover transition-colors text-text-secondary hover:text-warning"
               title={t("mailDetail.star")}
               aria-label={t("mailDetail.star")}
             >
@@ -1985,7 +1985,7 @@ export function MailList() {
                   invalidate: invalidateMailQueries,
                 });
               }}
-              className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-secondary hover:text-accent"
+              className="p-1.5 rounded-control hover:bg-hover transition-colors text-text-secondary hover:text-accent"
               title={t("mailDetail.archive")}
               aria-label={t("mailDetail.archive")}
             >
@@ -2001,7 +2001,7 @@ export function MailList() {
                   invalidate: invalidateMailQueries,
                 });
               }}
-              className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-secondary hover:text-danger"
+              className="p-1.5 rounded-control hover:bg-hover transition-colors text-text-secondary hover:text-danger"
               title={t("mailDetail.trash")}
               aria-label={t("mailDetail.trash")}
             >
@@ -2064,7 +2064,7 @@ export function MailList() {
             {showSortMenu && <MailSortMenu sort={mailSort} onChange={chooseMailSort} />}
             <button
               onClick={() => setSearchOpen(true)}
-              className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
+              className="p-1.5 rounded-control hover:bg-hover transition-colors text-text-tertiary"
               title={t("mailList.search")}
               aria-label={t("mailList.search")}
             >

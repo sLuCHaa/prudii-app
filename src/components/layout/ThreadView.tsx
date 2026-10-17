@@ -834,7 +834,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
   const starButton = (
     <button
       onClick={handleStar}
-      className={`p-1.5 rounded-lg hover:bg-hover transition-colors ${
+      className={`p-1.5 rounded-control hover:bg-hover transition-colors ${
         mail.is_starred ? "text-warning" : "text-text-tertiary"
       }`}
     >
@@ -863,7 +863,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
             {!mail.is_read && <span className="w-2 h-2 rounded-full bg-accent shrink-0" />}
             <span className="font-medium text-text-secondary truncate">{name}</span>
             {isDraft && (
-              <span className="px-1.5 py-0.5 text-[11px] font-medium bg-warning/15 text-warning rounded shrink-0">
+              <span className="px-1.5 py-0.5 text-[11px] font-medium bg-warning/15 text-warning rounded-sm shrink-0">
                 {t("mailDetail.draft")}
               </span>
             )}
@@ -943,7 +943,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
                   <button
                     onClick={handleToggle}
                     aria-label={t("mailDetail.collapseMessage")}
-                    className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
+                    className="p-1.5 rounded-control hover:bg-hover transition-colors text-text-tertiary"
                   >
                     <ChevronUp className="w-4 h-4" />
                   </button>
@@ -989,12 +989,12 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
               {mail.from.name || mail.from.email}
             </span>
             {isDraft && (
-              <span className="px-1.5 py-0.5 text-[11px] font-medium bg-warning/15 text-warning rounded shrink-0">
+              <span className="px-1.5 py-0.5 text-[11px] font-medium bg-warning/15 text-warning rounded-sm shrink-0">
                 {t("mailDetail.draft")}
               </span>
             )}
             {!singleMail && isLatest && !isDraft && (
-              <span className="px-1.5 py-0.5 text-[11px] font-medium bg-accent/10 text-accent rounded">
+              <span className="px-1.5 py-0.5 text-[11px] font-medium bg-accent/10 text-accent rounded-sm">
                 {t("mailDetail.latest")}
               </span>
             )}

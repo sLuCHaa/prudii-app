@@ -123,7 +123,7 @@ function Card({ view }: { view: InvitationView }) {
             <h3 className={`min-w-0 break-words text-sm font-semibold ${mode === "cancel" ? "text-text-tertiary line-through" : "text-text"}`}>
               {view.title || t("calendar.untitled")}
             </h3>
-            <span className="mt-px shrink-0 whitespace-nowrap rounded bg-warning/10 px-1.5 py-0.5 text-[10px] font-bold uppercase text-warning">
+            <span className="mt-px shrink-0 whitespace-nowrap rounded-sm bg-warning/10 px-1.5 py-0.5 text-[10px] font-bold uppercase text-warning">
               {t("calendar.invite.inDevelopment")}
             </span>
           </div>

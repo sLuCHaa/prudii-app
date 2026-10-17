@@ -21,7 +21,7 @@ export function DayListPopover({ day, anchor, occurrences, tasks, onClose, onOpe
   const use24h = useAppStore((s) => s.appSettings.use_24h_clock);
   const { ref, pos } = usePopover(anchor, onClose);
   return createPortal(
-    <div ref={ref} role="dialog" tabIndex={-1} style={{ left: pos.left, top: pos.top }} className="fixed z-40 w-64 rounded-xl border border-border bg-surface p-2 shadow-2xl outline-none">
+    <div ref={ref} role="dialog" tabIndex={-1} style={{ left: pos.left, top: pos.top }} className="fixed z-40 w-64 rounded-xl border border-border bg-surface p-2 shadow-2xl inset-shadow-edge outline-none">
       <div className="px-1.5 pb-1.5 text-xs font-semibold text-text">{format(day, "PPPP", { locale: dateLocale() })}</div>
       <div className="max-h-72 space-y-0.5 overflow-y-auto">
         {occurrences.map((o) => (

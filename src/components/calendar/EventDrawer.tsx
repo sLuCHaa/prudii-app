@@ -290,7 +290,7 @@ export function EventDrawer({ target, onClose }: EventDrawerProps) {
         className="fixed top-8 bottom-0 right-0 z-40 flex w-[460px] max-w-[92vw] flex-col border-l border-border bg-surface shadow-2xl"
       >
         <div className="h-[3px] shrink-0" style={{ background: calendar?.color ?? "var(--color-accent)" }} />
-        <div className="flex items-center justify-between px-5 pt-4 pb-2">
+        <div className="flex items-center justify-between px-5 pt-4 pb-2 inset-shadow-edge">
           <span className="font-heading text-sm font-bold text-text">{heading}</span>
           <button
             type="button"

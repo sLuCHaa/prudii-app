@@ -84,7 +84,7 @@ export function SubscribeDialog({ target, onClose }: SubscribeDialogProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="calendar-subscribe-title"
-        className="w-[420px] max-w-[92vw] rounded-xl border border-border bg-surface p-5 shadow-2xl modal-panel-enter"
+        className="w-[420px] max-w-[92vw] rounded-xl border border-border bg-surface p-5 shadow-2xl inset-shadow-edge modal-panel-enter"
       >
         <div className="mb-4 flex items-center gap-2">
           <Rss className="h-4 w-4 text-accent" />

@@ -115,9 +115,34 @@ describe("shape audit", () => {
   });
 
   it("lights the top edge of raised panels", () => {
-    const files = ["ui/DialogProvider.tsx", "ui/ContextMenu.tsx", "ui/CommandPalette.tsx", "settings/SettingsPanel.tsx", "ui/DateField.tsx", "ui/UndoToast.tsx", "motion/StackedToast.tsx", "layout/MailSortMenu.tsx", "ui/PrivacyBadge.tsx", "layout/Sidebar.tsx", "compose/ComposeModal.tsx"];
+    const files = [
+      "ui/DialogProvider.tsx", "ui/ContextMenu.tsx", "ui/CommandPalette.tsx", "settings/SettingsPanel.tsx", "ui/DateField.tsx", "ui/UndoToast.tsx",
+      "motion/StackedToast.tsx", "layout/MailSortMenu.tsx", "ui/PrivacyBadge.tsx", "layout/Sidebar.tsx", "compose/ComposeModal.tsx",
+      "editor/LinkDialog.tsx", "calendar/SubscribeDialog.tsx", "calendar/EventPopover.tsx", "ui/ShortcutHelp.tsx", "ui/WhatsNew.tsx", "tasks/TaskDrawer.tsx",
+      "calendar/DayListPopover.tsx", "calendar/EventDrawer.tsx", "calendar/RecurrenceScopeDialog.tsx", "compose/ComposePreview.tsx", "compose/RecipientInput.tsx",
+      "layout/AttachmentBrowser.tsx", "layout/TrackingIndicator.tsx", "tasks/MailAttachmentPickDialog.tsx", "tasks/QuickAdd.tsx", "tasks/TaskPickerDialog.tsx",
+      "ui/ErrorBoundary.tsx", "ui/FlagPicker.tsx", "accounts/AccountWizard.tsx",
+    ];
     expect(files.filter((f) => !sourceOf(f).includes("inset-shadow-edge"))).toEqual([]);
     expect(sourceOf("settings/SettingsPanel.tsx")).not.toContain("boxShadow");
+    expect(sourceOf("accounts/AccountWizard.tsx")).not.toContain("boxShadow");
+  });
+
+  it("lights the header where a tinted header covers the panel's top", () => {
+    const headers = classStrings().filter(({ file, cls }) => ["compose/ComposeModal.tsx", "editor/LinkDialog.tsx", "compose/ComposePreview.tsx", "layout/TrackingIndicator.tsx"].includes(file) && cls.includes("border-b border-border bg-bg-secondary"));
+    expect(headers).toHaveLength(5);
+    expect(headers.filter(({ cls }) => !cls.includes("inset-shadow-edge")).map((f) => `${f.file}:${f.line}`)).toEqual([]);
+  });
+
+  it("keeps the dark shadow on the settings panel", () => {
+    const src = sourceOf("settings/SettingsPanel.tsx");
+    expect(src).toContain("shadow-[var(--shadow-lg)]");
+    expect(src).not.toMatch(/(?<![-\w])shadow-lg\b/);
+  });
+
+  it("keeps small icon buttons on control corners", () => {
+    const small = classStrings().filter(({ cls }) => /\brounded-lg\b/.test(cls) && (/(?<![-\w])p-1\.5\b/.test(cls) || /\bh-7 w-7\b/.test(cls)));
+    expect(small.map((f) => `${f.file}:${f.line}`)).toEqual([]);
   });
 
   it("matches the save-draft dialog buttons", () => {
@@ -145,7 +170,16 @@ describe("shape audit", () => {
   });
 
   it("gives chips and notice badges 8px corners", () => {
-    const files = ["tasks/MailTaskChip.tsx", "layout/TrackingIndicator.tsx", "ui/PremiumBadge.tsx", "ui/PrivacyBadge.tsx"];
+    const files = ["tasks/MailTaskChip.tsx", "layout/TrackingIndicator.tsx", "ui/PremiumBadge.tsx"];
     expect(files.filter((f) => !/\brounded-sm\b/.test(sourceOf(f)))).toEqual([]);
+    const badges = classStrings().filter(({ file, cls }) => ["layout/ThreadView.tsx", "calendar/InvitationCard.tsx", "calendar/AgendaList.tsx"].includes(file) && /\bpx-1\.5\b/.test(cls) && /\bpy-0\.5\b/.test(cls) && /\brounded\b/.test(cls));
+    expect(badges).toHaveLength(5);
+    expect(badges.filter(({ cls }) => !/\brounded-sm\b/.test(cls)).map((f) => `${f.file}:${f.line}`)).toEqual([]);
+  });
+
+  it("keeps the privacy trigger square like its title-bar neighbours", () => {
+    const trigger = classStrings().find(({ file, cls }) => file === "ui/PrivacyBadge.tsx" && cls.includes("w-11 h-full"));
+    expect(trigger).toBeDefined();
+    expect(trigger?.cls).not.toMatch(/\brounded/);
   });
 });

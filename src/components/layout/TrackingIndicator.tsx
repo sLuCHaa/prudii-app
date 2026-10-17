@@ -62,7 +62,7 @@ export function TrackingIndicator({ trackers }: TrackingIndicatorProps) {
 
       {open && hasTrackers && (
         <div ref={popupRef} className={`absolute ${dropUp ? "bottom-full mb-1" : "top-full mt-1"} right-0 w-72 bg-surface border border-border rounded-lg shadow-lg z-50 overflow-hidden`}>
-          <div className="px-3 py-2 border-b border-border bg-bg-secondary">
+          <div className="px-3 py-2 border-b border-border bg-bg-secondary inset-shadow-edge">
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-success" />
               <span className="text-xs font-semibold text-text">

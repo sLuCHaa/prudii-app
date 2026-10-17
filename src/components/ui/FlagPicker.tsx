@@ -71,7 +71,7 @@ export function FlagPicker({ flags, onToggleFlag, size = "md" }: FlagPickerProps
       {open && (
         <div
           ref={popupRef}
-          className={`absolute right-0 ${dropUp ? "bottom-full mb-1" : "top-full mt-1"} bg-surface border border-border rounded-lg shadow-lg py-1 z-50 min-w-[140px]`}
+          className={`absolute right-0 ${dropUp ? "bottom-full mb-1" : "top-full mt-1"} bg-surface border border-border rounded-lg shadow-lg inset-shadow-edge py-1 z-50 min-w-[140px]`}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="px-3 py-1.5 text-xs text-text-tertiary border-b border-border">

@@ -737,7 +737,7 @@ export function SettingsPanel() {
         role="dialog"
         aria-modal="true"
         aria-label={t("settings.title")}
-        className="bg-surface rounded-xl w-full max-w-6xl mx-4 overflow-hidden h-[80vh] flex flex-col shadow-lg inset-shadow-edge modal-panel-enter"
+        className="bg-surface rounded-xl w-full max-w-6xl mx-4 overflow-hidden h-[80vh] flex flex-col shadow-[var(--shadow-lg)] inset-shadow-edge modal-panel-enter"
       >
         {view === "account" && selectedAccount ? (
           <AccountSettings account={selectedAccount} onBack={handleBack} dirtyRef={accountDirtyRef} />

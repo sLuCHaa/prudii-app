@@ -512,7 +512,7 @@ export function AttachmentBrowser() {
           </button>
 
           {accountDropdownOpen && (
-            <div className="absolute top-full left-0 mt-1 z-30 w-56 rounded-lg border border-border bg-surface shadow-lg py-1">
+            <div className="absolute top-full left-0 mt-1 z-30 w-56 rounded-lg border border-border bg-surface shadow-lg inset-shadow-edge py-1 overflow-hidden">
               <button
                 onClick={() => {
                   setSelectedAccountIds(new Set());

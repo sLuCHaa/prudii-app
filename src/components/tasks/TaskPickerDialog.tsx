@@ -89,7 +89,7 @@ export function TaskPickerDialog({ open, onClose, onPick, excludeTaskIds, tasks 
         aria-modal="true"
         aria-label={t("tasks.pickTask")}
         onKeyDown={onKeyDown}
-        className="menu-enter w-[440px] max-w-[92vw] overflow-hidden rounded-lg border border-border bg-surface shadow-lg"
+        className="menu-enter w-[440px] max-w-[92vw] overflow-hidden rounded-lg border border-border bg-surface shadow-lg inset-shadow-edge"
       >
         <div className="flex items-center gap-2 border-b border-border px-3 py-2">
           <Search className="w-4 h-4 shrink-0 text-text-tertiary" />

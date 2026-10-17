@@ -74,7 +74,7 @@ function WhatsNewDialog({ release, onClose }: { release: WhatsNewRelease; onClos
         role="dialog"
         aria-modal="true"
         aria-labelledby="whats-new-title"
-        className="modal-panel-enter mx-4 w-full max-w-sm overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl"
+        className="modal-panel-enter mx-4 w-full max-w-sm overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl inset-shadow-edge"
       >
         <div className="flex items-center gap-3 px-6 pt-6">
           <div

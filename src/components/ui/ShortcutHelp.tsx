@@ -109,7 +109,7 @@ export function ShortcutHelp({ isOpen, onClose }: ShortcutHelpProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="shortcut-help-title"
-        className="w-full max-w-md bg-surface rounded-xl shadow-lg border border-border overflow-hidden modal-panel-enter"
+        className="w-full max-w-md bg-surface rounded-xl shadow-lg inset-shadow-edge border border-border overflow-hidden modal-panel-enter"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">

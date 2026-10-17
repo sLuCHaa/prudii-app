@@ -57,7 +57,7 @@ export function EventPopover({ occurrence: o, anchor, calendarName, onClose, onE
       animate={{ opacity: 1, scale: 1 }}
       transition={reduce ? TRANSITION_INSTANT : SPRING_SNAPPY}
       style={{ left: pos.left, top: pos.top }}
-      className="fixed z-50 w-[300px] rounded-xl border border-border bg-surface p-4 shadow-2xl"
+      className="fixed z-50 w-[300px] rounded-xl border border-border bg-surface p-4 shadow-2xl inset-shadow-edge"
     >
       <div className="flex items-start gap-2.5">
         <span className="mt-1.5 w-2.5 h-2.5 rounded-full shrink-0" style={{ background: o.color }} />

@@ -67,7 +67,7 @@ export function AgendaList({ occurrences, tasks, onOpen, onOpenTask, onToggleTas
         <section key={isoDate(g.day)}>
           <h3 className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-surface/95 px-6 py-2 text-xs font-semibold text-text-secondary backdrop-blur">
             {format(g.day, "EEEE, PPP", { locale: dateLocale() })}
-            {isToday(g.day) && <span className="rounded bg-accent/15 px-1.5 py-0.5 text-[10px] text-accent">{t("calendar.today")}</span>}
+            {isToday(g.day) && <span className="rounded-sm bg-accent/15 px-1.5 py-0.5 text-[10px] text-accent">{t("calendar.today")}</span>}
           </h3>
           <ul>
             {g.events.map((o) => (

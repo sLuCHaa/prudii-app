@@ -50,7 +50,7 @@ export function AgendaRail() {
           onClick={() => openNewEvent({ times: defaultDraftTimes(day, settings) })}
           aria-label={t("calendar.newEvent")}
           title={t("calendar.newEvent")}
-          className="grid h-7 w-7 place-items-center rounded-lg text-text-secondary hover:bg-hover"
+          className="grid h-7 w-7 place-items-center rounded-control text-text-secondary hover:bg-hover"
         >
           <Plus className="h-4 w-4" />
         </button>

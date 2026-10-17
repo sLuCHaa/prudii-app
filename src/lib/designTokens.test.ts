@@ -37,6 +37,12 @@ describe("design tokens", () => {
     expect(css).toMatch(/\.tactile-quiet:active:not\(:disabled\)\s*\{[^}]*background:\s*var\(--c-active\)/);
     expect(css).not.toMatch(/\.tactile-quiet:active:not\(:disabled\)\s*\{[^}]*filter/);
   });
+  it("only grows along the radius scale", () => {
+    const rem = (name: string) => Number(css.match(new RegExp(`--radius-${name}:\\s*([\\d.]+)rem`))?.[1]);
+    const scale = ["sm", "md", "control", "lg", "xl", "2xl"].map(rem);
+    expect(scale.filter(Number.isNaN)).toEqual([]);
+    expect(scale.slice(1).every((v, i) => v > scale[i])).toBe(true);
+  });
   it("keeps reduced motion still", () => {
     expect(css).toMatch(/prefers-reduced-motion: reduce\)[^{]*\{[^}]*\.tactile-filled[\s\S]*?transform: none/);
   });

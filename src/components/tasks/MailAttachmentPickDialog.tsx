@@ -59,7 +59,7 @@ export function MailAttachmentPickDialog({ attachments, onConfirm, onCancel }: M
         aria-modal="true"
         aria-label={t("tasks.attachFromMailTitle")}
         onKeyDown={onKeyDown}
-        className="menu-enter w-[440px] max-w-[92vw] overflow-hidden rounded-lg border border-border bg-surface shadow-lg"
+        className="menu-enter w-[440px] max-w-[92vw] overflow-hidden rounded-lg border border-border bg-surface shadow-lg inset-shadow-edge"
       >
         <div className="border-b border-border px-4 py-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-text">

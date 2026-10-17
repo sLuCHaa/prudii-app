@@ -215,6 +215,7 @@
   --radius-control: 0.75rem;
   --radius-lg: 1rem;
   --radius-xl: 1.25rem;
+  --radius-2xl: 1.5rem;
 
   --inset-shadow-edge: inset 0 1px 0 var(--c-edge-light);
   --inset-shadow-field: inset 0 1px 2px var(--c-field-inset);
@@ -561,6 +562,7 @@ button:focus-visible,
     rounded-control 12px | Buttons, inputs
     rounded-lg  16px  | Panels, popovers
     rounded-xl  20px  | Dialogs
+    rounded-2xl 24px  | Feature sheets
     rounded-full      | Pills, avatars
 
   TYPOGRAPHY (text-* utilities; only base deviates from Tailwind):

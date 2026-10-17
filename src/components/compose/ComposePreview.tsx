@@ -52,7 +52,7 @@ export function ComposePreview({ data, onClose }: { data: ComposePreviewData; on
         aria-label={t("compose.preview")}
         className="bg-surface rounded-xl shadow-lg w-full max-w-3xl max-h-full flex flex-col overflow-hidden"
       >
-        <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-bg-secondary">
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-bg-secondary inset-shadow-edge">
           <h3 className="text-sm font-semibold text-text">{t("compose.preview")}</h3>
           <IconButton icon={<X />} size="sm" aria-label={t("common.close")} onClick={onClose} />
         </div>

@@ -281,8 +281,7 @@ export function AccountWizard() {
         role="dialog"
         aria-modal="true"
         aria-label={t("shortcuts.desc.addAccount")}
-        className="bg-surface rounded-xl w-full max-w-xl mx-4 overflow-hidden max-h-[90vh] flex flex-col modal-panel-enter"
-        style={{ boxShadow: "var(--shadow-lg)" }}
+        className="bg-surface rounded-xl w-full max-w-xl mx-4 overflow-hidden max-h-[90vh] flex flex-col shadow-[var(--shadow-lg)] inset-shadow-edge modal-panel-enter"
       >
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h2 className="text-lg font-semibold text-text">{t("wizard.addAccount")}</h2>

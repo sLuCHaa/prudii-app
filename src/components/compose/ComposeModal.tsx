@@ -1880,7 +1880,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
                     className={showTemplateMenu ? "text-accent" : ""}
                   />
                   {showTemplateMenu && (
-                    <div className="absolute bottom-full left-0 mb-2 min-w-[200px] max-w-[280px] bg-surface rounded-lg shadow-lg border border-border py-1 z-50">
+                    <div className="absolute bottom-full left-0 mb-2 min-w-[200px] max-w-[280px] bg-surface rounded-lg shadow-lg inset-shadow-edge border border-border py-1 z-50 overflow-hidden">
                       <div className="px-3 py-1.5 text-xs font-semibold text-text-tertiary">{t("templates.insertTemplate")}</div>
                       {templates.map((tpl) => (
                         <button
@@ -1934,7 +1934,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
                   <ChevronDown className="w-4 h-4" />
                 </button>
                 {showScheduleMenu && (
-                  <div className="absolute bottom-full right-0 mb-2 min-w-[200px] bg-surface rounded-lg shadow-lg border border-border py-1 z-50">
+                  <div className="absolute bottom-full right-0 mb-2 min-w-[200px] bg-surface rounded-lg shadow-lg inset-shadow-edge border border-border py-1 z-50 overflow-hidden">
                     <div className="px-3 py-1.5 text-xs font-semibold text-text-tertiary flex items-center gap-1.5">
                       <CalendarClock className="w-3.5 h-3.5" />
                       {t("scheduled.scheduleSend")}
@@ -1986,9 +1986,9 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-surface rounded-xl shadow-lg inset-shadow-edge w-full max-w-sm overflow-hidden"
+            className="bg-surface rounded-xl shadow-lg w-full max-w-sm overflow-hidden"
           >
-            <div className="px-4 py-3 border-b border-border bg-bg-secondary">
+            <div className="px-4 py-3 border-b border-border bg-bg-secondary inset-shadow-edge">
               <h3 className="text-sm font-semibold text-text">{t("compose.saveDraftTitle")}</h3>
             </div>
             <div className="p-4">
@@ -2066,13 +2066,13 @@ export function ComposeModal({ isOpen, onClose, mode, originalMail }: ComposeMod
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            className="w-full max-w-3xl bg-surface rounded-xl shadow-lg inset-shadow-edge overflow-hidden flex flex-col max-h-[90vh]"
+            className="w-full max-w-3xl bg-surface rounded-xl shadow-lg overflow-hidden flex flex-col max-h-[90vh]"
           >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-bg-secondary">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-bg-secondary inset-shadow-edge">
               <h2 className="text-sm font-semibold text-text">{modeTitle}</h2>
               <button
                 onClick={handleRequestClose}
-                className="p-1.5 rounded-lg hover:bg-hover transition-colors text-text-tertiary"
+                className="p-1.5 rounded-control hover:bg-hover transition-colors text-text-tertiary"
               >
                 <X className="w-4 h-4" />
               </button>

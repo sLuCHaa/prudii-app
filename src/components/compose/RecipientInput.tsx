@@ -335,7 +335,7 @@ export const RecipientInput = forwardRef<RecipientInputHandle, RecipientInputPro
       </div>
 
       {showDropdown && suggestions.length > 0 && (
-        <div className="absolute left-0 top-full mt-1 w-full bg-surface border border-border rounded-lg shadow-lg py-1 z-50 max-h-[240px] overflow-y-auto">
+        <div className="absolute left-0 top-full mt-1 w-full bg-surface border border-border rounded-lg shadow-lg inset-shadow-edge py-1 z-50 max-h-[240px] overflow-y-auto">
           {suggestions.map((contact, i) => (
             <button
               key={contact.email}

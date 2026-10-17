@@ -58,7 +58,7 @@ export function LinkDialog({
         className="bg-surface rounded-xl shadow-lg w-full max-w-md overflow-hidden"
       >
         <form onSubmit={handleSubmit}>
-          <div className="px-4 py-3 border-b border-border bg-bg-secondary flex items-center justify-between">
+          <div className="px-4 py-3 border-b border-border bg-bg-secondary inset-shadow-edge flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Link2 className="w-4 h-4 text-accent" />
               <h3 className="text-sm font-semibold text-text">

@@ -154,7 +154,7 @@ export function QuickAddPopover({ anchorRect, onClose }: QuickAddPopoverProps) {
     <div
       ref={rootRef}
       style={style}
-      className="z-9999 w-80 max-w-[92vw] bg-surface rounded-lg shadow-lg border border-border p-2 menu-enter"
+      className="z-9999 w-80 max-w-[92vw] bg-surface rounded-lg shadow-lg inset-shadow-edge border border-border p-2 menu-enter"
     >
       <QuickAdd autoFocus onClose={onClose} />
     </div>,

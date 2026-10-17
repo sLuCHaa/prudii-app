@@ -33,7 +33,7 @@ export function RecurrenceScopeDialog({ kind, allowThis, onChoose }: RecurrenceS
         if (e.target === e.currentTarget) onChoose(null);
       }}
     >
-      <div ref={ref} role="dialog" aria-modal="true" aria-labelledby="calendar-scope-title" className="w-[340px] rounded-xl border border-border bg-surface p-5 shadow-2xl">
+      <div ref={ref} role="dialog" aria-modal="true" aria-labelledby="calendar-scope-title" className="w-[340px] rounded-xl border border-border bg-surface p-5 shadow-2xl inset-shadow-edge">
         <div className="flex items-center gap-2 mb-4">
           <Repeat className="w-4 h-4 text-accent" />
           <h2 id="calendar-scope-title" className="text-sm font-semibold text-text">
