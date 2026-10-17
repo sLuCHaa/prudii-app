@@ -58,4 +58,9 @@ describe("design tokens", () => {
   it("keeps the chosen option tile's look on hover", () => {
     expect(css).toMatch(/\.option-tile:hover:not\(:disabled\):not\(\[aria-pressed="true"\]\)/);
   });
+  it("lays settings groups on a calm canvas in both themes", () => {
+    expect(css).toMatch(/\.settings-canvas\s*\{[^}]*var\(--c-bg-secondary\)/);
+    expect(css).toMatch(/\.dark \.settings-canvas\s*\{[^}]*var\(--c-bg\)/);
+    expect(css).toMatch(/\.settings-group-card > \* \+ \*\s*\{[^}]*var\(--c-border-light\)/);
+  });
 });
