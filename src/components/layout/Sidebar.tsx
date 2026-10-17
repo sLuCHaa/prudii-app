@@ -676,7 +676,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
         </button>
 
         <Collapse open={!!(expanded && folders)}>
-          <div className="mt-0.5 space-y-0.5">
+          <div className="mt-0.5 space-y-0.5 px-px pb-1">
             {(folders ?? []).map((folder) => (
               <button
                 key={folder.id}
@@ -794,7 +794,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
       )}
 
       <Collapse open={!!(expanded && folders)}>
-        <div className="mt-0.5 space-y-0.5">
+        <div className="mt-0.5 space-y-0.5 px-px pb-1">
           {(folders ?? []).map((folder) => (
             renamingFolder?.id === folder.id ? (
               <div key={folder.id} className="flex items-center gap-1 px-1">
@@ -1040,7 +1040,7 @@ function CombinedFoldersSection({ collapsed }: { collapsed: boolean }) {
       </button>
 
       <Collapse open={expanded}>
-        <div className="ml-4 mt-0.5 space-y-0.5">
+        <div className="ml-4 mt-0.5 space-y-0.5 px-px pb-1">
           {combinedFolders.map((cf) => (
             <button
               key={cf.type}

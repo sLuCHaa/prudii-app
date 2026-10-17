@@ -394,7 +394,7 @@ function SearchResultsList({ results, isLoading, selectedMailId, setSelectedMail
           }`}
         >
           <div
-            className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r"
+            className="absolute left-0.5 top-2.5 bottom-2.5 w-[3px] rounded-r"
             style={{ background: !result.is_read ? "#3b82f6" : "transparent" }}
           />
           <div className="flex items-start gap-3">
@@ -753,6 +753,7 @@ function VirtualMailList({
                 left: 0,
                 width: "100%",
                 transform: `translateY(${vRow.start}px)`,
+                zIndex: selectedMailId === mail.id ? 1 : undefined,
               }}
             >
               <div
@@ -846,7 +847,7 @@ function VirtualMailList({
                     two are always clearly distinguishable (independent of theme/account color). */}
                 <div
                   aria-hidden
-                  className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r"
+                  className="absolute left-0.5 top-2.5 bottom-2.5 w-[3px] rounded-r"
                   style={{
                     background: mail.is_starred
                       ? "linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%)"

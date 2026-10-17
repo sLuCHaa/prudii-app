@@ -1,4 +1,7 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { CardButton } from "../components/ui/TabButton";
 import { extractClassStrings } from "./classAudit";
 
 const raw = import.meta.glob("../components/**/*.tsx", {
@@ -78,8 +81,31 @@ describe("shape audit", () => {
     expect(sourceOf("layout/MailList.tsx")).toMatch(/mail-row-body relative px-4 py-2\.5/);
   });
 
+  it("lifts the open mail's row above its neighbours", () => {
+    expect(sourceOf("layout/MailList.tsx")).toMatch(/zIndex: selectedMailId === mail\.id \? 1 : undefined/);
+  });
+
+  it("keeps the unread stripe inside the rounded row", () => {
+    const stripes = classStrings().filter(({ file, cls }) => file === "layout/MailList.tsx" && cls.includes("w-[3px]"));
+    expect(stripes).toHaveLength(2);
+    expect(stripes.filter(({ cls }) => !/\bleft-0\.5\b/.test(cls) || !/\btop-2\.5\b/.test(cls) || !/\bbottom-2\.5\b/.test(cls))).toEqual([]);
+  });
+
   it("selects folders as tiles without an accent bar", () => {
     expect(sourceOf("ui/TabButton.tsx")).not.toContain("borderLeft");
+  });
+
+  it("keeps the accent on the selected folder icon, not on its trailing marks", () => {
+    const selected = renderToStaticMarkup(createElement(CardButton, { selected: true, leading: createElement("svg"), trailing: createElement("i"), children: "Inbox" }));
+    expect(selected).toMatch(/<span class="[^"]*\btext-accent\b[^"]*"><svg>/);
+    expect(selected).toMatch(/<span class="shrink-0"><i>/);
+    expect(renderToStaticMarkup(createElement(CardButton, { selected: false, leading: createElement("svg"), children: "Inbox" }))).not.toContain("text-accent");
+  });
+
+  it("leaves room for the tile shadow inside collapsing folder lists", () => {
+    const wrappers = sourceOf("layout/Sidebar.tsx").match(/<Collapse[^>]*>\s*<div className="[^"]*"/g) ?? [];
+    expect(wrappers).toHaveLength(3);
+    expect(wrappers.filter((w) => !/\bpx-px\b/.test(w) || !/\bpb-1\b/.test(w))).toEqual([]);
   });
 
   it("uses composable shadows on the reading card", () => {

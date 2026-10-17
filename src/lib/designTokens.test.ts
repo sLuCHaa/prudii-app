@@ -23,6 +23,14 @@ describe("design tokens", () => {
   it("drops the accent bar from the active folder", () => {
     expect(css).not.toContain(".folder-active::before");
   });
+  it("insets the tile ring and shares it with the active folder", () => {
+    expect(css).toMatch(/\.tile-raised,\s*\.folder-active\s*\{[^}]*box-shadow:\s*inset 0 0 0 1px var\(--c-border\), 0 2px 6px -2px var\(--c-tile-drop\)/);
+    expect(css.match(/0 2px 6px -2px var\(--c-tile-drop\)/g)).toHaveLength(1);
+  });
+  it("deepens the tile shadow in the light theme only", () => {
+    expect(css).toMatch(/:root\s*\{[^}]*--c-tile-drop:\s*rgba\(40, 25, 10, 0\.22\)/);
+    expect(css).toMatch(/\.dark\s*\{[^}]*--c-tile-drop:\s*rgba\(0, 0, 0, 0\.45\)/);
+  });
   it("keeps reduced motion still", () => {
     expect(css).toMatch(/prefers-reduced-motion: reduce\)[^{]*\{[^}]*\.tactile-filled[\s\S]*?transform: none/);
   });

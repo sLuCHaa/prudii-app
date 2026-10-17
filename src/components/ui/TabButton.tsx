@@ -50,7 +50,7 @@ export const CardButton = forwardRef<
       } ${className}`}
       {...rest}
     >
-      {leading && <span className="shrink-0">{leading}</span>}
+      {leading && <span className={`shrink-0 ${selected ? "text-accent" : ""}`}>{leading}</span>}
       <span className="flex-1 min-w-0 truncate">{children}</span>
       {trailing && <span className="shrink-0">{trailing}</span>}
     </button>
