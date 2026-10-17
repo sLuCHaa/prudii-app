@@ -43,6 +43,9 @@ describe("design tokens", () => {
     expect(scale.filter(Number.isNaN)).toEqual([]);
     expect(scale.slice(1).every((v, i) => v > scale[i])).toBe(true);
   });
+  it("anchors the switch's on-state on the accent", () => {
+    expect(css).toMatch(/\.switch-track\[aria-checked="true"\]\s*\{[^}]*var\(--c-accent\) 50%/);
+  });
   it("keeps reduced motion still", () => {
     expect(css).toMatch(/prefers-reduced-motion: reduce\)[^{]*\{[^}]*\.tactile-filled[\s\S]*?transform: none/);
   });

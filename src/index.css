@@ -1035,6 +1035,52 @@ html[data-vibrancy].dark .glass-sidebar {
     box-shadow: inset 0 0 0 1px var(--c-border), 0 2px 6px -2px var(--c-tile-drop);
   }
 
+  .switch-track {
+    position: relative;
+    display: inline-block;
+    flex-shrink: 0;
+    width: 38px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 9999px;
+    background: var(--c-bg-tertiary);
+    box-shadow: inset 0 1px 3px var(--c-field-inset), inset 0 0 0 1px var(--c-border);
+    cursor: pointer;
+    transition: background 180ms ease, box-shadow 180ms ease;
+  }
+
+  .switch-track[aria-checked="true"] {
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--c-accent) 88%, white) 0%,
+      var(--c-accent) 50%,
+      color-mix(in srgb, var(--c-accent) 88%, black) 100%
+    );
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+  }
+
+  .switch-track:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .switch-knob {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 16px;
+    height: 16px;
+    border-radius: 9999px;
+    background: linear-gradient(180deg, #fff 0%, #ececec 100%);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25), inset 0 1px 0 var(--c-edge-light);
+    transition: translate 180ms ease;
+  }
+
+  .switch-track[aria-checked="true"] .switch-knob {
+    translate: 16px 0;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .tactile-filled,
     .tactile-quiet,
@@ -1043,6 +1089,11 @@ html[data-vibrancy].dark .glass-sidebar {
     .tactile-filled:active:not(:disabled),
     .tactile-quiet:active:not(:disabled) {
       transform: none;
+    }
+
+    .switch-track,
+    .switch-knob {
+      transition: none;
     }
   }
 }
