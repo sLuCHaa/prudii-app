@@ -22,6 +22,11 @@
   --c-bg-secondary:#F5F1EA;
   --c-bg-tertiary: #EDE7DE;
   --c-surface:     #FFFEFC;
+  --c-tile:        #FFFEFC;
+  --c-edge-light:  rgba(255, 255, 255, 0.75);
+  --c-field-inset: rgba(40, 25, 10, 0.08);
+  --c-card-drop:   rgba(60, 35, 15, 0.4);
+  --c-tile-drop:   rgba(40, 25, 10, 0.14);
   --c-sidebar:     #F2EDE5;
   --c-border:      #E2DACE;
   --c-border-light:#EDE7DE;
@@ -105,6 +110,11 @@
   --c-bg-secondary:#1F1A15;
   --c-bg-tertiary: #332C24;
   --c-surface:     #1F1A15;
+  --c-tile:        #2A241D;
+  --c-edge-light:  rgba(255, 255, 255, 0.08);
+  --c-field-inset: rgba(0, 0, 0, 0.35);
+  --c-card-drop:   rgba(0, 0, 0, 0.6);
+  --c-tile-drop:   rgba(0, 0, 0, 0.45);
   --c-sidebar:     #110E0B;
   --c-border:      #332C24;
   --c-border-light:#29231C;
@@ -198,15 +208,17 @@
   --font-heading: 'Amulya', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-body:    'Synonym', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 
-  /* Radius — the documented scale wired into rounded-*. Rhythm: bare
-     `rounded` (4px) for chips/marks, sm/md (6/8px) for controls,
-     lg (12px) for panels/cards, xl (16px) for modals. Previously these
-     tokens existed only as dead :root declarations while the utilities
-     silently used Tailwind's smaller defaults. */
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
+  /* Radius — the documented scale wired into rounded-*. Roles are listed in
+     the design-system comment further down. */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.625rem;
+  --radius-control: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+
+  --inset-shadow-edge: inset 0 1px 0 var(--c-edge-light);
+  --inset-shadow-field: inset 0 1px 2px var(--c-field-inset);
+  --shadow-card-soft: 0 14px 32px -18px var(--c-card-drop);
 
   /* Reading size: base text is 15px by design, not the browser's 16px */
   --text-base: 0.9375rem;
@@ -543,11 +555,12 @@ button:focus-visible,
   (section spacing). Never arbitrary pixel values.
 
   RADIUS (wired into rounded-* via @theme):
-    rounded      4px  | Chips, marks, tiny controls
-    rounded-sm   6px  | Small controls
-    rounded-md   8px  | Buttons, inputs
-    rounded-lg  12px  | Panels, cards, list containers
-    rounded-xl  16px  | Modals, floating surfaces
+    rounded      4px  | Marks, tiny controls
+    rounded-sm   8px  | Chips, badges
+    rounded-md  10px  | Nav items, list rows
+    rounded-control 12px | Buttons, inputs
+    rounded-lg  16px  | Panels, popovers
+    rounded-xl  20px  | Dialogs
     rounded-full      | Pills, avatars
 
   TYPOGRAPHY (text-* utilities; only base deviates from Tailwind):
@@ -948,20 +961,86 @@ html[data-vibrancy].dark .glass-sidebar {
 
 /* ─── Active Folder Indicator ─── */
 .folder-active {
-  position: relative;
-  background: var(--c-selected);
+  background: var(--c-tile);
+  box-shadow: 0 0 0 1px var(--c-border), 0 2px 6px -2px var(--c-tile-drop);
+  color: var(--c-text);
+  font-weight: 600;
+}
+
+.folder-active svg {
   color: var(--c-accent);
 }
 
-.folder-active::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 4px;
-  bottom: 4px;
-  width: 3px;
-  border-radius: 1px;
-  background: var(--c-accent);
+/* ─── Tactile controls ─── */
+@layer components {
+  .tactile-filled {
+    --tactile-fill: var(--c-accent);
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--tactile-fill) 88%, white) 0%,
+      var(--tactile-fill) 50%,
+      color-mix(in srgb, var(--tactile-fill) 88%, black) 100%
+    );
+    border-color: color-mix(in srgb, var(--tactile-fill) 78%, black);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.3),
+      0 1px 1px rgba(0, 0, 0, 0.14),
+      0 6px 14px -6px color-mix(in srgb, var(--tactile-fill) 80%, transparent);
+  }
+
+  .tactile-filled:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.3),
+      0 1px 1px rgba(0, 0, 0, 0.14),
+      0 12px 22px -8px color-mix(in srgb, var(--tactile-fill) 80%, transparent);
+  }
+
+  .tactile-filled:active:not(:disabled) {
+    transform: translateY(1px);
+    filter: brightness(0.92);
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.28);
+    transition-duration: 0s;
+  }
+
+  .tactile-quiet {
+    background: linear-gradient(180deg, var(--c-surface), var(--c-bg-secondary));
+    border-color: var(--c-border);
+    box-shadow: inset 0 1px 0 var(--c-edge-light), 0 1px 2px var(--c-field-inset);
+  }
+
+  .tactile-quiet:hover:not(:disabled) {
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--c-border) 80%, black);
+    box-shadow: inset 0 1px 0 var(--c-edge-light), 0 6px 12px -6px var(--c-card-drop);
+  }
+
+  .tactile-quiet:active:not(:disabled) {
+    transform: translateY(1px);
+    filter: brightness(0.92);
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.28);
+    transition-duration: 0s;
+  }
+
+  .tactile-static {
+    transform: none !important;
+  }
+
+  .tile-raised {
+    background: var(--c-tile);
+    box-shadow: 0 0 0 1px var(--c-border), 0 2px 6px -2px var(--c-tile-drop);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tactile-filled,
+    .tactile-quiet,
+    .tactile-filled:hover:not(:disabled),
+    .tactile-quiet:hover:not(:disabled),
+    .tactile-filled:active:not(:disabled),
+    .tactile-quiet:active:not(:disabled) {
+      transform: none;
+    }
+  }
 }
 
 /* ─── Email HTML content (replaces iframe) ─── */

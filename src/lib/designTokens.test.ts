@@ -1,0 +1,24 @@
+import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+const css = readFileSync(resolve(__dirname, "../index.css"), "utf8");
+
+describe("design tokens", () => {
+  it("sets the soft radius scale", () => {
+    for (const decl of ["--radius-sm: 0.5rem", "--radius-md: 0.625rem", "--radius-lg: 1rem", "--radius-xl: 1.25rem", "--radius-control: 0.75rem"]) expect(css).toContain(decl);
+  });
+  it("anchors the filled gradient on the original fill", () => {
+    expect(css).toMatch(/\.tactile-filled\s*\{[^}]*var\(--tactile-fill\) 50%/);
+  });
+  it("defines the new tokens in every theme scope", () => {
+    const decls = (t: string) => (css.match(new RegExp(`^\\s*${t}\\s*(?:#|rgba?\\()`, "gm")) ?? []).length;
+    for (const t of ["--c-tile:", "--c-edge-light:", "--c-field-inset:", "--c-card-drop:", "--c-tile-drop:"]) expect(decls(t)).toBe(decls("--c-surface:"));
+  });
+  it("drops the accent bar from the active folder", () => {
+    expect(css).not.toContain(".folder-active::before");
+  });
+  it("keeps reduced motion still", () => {
+    expect(css).toMatch(/prefers-reduced-motion: reduce\)[^{]*\{[^}]*\.tactile-filled[\s\S]*?transform: none/);
+  });
+});
