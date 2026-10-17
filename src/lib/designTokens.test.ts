@@ -25,7 +25,7 @@ describe("design tokens", () => {
   });
   it("insets the tile ring and shares it with the active folder", () => {
     expect(css).toMatch(/\.tile-raised,\s*\.folder-active\s*\{[^}]*box-shadow:\s*inset 0 0 0 1px var\(--c-border\), 0 2px 6px -2px var\(--c-tile-drop\)/);
-    expect(css.match(/0 2px 6px -2px var\(--c-tile-drop\)/g)).toHaveLength(1);
+    expect(css.match(/0 2px 6px -2px var\(--c-tile-drop\)/g)).toHaveLength(2);
   });
   it("deepens the tile shadow in the light theme only", () => {
     expect(css).toMatch(/:root\s*\{[^}]*--c-tile-drop:\s*rgba\(40, 25, 10, 0\.22\)/);
@@ -45,6 +45,11 @@ describe("design tokens", () => {
   });
   it("anchors the switch's on-state on the accent", () => {
     expect(css).toMatch(/\.switch-track\[aria-checked="true"\]\s*\{[^}]*var\(--c-accent\) 50%/);
+  });
+  it("raises the chosen segment and option tile as tiles", () => {
+    expect(css).toMatch(/\.segmented-item\[aria-pressed="true"\][^{]*\{[^}]*var\(--c-tile\)/);
+    expect(css).toMatch(/\.segmented-item[^{]*\[aria-selected="true"\][^{]*\{[^}]*var\(--c-tile\)/);
+    expect(css).toMatch(/\.option-tile\[aria-pressed="true"\]\s*\{[^}]*var\(--c-tile\)/);
   });
   it("keeps reduced motion still", () => {
     expect(css).toMatch(/prefers-reduced-motion: reduce\)[^{]*\{[^}]*\.tactile-filled[\s\S]*?transform: none/);
