@@ -81,4 +81,30 @@ describe("shape audit", () => {
   it("selects folders as tiles without an accent bar", () => {
     expect(sourceOf("ui/TabButton.tsx")).not.toContain("borderLeft");
   });
+
+  it("uses composable shadows on the reading card", () => {
+    const card = classStrings().find(({ file, cls }) => file.endsWith("ThreadView.tsx") && cls.includes("bg-surface border border-border rounded-xl"));
+    expect(card?.cls).toContain("shadow-card-soft");
+    expect(card?.cls).toContain("inset-shadow-edge");
+  });
+
+  it("lights the top edge of raised panels", () => {
+    const files = ["ui/DialogProvider.tsx", "ui/ContextMenu.tsx", "ui/CommandPalette.tsx", "settings/SettingsPanel.tsx", "ui/DateField.tsx", "ui/UndoToast.tsx", "motion/StackedToast.tsx", "layout/MailSortMenu.tsx", "ui/PrivacyBadge.tsx", "layout/Sidebar.tsx"];
+    expect(files.filter((f) => !sourceOf(f).includes("inset-shadow-edge"))).toEqual([]);
+    expect(sourceOf("settings/SettingsPanel.tsx")).not.toContain("boxShadow");
+  });
+
+  it("gives the compose button soft corners in both states", () => {
+    const buttons = classStrings().filter(({ file, cls }) => file.endsWith("ComposeButton.tsx") && cls.includes("items-center justify-center"));
+    expect(buttons).toHaveLength(2);
+    expect(buttons.filter(({ cls }) => /\brounded-(?:full|xl)\b/.test(cls) || !/\brounded-control\b/.test(cls))).toEqual([]);
+  });
+
+  it("shapes the send split button with control corners", () => {
+    const src = sourceOf("compose/ComposeModal.tsx");
+    expect(src).not.toMatch(/rounded-[lr]-xl\b/);
+    expect(src).toContain("rounded-l-control");
+    expect(src).toContain("rounded-r-control");
+    expect(src).toContain("motion-reduce:transform-none");
+  });
 });

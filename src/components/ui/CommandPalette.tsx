@@ -459,7 +459,7 @@ export function CommandPalette() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.96, transition: { duration: 0.15 } }}
             transition={SPRING_BOUNCY}
-            className="fixed top-[20vh] left-1/2 -translate-x-1/2 w-full max-w-lg z-151 bg-surface rounded-xl shadow-lg border border-border overflow-hidden"
+            className="fixed top-[20vh] left-1/2 -translate-x-1/2 w-full max-w-lg z-151 bg-surface rounded-xl shadow-lg inset-shadow-edge border border-border overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-3 px-4 py-3 border-b border-border">

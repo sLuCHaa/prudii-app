@@ -76,7 +76,7 @@ export function MailSortMenu({ sort, onChange }: { sort: MailSort; onChange: (so
         <span>{t(`mailList.sort.${field}`)}</span>
       </button>
       {open && (
-        <div role="menu" className="absolute right-0 top-full mt-1 min-w-45 bg-surface rounded-lg shadow-lg border border-border py-1 z-50">
+        <div role="menu" className="absolute right-0 top-full mt-1 min-w-45 bg-surface rounded-lg shadow-lg inset-shadow-edge border border-border py-1 z-50">
           {MAIL_SORT_FIELDS.map((f, i) => (
             <button
               key={f}

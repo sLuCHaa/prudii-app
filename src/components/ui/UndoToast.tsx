@@ -154,7 +154,7 @@ export function UndoToast() {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 60, scale: 0.96 }}
           transition={{ type: "spring", stiffness: 400, damping: 30 }}
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-100 overflow-hidden rounded-xl bg-surface border border-border shadow-lg min-w-[340px] max-w-[440px]"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-100 overflow-hidden rounded-xl bg-surface border border-border shadow-lg inset-shadow-edge min-w-[340px] max-w-[440px]"
         >
           <div className="flex items-center gap-3 px-4 py-3">
             {(phase === "countdown" || phase === "sending") && (

@@ -131,7 +131,7 @@ function Dialog({ state, onClose }: { state: DialogState; onClose: (result: bool
         role={type === "danger" ? "alertdialog" : "dialog"}
         aria-modal="true"
         aria-labelledby="app-dialog-title"
-        className="bg-surface rounded-xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden modal-panel-enter"
+        className="bg-surface rounded-xl shadow-2xl inset-shadow-edge w-full max-w-sm mx-4 overflow-hidden modal-panel-enter"
       >
         <div className="p-6">
           <div className="flex items-start gap-4">

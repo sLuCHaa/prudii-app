@@ -166,7 +166,7 @@ function PickerPanel({ anchor, trigger, label, onClose, children }: PickerPanelP
       // Like a native picker: keys typed here never reach the window-level shortcuts.
       onKeyDown={(e) => e.stopPropagation()}
       style={{ left: pos.left, top: pos.top }}
-      className="fixed z-9999 w-68 p-3 rounded-xl bg-surface border border-border shadow-lg menu-enter"
+      className="fixed z-9999 w-68 p-3 rounded-xl bg-surface border border-border shadow-lg inset-shadow-edge menu-enter"
     >
       {children}
     </div>

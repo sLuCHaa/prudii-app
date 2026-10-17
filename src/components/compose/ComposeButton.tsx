@@ -128,7 +128,7 @@ export function ComposeButton({ collapsed = false }: { collapsed?: boolean }) {
       <button
         ref={buttonRef}
         disabled={!hasAccounts}
-        className={`relative flex items-center justify-center w-9 h-9 rounded-full mx-auto overflow-hidden transition-all duration-300 ${
+        className={`relative flex items-center justify-center w-9 h-9 rounded-control inset-shadow-[0_1px_0_rgba(255,255,255,.32)] mx-auto overflow-hidden transition-all duration-300 ${
           hasAccounts
             ? "bg-linear-to-r from-accent to-accent-hover text-white"
             : "bg-border/50 text-text-tertiary opacity-50 cursor-default"
@@ -148,7 +148,7 @@ export function ComposeButton({ collapsed = false }: { collapsed?: boolean }) {
     <button
       ref={buttonRef}
       disabled={!hasAccounts}
-      className={`relative flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-xl font-medium text-sm overflow-hidden transition-all duration-300 ${
+      className={`relative flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-control inset-shadow-[0_1px_0_rgba(255,255,255,.32)] font-medium text-sm overflow-hidden transition-all duration-300 ${
         hasAccounts
           ? "bg-linear-to-r from-accent to-accent-hover text-white"
           : "bg-border/50 text-text-tertiary opacity-50 cursor-default"

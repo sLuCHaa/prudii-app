@@ -968,7 +968,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
   }
 
   return (
-    <div className={`bg-surface border border-border rounded-xl overflow-hidden transition-shadow ${
+    <div className={`bg-surface border border-border rounded-xl overflow-hidden transition-shadow shadow-card-soft inset-shadow-edge ${
       isDraft ? "ring-2 ring-warning/40" : !singleMail && isLatest ? "ring-2 ring-accent/30" : ""
     }`}>
       <div

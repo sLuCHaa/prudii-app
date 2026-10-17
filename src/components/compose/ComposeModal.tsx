@@ -457,7 +457,7 @@ function SendButton({ onSend, disabled }: { onSend: () => Promise<boolean>; disa
       onHoverStart={() => setHovered(true)}
       onHoverEnd={() => setHovered(false)}
       disabled={disabled || phase !== "idle"}
-      className="relative overflow-hidden px-5 py-2 rounded-l-xl text-white font-semibold text-sm min-w-[100px]"
+      className="relative overflow-hidden px-5 py-2 rounded-l-control inset-shadow-[0_1px_0_rgba(255,255,255,.32)] text-white font-semibold text-sm min-w-[100px]"
       transition={SPRING_SNAPPY}
     >
         {/* Base brand gradient (always present). */}
@@ -1916,7 +1916,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
               />
               <div
                 ref={scheduleBtnRef}
-                className="relative flex items-stretch gap-0 rounded-xl [box-shadow:0_2px_8px_rgba(59,130,246,0.25)]"
+                className="relative flex items-stretch gap-0 rounded-control transition-transform hover:-translate-y-px active:translate-y-px motion-reduce:transform-none [box-shadow:0_2px_8px_rgba(59,130,246,0.25)]"
               >
                 <SendButton onSend={handleSend} disabled={to.length === 0 && !toHasPending} />
                 <button
@@ -1925,7 +1925,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
                     setCustomSchedule(null);
                   }}
                   disabled={(to.length === 0 && !toHasPending) || sending}
-                  className="flex items-center px-2 bg-accent text-white rounded-r-xl border-l border-white/20 disabled:opacity-50 transition-[filter] duration-200 hover:brightness-110 active:brightness-95"
+                  className="flex items-center px-2 bg-accent text-white rounded-r-control border-l border-white/20 disabled:opacity-50 transition-[filter] duration-200 hover:brightness-110 active:brightness-95"
                 >
                   <ChevronDown className="w-4 h-4" />
                 </button>
@@ -1982,7 +1982,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-surface rounded-xl shadow-lg w-full max-w-sm overflow-hidden"
+            className="bg-surface rounded-xl shadow-lg inset-shadow-edge w-full max-w-sm overflow-hidden"
           >
             <div className="px-4 py-3 border-b border-border bg-bg-secondary">
               <h3 className="text-sm font-semibold text-text">{t("compose.saveDraftTitle")}</h3>
@@ -2057,7 +2057,7 @@ export function ComposeModal({ isOpen, onClose, mode, originalMail }: ComposeMod
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            className="w-full max-w-3xl bg-surface rounded-xl shadow-lg overflow-hidden flex flex-col max-h-[90vh]"
+            className="w-full max-w-3xl bg-surface rounded-xl shadow-lg inset-shadow-edge overflow-hidden flex flex-col max-h-[90vh]"
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-bg-secondary">
               <h2 className="text-sm font-semibold text-text">{modeTitle}</h2>

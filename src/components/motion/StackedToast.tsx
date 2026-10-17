@@ -64,7 +64,7 @@ export function StackedToast({
           return (
             <motion.div
               key={toast.id}
-              className="pointer-events-auto relative overflow-hidden rounded-xl bg-surface border border-border shadow-lg min-w-[280px] max-w-[400px]"
+              className="pointer-events-auto relative overflow-hidden rounded-xl bg-surface border border-border shadow-lg inset-shadow-edge min-w-[280px] max-w-[400px]"
               initial={reduce ? { opacity: 0 } : { opacity: 0, x: 40, scale: 0.9 }}
               animate={
                 reduce

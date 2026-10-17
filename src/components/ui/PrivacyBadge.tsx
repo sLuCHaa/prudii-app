@@ -35,7 +35,7 @@ export function PrivacyBadge() {
         <Shield className="w-4 h-4 pointer-events-none" />
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 w-72 bg-surface border border-border rounded-lg shadow-lg p-3 z-50 text-xs">
+        <div className="absolute right-0 top-full mt-1 w-72 bg-surface border border-border rounded-lg shadow-lg inset-shadow-edge p-3 z-50 text-xs">
           <h3 className="font-heading text-sm font-semibold text-text mb-2">
             {t("privacy.badge")}
           </h3>

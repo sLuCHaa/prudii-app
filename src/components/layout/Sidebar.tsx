@@ -233,7 +233,7 @@ function CreateFolderDialog({
       className="fixed inset-0 modal-backdrop flex items-center justify-center z-50"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-surface rounded-xl p-4 w-80 shadow-lg modal-panel-enter">
+      <div className="bg-surface rounded-xl p-4 w-80 shadow-lg inset-shadow-edge modal-panel-enter">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-text">{t("folder.newFolder")}</h3>
           <IconButton

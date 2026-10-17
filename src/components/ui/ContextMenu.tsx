@@ -130,7 +130,7 @@ function MenuPanel({ entries, position, variant, minWidth, ariaLabel, onCloseAll
         role={isListbox ? "listbox" : "menu"}
         aria-label={ariaLabel}
         onKeyDown={onKeyDown}
-        className="fixed z-9999 min-w-[180px] max-h-[min(60vh,400px)] overflow-y-auto bg-surface rounded-lg shadow-lg border border-border py-1 menu-enter"
+        className="fixed z-9999 min-w-[180px] max-h-[min(60vh,400px)] overflow-y-auto bg-surface rounded-lg shadow-lg inset-shadow-edge border border-border py-1 menu-enter"
         style={{ left: pos.left, top: pos.top, minWidth }}
       >
         {entries.map((e, i) => {
