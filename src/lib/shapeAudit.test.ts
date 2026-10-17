@@ -62,7 +62,7 @@ describe("shape audit", () => {
   });
 
   it("gives every text field soft corners and an inset", () => {
-    const fields = classStrings().filter(({ cls }) => /\bbg-bg-secondary\b/.test(cls) && /\bfocus:border-accent\b/.test(cls));
+    const fields = classStrings().filter(({ cls }) => /\b(?:bg-bg-secondary|bg-surface)\b/.test(cls) && /\bfocus:border-accent\b/.test(cls));
     expect(fields.length).toBeGreaterThan(8);
     expect(fields.filter(({ cls }) => !/\brounded-control\b/.test(cls) || !/\binset-shadow-field\b/.test(cls)).map((f) => `${f.file}:${f.line}`)).toEqual([]);
   });

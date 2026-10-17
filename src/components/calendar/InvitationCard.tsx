@@ -229,7 +229,7 @@ function Card({ view }: { view: InvitationView }) {
               options={writable.map((c) => ({ value: c.id, label: c.name }))}
               onChange={setPicked}
               ariaLabel={t("calendar.invite.calendar")}
-              className="flex w-full items-center gap-2 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-left text-xs text-text focus:border-accent"
+              className="flex w-full items-center gap-2 rounded-control inset-shadow-field border border-border bg-surface px-2.5 py-1.5 text-left text-xs text-text focus:border-accent"
             />
           </div>
         )}
