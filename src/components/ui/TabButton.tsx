@@ -14,13 +14,16 @@ export function TabButton({
   orientation?: "horizontal" | "vertical";
   className?: string;
 } & Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "onClick" | "children">) {
-  const base = "text-sm font-medium px-3 py-2 transition-colors";
-  const borderSide = orientation === "vertical" ? "border-l-2" : "border-b-2";
-  const colors = selected
-    ? `bg-accent/10 text-text ${borderSide} border-accent`
-    : `text-text-secondary hover:bg-hover hover:text-text ${borderSide} border-transparent`;
+  const layout = orientation === "vertical" ? "w-full justify-start" : "flex-none";
   return (
-    <button type="button" onClick={onClick} className={`${base} ${colors} ${className}`} {...rest}>
+    <button
+      type="button"
+      role="tab"
+      aria-selected={selected}
+      onClick={onClick}
+      className={`segmented-item ${layout} text-sm ${className}`}
+      {...rest}
+    >
       {children}
     </button>
   );

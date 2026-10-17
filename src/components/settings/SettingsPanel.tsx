@@ -26,6 +26,7 @@ import { PremiumBadge } from "../ui/PremiumBadge";
 import { getVersion } from "@tauri-apps/api/app";
 import { Button, IconButton } from "../ui/Button";
 import { TabButton } from "../ui/TabButton";
+import { SegmentedControl } from "../ui/SegmentedControl";
 import { useDialog } from "../ui/DialogProvider";
 import { isMacOS } from "../../lib/platform";
 import type { Account, SmtpSecurity } from "../../types";
@@ -311,12 +312,10 @@ function AccountSettings({
             {SYNC_INTERVAL_OPTIONS.map((option) => (
               <button
                 key={option.value}
+                type="button"
+                aria-pressed={syncInterval === option.value}
                 onClick={() => handleSyncIntervalChange(option.value)}
-                className={`px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
-                  syncInterval === option.value
-                    ? "border-accent bg-accent-soft text-accent"
-                    : "border-border text-text-secondary hover:bg-hover"
-                }`}
+                className="option-tile px-3 py-2 rounded-control text-xs"
               >
                 {t(option.labelKey)}
               </button>
@@ -341,28 +340,15 @@ function AccountSettings({
           <p className="text-xs text-text-tertiary mb-3">
             {t("settings.account.loadExternalImagesDesc")}
           </p>
-          <div className="flex gap-2">
-            <button
-              onClick={() => { setLoadExternalImages("always"); setSaved(false); }}
-              className={`flex-1 px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
-                loadExternalImages === "always"
-                  ? "border-accent bg-accent-soft text-accent"
-                  : "border-border text-text-secondary hover:bg-hover"
-              }`}
-            >
-              {t("settings.account.loadImagesAlways")}
-            </button>
-            <button
-              onClick={() => { setLoadExternalImages("never"); setSaved(false); }}
-              className={`flex-1 px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
-                loadExternalImages === "never"
-                  ? "border-accent bg-accent-soft text-accent"
-                  : "border-border text-text-secondary hover:bg-hover"
-              }`}
-            >
-              {t("settings.account.loadImagesNever")}
-            </button>
-          </div>
+          <SegmentedControl
+            aria-label={t("settings.account.loadExternalImages")}
+            value={loadExternalImages}
+            onChange={(v) => { setLoadExternalImages(v); setSaved(false); }}
+            options={[
+              { value: "always", label: t("settings.account.loadImagesAlways") },
+              { value: "never", label: t("settings.account.loadImagesNever") },
+            ]}
+          />
         </div>
 
         {!isOAuth && (
@@ -453,38 +439,20 @@ function AccountSettings({
             </div>
             <div>
               <label className="text-xs text-text-tertiary mb-1 block">{t("settings.account.smtpSecurity")}</label>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSmtpSecurity("ssl");
-                    if (smtpPort === 587) setSmtpPort(465);
-                    setSaved(false);
-                  }}
-                  className={`flex-1 px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
-                    smtpSecurity === "ssl"
-                      ? "border-accent bg-accent-soft text-accent"
-                      : "border-border text-text-secondary hover:bg-hover"
-                  }`}
-                >
-                  SSL/TLS (Port 465)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSmtpSecurity("starttls");
-                    if (smtpPort === 465) setSmtpPort(587);
-                    setSaved(false);
-                  }}
-                  className={`flex-1 px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
-                    smtpSecurity === "starttls"
-                      ? "border-accent bg-accent-soft text-accent"
-                      : "border-border text-text-secondary hover:bg-hover"
-                  }`}
-                >
-                  STARTTLS (Port 587)
-                </button>
-              </div>
+              <SegmentedControl
+                aria-label={t("settings.account.smtpSecurity")}
+                value={smtpSecurity}
+                onChange={(v) => {
+                  setSmtpSecurity(v);
+                  if (v === "ssl" && smtpPort === 587) setSmtpPort(465);
+                  if (v === "starttls" && smtpPort === 465) setSmtpPort(587);
+                  setSaved(false);
+                }}
+                options={[
+                  { value: "ssl", label: "SSL/TLS (Port 465)" },
+                  { value: "starttls", label: "STARTTLS (Port 587)" },
+                ]}
+              />
             </div>
             <div className="p-2 rounded bg-bg-secondary">
               <span className="text-xs text-text-tertiary">{t("settings.account.provider")}: </span>
@@ -759,13 +727,14 @@ export function SettingsPanel() {
               </div>
             </div>
 
-            <div className="flex border-b border-border px-4 shrink-0 overflow-x-auto scrollbar-none">
+            <div className="border-b border-border px-4 py-2 shrink-0">
+            <div role="tablist" className="segmented-track overflow-x-auto scrollbar-none">
               {SETTINGS_TABS.map(({ id, labelKey, icon: Icon, premium }) => (
                 <TabButton
                   key={id}
                   selected={activeTab === id}
                   onClick={() => setActiveTab(id)}
-                  className="flex items-center gap-1.5 py-2.5 whitespace-nowrap"
+                  className="gap-1.5 whitespace-nowrap"
                 >
                   <Icon className="w-4 h-4" />
                   {t(labelKey)}
@@ -774,6 +743,7 @@ export function SettingsPanel() {
                   )}
                 </TabButton>
               ))}
+            </div>
             </div>
 
             <div ref={scrollRef} className="overflow-y-auto flex-1">
@@ -799,18 +769,16 @@ export function SettingsPanel() {
                         <button
                           key={mode}
                           onClick={() => handleThemeChange(mode)}
-                          className={`flex-1 flex flex-col items-center gap-2 p-3 rounded-lg border transition-colors ${
-                            themeMode === mode
-                              ? "border-accent bg-accent-soft text-accent"
-                              : "border-border text-text-secondary hover:bg-hover"
-                          }`}
+                          type="button"
+                          aria-pressed={themeMode === mode}
+                          className="option-tile flex-1 flex flex-col items-center gap-2 p-3 rounded-control"
                         >
                           <Icon className="w-5 h-5" />
                           <span className="text-xs font-medium">{t(labelKey)}</span>
                         </button>
                       ))}
                     </div>
-                    <label className="mt-3 flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-hover transition-colors cursor-pointer">
+                    <label className="mt-3 flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer">
                       <PanelLeft className="w-4 h-4 text-text-tertiary shrink-0" />
                       <div className="flex-1">
                         <div className="text-sm text-text">{t(isMacOS ? "settings.appearance.transparentSidebar" : "settings.appearance.ambientSidebar")}</div>
@@ -823,7 +791,7 @@ export function SettingsPanel() {
                         className="w-4 h-4 rounded border-border text-accent focus:ring-accent"
                       />
                     </label>
-                    <label className="mt-3 flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-hover transition-colors cursor-pointer">
+                    <label className="mt-3 flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer">
                       <Type className="w-4 h-4 text-text-tertiary shrink-0" />
                       <div className="flex-1">
                         <div className="text-sm text-text">{t("settings.appearance.systemFont")}</div>
@@ -846,16 +814,14 @@ export function SettingsPanel() {
                     <p className="text-xs text-text-tertiary mb-3">
                       {t("settings.language.description")}
                     </p>
-                    <div className="flex gap-2">
+                    <div className="grid grid-cols-4 gap-2">
                       {LANGUAGE_OPTIONS.map(({ value, labelKey }) => (
                         <button
                           key={value}
+                          type="button"
+                          aria-pressed={languagePref === value}
                           onClick={() => handleLanguageChange(value)}
-                          className={`flex-1 px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
-                            languagePref === value
-                              ? "border-accent bg-accent-soft text-accent"
-                              : "border-border text-text-secondary hover:bg-hover"
-                          }`}
+                          className="option-tile px-3 py-2 rounded-control text-xs"
                         >
                           {t(labelKey)}
                         </button>
@@ -869,7 +835,7 @@ export function SettingsPanel() {
                       {t("settings.appSettings.description")}
                     </p>
                     <div className="space-y-3">
-                      <label className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-hover transition-colors cursor-pointer">
+                      <label className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer">
                         <Power className="w-4 h-4 text-text-tertiary shrink-0" />
                         <div className="flex-1">
                           <div className="text-sm text-text">{t("settings.appSettings.launchOnStartup")}</div>
@@ -883,7 +849,7 @@ export function SettingsPanel() {
                         />
                       </label>
 
-                      <label className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-hover transition-colors cursor-pointer">
+                      <label className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer">
                         <AppWindow className="w-4 h-4 text-text-tertiary shrink-0" />
                         <div className="flex-1">
                           <div className="text-sm text-text">{t("settings.appSettings.showInTray")}</div>
@@ -897,7 +863,7 @@ export function SettingsPanel() {
                         />
                       </label>
 
-                      <label className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-hover transition-colors cursor-pointer">
+                      <label className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer">
                         <Clock className="w-4 h-4 text-text-tertiary shrink-0" />
                         <div className="flex-1">
                           <div className="text-sm text-text">{t("settings.appSettings.use24hClock")}</div>
@@ -911,7 +877,7 @@ export function SettingsPanel() {
                         />
                       </label>
 
-                      <label className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-hover transition-colors cursor-pointer">
+                      <label className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer">
                         <FolderOpen className="w-4 h-4 text-text-tertiary shrink-0" />
                         <div className="flex-1">
                           <div className="text-sm text-text">{t("settings.appSettings.showAllUnreadCounts")}</div>
@@ -925,7 +891,7 @@ export function SettingsPanel() {
                         />
                       </label>
 
-                      <label className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-hover transition-colors cursor-pointer">
+                      <label className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer">
                         <Bell className="w-4 h-4 text-text-tertiary shrink-0" />
                         <div className="flex-1">
                           <div className="text-sm text-text">{t("settings.appSettings.notifications")}</div>
@@ -939,7 +905,7 @@ export function SettingsPanel() {
                         />
                       </label>
 
-                      <label className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-hover transition-colors cursor-pointer">
+                      <label className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer">
                         <Volume2 className="w-4 h-4 text-text-tertiary shrink-0" />
                         <div className="flex-1">
                           <div className="text-sm text-text">{t("settings.appSettings.notificationSound")}</div>
@@ -953,7 +919,7 @@ export function SettingsPanel() {
                         />
                       </label>
 
-                      <label className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-hover transition-colors cursor-pointer">
+                      <label className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer">
                         <Mail className="w-4 h-4 text-text-tertiary shrink-0" />
                         <div className="flex-1">
                           <div className="text-sm text-text">{t("settings.appSettings.defaultMailApp")}</div>
@@ -992,23 +958,19 @@ export function SettingsPanel() {
                     <p className="text-xs text-text-tertiary mb-3">
                       {t("settings.undoSendDelayDesc")}
                     </p>
-                    <div className="flex gap-2">
+                    <div className="grid grid-cols-6 gap-2">
                       {UNDO_SEND_OPTIONS.map((option) => (
                         <button
                           key={option.value}
+                          type="button"
+                          aria-pressed={localSettings.undo_send_delay === option.value}
                           onClick={() => {
                             if (hasFeature("undo_send_config") || option.value === 5) {
                               updateLocalSetting("undo_send_delay", option.value);
                             }
                           }}
                           disabled={!hasFeature("undo_send_config") && option.value !== 5}
-                          className={`flex-1 px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
-                            localSettings.undo_send_delay === option.value
-                              ? "border-accent bg-accent-soft text-accent"
-                              : !hasFeature("undo_send_config") && option.value !== 5
-                              ? "border-border text-text-tertiary opacity-50 cursor-not-allowed"
-                              : "border-border text-text-secondary hover:bg-hover"
-                          }`}
+                          className="option-tile px-3 py-2 rounded-control text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {"labelKey" in option ? t(option.labelKey as string) : option.label}
                         </button>
@@ -1028,13 +990,11 @@ export function SettingsPanel() {
                       {(Object.keys(COMPOSE_FONTS) as ComposeFontId[]).map((id) => (
                         <button
                           key={id}
+                          type="button"
+                          aria-pressed={composeTypo.fontStack === COMPOSE_FONTS[id].stack}
                           onClick={() => updateLocalSetting("compose_font", id)}
                           style={{ fontFamily: COMPOSE_FONTS[id].stack }}
-                          className={`px-3 py-2 rounded-lg border text-sm transition-colors ${
-                            composeTypo.fontStack === COMPOSE_FONTS[id].stack
-                              ? "border-accent bg-accent-soft text-accent"
-                              : "border-border text-text-secondary hover:bg-hover"
-                          }`}
+                          className="option-tile px-3 py-2 rounded-control text-sm"
                         >
                           {id === "prudii" ? t("settings.composeFont.default") : COMPOSE_FONTS[id].label}
                         </button>
@@ -1044,12 +1004,10 @@ export function SettingsPanel() {
                       {COMPOSE_FONT_SIZES.map((size) => (
                         <button
                           key={size}
+                          type="button"
+                          aria-pressed={composeTypo.fontSizePt === size}
                           onClick={() => updateLocalSetting("compose_font_size", size)}
-                          className={`flex-1 px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
-                            composeTypo.fontSizePt === size
-                              ? "border-accent bg-accent-soft text-accent"
-                              : "border-border text-text-secondary hover:bg-hover"
-                          }`}
+                          className="option-tile flex-1 px-3 py-2 rounded-control text-xs"
                         >
                           {size} pt
                         </button>
@@ -1100,21 +1058,12 @@ export function SettingsPanel() {
                     <p className="text-xs text-text-tertiary mb-3">
                       {t("settings.density.description")}
                     </p>
-                    <div className="flex gap-2">
-                      {DENSITY_OPTIONS.map(({ id, labelKey }) => (
-                        <button
-                          key={id}
-                          onClick={() => updateLocalSetting("density", id)}
-                          className={`flex-1 px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
-                            localSettings.density === id
-                              ? "border-accent bg-accent-soft text-accent"
-                              : "border-border text-text-secondary hover:bg-hover"
-                          }`}
-                        >
-                          {t(labelKey)}
-                        </button>
-                      ))}
-                    </div>
+                    <SegmentedControl
+                      aria-label={t("settings.density.title")}
+                      value={localSettings.density}
+                      onChange={(id) => updateLocalSetting("density", id)}
+                      options={DENSITY_OPTIONS.map(({ id, labelKey }) => ({ value: id, label: t(labelKey) }))}
+                    />
                   </div>
 
                   <div>
@@ -1122,21 +1071,12 @@ export function SettingsPanel() {
                     <p className="text-xs text-text-tertiary mb-3">
                       {t("settings.threadView.description")}
                     </p>
-                    <div className="flex gap-2">
-                      {THREAD_VIEW_OPTIONS.map(({ id, labelKey }) => (
-                        <button
-                          key={id}
-                          onClick={() => updateLocalSetting("thread_view", id)}
-                          className={`flex-1 px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
-                            localSettings.thread_view === id
-                              ? "border-accent bg-accent-soft text-accent"
-                              : "border-border text-text-secondary hover:bg-hover"
-                          }`}
-                        >
-                          {t(labelKey)}
-                        </button>
-                      ))}
-                    </div>
+                    <SegmentedControl
+                      aria-label={t("settings.threadView.title")}
+                      value={localSettings.thread_view}
+                      onChange={(id) => updateLocalSetting("thread_view", id)}
+                      options={THREAD_VIEW_OPTIONS.map(({ id, labelKey }) => ({ value: id, label: t(labelKey) }))}
+                    />
                   </div>
                 </>
               )}
@@ -1176,7 +1116,7 @@ export function SettingsPanel() {
                       {accounts.map((account) => (
                         <div
                           key={account.id}
-                          className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-hover transition-colors cursor-pointer"
+                          className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer"
                           onClick={() => handleAccountClick(account)}
                         >
                           <span

@@ -6,12 +6,10 @@ import { useAppStore } from "../../stores/appStore";
 import { checkSieveSupport, getVacation, setVacation } from "../../lib/tauri";
 import { Button } from "../ui/Button";
 import { DateField } from "../ui/DateField";
+import { SegmentedControl } from "../ui/SegmentedControl";
 import type { VacationSettings, VacationState } from "../../types";
 
 const INPUT = "w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm focus:border-accent";
-const SEGMENT = "flex-1 px-3 py-2 rounded-lg border text-xs font-medium transition-colors";
-const SEGMENT_ON = "border-accent bg-accent-soft text-accent";
-const SEGMENT_OFF = "border-border text-text-secondary hover:bg-hover";
 
 function toDraft(state: VacationState): VacationSettings {
   return { enabled: state.enabled, from: state.from, until: state.until, subject: state.subject, text: state.text };
@@ -100,22 +98,15 @@ export function VacationSection({ accountId }: { accountId: string }) {
             {state.had_addresses && ` ${t("settings.account.vacation.foreignAddresses")}`}
           </Hint>
         )}
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => patch({ enabled: false })}
-            className={`${SEGMENT} ${draft.enabled ? SEGMENT_OFF : SEGMENT_ON}`}
-          >
-            {t("settings.account.vacation.off")}
-          </button>
-          <button
-            type="button"
-            onClick={() => patch({ enabled: true })}
-            className={`${SEGMENT} ${draft.enabled ? SEGMENT_ON : SEGMENT_OFF}`}
-          >
-            {t("settings.account.vacation.on")}
-          </button>
-        </div>
+        <SegmentedControl
+          aria-label={t("settings.account.vacation.title")}
+          value={draft.enabled ? "on" : "off"}
+          onChange={(v) => patch({ enabled: v === "on" })}
+          options={[
+            { value: "off", label: t("settings.account.vacation.off") },
+            { value: "on", label: t("settings.account.vacation.on") },
+          ]}
+        />
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="text-xs text-text-tertiary mb-1 block">{t("settings.account.vacation.from")}</label>

@@ -177,6 +177,22 @@ describe("shape audit", () => {
     expect(badges.filter(({ cls }) => !/\brounded-sm\b/.test(cls)).map((f) => `${f.file}:${f.line}`)).toEqual([]);
   });
 
+  it("drops the old accent-frame selection from the settings", () => {
+    for (const f of ["settings/SettingsPanel.tsx", "settings/VacationSection.tsx"]) expect(sourceOf(f)).not.toMatch(/border-accent bg-accent-soft/);
+  });
+
+  it("lays the settings tabs into a track", () => {
+    const src = sourceOf("settings/SettingsPanel.tsx");
+    expect(src).toMatch(/role="tablist"[^>]*segmented-track|segmented-track[^>]*role="tablist"/);
+    expect(sourceOf("ui/TabButton.tsx")).toContain("segmented-item");
+  });
+
+  it("lights the edge of the settings option rows", () => {
+    const rows = classStrings().filter(({ file, cls }) => file.endsWith("SettingsPanel.tsx") && /\bp-3\b/.test(cls) && /\bborder-border\b/.test(cls) && /\bhover:bg-hover\b/.test(cls));
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.filter(({ cls }) => !/\binset-shadow-edge\b/.test(cls)).map((r) => r.line)).toEqual([]);
+  });
+
   it("keeps the privacy trigger square like its title-bar neighbours", () => {
     const trigger = classStrings().find(({ file, cls }) => file === "ui/PrivacyBadge.tsx" && cls.includes("w-11 h-full"));
     expect(trigger).toBeDefined();
