@@ -34,13 +34,14 @@ export function SettingsBlock({ description, children, className }: {
   );
 }
 
-export function SettingsRow({ title, description, icon, control, as, onClick, className, children }: {
+export function SettingsRow({ title, description, icon, control, as, onClick, titleId, className, children }: {
   title: ReactNode;
   description?: ReactNode;
   icon?: ReactNode;
   control?: ReactNode;
   as?: "label" | "div";
   onClick?: () => void;
+  titleId?: string;
   className?: string;
   children?: ReactNode;
 }) {
@@ -48,7 +49,7 @@ export function SettingsRow({ title, description, icon, control, as, onClick, cl
     <>
       {icon}
       <div className="settings-row-text">
-        <div className="settings-row-title">{title}</div>
+        <div id={titleId} className="settings-row-title">{title}</div>
         {description && <div className="settings-row-desc">{description}</div>}
         {children}
       </div>
@@ -63,6 +64,7 @@ export function SettingsRow({ title, description, icon, control, as, onClick, cl
       onClick={onClick}
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
+      aria-labelledby={onClick ? titleId : undefined}
       onKeyDown={onClick ? (e) => {
         if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
         e.preventDefault();

@@ -1,4 +1,4 @@
-import { Shield, Eye, Image, Link2 } from "lucide-react";
+import { Shield, Eye, Image } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "../../stores/appStore";
@@ -56,6 +56,11 @@ export function PrivacySettings({ localSettings, updateLocalSetting }: PrivacySe
           title={t("privacy.trackersBlocked")}
           control={<span className="text-sm font-mono text-text-secondary">{trackersBlockedCount}</span>}
         />
+        <SettingsRow
+          title={t("settings.privacy.stripTrackingParams")}
+          description={t("settings.privacy.stripTrackingParamsDesc")}
+          control={<Switch checked={localSettings.strip_tracking_params} onChange={(v) => updateLocalSetting("strip_tracking_params", v)} />}
+        />
       </SettingsGroup>
 
       <SettingsGroup title={t("settings.privacy.externalImages")} icon={<Image className="w-4 h-4" />}>
@@ -92,15 +97,6 @@ export function PrivacySettings({ localSettings, updateLocalSetting }: PrivacySe
             <p className="text-sm text-text-tertiary">{t("settings.accounts.noAccounts")}</p>
           </SettingsBlock>
         )}
-      </SettingsGroup>
-
-      {/* Link cleaning (app setting, saved via panel Save button) */}
-      <SettingsGroup title={t("settings.tabs.privacy")} icon={<Link2 className="w-4 h-4" />}>
-        <SettingsRow
-          title={t("settings.privacy.stripTrackingParams")}
-          description={t("settings.privacy.stripTrackingParamsDesc")}
-          control={<Switch checked={localSettings.strip_tracking_params} onChange={(v) => updateLocalSetting("strip_tracking_params", v)} />}
-        />
       </SettingsGroup>
     </>
   );

@@ -995,6 +995,7 @@ export function SettingsPanel() {
                           />
                         }
                         title={<span className="block truncate">{account.display_name}</span>}
+                        titleId={`account-row-${account.id}`}
                         description={<span className="block truncate">{account.email}</span>}
                         onClick={() => handleAccountClick(account)}
                         control={

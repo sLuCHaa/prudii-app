@@ -438,9 +438,6 @@ export function LicenseSettings() {
             <SettingsBlock>
               <div className="text-xs text-text-tertiary font-mono">{deviceId || license.device_id}</div>
             </SettingsBlock>
-          </SettingsGroup>
-
-          <SettingsGroup title={t("settings.license.refreshLicense")} icon={<RefreshCw className="w-4 h-4" />}>
             <SettingsBlock className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-text-tertiary">{t("settings.license.lastVerified")}</span>
@@ -464,13 +461,12 @@ export function LicenseSettings() {
                 {t("settings.license.refreshLicense")}
               </Button>
             </SettingsBlock>
+            <SettingsBlock>
+              <Button variant="secondary" size="sm" onClick={handleLogout} icon={<LogOut />}>
+                {t("settings.license.logout")}
+              </Button>
+            </SettingsBlock>
           </SettingsGroup>
-
-          <div className="pt-2">
-            <Button variant="secondary" size="sm" onClick={handleLogout} icon={<LogOut />}>
-              {t("settings.license.logout")}
-            </Button>
-          </div>
         </>
       )}
     </>

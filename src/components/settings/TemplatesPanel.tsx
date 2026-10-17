@@ -98,7 +98,7 @@ export function TemplatesPanel() {
     <SettingsGroup
       title={t("templates.title")}
       action={!showForm && (
-        <Button variant="secondary" size="sm" className="ml-auto" icon={<Plus className="w-3.5 h-3.5" />} onClick={handleNew}>
+        <Button variant="secondary" size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={handleNew}>
           {t("templates.newTemplate")}
         </Button>
       )}
@@ -124,7 +124,7 @@ export function TemplatesPanel() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder={t("templates.templateName")}
-                className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-surface text-text text-sm focus:border-accent"
+                className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm focus:border-accent"
               />
             </div>
 
@@ -135,7 +135,7 @@ export function TemplatesPanel() {
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 placeholder={t("compose.subjectPlaceholder")}
-                className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-surface text-text text-sm focus:border-accent"
+                className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm focus:border-accent"
               />
             </div>
 
@@ -146,7 +146,7 @@ export function TemplatesPanel() {
                 onChange={(e) => setBodyText(e.target.value)}
                 rows={6}
                 placeholder={t("compose.writeMessage")}
-                className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-surface text-text text-sm focus:border-accent resize-y"
+                className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm focus:border-accent resize-y"
               />
             </div>
 

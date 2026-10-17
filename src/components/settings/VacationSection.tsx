@@ -140,7 +140,7 @@ export function VacationSection({ accountId }: { accountId: string }) {
           />
         </div>
         {draft.enabled && !state.enabled && (
-          <div className="flex items-start gap-2 p-3 rounded-lg bg-warning/10 border border-warning/30">
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-warning/10">
             <Info className="w-4 h-4 text-warning shrink-0 mt-0.5" />
             <p className="text-xs text-text-secondary">{t("settings.account.vacation.panelWarning")}</p>
           </div>

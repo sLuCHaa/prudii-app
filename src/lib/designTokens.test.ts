@@ -63,4 +63,23 @@ describe("design tokens", () => {
     expect(css).toMatch(/\.dark \.settings-canvas\s*\{[^}]*var\(--c-bg\)/);
     expect(css).toMatch(/\.settings-group-card > \* \+ \*\s*\{[^}]*var\(--c-border-light\)/);
   });
+  it("keeps the group title and row focus rules outside the components layer", () => {
+    const start = css.indexOf("@layer components {");
+    let depth = 0;
+    let end = start;
+    for (let i = css.indexOf("{", start); i < css.length; i++) {
+      if (css[i] === "{") depth++;
+      if (css[i] === "}" && --depth === 0) {
+        end = i;
+        break;
+      }
+    }
+    const layered = css.slice(start, end);
+    const label = /\.settings-group-label h3\s*\{[^}]*font-size:\s*11px/;
+    const focus = /\.settings-row\[data-clickable\]:focus-visible\s*\{[^}]*outline-offset:\s*-2px/;
+    expect(css).toMatch(label);
+    expect(layered).not.toMatch(label);
+    expect(css).toMatch(focus);
+    expect(layered).not.toMatch(focus);
+  });
 });
