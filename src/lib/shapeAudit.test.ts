@@ -199,6 +199,13 @@ describe("shape audit", () => {
     expect(rows.filter(({ cls }) => !/\binset-shadow-edge\b/.test(cls)).map((r) => r.line)).toEqual([]);
   });
 
+  it("groups the general tab into section cards", () => {
+    const src = sourceOf("settings/SettingsPanel.tsx");
+    expect(src).toContain("settings-canvas");
+    expect(src).toContain("<SettingsGroup");
+    expect(src).not.toMatch(/\[&>\*\+\*\]:border-t/);
+  });
+
   it("keeps the privacy trigger square like its title-bar neighbours", () => {
     const trigger = classStrings().find(({ file, cls }) => file === "ui/PrivacyBadge.tsx" && cls.includes("w-11 h-full"));
     expect(trigger).toBeDefined();

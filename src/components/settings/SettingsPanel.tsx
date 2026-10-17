@@ -23,6 +23,7 @@ import { TemplatesPanel } from "./TemplatesPanel";
 import { UpdatePanel } from "./UpdatePanel";
 import { VacationSection } from "./VacationSection";
 import { Switch } from "../ui/Switch";
+import { SettingsGroup, SettingsBlock, SettingsRow } from "./SettingsGroup";
 import { PremiumBadge } from "../ui/PremiumBadge";
 import { getVersion } from "@tauri-apps/api/app";
 import { Button, IconButton } from "../ui/Button";
@@ -497,32 +498,34 @@ function InfoPanel() {
   });
 
   return (
-    <div>
-      <h3 className="text-sm font-medium text-text mb-1">{t("settings.info.title")}</h3>
-      <p className="text-xs text-text-tertiary mb-4">{t("settings.info.description")}</p>
-
-      <div className="space-y-3">
-        <div className="flex items-center justify-between p-3 rounded-lg border border-border">
-          <span className="text-sm text-text">{t("settings.info.version")}</span>
-          <span className="text-sm font-mono text-text-secondary">{version}</span>
+    <SettingsGroup title={t("settings.info.title")}>
+      <SettingsBlock description={t("settings.info.description")} />
+      <div className="settings-row">
+        <div className="settings-row-text">
+          <div className="settings-row-title">{t("settings.info.version")}</div>
         </div>
-        <div className="flex items-center justify-between p-3 rounded-lg border border-border">
-          <span className="text-sm text-text">{t("settings.info.appName")}</span>
-          <span className="text-sm text-text-secondary">Prudii Mail</span>
-        </div>
-        <div className="flex items-center justify-between p-3 rounded-lg border border-border">
-          <span className="text-sm text-text">{t("settings.info.website")}</span>
-          <a
-            href="https://prudii.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-accent hover:underline"
-          >
-            prudii.com
-          </a>
-        </div>
+        <span className="text-sm font-mono text-text-secondary">{version}</span>
       </div>
-    </div>
+      <div className="settings-row">
+        <div className="settings-row-text">
+          <div className="settings-row-title">{t("settings.info.appName")}</div>
+        </div>
+        <span className="text-sm text-text-secondary">Prudii Mail</span>
+      </div>
+      <div className="settings-row">
+        <div className="settings-row-text">
+          <div className="settings-row-title">{t("settings.info.website")}</div>
+        </div>
+        <a
+          href="https://prudii.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm text-accent hover:underline"
+        >
+          prudii.com
+        </a>
+      </div>
+    </SettingsGroup>
   );
 }
 
@@ -739,7 +742,7 @@ export function SettingsPanel() {
               </div>
             </div>
 
-            <div ref={scrollRef} className="overflow-y-auto flex-1">
+            <div ref={scrollRef} className="overflow-y-auto flex-1 settings-canvas">
               {/* Keyed on the tab so switching crossfades like the rest of the
                   app instead of hard-cutting. */}
               <motion.div
@@ -747,16 +750,13 @@ export function SettingsPanel() {
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.15, ease: "easeOut" }}
-                className="p-4 space-y-6 [&>*+*]:border-t [&>*+*]:border-border [&>*+*]:pt-6"
+                className="p-4 space-y-5"
               >
 
               {activeTab === "general" && (
                 <>
-                  <div>
-                    <h3 className="text-sm font-medium text-text mb-1">{t("settings.appearance.title")}</h3>
-                    <p className="text-xs text-text-tertiary mb-3">
-                      {t("settings.appearance.description")}
-                    </p>
+                  <SettingsGroup title={t("settings.appearance.title")}>
+                    <SettingsBlock description={t("settings.appearance.description")}>
                     <div className="flex gap-2">
                       {THEME_OPTIONS.map(({ mode, labelKey, icon: Icon }) => (
                         <button
@@ -771,32 +771,23 @@ export function SettingsPanel() {
                         </button>
                       ))}
                     </div>
-                    <label className="mt-3 flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer">
-                      <PanelLeft className="w-4 h-4 text-text-tertiary shrink-0" />
-                      <div className="flex-1">
-                        <div className="text-sm text-text">{t(isMacOS ? "settings.appearance.transparentSidebar" : "settings.appearance.ambientSidebar")}</div>
-                        <div className="text-xs text-text-tertiary">{t(isMacOS ? "settings.appearance.transparentSidebarDesc" : "settings.appearance.ambientSidebarDesc")}</div>
-                      </div>
-                      <Switch checked={localSettings.transparent_sidebar} onChange={(v) => updateLocalSetting("transparent_sidebar", v)} />
-                    </label>
-                    <label className="mt-3 flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer">
-                      <Type className="w-4 h-4 text-text-tertiary shrink-0" />
-                      <div className="flex-1">
-                        <div className="text-sm text-text">{t("settings.appearance.systemFont")}</div>
-                        <div className="text-xs text-text-tertiary">{t("settings.appearance.systemFontDesc")}</div>
-                      </div>
-                      <Switch checked={localSettings.use_system_font} onChange={(v) => updateLocalSetting("use_system_font", v)} />
-                    </label>
-                  </div>
+                    </SettingsBlock>
+                    <SettingsRow
+                      icon={<PanelLeft className="w-4 h-4 text-text-tertiary shrink-0" />}
+                      title={t(isMacOS ? "settings.appearance.transparentSidebar" : "settings.appearance.ambientSidebar")}
+                      description={t(isMacOS ? "settings.appearance.transparentSidebarDesc" : "settings.appearance.ambientSidebarDesc")}
+                      control={<Switch checked={localSettings.transparent_sidebar} onChange={(v) => updateLocalSetting("transparent_sidebar", v)} />}
+                    />
+                    <SettingsRow
+                      icon={<Type className="w-4 h-4 text-text-tertiary shrink-0" />}
+                      title={t("settings.appearance.systemFont")}
+                      description={t("settings.appearance.systemFontDesc")}
+                      control={<Switch checked={localSettings.use_system_font} onChange={(v) => updateLocalSetting("use_system_font", v)} />}
+                    />
+                  </SettingsGroup>
 
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <Globe className="w-4 h-4 text-text-tertiary" />
-                      <h3 className="text-sm font-medium text-text">{t("settings.language.title")}</h3>
-                    </div>
-                    <p className="text-xs text-text-tertiary mb-3">
-                      {t("settings.language.description")}
-                    </p>
+                  <SettingsGroup title={t("settings.language.title")} icon={<Globe className="w-4 h-4" />}>
+                    <SettingsBlock description={t("settings.language.description")}>
                     <div className="grid grid-cols-4 gap-2">
                       {LANGUAGE_OPTIONS.map(({ value, labelKey }) => (
                         <button
@@ -810,104 +801,85 @@ export function SettingsPanel() {
                         </button>
                       ))}
                     </div>
-                  </div>
+                    </SettingsBlock>
+                  </SettingsGroup>
 
-                  <div>
-                    <h3 className="text-sm font-medium text-text mb-1">{t("settings.appSettings.title")}</h3>
-                    <p className="text-xs text-text-tertiary mb-3">
-                      {t("settings.appSettings.description")}
-                    </p>
-                    <div className="space-y-3">
-                      <label className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer">
-                        <Power className="w-4 h-4 text-text-tertiary shrink-0" />
-                        <div className="flex-1">
-                          <div className="text-sm text-text">{t("settings.appSettings.launchOnStartup")}</div>
-                          <div className="text-xs text-text-tertiary">{t("settings.appSettings.launchOnStartupDesc")}</div>
-                        </div>
-                        <Switch checked={localSettings.launch_on_startup} onChange={(v) => updateLocalSetting("launch_on_startup", v)} />
-                      </label>
+                  <SettingsGroup title={t("settings.appSettings.title")}>
+                    <SettingsBlock description={t("settings.appSettings.description")} />
+                      <SettingsRow
+                        icon={<Power className="w-4 h-4 text-text-tertiary shrink-0" />}
+                        title={t("settings.appSettings.launchOnStartup")}
+                        description={t("settings.appSettings.launchOnStartupDesc")}
+                        control={<Switch checked={localSettings.launch_on_startup} onChange={(v) => updateLocalSetting("launch_on_startup", v)} />}
+                      />
 
-                      <label className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer">
-                        <AppWindow className="w-4 h-4 text-text-tertiary shrink-0" />
-                        <div className="flex-1">
-                          <div className="text-sm text-text">{t("settings.appSettings.showInTray")}</div>
-                          <div className="text-xs text-text-tertiary">{t("settings.appSettings.showInTrayDesc")}</div>
-                        </div>
-                        <Switch checked={localSettings.show_in_tray} onChange={(v) => updateLocalSetting("show_in_tray", v)} />
-                      </label>
+                      <SettingsRow
+                        icon={<AppWindow className="w-4 h-4 text-text-tertiary shrink-0" />}
+                        title={t("settings.appSettings.showInTray")}
+                        description={t("settings.appSettings.showInTrayDesc")}
+                        control={<Switch checked={localSettings.show_in_tray} onChange={(v) => updateLocalSetting("show_in_tray", v)} />}
+                      />
 
-                      <label className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer">
-                        <Clock className="w-4 h-4 text-text-tertiary shrink-0" />
-                        <div className="flex-1">
-                          <div className="text-sm text-text">{t("settings.appSettings.use24hClock")}</div>
-                          <div className="text-xs text-text-tertiary">{t("settings.appSettings.use24hClockDesc")}</div>
-                        </div>
-                        <Switch checked={localSettings.use_24h_clock} onChange={(v) => updateLocalSetting("use_24h_clock", v)} />
-                      </label>
+                      <SettingsRow
+                        icon={<Clock className="w-4 h-4 text-text-tertiary shrink-0" />}
+                        title={t("settings.appSettings.use24hClock")}
+                        description={t("settings.appSettings.use24hClockDesc")}
+                        control={<Switch checked={localSettings.use_24h_clock} onChange={(v) => updateLocalSetting("use_24h_clock", v)} />}
+                      />
 
-                      <label className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer">
-                        <FolderOpen className="w-4 h-4 text-text-tertiary shrink-0" />
-                        <div className="flex-1">
-                          <div className="text-sm text-text">{t("settings.appSettings.showAllUnreadCounts")}</div>
-                          <div className="text-xs text-text-tertiary">{t("settings.appSettings.showAllUnreadCountsDesc")}</div>
-                        </div>
-                        <Switch checked={localSettings.show_all_unread_counts} onChange={(v) => updateLocalSetting("show_all_unread_counts", v)} />
-                      </label>
+                      <SettingsRow
+                        icon={<FolderOpen className="w-4 h-4 text-text-tertiary shrink-0" />}
+                        title={t("settings.appSettings.showAllUnreadCounts")}
+                        description={t("settings.appSettings.showAllUnreadCountsDesc")}
+                        control={<Switch checked={localSettings.show_all_unread_counts} onChange={(v) => updateLocalSetting("show_all_unread_counts", v)} />}
+                      />
 
-                      <label className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer">
-                        <Bell className="w-4 h-4 text-text-tertiary shrink-0" />
-                        <div className="flex-1">
-                          <div className="text-sm text-text">{t("settings.appSettings.notifications")}</div>
-                          <div className="text-xs text-text-tertiary">{t("settings.appSettings.notificationsDesc")}</div>
-                        </div>
-                        <Switch checked={localSettings.notifications_enabled} onChange={(v) => updateLocalSetting("notifications_enabled", v)} />
-                      </label>
+                      <SettingsRow
+                        icon={<Bell className="w-4 h-4 text-text-tertiary shrink-0" />}
+                        title={t("settings.appSettings.notifications")}
+                        description={t("settings.appSettings.notificationsDesc")}
+                        control={<Switch checked={localSettings.notifications_enabled} onChange={(v) => updateLocalSetting("notifications_enabled", v)} />}
+                      />
 
-                      <label className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer">
-                        <Volume2 className="w-4 h-4 text-text-tertiary shrink-0" />
-                        <div className="flex-1">
-                          <div className="text-sm text-text">{t("settings.appSettings.notificationSound")}</div>
-                          <div className="text-xs text-text-tertiary">{t("settings.appSettings.notificationSoundDesc")}</div>
-                        </div>
-                        <Switch checked={localSettings.notification_sound} onChange={(v) => updateLocalSetting("notification_sound", v)} />
-                      </label>
+                      <SettingsRow
+                        icon={<Volume2 className="w-4 h-4 text-text-tertiary shrink-0" />}
+                        title={t("settings.appSettings.notificationSound")}
+                        description={t("settings.appSettings.notificationSoundDesc")}
+                        control={<Switch checked={localSettings.notification_sound} onChange={(v) => updateLocalSetting("notification_sound", v)} />}
+                      />
 
-                      <label className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer">
-                        <Mail className="w-4 h-4 text-text-tertiary shrink-0" />
-                        <div className="flex-1">
-                          <div className="text-sm text-text">{t("settings.appSettings.defaultMailApp")}</div>
-                          <div className="text-xs text-text-tertiary">{t("settings.appSettings.defaultMailAppDesc")}</div>
-                        </div>
-                        <Switch
-                          checked={isDefaultMailApp}
-                          onChange={async (wantChecked) => {
-                            try {
-                              if (wantChecked) {
-                                await registerMailtoHandler();
-                              } else {
-                                await unregisterMailtoHandler();
+                      <SettingsRow
+                        icon={<Mail className="w-4 h-4 text-text-tertiary shrink-0" />}
+                        title={t("settings.appSettings.defaultMailApp")}
+                        description={t("settings.appSettings.defaultMailAppDesc")}
+                        control={
+                          <Switch
+                            checked={isDefaultMailApp}
+                            onChange={async (wantChecked) => {
+                              try {
+                                if (wantChecked) {
+                                  await registerMailtoHandler();
+                                } else {
+                                  await unregisterMailtoHandler();
+                                }
+                                setIsDefaultMailApp(wantChecked);
+                              } catch (err) {
+                                addToast("error", t("settings.mailtoFailed"), err instanceof Error ? err.message : String(err));
+                                // Re-read actual OS state so the switch reflects reality.
+                                isMailtoHandler().then(setIsDefaultMailApp).catch(() => {});
                               }
-                              setIsDefaultMailApp(wantChecked);
-                            } catch (err) {
-                              addToast("error", t("settings.mailtoFailed"), err instanceof Error ? err.message : String(err));
-                              // Re-read actual OS state so the switch reflects reality.
-                              isMailtoHandler().then(setIsDefaultMailApp).catch(() => {});
-                            }
-                          }}
-                        />
-                      </label>
-                    </div>
-                  </div>
+                            }}
+                            />
+                        }
+                      />
+                  </SettingsGroup>
 
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <Send className="w-4 h-4 text-text-tertiary" />
-                      <h3 className="text-sm font-medium text-text">{t("settings.undoSendDelay")}</h3>
-                      {!hasFeature("undo_send_config") && <PremiumBadge />}
-                    </div>
-                    <p className="text-xs text-text-tertiary mb-3">
-                      {t("settings.undoSendDelayDesc")}
-                    </p>
+                  <SettingsGroup
+                    title={t("settings.undoSendDelay")}
+                    icon={<Send className="w-4 h-4" />}
+                    action={!hasFeature("undo_send_config") ? <PremiumBadge /> : undefined}
+                  >
+                    <SettingsBlock description={t("settings.undoSendDelayDesc")}>
                     <div className="grid grid-cols-6 gap-2">
                       {UNDO_SEND_OPTIONS.map((option) => (
                         <button
@@ -926,16 +898,11 @@ export function SettingsPanel() {
                         </button>
                       ))}
                     </div>
-                  </div>
+                    </SettingsBlock>
+                  </SettingsGroup>
 
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <Type className="w-4 h-4 text-text-tertiary" />
-                      <h3 className="text-sm font-medium text-text">{t("settings.composeFont.title")}</h3>
-                    </div>
-                    <p className="text-xs text-text-tertiary mb-3">
-                      {t("settings.composeFont.description")}
-                    </p>
+                  <SettingsGroup title={t("settings.composeFont.title")} icon={<Type className="w-4 h-4" />}>
+                    <SettingsBlock description={t("settings.composeFont.description")}>
                     <div className="flex gap-2 flex-wrap">
                       {(Object.keys(COMPOSE_FONTS) as ComposeFontId[]).map((id) => (
                         <button
@@ -969,16 +936,11 @@ export function SettingsPanel() {
                     >
                       {t("settings.composeFont.sample")}
                     </p>
-                  </div>
+                    </SettingsBlock>
+                  </SettingsGroup>
 
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <Palette className="w-4 h-4 text-text-tertiary" />
-                      <h3 className="text-sm font-medium text-text">{t("settings.accentColor.title")}</h3>
-                    </div>
-                    <p className="text-xs text-text-tertiary mb-3">
-                      {t("settings.accentColor.description")}
-                    </p>
+                  <SettingsGroup title={t("settings.accentColor.title")} icon={<Palette className="w-4 h-4" />}>
+                    <SettingsBlock description={t("settings.accentColor.description")}>
                     <div className="flex gap-2 flex-wrap">
                       {ACCENT_OPTIONS.map(({ id, hex, labelKey }) => {
                         const swatchColor = id === "system" ? systemAccentHex ?? DEFAULT_ACCENT_HEX : hex ?? DEFAULT_ACCENT_HEX;
@@ -1001,33 +963,30 @@ export function SettingsPanel() {
                         );
                       })}
                     </div>
-                  </div>
+                    </SettingsBlock>
+                  </SettingsGroup>
 
-                  <div>
-                    <h3 className="text-sm font-medium text-text mb-1">{t("settings.density.title")}</h3>
-                    <p className="text-xs text-text-tertiary mb-3">
-                      {t("settings.density.description")}
-                    </p>
+                  <SettingsGroup title={t("settings.density.title")}>
+                    <SettingsBlock description={t("settings.density.description")}>
                     <SegmentedControl
                       aria-label={t("settings.density.title")}
                       value={localSettings.density}
                       onChange={(id) => updateLocalSetting("density", id)}
                       options={DENSITY_OPTIONS.map(({ id, labelKey }) => ({ value: id, label: t(labelKey) }))}
                     />
-                  </div>
+                    </SettingsBlock>
+                  </SettingsGroup>
 
-                  <div>
-                    <h3 className="text-sm font-medium text-text mb-1">{t("settings.threadView.title")}</h3>
-                    <p className="text-xs text-text-tertiary mb-3">
-                      {t("settings.threadView.description")}
-                    </p>
+                  <SettingsGroup title={t("settings.threadView.title")}>
+                    <SettingsBlock description={t("settings.threadView.description")}>
                     <SegmentedControl
                       aria-label={t("settings.threadView.title")}
                       value={localSettings.thread_view}
                       onChange={(id) => updateLocalSetting("thread_view", id)}
                       options={THREAD_VIEW_OPTIONS.map(({ id, labelKey }) => ({ value: id, label: t(labelKey) }))}
                     />
-                  </div>
+                    </SettingsBlock>
+                  </SettingsGroup>
                 </>
               )}
 
@@ -1109,14 +1068,13 @@ export function SettingsPanel() {
                 hasFeature("rules_filters") ? (
                   <RulesPanel />
                 ) : (
-                  <div className="text-center py-12">
-                    <Lock className="w-8 h-8 text-text-tertiary mx-auto mb-3" />
-                    <h3 className="text-sm font-medium text-text mb-1">{t("premium.upgradePrompt")}</h3>
-                    <p className="text-xs text-text-tertiary mb-4">{t("rules.premiumDesc")}</p>
-                    <Button variant="primary" size="sm" onClick={() => window.open("https://prudii.com/pricing", "_blank")}>
-                      {t("premium.upgradeButton")}
-                    </Button>
-                  </div>
+                  <SettingsGroup title={t("premium.upgradePrompt")} icon={<Lock className="w-4 h-4" />}>
+                    <SettingsBlock description={t("rules.premiumDesc")}>
+                      <Button variant="primary" size="sm" onClick={() => window.open("https://prudii.com/pricing", "_blank")}>
+                        {t("premium.upgradeButton")}
+                      </Button>
+                    </SettingsBlock>
+                  </SettingsGroup>
                 )
               )}
 
@@ -1124,14 +1082,13 @@ export function SettingsPanel() {
                 hasFeature("templates") ? (
                   <TemplatesPanel />
                 ) : (
-                  <div className="text-center py-12">
-                    <Lock className="w-8 h-8 text-text-tertiary mx-auto mb-3" />
-                    <h3 className="text-sm font-medium text-text mb-1">{t("premium.upgradePrompt")}</h3>
-                    <p className="text-xs text-text-tertiary mb-4">{t("templates.premiumDesc")}</p>
-                    <Button variant="primary" size="sm" onClick={() => window.open("https://prudii.com/pricing", "_blank")}>
-                      {t("premium.upgradeButton")}
-                    </Button>
-                  </div>
+                  <SettingsGroup title={t("premium.upgradePrompt")} icon={<Lock className="w-4 h-4" />}>
+                    <SettingsBlock description={t("templates.premiumDesc")}>
+                      <Button variant="primary" size="sm" onClick={() => window.open("https://prudii.com/pricing", "_blank")}>
+                        {t("premium.upgradeButton")}
+                      </Button>
+                    </SettingsBlock>
+                  </SettingsGroup>
                 )
               )}
 
@@ -1146,14 +1103,13 @@ export function SettingsPanel() {
                     updateLocalSetting={updateLocalSetting}
                   />
                 ) : (
-                  <div className="text-center py-12">
-                    <Lock className="w-8 h-8 text-text-tertiary mx-auto mb-3" />
-                    <h3 className="text-sm font-medium text-text mb-1">{t("premium.upgradePrompt")}</h3>
-                    <p className="text-xs text-text-tertiary mb-4">{t("settings.ai.premiumDesc")}</p>
-                    <Button variant="primary" size="sm" onClick={() => window.open("https://prudii.com/pricing", "_blank")}>
-                      {t("premium.upgradeButton")}
-                    </Button>
-                  </div>
+                  <SettingsGroup title={t("premium.upgradePrompt")} icon={<Lock className="w-4 h-4" />}>
+                    <SettingsBlock description={t("settings.ai.premiumDesc")}>
+                      <Button variant="primary" size="sm" onClick={() => window.open("https://prudii.com/pricing", "_blank")}>
+                        {t("premium.upgradeButton")}
+                      </Button>
+                    </SettingsBlock>
+                  </SettingsGroup>
                 )
               )}
 
