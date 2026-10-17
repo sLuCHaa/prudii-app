@@ -64,6 +64,30 @@ describe("settings group", () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
+  it("makes a clickable row reachable and operable by keyboard", () => {
+    const onClick = vi.fn();
+    const c = mount(createElement(SettingsRow, { title: "Konto", onClick }));
+    const row = c.querySelector<HTMLElement>(".settings-row")!;
+    expect(row.getAttribute("role")).toBe("button");
+    expect(row.tabIndex).toBe(0);
+    act(() => { row.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); });
+    act(() => { row.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true })); });
+    expect(onClick).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores keys pressed on a nested control of a clickable row", () => {
+    const onClick = vi.fn();
+    const c = mount(createElement(SettingsRow, { title: "Konto", onClick, control: undefined, children: createElement("button", { id: "inner" }) }));
+    act(() => { c.querySelector("#inner")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); });
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it("keeps a plain row out of the tab order", () => {
+    const h = html(createElement(SettingsRow, { title: "Konto" }));
+    expect(h).not.toContain("tabindex");
+    expect(h).not.toContain("role=");
+  });
+
   it("toggles the row's switch once when its text is clicked", () => {
     const onChange = vi.fn();
     const c = mount(createElement(SettingsRow, { title: "Ton", control: createElement(Switch, { checked: false, onChange }) }));

@@ -57,7 +57,18 @@ export function SettingsRow({ title, description, icon, control, as, onClick, cl
   );
   if (control && as !== "div") return <label className={cn("settings-row", className)}>{body}</label>;
   return (
-    <div className={cn("settings-row", className)} data-clickable={onClick ? "" : undefined} onClick={onClick}>
+    <div
+      className={cn("settings-row", className)}
+      data-clickable={onClick ? "" : undefined}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => {
+        if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
+        e.preventDefault();
+        onClick();
+      } : undefined}
+    >
       {body}
     </div>
   );
