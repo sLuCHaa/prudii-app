@@ -47,7 +47,7 @@ export function TrackingIndicator({ trackers }: TrackingIndicatorProps) {
     <div className="relative" ref={menuRef}>
       <button
         onClick={hasTrackers ? () => setOpen(!open) : undefined}
-        className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors text-success ${
+        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-sm text-xs font-medium transition-colors text-success ${
           hasTrackers ? "hover:bg-success/10 cursor-pointer" : "cursor-default"
         }`}
         title={t("tracking.title")}

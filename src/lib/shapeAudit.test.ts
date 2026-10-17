@@ -108,4 +108,9 @@ describe("shape audit", () => {
     expect(src).toContain("motion-reduce:transform-none");
     expect(classStrings().some(({ file, cls }) => file.endsWith("ComposeModal.tsx") && cls.includes("pointer-events-none") && cls.includes("rounded-[inherit]") && cls.includes("inset-shadow-[0_1px_0_rgba(255,255,255,.32)]"))).toBe(true);
   });
+
+  it("gives chips and notice badges 8px corners", () => {
+    const files = ["tasks/MailTaskChip.tsx", "layout/TrackingIndicator.tsx", "ui/PremiumBadge.tsx", "ui/PrivacyBadge.tsx"];
+    expect(files.filter((f) => !/\brounded-sm\b/.test(sourceOf(f)))).toEqual([]);
+  });
 });

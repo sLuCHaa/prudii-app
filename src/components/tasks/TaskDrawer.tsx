@@ -44,7 +44,7 @@ const STATUS_STRIPE: Record<TaskStatus, string> = {
   done: "bg-success",
 };
 
-const PILL = "inline-flex items-center gap-2 h-[30px] px-3 rounded-full border border-border bg-bg-secondary text-text text-xs font-medium hover:border-text-tertiary transition-colors";
+const PILL = "inline-flex items-center gap-2 h-[30px] px-3 rounded-sm border border-border bg-bg-secondary text-text text-xs font-medium hover:border-text-tertiary transition-colors";
 
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
@@ -479,8 +479,8 @@ export function TaskDrawer({ taskId, onClose, onCreate, onUpdate }: TaskDrawerPr
                   aria-label={t("tasks.due")}
                   className={
                     task.due_at
-                      ? `inline-flex items-center gap-2 h-[30px] px-3 rounded-full border border-transparent text-xs font-medium transition-colors ${overdue ? "bg-danger/10 text-danger" : "bg-accent/10 text-accent"}`
-                      : "inline-flex items-center gap-2 h-[30px] px-3 rounded-full border border-dashed border-border bg-transparent text-xs font-medium text-text-tertiary hover:border-text-tertiary hover:text-text-secondary transition-colors"
+                      ? `inline-flex items-center gap-2 h-[30px] px-3 rounded-sm border border-transparent text-xs font-medium transition-colors ${overdue ? "bg-danger/10 text-danger" : "bg-accent/10 text-accent"}`
+                      : "inline-flex items-center gap-2 h-[30px] px-3 rounded-sm border border-dashed border-border bg-transparent text-xs font-medium text-text-tertiary hover:border-text-tertiary hover:text-text-secondary transition-colors"
                   }
                 >
                   <CalendarDays className="w-3.5 h-3.5" />

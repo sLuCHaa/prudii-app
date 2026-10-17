@@ -104,7 +104,7 @@ function CustomRule({ spec, start, onChange }: { spec: RecurrenceSpec; start: Da
                 type="button"
                 aria-pressed={on}
                 onClick={() => toggleDay(code)}
-                className={`h-8 w-8 rounded-full text-xs font-medium transition-colors ${on ? "bg-accent text-white" : "bg-bg-secondary text-text-secondary hover:bg-hover"}`}
+                className={`h-8 w-8 rounded-sm text-xs font-medium transition-colors ${on ? "bg-accent text-white" : "bg-bg-secondary text-text-secondary hover:bg-hover"}`}
               >
                 {format(addDays(REFERENCE_SUNDAY, i), "EEEEEE", { locale: dateLocale() })}
               </button>

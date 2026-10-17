@@ -42,7 +42,7 @@ export function LinkedTaskChip({ task }: LinkedTaskChipProps) {
       type="button"
       onClick={() => openTaskById(task.id)}
       title={t("tasks.openTask")}
-      className="flex max-w-[220px] items-center gap-1.5 rounded-full bg-accent/10 px-2 py-0.5 text-xs text-accent transition-colors hover:bg-hover"
+      className="flex max-w-[220px] items-center gap-1.5 rounded-sm bg-accent/10 px-2 py-0.5 text-xs text-accent transition-colors hover:bg-hover"
     >
       <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[task.status]}`} />
       <span className="truncate">{task.title}</span>

@@ -884,7 +884,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
                     setShowQuoted(!showQuoted);
                   }}
                   aria-expanded={showQuoted}
-                  className={`mt-2 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-xs font-medium text-text-tertiary hover:bg-hover hover:text-text-secondary transition-colors ${
+                  className={`mt-2 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-sm border text-xs font-medium text-text-tertiary hover:bg-hover hover:text-text-secondary transition-colors ${
                     own ? "border-own-bubble-border" : "border-border"
                   }`}
                 >

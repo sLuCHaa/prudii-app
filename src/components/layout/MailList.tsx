@@ -2108,7 +2108,7 @@ export function MailList() {
             <button
               key={f}
               onClick={() => setFolderFilter(f)}
-              className={`px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${
+              className={`px-2.5 py-0.5 rounded-sm text-xs font-medium transition-colors ${
                 folderFilter === f
                   ? "bg-accent/15 text-accent"
                   : "text-text-tertiary hover:bg-hover hover:text-text-secondary"
