@@ -1578,6 +1578,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   }
 
   const modeTitle = mode === "new" ? t("compose.newMessage") : mode === "draft" ? t("compose.draft") : mode === "reply" ? t("compose.reply") : mode === "replyAll" ? t("compose.replyAll") : t("compose.forward");
+  const canSend = (to.length > 0 || toHasPending) && !sending;
 
   return (
     <>
@@ -1917,7 +1918,9 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
               />
               <div
                 ref={scheduleBtnRef}
-                className="relative flex items-stretch gap-0 rounded-control transition-transform hover:-translate-y-px active:translate-y-px motion-reduce:transform-none [box-shadow:0_2px_8px_rgba(59,130,246,0.25)]"
+                className={`relative flex items-stretch gap-0 rounded-control transition-[translate] duration-200 ease-out ${
+                  canSend && !showScheduleMenu ? "motion-safe:hover:-translate-y-px motion-safe:active:translate-y-px" : ""
+                } [box-shadow:0_2px_8px_rgba(59,130,246,0.25)]`}
               >
                 <SendButton onSend={handleSend} disabled={to.length === 0 && !toHasPending} />
                 <button
@@ -1925,7 +1928,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
                     setShowScheduleMenu(!showScheduleMenu);
                     setCustomSchedule(null);
                   }}
-                  disabled={(to.length === 0 && !toHasPending) || sending}
+                  disabled={!canSend}
                   className="flex items-center px-2 bg-accent text-white rounded-r-control border-l border-white/20 disabled:opacity-50 transition-[filter] duration-200 hover:brightness-110 active:brightness-95"
                 >
                   <ChevronDown className="w-4 h-4" />

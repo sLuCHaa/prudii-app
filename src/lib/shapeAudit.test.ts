@@ -105,7 +105,12 @@ describe("shape audit", () => {
     expect(src).not.toMatch(/rounded-[lr]-xl\b/);
     expect(src).toContain("rounded-l-control");
     expect(src).toContain("rounded-r-control");
-    expect(src).toContain("motion-reduce:transform-none");
+    expect(src).not.toContain("motion-reduce:transform-none");
+    const wrap = classStrings().find(({ file, cls }) => file === "compose/ComposeModal.tsx" && cls.includes("[box-shadow:0_2px_8px_rgba(59,130,246,0.25)]"));
+    expect(wrap?.cls).toContain("transition-[translate]");
+    expect(wrap?.cls).toContain("motion-safe:hover:-translate-y-px motion-safe:active:translate-y-px");
+    expect(wrap?.cls).toContain("showScheduleMenu");
+    expect(wrap?.cls).not.toMatch(/(?<!motion-safe:)(?:hover|active):-?translate-y-px/);
     expect(classStrings().some(({ file, cls }) => file.endsWith("ComposeModal.tsx") && cls.includes("pointer-events-none") && cls.includes("rounded-[inherit]") && cls.includes("inset-shadow-[0_1px_0_rgba(255,255,255,.32)]"))).toBe(true);
   });
 
