@@ -4,6 +4,19 @@ import { resolve } from "node:path";
 
 const css = readFileSync(resolve(__dirname, "../index.css"), "utf8");
 
+describe("shadow ramp", () => {
+  it("follows the theme in the shadow utilities", () => {
+    for (const step of ["sm", "md", "lg", "xl", "2xl"]) {
+      expect(css).toContain(`--shadow-${step}: var(--c-shadow-${step});`);
+      expect(css.match(new RegExp(`^\\s*--c-shadow-${step}:`, "gm"))?.length).toBe(2);
+    }
+  });
+
+  it("drops the unused cool gradient", () => {
+    expect(css).not.toContain("--gradient-cool");
+  });
+});
+
 describe("tactile surfaces marked disabled", () => {
   it("neither lift nor sink", () => {
     expect(css).toContain('.tactile-filled:hover:not(:disabled):not([aria-disabled="true"])');

@@ -60,7 +60,6 @@
   /* Signature Gradients (Revolut-style) */
   --gradient-vip:     linear-gradient(135deg, #f59e0b, #ef4444);
   --gradient-warm:    linear-gradient(135deg, #ec4899, #f97316);
-  --gradient-cool:    linear-gradient(135deg, #3b82f6, #8b5cf6);
   --gradient-success: linear-gradient(135deg, #10b981, #3b82f6);
 
   --c-hover:       #F1EBE2;
@@ -89,6 +88,11 @@
 
   /* Shadows + radius scale live in @theme; only the non-Tailwind extras here */
   --radius-full: 9999px;
+  --c-shadow-sm:  0 1px 2px rgba(0,0,0,0.05);
+  --c-shadow-md:  0 4px 6px rgba(0,0,0,0.07);
+  --c-shadow-lg:  0 10px 25px rgba(0,0,0,0.1);
+  --c-shadow-xl:  0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1);
+  --c-shadow-2xl: 0 25px 50px -12px rgba(0,0,0,0.25);
 
   /* Transitions & Easing */
   --transition-fast:   150ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -143,7 +147,6 @@
   /* Signature Gradients (Revolut-style) */
   --gradient-vip:     linear-gradient(135deg, #f59e0b, #ef4444);
   --gradient-warm:    linear-gradient(135deg, #ec4899, #f97316);
-  --gradient-cool:    linear-gradient(135deg, #3b82f6, #8b5cf6);
   --gradient-success: linear-gradient(135deg, #10b981, #3b82f6);
 
   /* Die Stufen folgen den Verhaeltnissen der urspruenglichen Slate-Palette
@@ -162,12 +165,12 @@
   --c-overlay:         rgba(0, 0, 0, 0.6);
   --c-drawer-backdrop: rgba(10, 8, 6, 0.55);
 
-  /* Shadows (Dark Mode): stronger values for direct var(--shadow-*)
-     consumers (modal panels, scrollbar chrome). shadow-* utilities keep the
-     inlined light values — Tailwind resolves them at build time. */
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
-  --shadow-md: 0 4px 6px rgba(0,0,0,0.3);
-  --shadow-lg: 0 10px 25px rgba(0,0,0,0.4);
+  /* Shadows (Dark Mode): stronger, so panels still lift off the dark surfaces. */
+  --c-shadow-sm:  0 1px 2px rgba(0,0,0,0.2);
+  --c-shadow-md:  0 4px 6px rgba(0,0,0,0.3);
+  --c-shadow-lg:  0 10px 25px rgba(0,0,0,0.4);
+  --c-shadow-xl:  0 20px 25px -5px rgba(0,0,0,0.45), 0 8px 10px -6px rgba(0,0,0,0.4);
+  --c-shadow-2xl: 0 25px 50px -12px rgba(0,0,0,0.6);
 }
 
 /* ─── Tailwind Theme Mapping ─── */
@@ -226,11 +229,12 @@
   --text-base--line-height: 1.5;
 
   /* Shadows — the documented ramp. Tailwind inlines these values into the
-     shadow-* utilities at build time; the .dark override below only reaches
-     direct var(--shadow-*) consumers (modal panels), same as before. */
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
-  --shadow-md: 0 4px 6px rgba(0,0,0,0.07);
-  --shadow-lg: 0 10px 25px rgba(0,0,0,0.1);
+     shadow-* utilities, so they point at --c-shadow-* to follow the theme. */
+  --shadow-sm: var(--c-shadow-sm);
+  --shadow-md: var(--c-shadow-md);
+  --shadow-lg: var(--c-shadow-lg);
+  --shadow-xl: var(--c-shadow-xl);
+  --shadow-2xl: var(--c-shadow-2xl);
 }
 
 /* System font: drop the brand faces and let the platform rasterise its own. */
