@@ -11,24 +11,18 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: React.ReactNode;
   iconPosition?: "left" | "right";
   fullWidth?: boolean;
-  /** Press feedback (fill step plus 1px sink). Off for controls that must not move, e.g. inside a drag handle. */
+  /** Lift and press feedback. Off for controls that must not move, e.g. inside a drag handle. */
   animated?: boolean;
 }
 
-// Hover lifts a little, press drops hard, and the two move in opposite
-// directions — the click has to be the larger of the two events. Measured on
-// the terracotta default: hover shifts 0.029 luminance, press shifts 0.084, so
-// the press is ~2.9x the hover. It used to be 0.046 against 0.022, which meant
-// merely moving the pointer over a button changed more than clicking it did.
-// Brightness rather than a named hover token, so all nine accents behave alike.
-const HOVER_FILLED = "hover:brightness-[1.08]";
+const FILLED = "tactile-filled border-transparent";
 
 const VARIANT_STYLES: Record<ButtonVariant, string> = {
-  primary: `bg-accent text-on-accent border-transparent ${HOVER_FILLED} shadow-[0_1px_2px_rgba(0,0,0,0.18)]`,
-  danger: `bg-danger text-white border-transparent ${HOVER_FILLED} shadow-[0_1px_2px_rgba(0,0,0,0.18)]`,
-  success: `bg-success text-white border-transparent ${HOVER_FILLED} shadow-[0_1px_2px_rgba(0,0,0,0.18)]`,
-  signal: `bg-signal text-bg border-transparent ${HOVER_FILLED} shadow-[0_1px_2px_rgba(0,0,0,0.18)]`,
-  secondary: "bg-surface text-text border-border hover:bg-hover hover:border-border-light",
+  primary: `${FILLED} [--tactile-fill:var(--c-accent)] text-on-accent`,
+  danger: `${FILLED} [--tactile-fill:var(--c-danger)] text-white`,
+  success: `${FILLED} [--tactile-fill:var(--c-success)] text-white`,
+  signal: `${FILLED} [--tactile-fill:var(--c-signal)] text-bg`,
+  secondary: "tactile-quiet bg-surface text-text border-border",
   ghost: "bg-transparent text-text-secondary border-transparent hover:bg-hover hover:text-text",
 };
 
@@ -44,32 +38,15 @@ const ICON_SIZES: Record<ButtonSize, number> = {
   lg: 20,
 };
 
-// Press feedback. A macOS push button answers a press by darkening its fill
-// immediately and easing back on release — that colour step IS the signal, and
-// the 1px sink only supports it. Without it a press reads as nothing at all,
-// because the pointer already sits in the hover state when the click lands.
-// duration-0 on :active keeps the press instant while the release still eases.
-// Still no scale: native controls never grow or shrink.
-const PRESS_FILLED =
-  "active:brightness-[0.82] active:translate-y-px active:duration-0 " +
-  "active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.32)] motion-reduce:active:translate-y-0";
-
-// A brightness filter barely shows on the near-black surfaces of the dark
-// theme, so the quiet variants step to --c-active instead, which is defined
-// per theme. Tailwind's `dark:` cannot help here: no @custom-variant is
-// registered, so it would follow the OS setting rather than the .dark class.
-const PRESS_QUIET =
+// Only ghost presses by itself; the other variants get hover and press from the tactile classes.
+const PRESS_GHOST =
   "active:bg-active active:translate-y-px active:duration-0 " +
   "active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.20)] motion-reduce:active:translate-y-0";
 
-const PRESS: Record<ButtonVariant, string> = {
-  primary: PRESS_FILLED,
-  danger: PRESS_FILLED,
-  success: PRESS_FILLED,
-  signal: PRESS_FILLED,
-  secondary: PRESS_QUIET,
-  ghost: PRESS_QUIET,
-};
+function pressStyle(variant: ButtonVariant, animated: boolean, isDisabled?: boolean): string {
+  if (variant === "ghost") return animated && !isDisabled ? PRESS_GHOST : "";
+  return animated && !isDisabled ? "" : "tactile-static";
+}
 
 const TRANSITION = "transition-[color,background-color,border-color,box-shadow,transform,filter] duration-150 ease-out";
 
@@ -108,14 +85,14 @@ export function Button({
     <button
       disabled={isDisabled}
       className={`
-        relative inline-flex items-center justify-center font-medium rounded-full border
+        relative inline-flex items-center justify-center font-medium rounded-control border
         ${TRANSITION}
         ${VARIANT_STYLES[variant]}
         ${sizeStyles.padding}
         ${sizeStyles.text}
         ${sizeStyles.gap}
         ${fullWidth ? "w-full" : ""}
-        ${animated && !isDisabled ? PRESS[variant] : ""}
+        ${pressStyle(variant, animated, isDisabled)}
         ${isDisabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
         ${className}
       `}
@@ -167,11 +144,11 @@ export function IconButton({
     <button
       disabled={isDisabled}
       className={`
-        inline-flex items-center justify-center rounded-full border border-transparent
+        inline-flex items-center justify-center rounded-control border border-transparent
         ${TRANSITION}
         ${variant === "ghost" ? "text-text-tertiary hover:text-text hover:bg-hover" : VARIANT_STYLES[variant]}
         ${SIZE_MAP[size]}
-        ${animated && !isDisabled ? PRESS[variant] : ""}
+        ${pressStyle(variant, animated, isDisabled)}
         ${isDisabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
         ${className}
       `}
