@@ -19,7 +19,7 @@ export interface SelectProps {
   ariaLabel?: string;
 }
 
-const DEFAULT_TRIGGER = "w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-bg-secondary text-text text-sm text-left focus:border-accent";
+const DEFAULT_TRIGGER = "w-full flex items-center gap-2 px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm text-left focus:border-accent";
 
 export function Select({ value, options, onChange, placeholder, className = DEFAULT_TRIGGER, ariaLabel }: SelectProps) {
   const ref = useRef<HTMLButtonElement>(null);

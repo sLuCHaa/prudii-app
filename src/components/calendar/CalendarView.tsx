@@ -213,7 +213,7 @@ export function CalendarView() {
                   if (e.key === "Escape") setSearch("");
                 }}
                 placeholder={t("calendar.search")}
-                className="w-full rounded-lg border border-border bg-bg-secondary py-1.5 pl-9 pr-3 text-sm text-text transition-colors focus:border-accent"
+                className="w-full rounded-control inset-shadow-field border border-border bg-bg-secondary py-1.5 pl-9 pr-3 text-sm text-text transition-colors focus:border-accent"
               />
             </div>
             <ViewSegment view={view} onChange={setView} />

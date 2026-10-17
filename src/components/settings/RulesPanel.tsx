@@ -57,7 +57,7 @@ function RuleForm({
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             placeholder={t("rules.namePlaceholder")}
-            className="w-full px-3 py-2 rounded-lg border border-border bg-surface text-text text-sm focus:border-accent"
+            className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-surface text-text text-sm focus:border-accent"
           />
         </div>
         <div>
@@ -66,7 +66,7 @@ function RuleForm({
             type="number"
             value={form.priority}
             onChange={(e) => setForm({ ...form, priority: parseInt(e.target.value) || 0 })}
-            className="w-full px-3 py-2 rounded-lg border border-border bg-surface text-text text-sm focus:border-accent"
+            className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-surface text-text text-sm focus:border-accent"
           />
         </div>
       </div>
@@ -81,7 +81,7 @@ function RuleForm({
               type="text"
               value={form.from_contains ?? ""}
               onChange={(e) => setForm({ ...form, from_contains: e.target.value || null })}
-              className="w-full px-3 py-2 rounded-lg border border-border bg-surface text-text text-sm focus:border-accent"
+              className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-surface text-text text-sm focus:border-accent"
             />
           </div>
           <div>
@@ -90,7 +90,7 @@ function RuleForm({
               type="text"
               value={form.to_contains ?? ""}
               onChange={(e) => setForm({ ...form, to_contains: e.target.value || null })}
-              className="w-full px-3 py-2 rounded-lg border border-border bg-surface text-text text-sm focus:border-accent"
+              className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-surface text-text text-sm focus:border-accent"
             />
           </div>
           <div>
@@ -99,7 +99,7 @@ function RuleForm({
               type="text"
               value={form.subject_contains ?? ""}
               onChange={(e) => setForm({ ...form, subject_contains: e.target.value || null })}
-              className="w-full px-3 py-2 rounded-lg border border-border bg-surface text-text text-sm focus:border-accent"
+              className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-surface text-text text-sm focus:border-accent"
             />
           </div>
           <div>
@@ -177,7 +177,7 @@ function RuleForm({
                 { value: "", label: t("rules.selectFolder") },
                 ...(folders ?? []).map((f) => ({ value: f.id, label: f.name })),
               ]}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-surface text-text text-sm text-left focus:border-accent"
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-control inset-shadow-field border border-border bg-surface text-text text-sm text-left focus:border-accent"
             />
           </div>
         </div>

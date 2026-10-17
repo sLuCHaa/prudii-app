@@ -434,7 +434,7 @@ export function AttachmentBrowser() {
                 onKeyDown={(e) => { if (e.key === "Enter") handleAiSearch(); if (e.key === "Escape") clearAiResults(); }}
                 placeholder={t("attachments.aiSearchPlaceholder")}
                 disabled={aiSearching}
-                className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-accent/50 bg-accent/5 text-text text-sm focus:border-accent transition-colors ring-1 ring-accent/20"
+                className="w-full pl-9 pr-3 py-1.5 rounded-control inset-shadow-field border border-accent/50 bg-accent/5 text-text text-sm focus:border-accent transition-colors ring-1 ring-accent/20"
               />
             </div>
           ) : (
@@ -445,7 +445,7 @@ export function AttachmentBrowser() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={t("attachments.search")}
-                className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-border bg-bg-secondary text-text text-sm focus:border-accent transition-colors"
+                className="w-full pl-9 pr-3 py-1.5 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm focus:border-accent transition-colors"
               />
             </div>
           )}

@@ -8,7 +8,7 @@ import { parseTimeInput, timeOptions } from "../../lib/timeInput";
 import type { MenuEntry } from "../../lib/menuModel";
 import { ContextMenu } from "./ContextMenu";
 
-const FIELD = "flex items-center gap-1 h-9 pl-3 pr-1.5 rounded-lg border border-border bg-bg-secondary text-sm text-text focus-within:border-accent";
+const FIELD = "flex items-center gap-1 h-9 pl-3 pr-1.5 rounded-control inset-shadow-field border border-border bg-bg-secondary text-sm text-text focus-within:border-accent";
 
 function label(value: string, use24h: boolean): string {
   const [h, m] = value.split(":").map(Number);

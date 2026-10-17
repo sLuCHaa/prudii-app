@@ -19,7 +19,7 @@ interface SubscribeDialogProps {
   onClose: () => void;
 }
 
-const INPUT = "w-full h-9 px-3 rounded-lg border border-border bg-bg-secondary text-sm text-text outline-none focus:border-accent";
+const INPUT = "w-full h-9 px-3 rounded-control inset-shadow-field border border-border bg-bg-secondary text-sm text-text outline-none focus:border-accent";
 
 export function SubscribeDialog({ target, onClose }: SubscribeDialogProps) {
   const { t } = useTranslation();

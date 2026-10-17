@@ -6,7 +6,7 @@ import { Button } from "../ui/Button";
 
 export const PRESET_MINUTES = [0, 5, 10, 15, 30, 60, 1440];
 const MAX_MINUTES = 7 * 24 * 60;
-const INPUT = "h-9 px-3 rounded-lg border border-border bg-bg-secondary text-sm text-text outline-none focus:border-accent";
+const INPUT = "h-9 px-3 rounded-control inset-shadow-field border border-border bg-bg-secondary text-sm text-text outline-none focus:border-accent";
 
 // i18next's overloaded t only fits a loose signature.
 type Translate = (key: string, opts?: any) => string;

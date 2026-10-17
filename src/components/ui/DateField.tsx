@@ -8,7 +8,7 @@ import { dateLocale } from "../../lib/dateUtils";
 import { weekStartsOn } from "../../lib/localeDefaults";
 import { MiniMonth } from "./MiniMonth";
 
-const TRIGGER = "flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-bg-secondary text-sm text-left outline-none focus:border-accent";
+const TRIGGER = "flex items-center gap-2 h-9 px-3 rounded-control inset-shadow-field border border-border bg-bg-secondary text-sm text-left outline-none focus:border-accent";
 const FOOTER_BUTTON = "px-2 py-1 rounded-md text-xs font-medium text-accent hover:bg-hover transition-colors";
 
 const weekStart = weekStartsOn();

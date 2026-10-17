@@ -201,7 +201,7 @@ export function LicenseSettings() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
-              className="w-full px-3 py-2 rounded-lg border border-border bg-bg-secondary text-text text-sm focus:border-accent"
+              className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm focus:border-accent"
               onKeyDown={(e) => e.key === "Enter" && handleLogin()}
             />
           </div>
@@ -211,7 +211,7 @@ export function LicenseSettings() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-border bg-bg-secondary text-text text-sm focus:border-accent"
+              className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm focus:border-accent"
               onKeyDown={(e) => e.key === "Enter" && handleLogin()}
             />
           </div>
@@ -267,7 +267,7 @@ export function LicenseSettings() {
               value={licenseKey}
               onChange={(e) => setLicenseKey(e.target.value.toUpperCase())}
               placeholder="PRUDII-XXXXX-XXXXX-XXXXX-XXXXX"
-              className="w-full px-3 py-2 rounded-lg border border-border bg-bg-secondary text-text text-sm font-mono focus:border-accent"
+              className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm font-mono focus:border-accent"
             />
           </div>
           <div>
@@ -277,7 +277,7 @@ export function LicenseSettings() {
               value={activateEmail}
               onChange={(e) => setActivateEmail(e.target.value)}
               placeholder="you@example.com"
-              className="w-full px-3 py-2 rounded-lg border border-border bg-bg-secondary text-text text-sm focus:border-accent"
+              className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm focus:border-accent"
             />
           </div>
           <div className="flex gap-2">

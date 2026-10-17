@@ -298,7 +298,7 @@ export function BackupRestore() {
                   value={restorePassphrase}
                   onChange={(e) => setRestorePassphrase(e.target.value)}
                   disabled={restoreBusy}
-                  className="w-full text-sm px-2 py-1.5 rounded-lg border border-border bg-bg-secondary text-text"
+                  className="w-full text-sm px-2 py-1.5 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text focus:border-accent"
                 />
                 <div className="text-xs text-text-tertiary">{t("backup.restoreWithoutCredentials")}</div>
               </div>

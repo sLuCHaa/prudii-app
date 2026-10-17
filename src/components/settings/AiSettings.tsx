@@ -110,7 +110,7 @@ export function AiSettings({ localSettings, updateLocalSetting }: AiSettingsProp
                 value={localSettings.ollama_url}
                 onChange={(e) => updateLocalSetting("ollama_url", e.target.value)}
                 placeholder="http://localhost:11434"
-                className="w-full px-3 py-2 rounded-lg border border-border bg-bg-secondary text-text text-sm font-mono focus:border-accent"
+                className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm font-mono focus:border-accent"
               />
             </div>
 

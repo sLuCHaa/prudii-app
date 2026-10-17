@@ -92,7 +92,7 @@ export function LinkDialog({
                 autoCapitalize="off"
                 aria-invalid={!!problem}
                 aria-describedby={problem || warnings.length > 0 ? "link-dialog-hint" : undefined}
-                className={`w-full pl-10 pr-4 py-2.5 rounded-lg border bg-bg-secondary text-sm text-text placeholder:text-text-secondary focus:ring-1 ${problem ? "border-danger focus:border-danger focus:ring-danger" : "border-border focus:border-accent focus:ring-accent"}`}
+                className={`w-full pl-10 pr-4 py-2.5 rounded-control inset-shadow-field border bg-bg-secondary text-sm text-text placeholder:text-text-secondary focus:ring-1 ${problem ? "border-danger focus:border-danger focus:ring-danger" : "border-border focus:border-accent focus:ring-accent"}`}
               />
             </div>
             {problem && (
@@ -123,7 +123,7 @@ export function LinkDialog({
                     onChange={(e) => setText(e.target.value)}
                     placeholder={i18n.t("compose.linkTextPlaceholder")}
                     autoComplete="off"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-border bg-bg-secondary text-sm text-text placeholder:text-text-secondary focus:border-accent focus:ring-1 focus:ring-accent"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-control inset-shadow-field border border-border bg-bg-secondary text-sm text-text placeholder:text-text-secondary focus:border-accent focus:ring-1 focus:ring-accent"
                   />
                 </div>
               </>

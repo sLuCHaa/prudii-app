@@ -8,7 +8,7 @@ import { Button } from "../ui/Button";
 import { DateField } from "../ui/DateField";
 import type { VacationSettings, VacationState } from "../../types";
 
-const INPUT = "w-full px-3 py-2 rounded-lg border border-border bg-bg-secondary text-text text-sm focus:border-accent";
+const INPUT = "w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm focus:border-accent";
 const SEGMENT = "flex-1 px-3 py-2 rounded-lg border text-xs font-medium transition-colors";
 const SEGMENT_ON = "border-accent bg-accent-soft text-accent";
 const SEGMENT_OFF = "border-border text-text-secondary hover:bg-hover";

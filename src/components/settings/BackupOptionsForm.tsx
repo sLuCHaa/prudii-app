@@ -77,7 +77,7 @@ export function BackupOptionsForm({
                     value={passphrase}
                     onChange={(e) => onPassphraseChange(e.target.value, repeat)}
                     disabled={disabled}
-                    className="w-full text-sm px-2 py-1.5 rounded-lg border border-border bg-bg-secondary text-text"
+                    className="w-full text-sm px-2 py-1.5 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text focus:border-accent"
                   />
                 </div>
                 <div>
@@ -91,7 +91,7 @@ export function BackupOptionsForm({
                     value={repeat}
                     onChange={(e) => onPassphraseChange(passphrase, e.target.value)}
                     disabled={disabled}
-                    className="w-full text-sm px-2 py-1.5 rounded-lg border border-border bg-bg-secondary text-text"
+                    className="w-full text-sm px-2 py-1.5 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text focus:border-accent"
                   />
                 </div>
                 {validation.reason === "tooShort" && (

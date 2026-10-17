@@ -245,7 +245,7 @@ function Card({ view }: { view: InvitationView }) {
             rows={2}
             autoFocus
             placeholder={t("calendar.invite.commentPlaceholder")}
-            className="w-full resize-y rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs text-text outline-none focus:border-accent"
+            className="w-full resize-y rounded-control inset-shadow-field border border-border bg-surface px-2.5 py-1.5 text-xs text-text outline-none focus:border-accent"
           />
           <div className="flex justify-end gap-1.5">
             <button type="button" onClick={() => setCommenting(null)} className="rounded-lg px-2.5 py-1 text-xs text-text-secondary hover:bg-hover">

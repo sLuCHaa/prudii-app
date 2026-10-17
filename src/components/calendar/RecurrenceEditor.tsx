@@ -13,7 +13,7 @@ import { weekStartsOn } from "../../lib/localeDefaults";
 
 const FREQS: Freq[] = ["DAILY", "WEEKLY", "MONTHLY", "YEARLY"];
 const REFERENCE_SUNDAY = new Date(2026, 0, 4);
-const INPUT = "h-9 px-3 rounded-lg border border-border bg-bg-secondary text-sm text-text outline-none focus:border-accent";
+const INPUT = "h-9 px-3 rounded-control inset-shadow-field border border-border bg-bg-secondary text-sm text-text outline-none focus:border-accent";
 
 interface RecurrenceEditorProps {
   value: string | null;

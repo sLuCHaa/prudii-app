@@ -253,7 +253,7 @@ function CreateFolderDialog({
             if (e.key === "Escape") onClose();
           }}
           placeholder={t("folder.folderName")}
-          className="w-full px-3 py-2 rounded-lg border border-border bg-bg-secondary text-text text-sm mb-3 focus:border-accent"
+          className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm mb-3 focus:border-accent"
         />
 
         <div className="flex gap-2 mb-4">

@@ -272,7 +272,7 @@ function AccountSettings({
             type="text"
             value={displayName}
             onChange={(e) => { setDisplayName(e.target.value); setSaved(false); }}
-            className="w-full px-3 py-2 rounded-lg border border-border bg-bg-secondary text-text text-sm focus:border-accent"
+            className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm focus:border-accent"
           />
         </div>
 
@@ -380,7 +380,7 @@ function AccountSettings({
                 value={password}
                 onChange={(e) => { setPassword(e.target.value); setSaved(false); }}
                 placeholder={t("settings.account.passwordPlaceholder")}
-                className="w-full px-3 py-2 pr-10 rounded-lg border border-border bg-bg-secondary text-text text-sm font-mono focus:border-accent"
+                className="w-full px-3 py-2 pr-10 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm font-mono focus:border-accent"
               />
               <button
                 type="button"
@@ -418,7 +418,7 @@ function AccountSettings({
                   type="text"
                   value={imapHost}
                   onChange={(e) => { setImapHost(e.target.value); setSaved(false); }}
-                  className="w-full px-3 py-2 rounded-lg border border-border bg-bg-secondary text-text text-sm font-mono focus:border-accent"
+                  className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm font-mono focus:border-accent"
                 />
               </div>
               <div>
@@ -427,7 +427,7 @@ function AccountSettings({
                   type="number"
                   value={imapPort}
                   onChange={(e) => { setImapPort(parseInt(e.target.value) || 993); setSaved(false); }}
-                  className="w-full px-3 py-2 rounded-lg border border-border bg-bg-secondary text-text text-sm font-mono focus:border-accent"
+                  className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm font-mono focus:border-accent"
                 />
               </div>
             </div>
@@ -438,7 +438,7 @@ function AccountSettings({
                   type="text"
                   value={smtpHost}
                   onChange={(e) => { setSmtpHost(e.target.value); setSaved(false); }}
-                  className="w-full px-3 py-2 rounded-lg border border-border bg-bg-secondary text-text text-sm font-mono focus:border-accent"
+                  className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm font-mono focus:border-accent"
                 />
               </div>
               <div>
@@ -447,7 +447,7 @@ function AccountSettings({
                   type="number"
                   value={smtpPort}
                   onChange={(e) => { setSmtpPort(parseInt(e.target.value) || 587); setSaved(false); }}
-                  className="w-full px-3 py-2 rounded-lg border border-border bg-bg-secondary text-text text-sm font-mono focus:border-accent"
+                  className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm font-mono focus:border-accent"
                 />
               </div>
             </div>

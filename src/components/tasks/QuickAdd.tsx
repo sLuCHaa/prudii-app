@@ -95,7 +95,7 @@ export function QuickAdd({ className = "", autoFocus, onClose, onCreate }: Quick
   }
 
   return (
-    <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border bg-bg-secondary transition-colors ${invalid ? "border-danger" : "border-border focus-within:border-accent"} ${className}`}>
+    <div className={`flex items-center gap-2 px-3 py-2 rounded-control inset-shadow-field border bg-bg-secondary transition-colors ${invalid ? "border-danger" : "border-border focus-within:border-accent"} ${className}`}>
       <Plus className="w-4 h-4 text-text-tertiary shrink-0" />
       <input
         ref={inputRef}

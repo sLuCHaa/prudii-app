@@ -23,7 +23,7 @@ import { EventReadOnlyBody } from "./EventReadOnlyBody";
 import { useEventActions } from "./useEventActions";
 import { Button } from "../ui/Button";
 
-const INPUT = "h-9 px-3 rounded-lg border border-border bg-bg-secondary text-sm text-text outline-none focus:border-accent";
+const INPUT = "h-9 px-3 rounded-control inset-shadow-field border border-border bg-bg-secondary text-sm text-text outline-none focus:border-accent";
 const START_DERIVED = ["weekly", "monthlyDay", "monthlyNth"];
 
 interface FormState {
@@ -389,7 +389,7 @@ export function EventDrawer({ target, onClose }: EventDrawerProps) {
                 onChange={(e) => patchForm({ description: e.target.value })}
                 rows={5}
                 placeholder={t("calendar.drawer.descriptionPlaceholder")}
-                className="w-full resize-y rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text outline-none focus:border-accent"
+                className="w-full resize-y rounded-control inset-shadow-field border border-border bg-bg-secondary px-3 py-2 text-sm text-text outline-none focus:border-accent"
               />
             </Field>
 

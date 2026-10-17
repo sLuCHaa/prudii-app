@@ -67,7 +67,7 @@ export function TasksView() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t("tasks.search")}
-            className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-border bg-bg-secondary text-text text-sm focus:border-accent transition-colors"
+            className="w-full pl-9 pr-3 py-1.5 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm focus:border-accent transition-colors"
           />
         </div>
 
