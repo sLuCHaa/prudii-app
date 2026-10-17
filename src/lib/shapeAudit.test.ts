@@ -77,6 +77,14 @@ describe("shape audit", () => {
     expect(src).not.toMatch(/text-left select-none px-4 py-2\.5 border-b/);
   });
 
+  it("lays the mail list on the app background so the open mail stands out", () => {
+    const src = sourceOf("layout/MailList.tsx");
+    expect(src).toContain('"relative flex flex-col h-full bg-bg"');
+    expect(src).not.toContain('"bg-surface hover:bg-hover"');
+    expect(src).toContain('"bg-bg hover:bg-hover"');
+    expect(src).not.toMatch(/px-4 py-1\.5 bg-surface/);
+  });
+
   it("carries the density class on the mail row body", () => {
     expect(sourceOf("layout/MailList.tsx")).toMatch(/mail-row-body relative px-4 py-2\.5/);
   });

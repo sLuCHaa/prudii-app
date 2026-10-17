@@ -377,7 +377,7 @@ function SearchResultsList({ results, isLoading, selectedMailId, setSelectedMail
 
   return (
     <div className="flex-1 overflow-y-auto scrollbar-thin">
-      <div className="px-4 py-1.5 bg-surface sticky top-0 z-10 flex items-center gap-2">
+      <div className="px-4 py-1.5 bg-bg sticky top-0 z-10 flex items-center gap-2">
         <span className="text-[11px] font-semibold uppercase tracking-widest text-text-tertiary">
           {t("mailDetail.searchResults", { count: results.length, query: useAppStore.getState().searchQuery })}
         </span>
@@ -728,7 +728,7 @@ function VirtualMailList({
                   transform: `translateY(${vRow.start}px)`,
                   zIndex: 10,
                 }}
-                className="px-4 py-1.5 bg-surface flex items-center gap-2"
+                className="px-4 py-1.5 bg-bg flex items-center gap-2"
               >
                 <span className="text-[11px] font-semibold uppercase tracking-widest text-text-tertiary">
                   {item.label}
@@ -840,7 +840,7 @@ function VirtualMailList({
                       ? "tile-raised"
                       : mailIndex === selectedMailIndex
                       ? "bg-hover"
-                      : "bg-surface hover:bg-hover"
+                      : "bg-bg hover:bg-hover"
                   }`}
                 >
                 {/* Left stripe: gold = starred, blue = unread — fixed colors so the
@@ -1892,7 +1892,7 @@ export function MailList() {
   }
 
   return (
-    <div className="relative flex flex-col h-full bg-surface">
+    <div className="relative flex flex-col h-full bg-bg">
       {inboxZeroFlight && <InboxZeroFlight onDone={() => setInboxZeroFlight(false)} />}
       {multiSelectMode && selectedMailIds.size > 0 ? (
         <div className="px-4 py-2 border-b border-border no-select flex items-center justify-between bg-accent/5">
