@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { listTemplates, createTemplate, updateTemplate, deleteTemplate } from "../../lib/tauri";
 import { Button } from "../ui/Button";
 import { useDialog } from "../ui/DialogProvider";
+import { SettingsBlock, SettingsGroup, SettingsRow } from "./SettingsGroup";
 import { useAppStore } from "../../stores/appStore";
 import { escapeHtml } from "../../lib/sanitize";
 import type { EmailTemplate } from "../../types";
@@ -94,108 +95,108 @@ export function TemplatesPanel() {
   const showForm = isNew || editing !== null;
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-1">
-        <h3 className="text-sm font-medium text-text">{t("templates.title")}</h3>
-        {!showForm && (
-          <Button variant="secondary" size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={handleNew}>
-            {t("templates.newTemplate")}
-          </Button>
-        )}
-      </div>
-      <p className="text-xs text-text-tertiary mb-4">{t("templates.description")}</p>
+    <SettingsGroup
+      title={t("templates.title")}
+      action={!showForm && (
+        <Button variant="secondary" size="sm" className="ml-auto" icon={<Plus className="w-3.5 h-3.5" />} onClick={handleNew}>
+          {t("templates.newTemplate")}
+        </Button>
+      )}
+    >
+      <SettingsBlock description={t("templates.description")} />
 
       {showForm && (
-        <div className="mb-4 p-4 rounded-lg border border-border bg-bg-secondary space-y-3">
-          <div className="flex items-center justify-between">
-            <h4 className="text-sm font-medium text-text">
-              {isNew ? t("templates.newTemplate") : t("templates.editTemplate")}
-            </h4>
-            <button onClick={handleCancel} className="p-1 rounded hover:bg-hover text-text-tertiary">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+        <SettingsBlock>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-medium text-text">
+                {isNew ? t("templates.newTemplate") : t("templates.editTemplate")}
+              </h4>
+              <button onClick={handleCancel} className="p-1 rounded hover:bg-hover text-text-tertiary">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
-          <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1">{t("templates.templateName")}</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={t("templates.templateName")}
-              className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-surface text-text text-sm focus:border-accent"
-            />
-          </div>
+            <div>
+              <label className="block text-xs font-medium text-text-secondary mb-1">{t("templates.templateName")}</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={t("templates.templateName")}
+                className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-surface text-text text-sm focus:border-accent"
+              />
+            </div>
 
-          <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1">{t("compose.subject")}</label>
-            <input
-              type="text"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              placeholder={t("compose.subjectPlaceholder")}
-              className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-surface text-text text-sm focus:border-accent"
-            />
-          </div>
+            <div>
+              <label className="block text-xs font-medium text-text-secondary mb-1">{t("compose.subject")}</label>
+              <input
+                type="text"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder={t("compose.subjectPlaceholder")}
+                className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-surface text-text text-sm focus:border-accent"
+              />
+            </div>
 
-          <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1">{t("templates.body")}</label>
-            <textarea
-              value={bodyText}
-              onChange={(e) => setBodyText(e.target.value)}
-              rows={6}
-              placeholder={t("compose.writeMessage")}
-              className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-surface text-text text-sm focus:border-accent resize-y"
-            />
-          </div>
+            <div>
+              <label className="block text-xs font-medium text-text-secondary mb-1">{t("templates.body")}</label>
+              <textarea
+                value={bodyText}
+                onChange={(e) => setBodyText(e.target.value)}
+                rows={6}
+                placeholder={t("compose.writeMessage")}
+                className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-surface text-text text-sm focus:border-accent resize-y"
+              />
+            </div>
 
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" size="sm" onClick={handleCancel}>
-              {t("common.cancel")}
-            </Button>
-            <Button variant="primary" size="sm" icon={<Save className="w-3.5 h-3.5" />} loading={saving} disabled={!name.trim()} onClick={handleSave}>
-              {t("common.save")}
-            </Button>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" size="sm" onClick={handleCancel}>
+                {t("common.cancel")}
+              </Button>
+              <Button variant="primary" size="sm" icon={<Save className="w-3.5 h-3.5" />} loading={saving} disabled={!name.trim()} onClick={handleSave}>
+                {t("common.save")}
+              </Button>
+            </div>
           </div>
-        </div>
+        </SettingsBlock>
       )}
 
       {templates.length === 0 && !showForm ? (
-        <div className="text-center py-8">
-          <p className="text-sm text-text-tertiary mb-3">{t("templates.noTemplates")}</p>
-          <Button variant="secondary" size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={handleNew}>
-            {t("templates.newTemplate")}
-          </Button>
-        </div>
+        <SettingsBlock>
+          <div className="text-center py-4">
+            <p className="text-sm text-text-tertiary mb-3">{t("templates.noTemplates")}</p>
+            <Button variant="secondary" size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={handleNew}>
+              {t("templates.newTemplate")}
+            </Button>
+          </div>
+        </SettingsBlock>
       ) : (
-        <div className="space-y-2">
-          {templates.map((tpl) => (
-            <div
-              key={tpl.id}
-              className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors"
-            >
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-text truncate">{tpl.name}</div>
-                {tpl.subject && (
-                  <div className="text-xs text-text-tertiary truncate">{tpl.subject}</div>
-                )}
+        templates.map((tpl) => (
+          <SettingsRow
+            key={tpl.id}
+            as="div"
+            title={<span className="block font-medium truncate">{tpl.name}</span>}
+            description={tpl.subject ? <span className="block truncate">{tpl.subject}</span> : undefined}
+            control={
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  onClick={() => handleEdit(tpl)}
+                  className="p-1.5 rounded hover:bg-hover text-text-tertiary hover:text-text transition-colors"
+                >
+                  <Edit3 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => handleDelete(tpl)}
+                  className="p-1.5 rounded hover:bg-hover text-text-tertiary hover:text-danger transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
-              <button
-                onClick={() => handleEdit(tpl)}
-                className="p-1.5 rounded hover:bg-hover text-text-tertiary hover:text-text transition-colors"
-              >
-                <Edit3 className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => handleDelete(tpl)}
-                className="p-1.5 rounded hover:bg-hover text-text-tertiary hover:text-danger transition-colors"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          ))}
-        </div>
+            }
+          />
+        ))
       )}
-    </div>
+    </SettingsGroup>
   );
 }

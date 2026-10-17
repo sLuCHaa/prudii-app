@@ -193,10 +193,14 @@ describe("shape audit", () => {
     expect(renderToStaticMarkup(createElement(TabButton, { selected: false, children: "x" }))).toContain('aria-selected="false"');
   });
 
-  it("lights the edge of the settings option rows", () => {
+  it("drops the old bordered option rows", () => {
     const rows = classStrings().filter(({ file, cls }) => file.startsWith("settings/") && /\bp-3\b/.test(cls) && /\bborder-border\b/.test(cls) && /\bhover:bg-hover\b/.test(cls));
-    expect(rows.length).toBeGreaterThan(0);
-    expect(rows.filter(({ cls }) => !/\binset-shadow-edge\b/.test(cls)).map((r) => r.line)).toEqual([]);
+    expect(rows.map((r) => `${r.file}:${r.line}`)).toEqual([]);
+  });
+
+  it("groups calendar, rules and templates into section cards", () => {
+    for (const f of ["calendar/CalendarSettings.tsx", "settings/RulesPanel.tsx", "settings/TemplatesPanel.tsx"]) expect(sourceOf(f)).toContain("<SettingsGroup");
+    expect(sourceOf("calendar/CalendarSettings.tsx")).not.toMatch(/function Section\b/);
   });
 
   it("groups the general tab into section cards", () => {

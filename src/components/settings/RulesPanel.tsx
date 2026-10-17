@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Trash2, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";
 import { useAccounts, useRules, useCreateRule, useUpdateRule, useDeleteRule, useFolders, useApplyRulesNow } from "../../hooks/useAccounts";
@@ -7,6 +7,7 @@ import { Button } from "../ui/Button";
 import { Select } from "../ui/Select";
 import { SegmentedControl } from "../ui/SegmentedControl";
 import { Switch } from "../ui/Switch";
+import { SettingsBlock, SettingsGroup, SettingsRow } from "./SettingsGroup";
 import type { MailRule, CreateRuleRequest } from "../../types";
 
 function emptyRule(accountId: string): CreateRuleRequest {
@@ -250,148 +251,154 @@ export function RulesPanel() {
     );
   }
 
-  return (
-    <div>
-      <h3 className="text-sm font-medium text-text mb-1">{t("rules.title")}</h3>
-      <p className="text-xs text-text-tertiary mb-3">{t("rules.description")}</p>
+  const conditionsOf = (rule: MailRule) =>
+    [
+      rule.from_contains && `${t("rules.fromContains")}: ${rule.from_contains}`,
+      rule.to_contains && `${t("rules.toContains")}: ${rule.to_contains}`,
+      rule.subject_contains && `${t("rules.subjectContains")}: ${rule.subject_contains}`,
+      rule.has_attachments === true
+        ? t("rules.attachmentsWith")
+        : rule.has_attachments === false
+        ? t("rules.attachmentsWithout")
+        : null,
+    ]
+      .filter(Boolean)
+      .join(" · ") || "—";
 
-      {accounts && accounts.length > 1 && (
-        <div className="mb-4">
-          <label className="text-xs text-text-tertiary mb-1 block">{t("rules.selectAccount")}</label>
-          <Select
-            value={accountId ?? ""}
-            onChange={(v) => {
-              setSelectedAccountId(v);
-              setShowForm(false);
-              setEditingRule(null);
-              setConfirmApply(false);
-              setApplyResult(null);
-            }}
-            options={accounts.map((a) => ({ value: a.id, label: `${a.display_name} (${a.email})` }))}
-          />
-        </div>
-      )}
+  return (
+    <>
+      <SettingsGroup title={t("rules.title")}>
+        <SettingsBlock description={t("rules.description")}>
+          {accounts && accounts.length > 1 && (
+            <div>
+              <label className="text-xs text-text-tertiary mb-1 block">{t("rules.selectAccount")}</label>
+              <Select
+                value={accountId ?? ""}
+                onChange={(v) => {
+                  setSelectedAccountId(v);
+                  setShowForm(false);
+                  setEditingRule(null);
+                  setConfirmApply(false);
+                  setApplyResult(null);
+                }}
+                options={accounts.map((a) => ({ value: a.id, label: `${a.display_name} (${a.email})` }))}
+              />
+            </div>
+          )}
+        </SettingsBlock>
+      </SettingsGroup>
 
       {accountId && (
-        <>
+        <SettingsGroup title={t("settings.tabs.rules")}>
           {rules && rules.length > 0 ? (
-            <div className="space-y-2 mb-4">
-              {rules.map((rule) =>
-                editingRule?.id === rule.id ? (
+            rules.map((rule) =>
+              editingRule?.id === rule.id ? (
+                <SettingsBlock key={rule.id}>
                   <RuleForm
-                    key={rule.id}
                     rule={editingRule}
                     accountId={accountId}
                     onSave={handleUpdate}
                     onCancel={() => setEditingRule(null)}
                     saving={updateRuleMutation.isPending}
                   />
-                ) : (
-                  <div
-                    key={rule.id}
-                    className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors"
-                  >
+                </SettingsBlock>
+              ) : (
+                <SettingsRow
+                  key={rule.id}
+                  as="div"
+                  icon={
                     <Switch
                       checked={rule.enabled}
                       onChange={() => handleToggleEnabled(rule)}
                       aria-label={`${t("rules.enabled")}: ${rule.name}`}
                     />
-
-                    <div
-                      className="flex-1 min-w-0 cursor-pointer"
-                      onClick={() => setEditingRule(rule)}
-                    >
-                      <div className="text-sm font-medium text-text truncate">
-                        {rule.name}
-                      </div>
-                      <div className="text-xs text-text-tertiary truncate">
-                        {[
-                          rule.from_contains && `${t("rules.fromContains")}: ${rule.from_contains}`,
-                          rule.to_contains && `${t("rules.toContains")}: ${rule.to_contains}`,
-                          rule.subject_contains && `${t("rules.subjectContains")}: ${rule.subject_contains}`,
-                          rule.has_attachments === true
-                            ? t("rules.attachmentsWith")
-                            : rule.has_attachments === false
-                            ? t("rules.attachmentsWithout")
-                            : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ") || "—"}
-                      </div>
+                  }
+                  title={
+                    <div className="font-medium truncate cursor-pointer" onClick={() => setEditingRule(rule)}>
+                      {rule.name}
                     </div>
-
-                    {rule.priority !== 0 && (
-                      <span className="text-xs text-text-tertiary bg-bg-secondary px-1.5 py-0.5 rounded shrink-0">
-                        P{rule.priority}
-                      </span>
-                    )}
-
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        onClick={() => setEditingRule(rule)}
-                        className="p-1 rounded hover:bg-hover text-text-tertiary hover:text-text transition-colors"
-                      >
-                        {editingRule?.id === rule.id ? (
-                          <ChevronUp className="w-4 h-4" />
-                        ) : (
-                          <ChevronDown className="w-4 h-4" />
-                        )}
-                      </button>
-                      {confirmDeleteId === rule.id ? (
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => setConfirmDeleteId(null)}
-                          >
-                            {t("common.cancel")}
-                          </Button>
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            loading={deleteRuleMutation.isPending}
-                            onClick={() => handleDelete(rule.id)}
-                          >
-                            {t("common.delete")}
-                          </Button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setConfirmDeleteId(rule.id)}
-                          className="p-1 rounded hover:bg-hover text-text-tertiary hover:text-danger transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                  }
+                  description={
+                    <div className="truncate cursor-pointer" onClick={() => setEditingRule(rule)}>
+                      {conditionsOf(rule)}
+                    </div>
+                  }
+                  control={
+                    <>
+                      {rule.priority !== 0 && (
+                        <span className="text-xs text-text-tertiary bg-bg-secondary px-1.5 py-0.5 rounded shrink-0">
+                          P{rule.priority}
+                        </span>
                       )}
-                    </div>
-                  </div>
-                )
-              )}
-            </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => setEditingRule(rule)}
+                          className="p-1 rounded hover:bg-hover text-text-tertiary hover:text-text transition-colors"
+                        >
+                          <ChevronDown className="w-4 h-4" />
+                        </button>
+                        {confirmDeleteId === rule.id ? (
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => setConfirmDeleteId(null)}
+                            >
+                              {t("common.cancel")}
+                            </Button>
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              loading={deleteRuleMutation.isPending}
+                              onClick={() => handleDelete(rule.id)}
+                            >
+                              {t("common.delete")}
+                            </Button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDeleteId(rule.id)}
+                            className="p-1 rounded hover:bg-hover text-text-tertiary hover:text-danger transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  }
+                />
+              )
+            )
           ) : (
-            <p className="text-sm text-text-tertiary mb-4">{t("rules.noRules")}</p>
+            <SettingsBlock>
+              <p className="text-sm text-text-tertiary">{t("rules.noRules")}</p>
+            </SettingsBlock>
           )}
 
-          {showForm ? (
-            <RuleForm
-              rule={emptyRule(accountId)}
-              accountId={accountId}
-              onSave={handleCreate}
-              onCancel={() => setShowForm(false)}
-              saving={createRuleMutation.isPending}
-            />
-          ) : (
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<Plus className="w-4 h-4" />}
-              onClick={() => setShowForm(true)}
-            >
-              {t("rules.addRule")}
-            </Button>
-          )}
+          <SettingsBlock>
+            {showForm ? (
+              <RuleForm
+                rule={emptyRule(accountId)}
+                accountId={accountId}
+                onSave={handleCreate}
+                onCancel={() => setShowForm(false)}
+                saving={createRuleMutation.isPending}
+              />
+            ) : (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<Plus className="w-4 h-4" />}
+                onClick={() => setShowForm(true)}
+              >
+                {t("rules.addRule")}
+              </Button>
+            )}
+          </SettingsBlock>
+
           {rules && rules.length > 0 && (
-            <div className="mt-4 pt-4 border-t border-border">
+            <SettingsBlock>
               {confirmApply ? (
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs text-text-secondary">{t("rules.applyNowConfirm")}</span>
@@ -424,10 +431,10 @@ export function RulesPanel() {
                   {t("rules.applyNowResult", { count: applyResult })}
                 </p>
               )}
-            </div>
+            </SettingsBlock>
           )}
-        </>
+        </SettingsGroup>
       )}
-    </div>
+    </>
   );
 }
