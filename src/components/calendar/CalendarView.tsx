@@ -14,6 +14,7 @@ import { weekStartsOn } from "../../lib/localeDefaults";
 import { dateLocale } from "../../lib/dateUtils";
 import { SPRING_SNAPPY, TRANSITION_INSTANT } from "../motion/tokens";
 import { TaskDrawer } from "../tasks/TaskDrawer";
+import { Switch } from "../ui/Switch";
 import { MiniMonth } from "../ui/MiniMonth";
 import { CalendarList } from "./CalendarList";
 import { MonthGrid } from "./MonthGrid";
@@ -181,9 +182,9 @@ export function CalendarView() {
       <aside className="flex w-[220px] shrink-0 flex-col gap-4 overflow-y-auto border-r border-border px-3 py-3">
         <MiniMonth selected={anchor} weekStart={weekStart} onSelect={(d) => setAnchor(isoDate(d))} />
         <CalendarList />
-        <label className="flex items-center gap-2 px-1 text-xs text-text-secondary">
-          <input type="checkbox" checked={showTasks} onChange={(e) => setShowTasks(e.target.checked)} />
+        <label className="flex items-center justify-between gap-2 px-1 text-xs text-text-secondary">
           {t("calendar.showTasks")}
+          <Switch checked={showTasks} onChange={setShowTasks} />
         </label>
       </aside>
 

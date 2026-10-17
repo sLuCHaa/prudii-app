@@ -22,6 +22,7 @@ import { LicenseSettings } from "./LicenseSettings";
 import { TemplatesPanel } from "./TemplatesPanel";
 import { UpdatePanel } from "./UpdatePanel";
 import { VacationSection } from "./VacationSection";
+import { Switch } from "../ui/Switch";
 import { PremiumBadge } from "../ui/PremiumBadge";
 import { getVersion } from "@tauri-apps/api/app";
 import { Button, IconButton } from "../ui/Button";
@@ -473,21 +474,11 @@ function AccountSettings({
           />
           <div className="mt-4 space-y-2">
             <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={signatureOnCompose}
-                onChange={(e) => { setSignatureOnCompose(e.target.checked); setSaved(false); }}
-                className="w-4 h-4 rounded border-border text-accent focus:ring-accent focus:ring-offset-0 bg-bg-secondary"
-              />
+              <Switch checked={signatureOnCompose} onChange={(v) => { setSignatureOnCompose(v); setSaved(false); }} />
               <span className="text-sm text-text">{t("settings.account.signatureOnCompose")}</span>
             </label>
             <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={signatureOnReply}
-                onChange={(e) => { setSignatureOnReply(e.target.checked); setSaved(false); }}
-                className="w-4 h-4 rounded border-border text-accent focus:ring-accent focus:ring-offset-0 bg-bg-secondary"
-              />
+              <Switch checked={signatureOnReply} onChange={(v) => { setSignatureOnReply(v); setSaved(false); }} />
               <span className="text-sm text-text">{t("settings.account.signatureOnReply")}</span>
             </label>
           </div>
@@ -786,12 +777,7 @@ export function SettingsPanel() {
                         <div className="text-sm text-text">{t(isMacOS ? "settings.appearance.transparentSidebar" : "settings.appearance.ambientSidebar")}</div>
                         <div className="text-xs text-text-tertiary">{t(isMacOS ? "settings.appearance.transparentSidebarDesc" : "settings.appearance.ambientSidebarDesc")}</div>
                       </div>
-                      <input
-                        type="checkbox"
-                        checked={localSettings.transparent_sidebar}
-                        onChange={(e) => updateLocalSetting("transparent_sidebar", e.target.checked)}
-                        className="w-4 h-4 rounded border-border text-accent focus:ring-accent"
-                      />
+                      <Switch checked={localSettings.transparent_sidebar} onChange={(v) => updateLocalSetting("transparent_sidebar", v)} />
                     </label>
                     <label className="mt-3 flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer">
                       <Type className="w-4 h-4 text-text-tertiary shrink-0" />
@@ -799,12 +785,7 @@ export function SettingsPanel() {
                         <div className="text-sm text-text">{t("settings.appearance.systemFont")}</div>
                         <div className="text-xs text-text-tertiary">{t("settings.appearance.systemFontDesc")}</div>
                       </div>
-                      <input
-                        type="checkbox"
-                        checked={localSettings.use_system_font}
-                        onChange={(e) => updateLocalSetting("use_system_font", e.target.checked)}
-                        className="w-4 h-4 rounded border-border text-accent focus:ring-accent"
-                      />
+                      <Switch checked={localSettings.use_system_font} onChange={(v) => updateLocalSetting("use_system_font", v)} />
                     </label>
                   </div>
 
@@ -843,12 +824,7 @@ export function SettingsPanel() {
                           <div className="text-sm text-text">{t("settings.appSettings.launchOnStartup")}</div>
                           <div className="text-xs text-text-tertiary">{t("settings.appSettings.launchOnStartupDesc")}</div>
                         </div>
-                        <input
-                          type="checkbox"
-                          checked={localSettings.launch_on_startup}
-                          onChange={(e) => updateLocalSetting("launch_on_startup", e.target.checked)}
-                          className="w-4 h-4 rounded border-border text-accent focus:ring-accent"
-                        />
+                        <Switch checked={localSettings.launch_on_startup} onChange={(v) => updateLocalSetting("launch_on_startup", v)} />
                       </label>
 
                       <label className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer">
@@ -857,12 +833,7 @@ export function SettingsPanel() {
                           <div className="text-sm text-text">{t("settings.appSettings.showInTray")}</div>
                           <div className="text-xs text-text-tertiary">{t("settings.appSettings.showInTrayDesc")}</div>
                         </div>
-                        <input
-                          type="checkbox"
-                          checked={localSettings.show_in_tray}
-                          onChange={(e) => updateLocalSetting("show_in_tray", e.target.checked)}
-                          className="w-4 h-4 rounded border-border text-accent focus:ring-accent"
-                        />
+                        <Switch checked={localSettings.show_in_tray} onChange={(v) => updateLocalSetting("show_in_tray", v)} />
                       </label>
 
                       <label className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer">
@@ -871,12 +842,7 @@ export function SettingsPanel() {
                           <div className="text-sm text-text">{t("settings.appSettings.use24hClock")}</div>
                           <div className="text-xs text-text-tertiary">{t("settings.appSettings.use24hClockDesc")}</div>
                         </div>
-                        <input
-                          type="checkbox"
-                          checked={localSettings.use_24h_clock}
-                          onChange={(e) => updateLocalSetting("use_24h_clock", e.target.checked)}
-                          className="w-4 h-4 rounded border-border text-accent focus:ring-accent"
-                        />
+                        <Switch checked={localSettings.use_24h_clock} onChange={(v) => updateLocalSetting("use_24h_clock", v)} />
                       </label>
 
                       <label className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer">
@@ -885,12 +851,7 @@ export function SettingsPanel() {
                           <div className="text-sm text-text">{t("settings.appSettings.showAllUnreadCounts")}</div>
                           <div className="text-xs text-text-tertiary">{t("settings.appSettings.showAllUnreadCountsDesc")}</div>
                         </div>
-                        <input
-                          type="checkbox"
-                          checked={localSettings.show_all_unread_counts}
-                          onChange={(e) => updateLocalSetting("show_all_unread_counts", e.target.checked)}
-                          className="w-4 h-4 rounded border-border text-accent focus:ring-accent"
-                        />
+                        <Switch checked={localSettings.show_all_unread_counts} onChange={(v) => updateLocalSetting("show_all_unread_counts", v)} />
                       </label>
 
                       <label className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer">
@@ -899,12 +860,7 @@ export function SettingsPanel() {
                           <div className="text-sm text-text">{t("settings.appSettings.notifications")}</div>
                           <div className="text-xs text-text-tertiary">{t("settings.appSettings.notificationsDesc")}</div>
                         </div>
-                        <input
-                          type="checkbox"
-                          checked={localSettings.notifications_enabled}
-                          onChange={(e) => updateLocalSetting("notifications_enabled", e.target.checked)}
-                          className="w-4 h-4 rounded border-border text-accent focus:ring-accent"
-                        />
+                        <Switch checked={localSettings.notifications_enabled} onChange={(v) => updateLocalSetting("notifications_enabled", v)} />
                       </label>
 
                       <label className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer">
@@ -913,12 +869,7 @@ export function SettingsPanel() {
                           <div className="text-sm text-text">{t("settings.appSettings.notificationSound")}</div>
                           <div className="text-xs text-text-tertiary">{t("settings.appSettings.notificationSoundDesc")}</div>
                         </div>
-                        <input
-                          type="checkbox"
-                          checked={localSettings.notification_sound}
-                          onChange={(e) => updateLocalSetting("notification_sound", e.target.checked)}
-                          className="w-4 h-4 rounded border-border text-accent focus:ring-accent"
-                        />
+                        <Switch checked={localSettings.notification_sound} onChange={(v) => updateLocalSetting("notification_sound", v)} />
                       </label>
 
                       <label className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer">
@@ -927,11 +878,9 @@ export function SettingsPanel() {
                           <div className="text-sm text-text">{t("settings.appSettings.defaultMailApp")}</div>
                           <div className="text-xs text-text-tertiary">{t("settings.appSettings.defaultMailAppDesc")}</div>
                         </div>
-                        <input
-                          type="checkbox"
+                        <Switch
                           checked={isDefaultMailApp}
-                          onChange={async (e) => {
-                            const wantChecked = e.target.checked;
+                          onChange={async (wantChecked) => {
                             try {
                               if (wantChecked) {
                                 await registerMailtoHandler();
@@ -941,11 +890,10 @@ export function SettingsPanel() {
                               setIsDefaultMailApp(wantChecked);
                             } catch (err) {
                               addToast("error", t("settings.mailtoFailed"), err instanceof Error ? err.message : String(err));
-                              // Re-read actual OS state so the checkbox reflects reality.
+                              // Re-read actual OS state so the switch reflects reality.
                               isMailtoHandler().then(setIsDefaultMailApp).catch(() => {});
                             }
                           }}
-                          className="w-4 h-4 rounded border-border text-accent focus:ring-accent"
                         />
                       </label>
                     </div>

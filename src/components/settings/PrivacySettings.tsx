@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "../../stores/appStore";
 import { useAccounts } from "../../hooks/useAccounts";
 import { updateAccountSettings } from "../../lib/tauri";
+import { Switch } from "../ui/Switch";
 import { SegmentedControl } from "../ui/SegmentedControl";
 import type { Account, AppSettings } from "../../types";
 
@@ -110,12 +111,7 @@ export function PrivacySettings({ localSettings, updateLocalSetting }: PrivacySe
             <div className="text-sm text-text">{t("settings.privacy.stripTrackingParams")}</div>
             <div className="text-xs text-text-tertiary">{t("settings.privacy.stripTrackingParamsDesc")}</div>
           </div>
-          <input
-            type="checkbox"
-            checked={localSettings.strip_tracking_params}
-            onChange={(e) => updateLocalSetting("strip_tracking_params", e.target.checked)}
-            className="w-4 h-4 rounded border-border text-accent focus:ring-accent"
-          />
+          <Switch checked={localSettings.strip_tracking_params} onChange={(v) => updateLocalSetting("strip_tracking_params", v)} />
         </label>
       </div>
     </>

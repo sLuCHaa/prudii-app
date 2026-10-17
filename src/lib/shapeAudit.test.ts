@@ -204,4 +204,10 @@ describe("shape audit", () => {
     expect(trigger).toBeDefined();
     expect(trigger?.cls).not.toMatch(/\brounded/);
   });
+
+  it("switches on/off options instead of ticking them", () => {
+    const toggles = ["settings/SettingsPanel.tsx", "settings/PrivacySettings.tsx", "settings/AiSettings.tsx", "calendar/EventDrawer.tsx", "calendar/CalendarView.tsx"];
+    expect(toggles.filter((f) => sourceOf(f).includes('type="checkbox"'))).toEqual([]);
+    for (const f of ["settings/RulesPanel.tsx", "settings/BackupOptionsForm.tsx", "tasks/MailAttachmentPickDialog.tsx"]) expect(sourceOf(f)).toContain('type="checkbox"');
+  });
 });

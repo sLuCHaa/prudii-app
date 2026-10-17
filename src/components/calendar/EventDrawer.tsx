@@ -12,6 +12,7 @@ import { isoDate, parseIsoDate } from "../../lib/calendar/dates";
 import { detectPreset, presetRrule } from "../../lib/calendar/rrule";
 import { findMeetingLink } from "../../lib/calendar/meetingLinks";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
+import { Switch } from "../ui/Switch";
 import { DateField } from "../ui/DateField";
 import { Select } from "../ui/Select";
 import { Skeleton } from "../ui/Skeleton";
@@ -321,7 +322,7 @@ export function EventDrawer({ target, onClose }: EventDrawerProps) {
 
             <Field icon={Clock}>
               <label className="flex items-center gap-2 text-sm text-text">
-                <input type="checkbox" checked={form.allDay} onChange={(e) => toggleAllDay(e.target.checked)} />
+                <Switch checked={form.allDay} onChange={toggleAllDay} />
                 {t("calendar.drawer.allDay")}
               </label>
               <div className="mt-2 grid grid-cols-[3.5rem_1fr_auto] items-center gap-2">

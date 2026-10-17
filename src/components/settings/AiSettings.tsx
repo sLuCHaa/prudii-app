@@ -3,6 +3,7 @@ import { Sparkles, Loader2, CheckCircle, XCircle, ExternalLink, Info } from "luc
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { checkOllamaStatus } from "../../lib/tauri";
+import { Switch } from "../ui/Switch";
 import { Button } from "../ui/Button";
 import { Select } from "../ui/Select";
 import type { AppSettings } from "../../types";
@@ -91,12 +92,7 @@ export function AiSettings({ localSettings, updateLocalSetting }: AiSettingsProp
             <div className="text-sm text-text">{t("settings.ai.enable")}</div>
             <div className="text-xs text-text-tertiary">{t("settings.ai.ollamaRequired")}</div>
           </div>
-          <input
-            type="checkbox"
-            checked={localSettings.ai_enabled}
-            onChange={(e) => updateLocalSetting("ai_enabled", e.target.checked)}
-            className="w-4 h-4 rounded border-border text-accent focus:ring-accent"
-          />
+          <Switch checked={localSettings.ai_enabled} onChange={(v) => updateLocalSetting("ai_enabled", v)} />
         </label>
 
         {localSettings.ai_enabled && (
