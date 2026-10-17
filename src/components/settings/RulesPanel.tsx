@@ -287,153 +287,153 @@ export function RulesPanel() {
           )}
         </SettingsBlock>
 
-      {accountId && (
-        <>
-          {rules && rules.length > 0 ? (
-            rules.map((rule) =>
-              editingRule?.id === rule.id ? (
-                <SettingsBlock key={rule.id}>
-                  <RuleForm
-                    rule={editingRule}
-                    accountId={accountId}
-                    onSave={handleUpdate}
-                    onCancel={() => setEditingRule(null)}
-                    saving={updateRuleMutation.isPending}
-                  />
-                </SettingsBlock>
-              ) : (
-                <SettingsRow
-                  key={rule.id}
-                  as="div"
-                  icon={
-                    <Switch
-                      checked={rule.enabled}
-                      onChange={() => handleToggleEnabled(rule)}
-                      aria-label={`${t("rules.enabled")}: ${rule.name}`}
+        {accountId && (
+          <>
+            {rules && rules.length > 0 ? (
+              rules.map((rule) =>
+                editingRule?.id === rule.id ? (
+                  <SettingsBlock key={rule.id}>
+                    <RuleForm
+                      rule={editingRule}
+                      accountId={accountId}
+                      onSave={handleUpdate}
+                      onCancel={() => setEditingRule(null)}
+                      saving={updateRuleMutation.isPending}
                     />
-                  }
-                  title={
-                    <div className="font-medium truncate cursor-pointer" onClick={() => setEditingRule(rule)}>
-                      {rule.name}
-                    </div>
-                  }
-                  description={
-                    <div className="truncate cursor-pointer" onClick={() => setEditingRule(rule)}>
-                      {conditionsOf(rule)}
-                    </div>
-                  }
-                  control={
-                    <>
-                      {rule.priority !== 0 && (
-                        <span className="text-xs text-text-tertiary bg-bg-secondary px-1.5 py-0.5 rounded shrink-0">
-                          P{rule.priority}
-                        </span>
-                      )}
-
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() => setEditingRule(rule)}
-                          className="p-1 rounded hover:bg-hover text-text-tertiary hover:text-text transition-colors"
-                        >
-                          <ChevronDown className="w-4 h-4" />
-                        </button>
-                        {confirmDeleteId === rule.id ? (
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => setConfirmDeleteId(null)}
-                            >
-                              {t("common.cancel")}
-                            </Button>
-                            <Button
-                              variant="danger"
-                              size="sm"
-                              loading={deleteRuleMutation.isPending}
-                              onClick={() => handleDelete(rule.id)}
-                            >
-                              {t("common.delete")}
-                            </Button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => setConfirmDeleteId(rule.id)}
-                            className="p-1 rounded hover:bg-hover text-text-tertiary hover:text-danger transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
+                  </SettingsBlock>
+                ) : (
+                  <SettingsRow
+                    key={rule.id}
+                    as="div"
+                    icon={
+                      <Switch
+                        checked={rule.enabled}
+                        onChange={() => handleToggleEnabled(rule)}
+                        aria-label={`${t("rules.enabled")}: ${rule.name}`}
+                      />
+                    }
+                    title={
+                      <div className="font-medium truncate cursor-pointer" onClick={() => setEditingRule(rule)}>
+                        {rule.name}
                       </div>
-                    </>
-                  }
-                />
+                    }
+                    description={
+                      <div className="truncate cursor-pointer" onClick={() => setEditingRule(rule)}>
+                        {conditionsOf(rule)}
+                      </div>
+                    }
+                    control={
+                      <>
+                        {rule.priority !== 0 && (
+                          <span className="text-xs text-text-tertiary bg-bg-secondary px-1.5 py-0.5 rounded shrink-0">
+                            P{rule.priority}
+                          </span>
+                        )}
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => setEditingRule(rule)}
+                            className="p-1 rounded hover:bg-hover text-text-tertiary hover:text-text transition-colors"
+                          >
+                            <ChevronDown className="w-4 h-4" />
+                          </button>
+                          {confirmDeleteId === rule.id ? (
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => setConfirmDeleteId(null)}
+                              >
+                                {t("common.cancel")}
+                              </Button>
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                loading={deleteRuleMutation.isPending}
+                                onClick={() => handleDelete(rule.id)}
+                              >
+                                {t("common.delete")}
+                              </Button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setConfirmDeleteId(rule.id)}
+                              className="p-1 rounded hover:bg-hover text-text-tertiary hover:text-danger transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    }
+                  />
+                )
               )
-            )
-          ) : (
-            <SettingsBlock>
-              <p className="text-sm text-text-tertiary">{t("rules.noRules")}</p>
-            </SettingsBlock>
-          )}
-
-          <SettingsBlock>
-            {showForm ? (
-              <RuleForm
-                rule={emptyRule(accountId)}
-                accountId={accountId}
-                onSave={handleCreate}
-                onCancel={() => setShowForm(false)}
-                saving={createRuleMutation.isPending}
-              />
             ) : (
-              <Button
-                variant="secondary"
-                size="sm"
-                icon={<Plus className="w-4 h-4" />}
-                onClick={() => setShowForm(true)}
-              >
-                {t("rules.addRule")}
-              </Button>
+              <SettingsBlock>
+                <p className="text-sm text-text-tertiary">{t("rules.noRules")}</p>
+              </SettingsBlock>
             )}
-          </SettingsBlock>
 
-          {rules && rules.length > 0 && (
             <SettingsBlock>
-              {confirmApply ? (
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs text-text-secondary">{t("rules.applyNowConfirm")}</span>
-                  <Button variant="secondary" size="sm" onClick={() => setConfirmApply(false)}>
-                    {t("common.cancel")}
-                  </Button>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    loading={applyRulesMutation.isPending}
-                    onClick={handleApplyNow}
-                  >
-                    {t("rules.applyNow")}
-                  </Button>
-                </div>
+              {showForm ? (
+                <RuleForm
+                  rule={emptyRule(accountId)}
+                  accountId={accountId}
+                  onSave={handleCreate}
+                  onCancel={() => setShowForm(false)}
+                  saving={createRuleMutation.isPending}
+                />
               ) : (
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => {
-                    setApplyResult(null);
-                    setConfirmApply(true);
-                  }}
+                  icon={<Plus className="w-4 h-4" />}
+                  onClick={() => setShowForm(true)}
                 >
-                  {t("rules.applyNow")}
+                  {t("rules.addRule")}
                 </Button>
               )}
-              {applyResult !== null && (
-                <p className="text-xs text-text-tertiary mt-2">
-                  {t("rules.applyNowResult", { count: applyResult })}
-                </p>
-              )}
             </SettingsBlock>
-          )}
-        </>
-      )}
+
+            {rules && rules.length > 0 && (
+              <SettingsBlock>
+                {confirmApply ? (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs text-text-secondary">{t("rules.applyNowConfirm")}</span>
+                    <Button variant="secondary" size="sm" onClick={() => setConfirmApply(false)}>
+                      {t("common.cancel")}
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      loading={applyRulesMutation.isPending}
+                      onClick={handleApplyNow}
+                    >
+                      {t("rules.applyNow")}
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setApplyResult(null);
+                      setConfirmApply(true);
+                    }}
+                  >
+                    {t("rules.applyNow")}
+                  </Button>
+                )}
+                {applyResult !== null && (
+                  <p className="text-xs text-text-tertiary mt-2">
+                    {t("rules.applyNowResult", { count: applyResult })}
+                  </p>
+                )}
+              </SettingsBlock>
+            )}
+          </>
+        )}
       </SettingsGroup>
     </>
   );
