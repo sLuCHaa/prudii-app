@@ -1316,6 +1316,12 @@
     "title": "Neu in Prudii {{version}}",
     "subtitle": "Das hat sich seit deinem letzten Update getan.",
     "done": "Verstanden",
+    "v1_7_1": {
+      "look": {
+        "title": "Neuer Look",
+        "text": "Weichere Ecken und Buttons, die sich beim Klicken eindrücken."
+      }
+    },
     "v1_7_0": {
       "calendar": {
         "title": "Kalender",

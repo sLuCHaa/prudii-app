@@ -1316,6 +1316,12 @@
     "title": "Nouveautés de Prudii {{version}}",
     "subtitle": "Voici ce qui a changé depuis votre dernière mise à jour.",
     "done": "Compris",
+    "v1_7_1": {
+      "look": {
+        "title": "Nouveau look",
+        "text": "Des coins plus doux et des boutons qui s'enfoncent au clic."
+      }
+    },
     "v1_7_0": {
       "calendar": {
         "title": "Calendrier",

@@ -1,6 +1,6 @@
 export const SEEN_KEY = "prudii-whats-new-seen";
 
-export type WhatsNewIcon = "calendar" | "mail" | "rss" | "tasks";
+export type WhatsNewIcon = "calendar" | "mail" | "rss" | "tasks" | "sparkles";
 export type WhatsNewTone = "blue" | "green" | "amber" | "violet";
 
 export interface WhatsNewItem {
@@ -16,6 +16,15 @@ export interface WhatsNewRelease {
 }
 
 export const RELEASES: WhatsNewRelease[] = [
+  {
+    version: "1.7.1",
+    items: [
+      { icon: "sparkles", tone: "green", key: "whatsNew.v1_7_1.look" },
+      { icon: "calendar", tone: "blue", key: "whatsNew.v1_7_0.calendar" },
+      { icon: "rss", tone: "amber", key: "whatsNew.v1_7_0.subscriptions" },
+      { icon: "tasks", tone: "violet", key: "whatsNew.v1_7_0.tasks" },
+    ],
+  },
   {
     version: "1.7.0",
     items: [

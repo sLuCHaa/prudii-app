@@ -73,4 +73,15 @@ describe("RELEASES", () => {
       "whatsNew.v1_7_0.tasks",
     ]);
   });
+
+  it("leads 1.7.1 with the new look and repeats the 1.7.0 highlights", () => {
+    const r = RELEASES.find((x) => x.version === "1.7.1");
+    expect(r?.items.map((i) => i.key)).toEqual([
+      "whatsNew.v1_7_1.look",
+      "whatsNew.v1_7_0.calendar",
+      "whatsNew.v1_7_0.subscriptions",
+      "whatsNew.v1_7_0.tasks",
+    ]);
+    expect(r?.items[0].icon).toBe("sparkles");
+  });
 });
