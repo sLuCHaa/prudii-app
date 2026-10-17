@@ -823,7 +823,7 @@ function VirtualMailList({
               >
                 {/* Reveal layers for trackpad swipe. Shown only while a swipe
                     episode is active (inline opacity, same lifecycle as the
-                    overflow clip): selection tints like bg-selected are alpha
+                    overflow clip): selection tints are alpha
                     colors, so at rest the labels would shine through them. */}
                 <div aria-hidden className="absolute inset-0 flex items-center justify-between px-5 pointer-events-none opacity-0">
                   <span className="flex items-center gap-1.5 text-success text-xs font-medium"><Archive className="w-4 h-4" />{t("mailList.batchArchive")}</span>
@@ -832,7 +832,7 @@ function VirtualMailList({
                 {/* The row root's px-2 py-px is the tile gutter, inside the measured height. */}
                 <div
                   ref={(el) => { if (el) swipeTargets.current.set(mail.id, el); else swipeTargets.current.delete(mail.id); }}
-                  className={`relative px-4 py-2.5 rounded-control transition-colors ${
+                  className={`mail-row-body relative px-4 py-2.5 rounded-control transition-colors ${
                     isSelected
                       ? "bg-accent/15"
                       : selectedMailId === mail.id

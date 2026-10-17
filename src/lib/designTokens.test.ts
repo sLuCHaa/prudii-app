@@ -15,6 +15,11 @@ describe("design tokens", () => {
     const decls = (t: string) => (css.match(new RegExp(`^\\s*${t}\\s*(?:#|rgba?\\()`, "gm")) ?? []).length;
     for (const t of ["--c-tile:", "--c-edge-light:", "--c-field-inset:", "--c-card-drop:", "--c-tile-drop:"]) expect(decls(t)).toBe(decls("--c-surface:"));
   });
+  it("applies list density to the row body, not the tile gutter", () => {
+    expect(css).toMatch(/\[data-density="compact"\] \.mail-row-body\s*\{/);
+    expect(css).toMatch(/\[data-density="spacious"\] \.mail-row-body\s*\{/);
+    expect(css).not.toMatch(/\[data-density[^{]*\.mail-item-draggable/);
+  });
   it("drops the accent bar from the active folder", () => {
     expect(css).not.toContain(".folder-active::before");
   });

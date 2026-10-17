@@ -74,6 +74,10 @@ describe("shape audit", () => {
     expect(src).not.toMatch(/text-left select-none px-4 py-2\.5 border-b/);
   });
 
+  it("carries the density class on the mail row body", () => {
+    expect(sourceOf("layout/MailList.tsx")).toMatch(/mail-row-body relative px-4 py-2\.5/);
+  });
+
   it("selects folders as tiles without an accent bar", () => {
     expect(sourceOf("ui/TabButton.tsx")).not.toContain("borderLeft");
   });
