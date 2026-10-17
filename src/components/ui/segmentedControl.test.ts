@@ -38,6 +38,8 @@ describe("SegmentedControl", () => {
     expect(h).toContain("segmented-track");
     expect(h).toContain("segmented-item");
     expect(h.match(/aria-pressed="true"/g)?.length).toBe(1);
+    expect(h).toMatch(/aria-pressed="true"[^>]*>B</);
+    expect(h).not.toMatch(/aria-pressed="true"[^>]*>A</);
   });
 
   it("reports the clicked option", () => {

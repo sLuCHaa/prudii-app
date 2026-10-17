@@ -172,7 +172,7 @@ export function TemplatesPanel() {
           {templates.map((tpl) => (
             <div
               key={tpl.id}
-              className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-hover transition-colors"
+              className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors"
             >
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium text-text truncate">{tpl.name}</div>

@@ -1045,7 +1045,7 @@ html[data-vibrancy].dark .glass-sidebar {
     border: 0;
     border-radius: 9999px;
     background: var(--c-bg-tertiary);
-    box-shadow: inset 0 1px 3px var(--c-field-inset), inset 0 0 0 1px var(--c-border);
+    box-shadow: inset 0 1px 3px var(--c-field-inset), inset 0 0 0 1px color-mix(in srgb, var(--c-border) 70%, var(--c-text));
     cursor: pointer;
     transition: background 180ms ease, box-shadow 180ms ease;
   }
@@ -1072,7 +1072,7 @@ html[data-vibrancy].dark .glass-sidebar {
     width: 16px;
     height: 16px;
     border-radius: 9999px;
-    background: linear-gradient(180deg, #fff 0%, #ececec 100%);
+    background: linear-gradient(180deg, #fff 0%, color-mix(in srgb, white 92.5%, black) 100%);
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25), inset 0 1px 0 var(--c-edge-light);
     transition: translate 180ms ease;
   }
@@ -1100,7 +1100,8 @@ html[data-vibrancy].dark .glass-sidebar {
     padding: 6px 12px;
     border-radius: var(--radius-sm);
     color: var(--c-text-secondary);
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
+    font-weight: 500;
     cursor: pointer;
     transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease;
   }
@@ -1127,11 +1128,12 @@ html[data-vibrancy].dark .glass-sidebar {
     border: 1px solid var(--c-border);
     box-shadow: inset 0 1px 2px var(--c-field-inset);
     color: var(--c-text-secondary);
+    font-weight: 500;
     cursor: pointer;
     transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease, translate 150ms ease;
   }
 
-  .option-tile:hover:not(:disabled) {
+  .option-tile:hover:not(:disabled):not([aria-pressed="true"]) {
     background: var(--c-hover);
   }
 

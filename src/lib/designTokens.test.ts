@@ -53,5 +53,9 @@ describe("design tokens", () => {
   });
   it("keeps reduced motion still", () => {
     expect(css).toMatch(/prefers-reduced-motion: reduce\)[^{]*\{[^}]*\.tactile-filled[\s\S]*?transform: none/);
+    expect(css).toMatch(/prefers-reduced-motion: reduce\)[\s\S]*?\.option-tile\[aria-pressed="true"\]\s*\{\s*translate: none/);
+  });
+  it("keeps the chosen option tile's look on hover", () => {
+    expect(css).toMatch(/\.option-tile:hover:not\(:disabled\):not\(\[aria-pressed="true"\]\)/);
   });
 });

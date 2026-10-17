@@ -180,7 +180,7 @@ describe("shape audit", () => {
   it("drops the old accent-frame selection from the settings", () => {
     const files = Object.keys(sources).filter((f) => f.startsWith("settings/"));
     expect(files.length).toBeGreaterThan(5);
-    expect(files.filter((f) => /border-accent bg-accent-soft/.test(sourceOf(f)))).toEqual([]);
+    expect(files.filter((f) => /border-accent bg-accent-soft|bg-accent-soft text-accent/.test(sourceOf(f)))).toEqual([]);
   });
 
   it("lays the settings tabs into a track", () => {
@@ -194,7 +194,7 @@ describe("shape audit", () => {
   });
 
   it("lights the edge of the settings option rows", () => {
-    const rows = classStrings().filter(({ file, cls }) => file.endsWith("SettingsPanel.tsx") && /\bp-3\b/.test(cls) && /\bborder-border\b/.test(cls) && /\bhover:bg-hover\b/.test(cls));
+    const rows = classStrings().filter(({ file, cls }) => file.startsWith("settings/") && /\bp-3\b/.test(cls) && /\bborder-border\b/.test(cls) && /\bhover:bg-hover\b/.test(cls));
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.filter(({ cls }) => !/\binset-shadow-edge\b/.test(cls)).map((r) => r.line)).toEqual([]);
   });

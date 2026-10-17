@@ -56,7 +56,7 @@ export function PrivacySettings({ localSettings, updateLocalSetting }: PrivacySe
         <p className="text-xs text-text-tertiary mb-3">
           {t("settings.privacy.trackerBlockingDesc")}
         </p>
-        <div className="flex items-center justify-between p-3 rounded-lg border border-border">
+        <div className="flex items-center justify-between p-3 rounded-lg border border-border inset-shadow-edge">
           <div className="flex items-center gap-2">
             <Eye className="w-4 h-4 text-text-tertiary" />
             <span className="text-sm text-text">{t("privacy.trackersBlocked")}</span>
@@ -76,7 +76,7 @@ export function PrivacySettings({ localSettings, updateLocalSetting }: PrivacySe
         {accounts && accounts.length > 0 ? (
           <div className="space-y-2">
             {accounts.map((account) => (
-              <div key={account.id} className="flex items-center gap-3 p-3 rounded-lg border border-border">
+              <div key={account.id} className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge">
                 <span
                   className="w-3 h-3 rounded-full shrink-0"
                   style={{ backgroundColor: account.color }}
@@ -87,7 +87,7 @@ export function PrivacySettings({ localSettings, updateLocalSetting }: PrivacySe
                 </div>
                 <SegmentedControl
                   className="shrink-0"
-                  aria-label={account.display_name}
+                  aria-label={`${t("settings.privacy.externalImages")}: ${account.display_name}`}
                   value={(account.load_external_images || "always") === "never" ? "never" : "always"}
                   onChange={(v) => handleImageSetting(account, v)}
                   options={[
@@ -105,7 +105,7 @@ export function PrivacySettings({ localSettings, updateLocalSetting }: PrivacySe
 
       {/* Link cleaning (app setting, saved via panel Save button) */}
       <div>
-        <label className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-hover transition-colors cursor-pointer">
+        <label className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer">
           <Link2 className="w-4 h-4 text-text-tertiary shrink-0" />
           <div className="flex-1">
             <div className="text-sm text-text">{t("settings.privacy.stripTrackingParams")}</div>

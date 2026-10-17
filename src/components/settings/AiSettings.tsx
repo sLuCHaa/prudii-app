@@ -86,7 +86,7 @@ export function AiSettings({ localSettings, updateLocalSetting }: AiSettingsProp
           {t("settings.ai.description")}
         </p>
 
-        <label className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-hover transition-colors cursor-pointer mb-4">
+        <label className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer mb-4">
           <Sparkles className="w-4 h-4 text-text-tertiary shrink-0" />
           <div className="flex-1">
             <div className="text-sm text-text">{t("settings.ai.enable")}</div>

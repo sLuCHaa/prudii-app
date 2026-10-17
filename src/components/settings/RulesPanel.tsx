@@ -6,6 +6,7 @@ import { useAccounts, useRules, useCreateRule, useUpdateRule, useDeleteRule, use
 import { Button } from "../ui/Button";
 import { Select } from "../ui/Select";
 import { SegmentedControl } from "../ui/SegmentedControl";
+import { Switch } from "../ui/Switch";
 import type { MailRule, CreateRuleRequest } from "../../types";
 
 function emptyRule(accountId: string): CreateRuleRequest {
@@ -288,14 +289,12 @@ export function RulesPanel() {
                 ) : (
                   <div
                     key={rule.id}
-                    className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-hover transition-colors"
+                    className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors"
                   >
-                    <input
-                      type="checkbox"
+                    <Switch
                       checked={rule.enabled}
                       onChange={() => handleToggleEnabled(rule)}
-                      className="w-4 h-4 rounded border-border text-accent focus:ring-accent shrink-0"
-                      title={t("rules.enabled")}
+                      aria-label={`${t("rules.enabled")}: ${rule.name}`}
                     />
 
                     <div

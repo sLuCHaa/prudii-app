@@ -10,6 +10,7 @@ import {
   hasStructure,
   htmlToPlainLines,
 } from "../../lib/signatureHtml";
+import { SegmentedControl } from "../ui/SegmentedControl";
 import { SignaturePreviewEditor } from "./SignaturePreviewEditor";
 
 interface SignatureEditorProps {
@@ -131,22 +132,12 @@ export function SignatureEditor({ htmlValue, textValue, onChange }: SignatureEdi
   return (
     <div className="border border-border rounded-lg overflow-hidden">
       <div className="flex items-center px-3 py-2 border-b border-border bg-bg-secondary">
-        <div className="flex items-center gap-1">
-          {tabs.map(([value, label, Icon]) => (
-            <button
-              key={value}
-              onClick={() => setMode(value)}
-              className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-colors ${
-                mode === value
-                  ? "bg-accent-soft text-accent"
-                  : "text-text-tertiary hover:text-text-secondary hover:bg-hover"
-              }`}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              {label}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          aria-label={t("settings.account.signature")}
+          value={mode}
+          onChange={setMode}
+          options={tabs.map(([value, label, Icon]) => ({ value, label, icon: <Icon className="w-3.5 h-3.5" /> }))}
+        />
       </div>
 
       <div className="min-h-[240px]">
