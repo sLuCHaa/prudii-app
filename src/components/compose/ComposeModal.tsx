@@ -457,7 +457,7 @@ function SendButton({ onSend, disabled }: { onSend: () => Promise<boolean>; disa
       onHoverStart={() => setHovered(true)}
       onHoverEnd={() => setHovered(false)}
       disabled={disabled || phase !== "idle"}
-      className="relative overflow-hidden px-5 py-2 rounded-l-control inset-shadow-[0_1px_0_rgba(255,255,255,.32)] text-white font-semibold text-sm min-w-[100px]"
+      className="relative overflow-hidden px-5 py-2 rounded-l-control text-white font-semibold text-sm min-w-[100px]"
       transition={SPRING_SNAPPY}
     >
         {/* Base brand gradient (always present). */}
@@ -471,6 +471,7 @@ function SendButton({ onSend, disabled }: { onSend: () => Promise<boolean>; disa
           transition={SPRING_SNAPPY}
           aria-hidden
         />
+        <span aria-hidden className="absolute inset-0 rounded-[inherit] pointer-events-none inset-shadow-[0_1px_0_rgba(255,255,255,.32)]" />
         {/* Grid auto-sizes to the widest label across locales; children stack. */}
         <span className="relative grid place-items-center">
           {phases.map((p) => (

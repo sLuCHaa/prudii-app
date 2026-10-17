@@ -89,7 +89,7 @@ describe("shape audit", () => {
   });
 
   it("lights the top edge of raised panels", () => {
-    const files = ["ui/DialogProvider.tsx", "ui/ContextMenu.tsx", "ui/CommandPalette.tsx", "settings/SettingsPanel.tsx", "ui/DateField.tsx", "ui/UndoToast.tsx", "motion/StackedToast.tsx", "layout/MailSortMenu.tsx", "ui/PrivacyBadge.tsx", "layout/Sidebar.tsx"];
+    const files = ["ui/DialogProvider.tsx", "ui/ContextMenu.tsx", "ui/CommandPalette.tsx", "settings/SettingsPanel.tsx", "ui/DateField.tsx", "ui/UndoToast.tsx", "motion/StackedToast.tsx", "layout/MailSortMenu.tsx", "ui/PrivacyBadge.tsx", "layout/Sidebar.tsx", "compose/ComposeModal.tsx"];
     expect(files.filter((f) => !sourceOf(f).includes("inset-shadow-edge"))).toEqual([]);
     expect(sourceOf("settings/SettingsPanel.tsx")).not.toContain("boxShadow");
   });
@@ -106,5 +106,6 @@ describe("shape audit", () => {
     expect(src).toContain("rounded-l-control");
     expect(src).toContain("rounded-r-control");
     expect(src).toContain("motion-reduce:transform-none");
+    expect(classStrings().some(({ file, cls }) => file.endsWith("ComposeModal.tsx") && cls.includes("pointer-events-none") && cls.includes("rounded-[inherit]") && cls.includes("inset-shadow-[0_1px_0_rgba(255,255,255,.32)]"))).toBe(true);
   });
 });
