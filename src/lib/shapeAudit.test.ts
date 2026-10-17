@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { CardButton } from "../components/ui/TabButton";
+import { CardButton, TabButton } from "../components/ui/TabButton";
 import { extractClassStrings } from "./classAudit";
 
 const raw = import.meta.glob("../components/**/*.tsx", {
@@ -178,13 +178,19 @@ describe("shape audit", () => {
   });
 
   it("drops the old accent-frame selection from the settings", () => {
-    for (const f of ["settings/SettingsPanel.tsx", "settings/VacationSection.tsx"]) expect(sourceOf(f)).not.toMatch(/border-accent bg-accent-soft/);
+    const files = Object.keys(sources).filter((f) => f.startsWith("settings/"));
+    expect(files.length).toBeGreaterThan(5);
+    expect(files.filter((f) => /border-accent bg-accent-soft/.test(sourceOf(f)))).toEqual([]);
   });
 
   it("lays the settings tabs into a track", () => {
     const src = sourceOf("settings/SettingsPanel.tsx");
     expect(src).toMatch(/role="tablist"[^>]*segmented-track|segmented-track[^>]*role="tablist"/);
     expect(sourceOf("ui/TabButton.tsx")).toContain("segmented-item");
+    const tab = renderToStaticMarkup(createElement(TabButton, { selected: true, children: "General" }));
+    expect(tab).toContain('role="tab"');
+    expect(tab).toContain('aria-selected="true"');
+    expect(renderToStaticMarkup(createElement(TabButton, { selected: false, children: "x" }))).toContain('aria-selected="false"');
   });
 
   it("lights the edge of the settings option rows", () => {

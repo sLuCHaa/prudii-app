@@ -1131,8 +1131,13 @@ html[data-vibrancy].dark .glass-sidebar {
     transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease, translate 150ms ease;
   }
 
-  .option-tile:hover {
+  .option-tile:hover:not(:disabled) {
     background: var(--c-hover);
+  }
+
+  .option-tile:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .option-tile[aria-pressed="true"] {

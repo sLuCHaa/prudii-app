@@ -727,23 +727,25 @@ export function SettingsPanel() {
               </div>
             </div>
 
-            <div className="border-b border-border px-4 py-2 shrink-0">
-            <div role="tablist" className="segmented-track overflow-x-auto scrollbar-none">
-              {SETTINGS_TABS.map(({ id, labelKey, icon: Icon, premium }) => (
-                <TabButton
-                  key={id}
-                  selected={activeTab === id}
-                  onClick={() => setActiveTab(id)}
-                  className="gap-1.5 whitespace-nowrap"
-                >
-                  <Icon className="w-4 h-4" />
-                  {t(labelKey)}
-                  {premium && !hasFeature(id === "ai" ? "ai_replies" : id === "rules" ? "rules_filters" : "templates") && (
-                    <PremiumBadge />
-                  )}
-                </TabButton>
-              ))}
-            </div>
+            <div className="border-b border-border shrink-0">
+              <div className="overflow-x-auto scrollbar-none px-4 py-2">
+                <div role="tablist" className="segmented-track w-max min-w-full">
+                {SETTINGS_TABS.map(({ id, labelKey, icon: Icon, premium }) => (
+                  <TabButton
+                    key={id}
+                    selected={activeTab === id}
+                    onClick={() => setActiveTab(id)}
+                    className="gap-1.5 whitespace-nowrap"
+                  >
+                    <Icon className="w-4 h-4" />
+                    {t(labelKey)}
+                    {premium && !hasFeature(id === "ai" ? "ai_replies" : id === "rules" ? "rules_filters" : "templates") && (
+                      <PremiumBadge />
+                    )}
+                  </TabButton>
+                ))}
+                </div>
+              </div>
             </div>
 
             <div ref={scrollRef} className="overflow-y-auto flex-1">
@@ -774,7 +776,7 @@ export function SettingsPanel() {
                           className="option-tile flex-1 flex flex-col items-center gap-2 p-3 rounded-control"
                         >
                           <Icon className="w-5 h-5" />
-                          <span className="text-xs font-medium">{t(labelKey)}</span>
+                          <span className="text-xs">{t(labelKey)}</span>
                         </button>
                       ))}
                     </div>
@@ -970,7 +972,7 @@ export function SettingsPanel() {
                             }
                           }}
                           disabled={!hasFeature("undo_send_config") && option.value !== 5}
-                          className="option-tile px-3 py-2 rounded-control text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="option-tile px-3 py-2 rounded-control text-xs"
                         >
                           {"labelKey" in option ? t(option.labelKey as string) : option.label}
                         </button>

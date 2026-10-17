@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "../../stores/appStore";
 import { useAccounts } from "../../hooks/useAccounts";
 import { updateAccountSettings } from "../../lib/tauri";
+import { SegmentedControl } from "../ui/SegmentedControl";
 import type { Account, AppSettings } from "../../types";
 
 interface PrivacySettingsProps {
@@ -83,28 +84,16 @@ export function PrivacySettings({ localSettings, updateLocalSetting }: PrivacySe
                   <div className="text-sm font-medium text-text truncate">{account.display_name}</div>
                   <div className="text-xs text-text-tertiary truncate">{account.email}</div>
                 </div>
-                <div className="flex gap-1 shrink-0">
-                  <button
-                    onClick={() => handleImageSetting(account, "always")}
-                    className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
-                      (account.load_external_images || "always") === "always"
-                        ? "border-accent bg-accent-soft text-accent"
-                        : "border-border text-text-secondary hover:bg-hover"
-                    }`}
-                  >
-                    {t("settings.account.loadImagesAlways")}
-                  </button>
-                  <button
-                    onClick={() => handleImageSetting(account, "never")}
-                    className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
-                      account.load_external_images === "never"
-                        ? "border-accent bg-accent-soft text-accent"
-                        : "border-border text-text-secondary hover:bg-hover"
-                    }`}
-                  >
-                    {t("settings.account.loadImagesNever")}
-                  </button>
-                </div>
+                <SegmentedControl
+                  className="shrink-0"
+                  aria-label={account.display_name}
+                  value={(account.load_external_images || "always") === "never" ? "never" : "always"}
+                  onChange={(v) => handleImageSetting(account, v)}
+                  options={[
+                    { value: "always", label: t("settings.account.loadImagesAlways") },
+                    { value: "never", label: t("settings.account.loadImagesNever") },
+                  ]}
+                />
               </div>
             ))}
           </div>

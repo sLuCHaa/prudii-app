@@ -5,6 +5,7 @@ import { useAppStore } from "../../stores/appStore";
 import { useAccounts, useRules, useCreateRule, useUpdateRule, useDeleteRule, useFolders, useApplyRulesNow } from "../../hooks/useAccounts";
 import { Button } from "../ui/Button";
 import { Select } from "../ui/Select";
+import { SegmentedControl } from "../ui/SegmentedControl";
 import type { MailRule, CreateRuleRequest } from "../../types";
 
 function emptyRule(accountId: string): CreateRuleRequest {
@@ -104,26 +105,16 @@ function RuleForm({
           </div>
           <div>
             <label className="text-xs text-text-tertiary mb-1 block">{t("rules.attachmentsLabel")}</label>
-            <div className="flex gap-1">
-              {([
-                { val: null, label: t("rules.attachmentsAny") },
-                { val: true, label: t("rules.attachmentsWith") },
-                { val: false, label: t("rules.attachmentsWithout") },
-              ] as { val: boolean | null; label: string }[]).map((opt) => (
-                <button
-                  key={String(opt.val)}
-                  type="button"
-                  onClick={() => setForm({ ...form, has_attachments: opt.val })}
-                  className={`flex-1 px-2 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
-                    form.has_attachments === opt.val
-                      ? "border-accent bg-accent-soft text-accent"
-                      : "border-border bg-surface text-text-secondary hover:bg-hover"
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
+            <SegmentedControl
+              aria-label={t("rules.attachmentsLabel")}
+              value={form.has_attachments === null ? "any" : form.has_attachments ? "with" : "without"}
+              onChange={(v) => setForm({ ...form, has_attachments: v === "any" ? null : v === "with" })}
+              options={[
+                { value: "any", label: t("rules.attachmentsAny") },
+                { value: "with", label: t("rules.attachmentsWith") },
+                { value: "without", label: t("rules.attachmentsWithout") },
+              ]}
+            />
           </div>
         </div>
       </div>
