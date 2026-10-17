@@ -113,7 +113,7 @@ export function CalendarSettingsPanel() {
                   const next = on ? settings.work_days.filter((x) => x !== d) : [...settings.work_days, d];
                   if (next.length) set({ work_days: [...next].sort((a, b) => a - b) });
                 }}
-                className={`h-8 w-9 rounded-control text-xs font-medium transition-colors ${on ? "bg-accent text-white" : "bg-bg-secondary text-text-secondary hover:bg-hover"}`}
+                className={`h-8 w-9 rounded-sm text-xs font-medium transition-colors ${on ? "bg-accent text-white" : "bg-bg-secondary text-text-secondary hover:bg-hover"}`}
               >
                 {format(addDays(REFERENCE_SUNDAY, d), "EEEEEE", { locale: dateLocale() })}
               </button>

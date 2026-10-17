@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { extractClassStrings } from "./classAudit";
 
 const raw = import.meta.glob("../components/**/*.tsx", {
   query: "?raw",
@@ -18,18 +19,31 @@ export function sourceOf(rel: string): string {
 }
 
 export function classStrings(): { file: string; line: number; cls: string }[] {
-  const out: { file: string; line: number; cls: string }[] = [];
-  const re = /"([^"\n]*)"|`([^`]*)`|'([^'\n]*)'/g;
-  for (const [file, text] of Object.entries(sources)) {
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(text))) {
-      const cls = m[1] ?? m[2] ?? m[3] ?? "";
-      const line = text.slice(0, m.index).split("\n").length;
-      out.push({ file, line, cls });
-    }
-  }
-  return out;
+  return Object.entries(sources).flatMap(([file, text]) => extractClassStrings(file, text));
 }
+
+describe("class string extraction", () => {
+  it("keeps a split className ternary as one entry", () => {
+    const src = 'const a = <div className={x ? "rounded-lg bg-accent" : "text-white"} />;';
+    const hit = extractClassStrings("f.tsx", src).find((c) => c.cls.includes("bg-accent"));
+    expect(hit?.cls).toContain("rounded-lg");
+    expect(hit?.cls).toContain("text-white");
+  });
+
+  it("does not let an apostrophe in JSX text swallow a className", () => {
+    const src = ["<p>don't</p>", `<b className="bg-accent text-white rounded-lg">it's</b>`].join("\n");
+    const hit = extractClassStrings("f.tsx", src).find((c) => c.cls.includes("bg-accent"));
+    expect(hit?.line).toBe(2);
+  });
+
+  it("reads nested templates and multi-line className expressions", () => {
+    const src = ["<i", " className={`a ${x ? `rounded-xl` : ''} bg-accent", " text-white`}", "/>"].join("\n");
+    const hit = extractClassStrings("f.tsx", src).find((c) => c.cls.includes("bg-accent"));
+    expect(hit?.line).toBe(2);
+    expect(hit?.cls).toContain("text-white");
+    expect(hit?.cls).toContain("rounded-xl");
+  });
+});
 
 describe("shape audit", () => {
   it("reads component sources", () => {
