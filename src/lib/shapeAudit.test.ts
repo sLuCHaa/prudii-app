@@ -177,7 +177,10 @@ describe("shape audit", () => {
     expect(src).not.toMatch(/onHoverStart|onHoverEnd/);
     expect(src).toMatch(/aria-disabled=\{!canSend\}/);
     const split = classStrings().find(({ file, cls }) => file === "compose/ComposeModal.tsx" && /\btactile-filled\b/.test(cls) && cls.includes("items-stretch"));
-    expect(split).toBeDefined();
+    expect(split?.cls).toContain("send-split");
+    expect(split?.cls).not.toMatch(/\boverflow-hidden\b/);
+    expect(src).toMatch(/<SendButton key=\{sendResetKey\}/);
+    expect(src).toMatch(/setSendResetKey\(\(k\) => k \+ 1\)/);
     const chevron = classStrings().find(({ file, cls }) => file === "compose/ComposeModal.tsx" && cls.includes("rounded-r-control"));
     expect(chevron?.cls).not.toMatch(/\bbg-accent\b|\btext-white\b/);
   });

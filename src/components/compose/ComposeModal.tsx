@@ -530,6 +530,8 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
   const [showScheduleMenu, setShowScheduleMenu] = useState(false);
   const [sendPhase, setSendPhase] = useState<SendPhase>("idle");
+  // Bumped when a send fails after the button already showed "sent"; remounting resets it.
+  const [sendResetKey, setSendResetKey] = useState(0);
   const [customSchedule, setCustomSchedule] = useState<CustomSchedule | null>(null);
   const [quotedHtml, setQuotedHtml] = useState("");
   const [preview, setPreview] = useState<ComposePreviewData | null>(null);
@@ -1261,6 +1263,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         onClose();
       }).catch((err) => {
         setSendError(err instanceof Error ? err.message : String(err));
+        setSendResetKey((k) => k + 1);
       }).finally(() => setSending(false));
     } else if (initData) {
       // Compose window mode — emit to main window for undo-send, then close
@@ -1903,20 +1906,20 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
               <div ref={scheduleBtnRef} className="relative">
                 <div
                   aria-disabled={!canSend}
-                  className={`relative flex items-stretch rounded-control border overflow-hidden tactile-filled active:duration-0 transition-[box-shadow,transform,filter] duration-150 ease-out ${
+                  className={`send-split relative flex items-stretch rounded-control border tactile-filled active:duration-0 transition-[box-shadow,transform,filter,border-color,opacity] duration-150 ease-out ${
                     sendPhase !== "idle" ? "[--tactile-fill:var(--c-success)]" : ""
                   } ${to.length === 0 && !toHasPending ? "opacity-50" : ""}`}
                 >
                   {/* Green is the "go" colour: from sending to sent it fills the whole split as one confirmation. */}
                   <motion.span
                     aria-hidden
-                    className="absolute inset-0 pointer-events-none"
+                    className="absolute inset-0 rounded-[inherit] pointer-events-none"
                     style={{ background: "linear-gradient(180deg, color-mix(in srgb, var(--c-success) 88%, white) 0%, var(--c-success) 50%, color-mix(in srgb, var(--c-success) 88%, black) 100%)" }}
                     initial={false}
                     animate={{ opacity: sendPhase !== "idle" ? 1 : 0 }}
                     transition={SPRING_SNAPPY}
                   />
-                  <SendButton onSend={handleSend} disabled={to.length === 0 && !toHasPending} onPhaseChange={setSendPhase} />
+                  <SendButton key={sendResetKey} onSend={handleSend} disabled={to.length === 0 && !toHasPending} onPhaseChange={setSendPhase} />
                   <button
                     onClick={() => {
                       setShowScheduleMenu(!showScheduleMenu);

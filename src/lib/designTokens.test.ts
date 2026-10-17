@@ -84,9 +84,12 @@ describe("design tokens", () => {
     const layered = css.slice(start, end);
     const label = /\.settings-group-label h3\s*\{[^}]*font-size:\s*11px/;
     const focus = /\.settings-row\[data-clickable\]:focus-visible\s*\{[^}]*outline-offset:\s*-2px/;
+    const sendFocus = /\.send-split button:focus-visible\s*\{[^}]*outline-color:\s*var\(--c-on-accent\)[^}]*outline-offset:\s*-4px/;
     expect(css).toMatch(label);
     expect(layered).not.toMatch(label);
     expect(css).toMatch(focus);
     expect(layered).not.toMatch(focus);
+    expect(css).toMatch(sendFocus);
+    expect(layered).not.toMatch(sendFocus);
   });
 });

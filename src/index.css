@@ -309,6 +309,12 @@ h3 { font-size: var(--text-base); }
   outline-offset: -2px;
 }
 
+/* Inside the accent fill an accent outline would vanish, so the ring takes the text colour. */
+.send-split button:focus-visible {
+  outline-color: var(--c-on-accent);
+  outline-offset: -4px;
+}
+
 /* ─── Transition Utilities ─── */
 .transition-smooth {
   transition-duration: var(--transition-base);
