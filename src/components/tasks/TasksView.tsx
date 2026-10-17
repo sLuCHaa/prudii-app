@@ -12,6 +12,7 @@ import { EmptyState } from "../ui/EmptyState";
 import { NoTasksState } from "./NoTasksState";
 import { LoadingCrossfade } from "../motion/LoadingCrossfade";
 import { Skeleton } from "../ui/Skeleton";
+import { Button } from "../ui/Button";
 
 type TaskFilter = "all" | "today" | "overdue";
 
@@ -110,13 +111,13 @@ export function TasksView() {
             ))}
           </div>
 
-          <button
+          <Button
+            size="sm"
             onClick={() => setOpenTaskId("new")}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90 transition-colors"
+            icon={<Plus />}
           >
-            <Plus className="w-3.5 h-3.5" />
             {t("tasks.new")}
-          </button>
+          </Button>
         </div>
       </div>
 

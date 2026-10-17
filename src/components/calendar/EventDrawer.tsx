@@ -21,6 +21,7 @@ import { AlarmEditor } from "./AlarmEditor";
 import { RecurrenceEditor } from "./RecurrenceEditor";
 import { EventReadOnlyBody } from "./EventReadOnlyBody";
 import { useEventActions } from "./useEventActions";
+import { Button } from "../ui/Button";
 
 const INPUT = "h-9 px-3 rounded-lg border border-border bg-bg-secondary text-sm text-text outline-none focus:border-accent";
 const START_DERIVED = ["weekly", "monthlyDay", "monthlyNth"];
@@ -366,14 +367,14 @@ export function EventDrawer({ target, onClose }: EventDrawerProps) {
                   className={`${INPUT} min-w-0 flex-1`}
                 />
                 {join && (
-                  <button
+                  <Button
+                    size="sm"
                     type="button"
                     onClick={() => openUrl(join).catch(() => {})}
-                    className="flex items-center gap-1.5 rounded-lg bg-accent px-3 text-xs font-medium text-white hover:bg-accent/90"
+                    icon={<Video />}
                   >
-                    <Video className="h-3.5 w-3.5" />
                     {t("calendar.join")}
-                  </button>
+                  </Button>
                 )}
               </div>
             </Field>
@@ -422,14 +423,14 @@ export function EventDrawer({ target, onClose }: EventDrawerProps) {
                 <button type="button" onClick={onClose} className="rounded-lg px-3 py-1.5 text-xs text-text-secondary hover:bg-hover">
                   {t("common.cancel")}
                 </button>
-                <button
+                <Button
+                  size="sm"
                   type="button"
                   onClick={() => void save()}
                   disabled={!form || saving}
-                  className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-50"
                 >
                   {t(target.mode === "new" ? "calendar.drawer.create" : "calendar.drawer.save")}
-                </button>
+                </Button>
               </>
             )}
           </div>

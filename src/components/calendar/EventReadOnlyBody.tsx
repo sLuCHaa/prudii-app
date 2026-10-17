@@ -11,6 +11,7 @@ import { findMeetingLink } from "../../lib/calendar/meetingLinks";
 import { formatOccurrenceTime } from "../../lib/calendar/format";
 import { dateLocale } from "../../lib/dateUtils";
 import { LinkifiedText } from "./LinkifiedText";
+import { Button } from "../ui/Button";
 
 function Row({ icon: Icon, children }: { icon: typeof MapPin; children: ReactNode }) {
   return (
@@ -48,14 +49,15 @@ export function EventReadOnlyBody({ occurrence: o, detail, calendarName }: Event
         </Row>
       )}
       {join && (
-        <button
+        <Button
+          size="sm"
           type="button"
           onClick={() => openUrl(join).catch(() => {})}
-          className="ml-7 flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90"
+          className="ml-7"
+          icon={<Video />}
         >
-          <Video className="h-3.5 w-3.5" />
           {t("calendar.join")}
-        </button>
+        </Button>
       )}
       {o.description && (
         <Row icon={AlignLeft}>

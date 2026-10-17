@@ -1,5 +1,6 @@
 import { Component, type ReactNode } from "react";
 import { Translation } from "react-i18next";
+import { Button } from "./Button";
 
 interface Props {
   children: ReactNode;
@@ -42,15 +43,15 @@ export class ErrorBoundary extends Component<Props, State> {
                 <p className="text-sm text-text-secondary mb-4">
                   {this.state.error?.message || t("errorBoundary.defaultMessage")}
                 </p>
-                <button
+                <Button
+                  size="sm"
                   onClick={() => {
                     this.setState({ hasError: false, error: null });
                     window.location.reload();
                   }}
-                  className="px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors"
                 >
                   {t("errorBoundary.reload")}
-                </button>
+                </Button>
               </div>
             </div>
           )}

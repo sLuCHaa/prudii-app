@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import { Select } from "../ui/Select";
+import { Button } from "../ui/Button";
 
 export const PRESET_MINUTES = [0, 5, 10, 15, 30, 60, 1440];
 const MAX_MINUTES = 7 * 24 * 60;
@@ -83,16 +84,16 @@ export function AlarmEditor({ value, allDay, onChange }: AlarmEditorProps) {
               onChange={(v) => setUnit(v as "m" | "h" | "d")}
             />
           </div>
-          <button
+          <Button
+            size="sm"
             type="button"
             onClick={() => {
               add(Math.min(MAX_MINUTES, amount * (unit === "d" ? 1440 : unit === "h" ? 60 : 1)));
               setCustom(false);
             }}
-            className="px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90"
           >
             {t("common.create")}
-          </button>
+          </Button>
         </div>
       )}
       {allDay && <p className="text-xs text-text-tertiary">{t("calendar.alarm.allDayHint")}</p>}

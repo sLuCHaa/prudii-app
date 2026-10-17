@@ -16,6 +16,7 @@ import { dateLocale } from "../../lib/dateUtils";
 import { SPRING_SNAPPY, TRANSITION_INSTANT } from "../motion/tokens";
 import { LinkifiedText } from "./LinkifiedText";
 import { usePopover } from "./usePopover";
+import { Button } from "../ui/Button";
 
 interface EventPopoverProps {
   occurrence: Occurrence;
@@ -89,14 +90,14 @@ export function EventPopover({ occurrence: o, anchor, calendarName, onClose, onE
       {calendarName && <Row icon={CalendarDays}>{calendarName}</Row>}
       <div className="mt-4 flex items-center gap-1.5">
         {join && (
-          <button
+          <Button
+            size="sm"
             type="button"
             onClick={() => openUrl(join).catch(() => {})}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90"
+            icon={<Video />}
           >
-            <Video className="w-3.5 h-3.5" />
             {t("calendar.join")}
-          </button>
+          </Button>
         )}
         {o.read_only ? (
           <span className="ml-auto flex items-center gap-1 text-xs text-text-tertiary">

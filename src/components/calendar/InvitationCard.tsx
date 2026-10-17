@@ -15,6 +15,7 @@ import type { MenuEntry } from "../../lib/menuModel";
 import { ContextMenu } from "../ui/ContextMenu";
 import { Select } from "../ui/Select";
 import { LinkifiedText } from "./LinkifiedText";
+import { Button } from "../ui/Button";
 
 const ANSWER_LABELS: Record<InviteAnswer, string> = {
   accepted: "calendar.invite.accept",
@@ -156,14 +157,14 @@ function Card({ view }: { view: InvitationView }) {
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {join && (
-          <button
+          <Button
+            size="sm"
             type="button"
             onClick={() => openUrl(join).catch(() => {})}
-            className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90"
+            icon={<Video />}
           >
-            <Video className="h-3.5 w-3.5" />
             {t("calendar.join")}
-          </button>
+          </Button>
         )}
         {mode === "request" &&
           ANSWERS.map((a) => {
@@ -202,14 +203,14 @@ function Card({ view }: { view: InvitationView }) {
           (view.event_id ? (
             <span className="text-xs text-text-tertiary">{t("calendar.invite.inCalendar")}</span>
           ) : (
-            <button
+            <Button
+              size="sm"
               type="button"
               disabled={busy || !calendarId}
               onClick={() => addPublished.mutate({ mailId: view.mail_id, calendarId })}
-              className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-50"
             >
               {t("calendar.invite.addToCalendar")}
-            </button>
+            </Button>
           ))}
         {mode === "cancel" && view.event_id && (
           <button
@@ -250,14 +251,14 @@ function Card({ view }: { view: InvitationView }) {
             <button type="button" onClick={() => setCommenting(null)} className="rounded-lg px-2.5 py-1 text-xs text-text-secondary hover:bg-hover">
               {t("calendar.invite.cancel")}
             </button>
-            <button
+            <Button
+              size="sm"
               type="button"
               disabled={busy}
               onClick={() => answer(commenting, true, comment)}
-              className="rounded-lg bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-50"
             >
               {t(ANSWER_LABELS[commenting])} · {t("calendar.invite.send")}
-            </button>
+            </Button>
           </div>
         </div>
       )}

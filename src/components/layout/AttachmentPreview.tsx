@@ -10,6 +10,7 @@ import { Tooltip } from "../ui/Tooltip";
 import { revealLabelKey, revealAttachment } from "../../lib/attachmentActions";
 import { isMacOS, isWindows } from "../../lib/platform";
 import { formatFileSize } from "../../lib/fileSize";
+import { Button } from "../ui/Button";
 
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tiff"]);
 const PDF_EXTENSIONS = new Set(["pdf"]);
@@ -269,13 +270,14 @@ export function AttachmentPreview({
               </button>
             </Tooltip>
           )}
-          <button
+          <Button
+            size="sm"
             onClick={() => onOpenMail(attachment)}
-            className="flex-1 flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90 transition-colors"
+            className="flex-1"
+            icon={<Mail />}
           >
-            <Mail className="w-3.5 h-3.5" />
             {t("attachments.openInMail")}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

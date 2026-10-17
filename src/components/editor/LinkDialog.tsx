@@ -4,6 +4,7 @@ import { X, ExternalLink, Link2, Unlink, AlertTriangle, Type } from "lucide-reac
 import i18n from "../../lib/i18n";
 import { checkLink } from "../../lib/linkChecker";
 import { normalizeLinkInput } from "./linkInput";
+import { Button } from "../ui/Button";
 
 export function LinkDialog({
   isOpen,
@@ -153,13 +154,13 @@ export function LinkDialog({
               >
                 {i18n.t("common.cancel")}
               </button>
-              <button
+              <Button
+                size="sm"
                 type="submit"
                 disabled={!result.ok}
-                className="px-4 py-1.5 rounded-lg text-sm font-medium bg-accent text-white hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {hasExistingLink ? i18n.t("compose.linkUpdate") : i18n.t("compose.linkInsertBtn")}
-              </button>
+              </Button>
             </div>
           </div>
         </form>

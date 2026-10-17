@@ -10,6 +10,7 @@ import { CALENDAR_COLORS } from "../../lib/calendar/palette";
 import { DEFAULT_REFRESH_MINUTES, looksLikeFeedLink, REFRESH_CHOICES, refreshLabelKey } from "../../lib/calendar/subscriptions";
 import i18n from "../../lib/i18n";
 import { Select } from "../ui/Select";
+import { Button } from "../ui/Button";
 
 export type SubscribeTarget = { mode: "subscribe" } | { mode: "change"; calendar: Calendar };
 
@@ -169,13 +170,13 @@ export function SubscribeDialog({ target, onClose }: SubscribeDialogProps) {
             <button type="button" onClick={onClose} disabled={busy} className="rounded-lg px-3 py-1.5 text-xs text-text-secondary hover:bg-hover disabled:opacity-50">
               {t("common.cancel")}
             </button>
-            <button
+            <Button
+              size="sm"
               type="submit"
               disabled={busy || !looksLikeFeedLink(url)}
-              className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-50"
             >
               {busy ? t("common.pleaseWait") : t(changing ? "calendar.subscribe.save" : "calendar.subscribe.submit")}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

@@ -23,6 +23,7 @@ import { EventPopover } from "./EventPopover";
 import { EventDrawer } from "./EventDrawer";
 import { useEventActions } from "./useEventActions";
 import type { CalendarGridHandlers } from "./gridShared";
+import { Button } from "../ui/Button";
 
 const VIEWS: CalendarViewKind[] = ["month", "week", "workweek", "day", "agenda"];
 const MAX_AGENDA_DAYS = 3 * 365;
@@ -216,14 +217,14 @@ export function CalendarView() {
               />
             </div>
             <ViewSegment view={view} onChange={setView} />
-            <button
+            <Button
+              size="sm"
               type="button"
               onClick={() => newEvent()}
-              className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90"
+              icon={<Plus />}
             >
-              <Plus className="h-3.5 w-3.5" />
               {t("calendar.newEvent")}
-            </button>
+            </Button>
           </div>
         </div>
 

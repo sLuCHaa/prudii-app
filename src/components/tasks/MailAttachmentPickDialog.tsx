@@ -6,6 +6,7 @@ import type { Attachment } from "../../types";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { attachmentPickOrder, defaultPickedAttachmentIds } from "../../lib/tasks";
 import { formatFileSize } from "../../lib/fileSize";
+import { Button } from "../ui/Button";
 
 export interface MailAttachmentPickDialogProps {
   attachments: Attachment[];
@@ -106,14 +107,14 @@ export function MailAttachmentPickDialog({ attachments, onConfirm, onCancel }: M
           >
             {t("tasks.attachSkip")}
           </button>
-          <button
+          <Button
+            size="sm"
             type="button"
             autoFocus
             onClick={confirm}
-            className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent/90"
           >
             {t("tasks.attachConfirm")}
-          </button>
+          </Button>
         </div>
       </div>
     </div>,

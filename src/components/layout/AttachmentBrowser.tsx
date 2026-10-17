@@ -17,6 +17,7 @@ import { revealLabelKey, revealAttachment } from "../../lib/attachmentActions";
 import { isMacOS, isWindows } from "../../lib/platform";
 import type { AttachmentWithContext, AiSearchResultEvent } from "../../types";
 import { formatFileSize } from "../../lib/fileSize";
+import { Button } from "../ui/Button";
 
 function getFileIcon(mimeType: string | null, filename: string) {
   const mime = mimeType?.toLowerCase() || "";
@@ -477,18 +478,14 @@ export function AttachmentBrowser() {
               <span className="text-xs text-text-secondary">
                 {t("attachments.selected", { count: selectedIds.size })}
               </span>
-              <button
+              <Button
+                size="sm"
                 onClick={handleBulkDownload}
-                disabled={downloading}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90 transition-colors disabled:opacity-50"
+                loading={downloading}
+                icon={<Download />}
               >
-                {downloading ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Download className="w-3.5 h-3.5" />
-                )}
                 {t("attachments.downloadSelected")}
-              </button>
+              </Button>
             </>
           )}
         </div>
