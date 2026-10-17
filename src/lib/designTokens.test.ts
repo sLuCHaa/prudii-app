@@ -4,6 +4,13 @@ import { resolve } from "node:path";
 
 const css = readFileSync(resolve(__dirname, "../index.css"), "utf8");
 
+describe("tactile surfaces marked disabled", () => {
+  it("neither lift nor sink", () => {
+    expect(css).toContain('.tactile-filled:hover:not(:disabled):not([aria-disabled="true"])');
+    expect(css).toContain('.tactile-filled:active:not(:disabled):not([aria-disabled="true"])');
+  });
+});
+
 describe("design tokens", () => {
   it("sets the soft radius scale", () => {
     for (const decl of ["--radius-sm: 0.5rem", "--radius-md: 0.625rem", "--radius-lg: 1rem", "--radius-xl: 1.25rem", "--radius-control: 0.75rem"]) expect(css).toContain(decl);

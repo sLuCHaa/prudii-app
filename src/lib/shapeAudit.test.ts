@@ -167,18 +167,19 @@ describe("shape audit", () => {
     expect(src).not.toMatch(/elastic\.out|glowRef|buttonRef/);
   });
 
-  it("shapes the send split button with control corners", () => {
+  it("makes the send split one tactile accent button", () => {
     const src = sourceOf("compose/ComposeModal.tsx");
     expect(src).not.toMatch(/rounded-[lr]-xl\b/);
     expect(src).toContain("rounded-l-control");
     expect(src).toContain("rounded-r-control");
-    expect(src).not.toContain("motion-reduce:transform-none");
-    const wrap = classStrings().find(({ file, cls }) => file === "compose/ComposeModal.tsx" && cls.includes("[box-shadow:0_2px_8px_rgba(59,130,246,0.25)]"));
-    expect(wrap?.cls).toContain("transition-[translate]");
-    expect(wrap?.cls).toContain("motion-safe:hover:-translate-y-px motion-safe:active:translate-y-px");
-    expect(wrap?.cls).toContain("showScheduleMenu");
-    expect(wrap?.cls).not.toMatch(/(?<!motion-safe:)(?:hover|active):-?translate-y-px/);
-    expect(classStrings().some(({ file, cls }) => file.endsWith("ComposeModal.tsx") && cls.includes("pointer-events-none") && cls.includes("rounded-[inherit]") && cls.includes("inset-shadow-[0_1px_0_rgba(255,255,255,.32)]"))).toBe(true);
+    expect(src).not.toContain("var(--gradient-cool)");
+    expect(src).not.toContain("rgba(59,130,246");
+    expect(src).not.toMatch(/onHoverStart|onHoverEnd/);
+    expect(src).toMatch(/aria-disabled=\{!canSend\}/);
+    const split = classStrings().find(({ file, cls }) => file === "compose/ComposeModal.tsx" && /\btactile-filled\b/.test(cls) && cls.includes("items-stretch"));
+    expect(split).toBeDefined();
+    const chevron = classStrings().find(({ file, cls }) => file === "compose/ComposeModal.tsx" && cls.includes("rounded-r-control"));
+    expect(chevron?.cls).not.toMatch(/\bbg-accent\b|\btext-white\b/);
   });
 
   it("gives chips and notice badges 8px corners", () => {

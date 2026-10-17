@@ -416,15 +416,13 @@ function CustomScheduleForm({ value, onChange, onBack, onSchedule }: {
   );
 }
 
-function SendButton({ onSend, disabled }: { onSend: () => Promise<boolean>; disabled: boolean }) {
+function SendButton({ onSend, disabled, onPhaseChange }: { onSend: () => Promise<boolean>; disabled: boolean; onPhaseChange: (phase: SendPhase) => void }) {
   const { t } = useTranslation();
   const [phase, setPhase] = useState<SendPhase>("idle");
-  const [hovered, setHovered] = useState(false);
 
-  // Green is the "go" colour: it glides in on hover (a ready-to-send cue) and
-  // stays through sending → sent, so the whole send gesture reads as one
-  // continuous green journey. Resting idle stays on the brand gradient.
-  const greenOn = phase !== "idle" || (hovered && !disabled);
+  useEffect(() => {
+    onPhaseChange(phase);
+  }, [phase, onPhaseChange]);
 
   async function handleClick() {
     if (phase !== "idle" || disabled) return;
@@ -452,44 +450,29 @@ function SendButton({ onSend, disabled }: { onSend: () => Promise<boolean>; disa
   ];
 
   return (
-    <motion.button
+    <button
       onClick={handleClick}
-      onHoverStart={() => setHovered(true)}
-      onHoverEnd={() => setHovered(false)}
       disabled={disabled || phase !== "idle"}
-      className="relative overflow-hidden px-5 py-2 rounded-l-control text-white font-semibold text-sm min-w-[100px]"
-      transition={SPRING_SNAPPY}
+      className="relative px-5 py-2 rounded-l-control text-on-accent font-semibold text-sm min-w-25 disabled:cursor-default"
     >
-        {/* Base brand gradient (always present). */}
-        <span className="absolute inset-0" style={{ background: "var(--gradient-cool)" }} aria-hidden />
-        {/* Success-green overlay: glides in on hover and stays through send → sent. */}
-        <motion.span
-          className="absolute inset-0"
-          style={{ background: "var(--c-success)" }}
-          initial={false}
-          animate={{ opacity: greenOn ? 1 : 0 }}
-          transition={SPRING_SNAPPY}
-          aria-hidden
-        />
-        <span aria-hidden className="absolute inset-0 rounded-[inherit] pointer-events-none inset-shadow-[0_1px_0_rgba(255,255,255,.32)]" />
-        {/* Grid auto-sizes to the widest label across locales; children stack. */}
-        <span className="relative grid place-items-center">
-          {phases.map((p) => (
-            <motion.span
-              key={p.key}
-              style={{ gridArea: "1 / 1", pointerEvents: "none" }}
-              className="inline-flex items-center gap-1.5 whitespace-nowrap"
-              initial={false}
-              animate={{ opacity: phase === p.key ? 1 : 0, scale: phase === p.key ? 1 : 0.85 }}
-              transition={SPRING_SNAPPY}
-              aria-hidden={phase !== p.key}
-            >
-              {p.icon}
-              {p.label}
-            </motion.span>
-          ))}
-        </span>
-    </motion.button>
+      {/* Grid auto-sizes to the widest label across locales; children stack. */}
+      <span className="relative grid place-items-center">
+        {phases.map((p) => (
+          <motion.span
+            key={p.key}
+            style={{ gridArea: "1 / 1", pointerEvents: "none" }}
+            className="inline-flex items-center gap-1.5 whitespace-nowrap"
+            initial={false}
+            animate={{ opacity: phase === p.key ? 1 : 0, scale: phase === p.key ? 1 : 0.85 }}
+            transition={SPRING_SNAPPY}
+            aria-hidden={phase !== p.key}
+          >
+            {p.icon}
+            {p.label}
+          </motion.span>
+        ))}
+      </span>
+    </button>
   );
 }
 
@@ -546,6 +529,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
   const [showScheduleMenu, setShowScheduleMenu] = useState(false);
+  const [sendPhase, setSendPhase] = useState<SendPhase>("idle");
   const [customSchedule, setCustomSchedule] = useState<CustomSchedule | null>(null);
   const [quotedHtml, setQuotedHtml] = useState("");
   const [preview, setPreview] = useState<ComposePreviewData | null>(null);
@@ -1916,23 +1900,35 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
                 title={t("compose.preview")}
                 onClick={openPreview}
               />
-              <div
-                ref={scheduleBtnRef}
-                className={`relative flex items-stretch gap-0 rounded-control transition-[translate] duration-200 ease-out ${
-                  canSend && !showScheduleMenu ? "motion-safe:hover:-translate-y-px motion-safe:active:translate-y-px" : ""
-                } [box-shadow:0_2px_8px_rgba(59,130,246,0.25)]`}
-              >
-                <SendButton onSend={handleSend} disabled={to.length === 0 && !toHasPending} />
-                <button
-                  onClick={() => {
-                    setShowScheduleMenu(!showScheduleMenu);
-                    setCustomSchedule(null);
-                  }}
-                  disabled={!canSend}
-                  className="flex items-center px-2 bg-accent text-white rounded-r-control border-l border-white/20 disabled:opacity-50 transition-[filter] duration-200 hover:brightness-110 active:brightness-95"
+              <div ref={scheduleBtnRef} className="relative">
+                <div
+                  aria-disabled={!canSend}
+                  className={`relative flex items-stretch rounded-control border overflow-hidden tactile-filled active:duration-0 transition-[box-shadow,transform,filter] duration-150 ease-out ${
+                    sendPhase !== "idle" ? "[--tactile-fill:var(--c-success)]" : ""
+                  } ${to.length === 0 && !toHasPending ? "opacity-50" : ""}`}
                 >
-                  <ChevronDown className="w-4 h-4" />
-                </button>
+                  {/* Green is the "go" colour: from sending to sent it fills the whole split as one confirmation. */}
+                  <motion.span
+                    aria-hidden
+                    className="absolute inset-0 pointer-events-none"
+                    style={{ background: "linear-gradient(180deg, color-mix(in srgb, var(--c-success) 88%, white) 0%, var(--c-success) 50%, color-mix(in srgb, var(--c-success) 88%, black) 100%)" }}
+                    initial={false}
+                    animate={{ opacity: sendPhase !== "idle" ? 1 : 0 }}
+                    transition={SPRING_SNAPPY}
+                  />
+                  <SendButton onSend={handleSend} disabled={to.length === 0 && !toHasPending} onPhaseChange={setSendPhase} />
+                  <button
+                    onClick={() => {
+                      setShowScheduleMenu(!showScheduleMenu);
+                      setCustomSchedule(null);
+                    }}
+                    disabled={!canSend}
+                    className="relative flex items-center px-2 text-on-accent rounded-r-control border-l disabled:cursor-default"
+                    style={{ borderLeftColor: "color-mix(in srgb, var(--c-on-accent) 25%, transparent)" }}
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                </div>
                 {showScheduleMenu && (
                   <div className="absolute bottom-full right-0 mb-2 min-w-[200px] bg-surface rounded-lg shadow-lg inset-shadow-edge border border-border py-1 z-50 overflow-hidden">
                     <div className="px-3 py-1.5 text-xs font-semibold text-text-tertiary flex items-center gap-1.5">

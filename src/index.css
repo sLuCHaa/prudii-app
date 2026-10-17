@@ -1003,7 +1003,7 @@ html[data-vibrancy].dark .glass-sidebar {
       0 6px 14px -6px color-mix(in srgb, var(--tactile-fill) 80%, transparent);
   }
 
-  .tactile-filled:hover:not(:disabled) {
+  .tactile-filled:hover:not(:disabled):not([aria-disabled="true"]) {
     transform: translateY(-1px);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.3),
@@ -1011,7 +1011,7 @@ html[data-vibrancy].dark .glass-sidebar {
       0 12px 22px -8px color-mix(in srgb, var(--tactile-fill) 80%, transparent);
   }
 
-  .tactile-filled:active:not(:disabled) {
+  .tactile-filled:active:not(:disabled):not([aria-disabled="true"]) {
     transform: translateY(1px);
     filter: brightness(0.92);
     box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.28);
@@ -1255,9 +1255,9 @@ html[data-vibrancy].dark .glass-sidebar {
   @media (prefers-reduced-motion: reduce) {
     .tactile-filled,
     .tactile-quiet,
-    .tactile-filled:hover:not(:disabled),
+    .tactile-filled:hover:not(:disabled):not([aria-disabled="true"]),
     .tactile-quiet:hover:not(:disabled),
-    .tactile-filled:active:not(:disabled),
+    .tactile-filled:active:not(:disabled):not([aria-disabled="true"]),
     .tactile-quiet:active:not(:disabled) {
       transform: none;
     }
