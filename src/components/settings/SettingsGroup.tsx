@@ -34,11 +34,12 @@ export function SettingsBlock({ description, children, className }: {
   );
 }
 
-export function SettingsRow({ title, description, icon, control, onClick, className, children }: {
+export function SettingsRow({ title, description, icon, control, as, onClick, className, children }: {
   title: ReactNode;
   description?: ReactNode;
   icon?: ReactNode;
   control?: ReactNode;
+  as?: "label" | "div";
   onClick?: () => void;
   className?: string;
   children?: ReactNode;
@@ -54,7 +55,7 @@ export function SettingsRow({ title, description, icon, control, onClick, classN
       {control}
     </>
   );
-  if (control) return <label className={cn("settings-row", className)}>{body}</label>;
+  if (control && as !== "div") return <label className={cn("settings-row", className)}>{body}</label>;
   return (
     <div className={cn("settings-row", className)} data-clickable={onClick ? "" : undefined} onClick={onClick}>
       {body}

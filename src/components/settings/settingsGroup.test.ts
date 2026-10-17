@@ -50,6 +50,13 @@ describe("settings group", () => {
     expect(html(createElement(SettingsRow, { title: "Konto", onClick: () => {} }))).toContain("data-clickable");
   });
 
+  it("renders a div row that still holds its control when asked", () => {
+    const h = html(createElement(SettingsRow, { title: "Version", as: "div", control: createElement("span", { id: "val" }) }));
+    expect(h).toMatch(/^<div[^>]*settings-row/);
+    expect(h).toContain('id="val"');
+    expect(h).not.toContain("data-clickable");
+  });
+
   it("calls onClick of a clickable row", () => {
     const onClick = vi.fn();
     const c = mount(createElement(SettingsRow, { title: "Konto", onClick }));

@@ -500,31 +500,22 @@ function InfoPanel() {
   return (
     <SettingsGroup title={t("settings.info.title")}>
       <SettingsBlock description={t("settings.info.description")} />
-      <div className="settings-row">
-        <div className="settings-row-text">
-          <div className="settings-row-title">{t("settings.info.version")}</div>
-        </div>
-        <span className="text-sm font-mono text-text-secondary">{version}</span>
-      </div>
-      <div className="settings-row">
-        <div className="settings-row-text">
-          <div className="settings-row-title">{t("settings.info.appName")}</div>
-        </div>
-        <span className="text-sm text-text-secondary">Prudii Mail</span>
-      </div>
-      <div className="settings-row">
-        <div className="settings-row-text">
-          <div className="settings-row-title">{t("settings.info.website")}</div>
-        </div>
-        <a
-          href="https://prudii.com"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-sm text-accent hover:underline"
-        >
-          prudii.com
-        </a>
-      </div>
+      <SettingsRow as="div" title={t("settings.info.version")} control={<span className="text-sm font-mono text-text-secondary">{version}</span>} />
+      <SettingsRow as="div" title={t("settings.info.appName")} control={<span className="text-sm text-text-secondary">Prudii Mail</span>} />
+      <SettingsRow
+        as="div"
+        title={t("settings.info.website")}
+        control={
+          <a
+            href="https://prudii.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-accent hover:underline"
+          >
+            prudii.com
+          </a>
+        }
+      />
     </SettingsGroup>
   );
 }
@@ -757,20 +748,20 @@ export function SettingsPanel() {
                 <>
                   <SettingsGroup title={t("settings.appearance.title")}>
                     <SettingsBlock description={t("settings.appearance.description")}>
-                    <div className="flex gap-2">
-                      {THEME_OPTIONS.map(({ mode, labelKey, icon: Icon }) => (
-                        <button
-                          key={mode}
-                          onClick={() => handleThemeChange(mode)}
-                          type="button"
-                          aria-pressed={themeMode === mode}
-                          className="option-tile flex-1 flex flex-col items-center gap-2 p-3 rounded-control"
-                        >
-                          <Icon className="w-5 h-5" />
-                          <span className="text-xs">{t(labelKey)}</span>
-                        </button>
-                      ))}
-                    </div>
+                      <div className="flex gap-2">
+                        {THEME_OPTIONS.map(({ mode, labelKey, icon: Icon }) => (
+                          <button
+                            key={mode}
+                            onClick={() => handleThemeChange(mode)}
+                            type="button"
+                            aria-pressed={themeMode === mode}
+                            className="option-tile flex-1 flex flex-col items-center gap-2 p-3 rounded-control"
+                          >
+                            <Icon className="w-5 h-5" />
+                            <span className="text-xs">{t(labelKey)}</span>
+                          </button>
+                        ))}
+                      </div>
                     </SettingsBlock>
                     <SettingsRow
                       icon={<PanelLeft className="w-4 h-4 text-text-tertiary shrink-0" />}
@@ -788,90 +779,90 @@ export function SettingsPanel() {
 
                   <SettingsGroup title={t("settings.language.title")} icon={<Globe className="w-4 h-4" />}>
                     <SettingsBlock description={t("settings.language.description")}>
-                    <div className="grid grid-cols-4 gap-2">
-                      {LANGUAGE_OPTIONS.map(({ value, labelKey }) => (
-                        <button
-                          key={value}
-                          type="button"
-                          aria-pressed={languagePref === value}
-                          onClick={() => handleLanguageChange(value)}
-                          className="option-tile px-3 py-2 rounded-control text-xs"
-                        >
-                          {t(labelKey)}
-                        </button>
-                      ))}
-                    </div>
+                      <div className="grid grid-cols-4 gap-2">
+                        {LANGUAGE_OPTIONS.map(({ value, labelKey }) => (
+                          <button
+                            key={value}
+                            type="button"
+                            aria-pressed={languagePref === value}
+                            onClick={() => handleLanguageChange(value)}
+                            className="option-tile px-3 py-2 rounded-control text-xs"
+                          >
+                            {t(labelKey)}
+                          </button>
+                        ))}
+                      </div>
                     </SettingsBlock>
                   </SettingsGroup>
 
                   <SettingsGroup title={t("settings.appSettings.title")}>
                     <SettingsBlock description={t("settings.appSettings.description")} />
-                      <SettingsRow
-                        icon={<Power className="w-4 h-4 text-text-tertiary shrink-0" />}
-                        title={t("settings.appSettings.launchOnStartup")}
-                        description={t("settings.appSettings.launchOnStartupDesc")}
-                        control={<Switch checked={localSettings.launch_on_startup} onChange={(v) => updateLocalSetting("launch_on_startup", v)} />}
-                      />
+                    <SettingsRow
+                      icon={<Power className="w-4 h-4 text-text-tertiary shrink-0" />}
+                      title={t("settings.appSettings.launchOnStartup")}
+                      description={t("settings.appSettings.launchOnStartupDesc")}
+                      control={<Switch checked={localSettings.launch_on_startup} onChange={(v) => updateLocalSetting("launch_on_startup", v)} />}
+                    />
 
-                      <SettingsRow
-                        icon={<AppWindow className="w-4 h-4 text-text-tertiary shrink-0" />}
-                        title={t("settings.appSettings.showInTray")}
-                        description={t("settings.appSettings.showInTrayDesc")}
-                        control={<Switch checked={localSettings.show_in_tray} onChange={(v) => updateLocalSetting("show_in_tray", v)} />}
-                      />
+                    <SettingsRow
+                      icon={<AppWindow className="w-4 h-4 text-text-tertiary shrink-0" />}
+                      title={t("settings.appSettings.showInTray")}
+                      description={t("settings.appSettings.showInTrayDesc")}
+                      control={<Switch checked={localSettings.show_in_tray} onChange={(v) => updateLocalSetting("show_in_tray", v)} />}
+                    />
 
-                      <SettingsRow
-                        icon={<Clock className="w-4 h-4 text-text-tertiary shrink-0" />}
-                        title={t("settings.appSettings.use24hClock")}
-                        description={t("settings.appSettings.use24hClockDesc")}
-                        control={<Switch checked={localSettings.use_24h_clock} onChange={(v) => updateLocalSetting("use_24h_clock", v)} />}
-                      />
+                    <SettingsRow
+                      icon={<Clock className="w-4 h-4 text-text-tertiary shrink-0" />}
+                      title={t("settings.appSettings.use24hClock")}
+                      description={t("settings.appSettings.use24hClockDesc")}
+                      control={<Switch checked={localSettings.use_24h_clock} onChange={(v) => updateLocalSetting("use_24h_clock", v)} />}
+                    />
 
-                      <SettingsRow
-                        icon={<FolderOpen className="w-4 h-4 text-text-tertiary shrink-0" />}
-                        title={t("settings.appSettings.showAllUnreadCounts")}
-                        description={t("settings.appSettings.showAllUnreadCountsDesc")}
-                        control={<Switch checked={localSettings.show_all_unread_counts} onChange={(v) => updateLocalSetting("show_all_unread_counts", v)} />}
-                      />
+                    <SettingsRow
+                      icon={<FolderOpen className="w-4 h-4 text-text-tertiary shrink-0" />}
+                      title={t("settings.appSettings.showAllUnreadCounts")}
+                      description={t("settings.appSettings.showAllUnreadCountsDesc")}
+                      control={<Switch checked={localSettings.show_all_unread_counts} onChange={(v) => updateLocalSetting("show_all_unread_counts", v)} />}
+                    />
 
-                      <SettingsRow
-                        icon={<Bell className="w-4 h-4 text-text-tertiary shrink-0" />}
-                        title={t("settings.appSettings.notifications")}
-                        description={t("settings.appSettings.notificationsDesc")}
-                        control={<Switch checked={localSettings.notifications_enabled} onChange={(v) => updateLocalSetting("notifications_enabled", v)} />}
-                      />
+                    <SettingsRow
+                      icon={<Bell className="w-4 h-4 text-text-tertiary shrink-0" />}
+                      title={t("settings.appSettings.notifications")}
+                      description={t("settings.appSettings.notificationsDesc")}
+                      control={<Switch checked={localSettings.notifications_enabled} onChange={(v) => updateLocalSetting("notifications_enabled", v)} />}
+                    />
 
-                      <SettingsRow
-                        icon={<Volume2 className="w-4 h-4 text-text-tertiary shrink-0" />}
-                        title={t("settings.appSettings.notificationSound")}
-                        description={t("settings.appSettings.notificationSoundDesc")}
-                        control={<Switch checked={localSettings.notification_sound} onChange={(v) => updateLocalSetting("notification_sound", v)} />}
-                      />
+                    <SettingsRow
+                      icon={<Volume2 className="w-4 h-4 text-text-tertiary shrink-0" />}
+                      title={t("settings.appSettings.notificationSound")}
+                      description={t("settings.appSettings.notificationSoundDesc")}
+                      control={<Switch checked={localSettings.notification_sound} onChange={(v) => updateLocalSetting("notification_sound", v)} />}
+                    />
 
-                      <SettingsRow
-                        icon={<Mail className="w-4 h-4 text-text-tertiary shrink-0" />}
-                        title={t("settings.appSettings.defaultMailApp")}
-                        description={t("settings.appSettings.defaultMailAppDesc")}
-                        control={
-                          <Switch
-                            checked={isDefaultMailApp}
-                            onChange={async (wantChecked) => {
-                              try {
-                                if (wantChecked) {
-                                  await registerMailtoHandler();
-                                } else {
-                                  await unregisterMailtoHandler();
-                                }
-                                setIsDefaultMailApp(wantChecked);
-                              } catch (err) {
-                                addToast("error", t("settings.mailtoFailed"), err instanceof Error ? err.message : String(err));
-                                // Re-read actual OS state so the switch reflects reality.
-                                isMailtoHandler().then(setIsDefaultMailApp).catch(() => {});
+                    <SettingsRow
+                      icon={<Mail className="w-4 h-4 text-text-tertiary shrink-0" />}
+                      title={t("settings.appSettings.defaultMailApp")}
+                      description={t("settings.appSettings.defaultMailAppDesc")}
+                      control={
+                        <Switch
+                          checked={isDefaultMailApp}
+                          onChange={async (wantChecked) => {
+                            try {
+                              if (wantChecked) {
+                                await registerMailtoHandler();
+                              } else {
+                                await unregisterMailtoHandler();
                               }
-                            }}
-                            />
-                        }
-                      />
+                              setIsDefaultMailApp(wantChecked);
+                            } catch (err) {
+                              addToast("error", t("settings.mailtoFailed"), err instanceof Error ? err.message : String(err));
+                              // Re-read actual OS state so the switch reflects reality.
+                              isMailtoHandler().then(setIsDefaultMailApp).catch(() => {});
+                            }
+                          }}
+                        />
+                      }
+                    />
                   </SettingsGroup>
 
                   <SettingsGroup
@@ -880,111 +871,111 @@ export function SettingsPanel() {
                     action={!hasFeature("undo_send_config") ? <PremiumBadge /> : undefined}
                   >
                     <SettingsBlock description={t("settings.undoSendDelayDesc")}>
-                    <div className="grid grid-cols-6 gap-2">
-                      {UNDO_SEND_OPTIONS.map((option) => (
-                        <button
-                          key={option.value}
-                          type="button"
-                          aria-pressed={localSettings.undo_send_delay === option.value}
-                          onClick={() => {
-                            if (hasFeature("undo_send_config") || option.value === 5) {
-                              updateLocalSetting("undo_send_delay", option.value);
-                            }
-                          }}
-                          disabled={!hasFeature("undo_send_config") && option.value !== 5}
-                          className="option-tile px-3 py-2 rounded-control text-xs"
-                        >
-                          {"labelKey" in option ? t(option.labelKey as string) : option.label}
-                        </button>
-                      ))}
-                    </div>
+                      <div className="grid grid-cols-6 gap-2">
+                        {UNDO_SEND_OPTIONS.map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            aria-pressed={localSettings.undo_send_delay === option.value}
+                            onClick={() => {
+                              if (hasFeature("undo_send_config") || option.value === 5) {
+                                updateLocalSetting("undo_send_delay", option.value);
+                              }
+                            }}
+                            disabled={!hasFeature("undo_send_config") && option.value !== 5}
+                            className="option-tile px-3 py-2 rounded-control text-xs"
+                          >
+                            {"labelKey" in option ? t(option.labelKey as string) : option.label}
+                          </button>
+                        ))}
+                      </div>
                     </SettingsBlock>
                   </SettingsGroup>
 
                   <SettingsGroup title={t("settings.composeFont.title")} icon={<Type className="w-4 h-4" />}>
                     <SettingsBlock description={t("settings.composeFont.description")}>
-                    <div className="flex gap-2 flex-wrap">
-                      {(Object.keys(COMPOSE_FONTS) as ComposeFontId[]).map((id) => (
-                        <button
-                          key={id}
-                          type="button"
-                          aria-pressed={composeTypo.fontStack === COMPOSE_FONTS[id].stack}
-                          onClick={() => updateLocalSetting("compose_font", id)}
-                          style={{ fontFamily: COMPOSE_FONTS[id].stack }}
-                          className="option-tile px-3 py-2 rounded-control text-sm"
-                        >
-                          {id === "prudii" ? t("settings.composeFont.default") : COMPOSE_FONTS[id].label}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="flex gap-2 mt-3">
-                      {COMPOSE_FONT_SIZES.map((size) => (
-                        <button
-                          key={size}
-                          type="button"
-                          aria-pressed={composeTypo.fontSizePt === size}
-                          onClick={() => updateLocalSetting("compose_font_size", size)}
-                          className="option-tile flex-1 px-3 py-2 rounded-control text-xs"
-                        >
-                          {size} pt
-                        </button>
-                      ))}
-                    </div>
-                    <p
-                      className="mt-3 p-3 rounded-lg border border-border bg-bg-secondary text-text"
-                      style={{ fontFamily: composeTypo.fontStack, fontSize: `${composeTypo.fontSizePt}pt`, lineHeight: 1.5 }}
-                    >
-                      {t("settings.composeFont.sample")}
-                    </p>
+                      <div className="flex gap-2 flex-wrap">
+                        {(Object.keys(COMPOSE_FONTS) as ComposeFontId[]).map((id) => (
+                          <button
+                            key={id}
+                            type="button"
+                            aria-pressed={composeTypo.fontStack === COMPOSE_FONTS[id].stack}
+                            onClick={() => updateLocalSetting("compose_font", id)}
+                            style={{ fontFamily: COMPOSE_FONTS[id].stack }}
+                            className="option-tile px-3 py-2 rounded-control text-sm"
+                          >
+                            {id === "prudii" ? t("settings.composeFont.default") : COMPOSE_FONTS[id].label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex gap-2 mt-3">
+                        {COMPOSE_FONT_SIZES.map((size) => (
+                          <button
+                            key={size}
+                            type="button"
+                            aria-pressed={composeTypo.fontSizePt === size}
+                            onClick={() => updateLocalSetting("compose_font_size", size)}
+                            className="option-tile flex-1 px-3 py-2 rounded-control text-xs"
+                          >
+                            {size} pt
+                          </button>
+                        ))}
+                      </div>
+                      <p
+                        className="mt-3 p-3 rounded-lg border border-border bg-bg-secondary text-text"
+                        style={{ fontFamily: composeTypo.fontStack, fontSize: `${composeTypo.fontSizePt}pt`, lineHeight: 1.5 }}
+                      >
+                        {t("settings.composeFont.sample")}
+                      </p>
                     </SettingsBlock>
                   </SettingsGroup>
 
                   <SettingsGroup title={t("settings.accentColor.title")} icon={<Palette className="w-4 h-4" />}>
                     <SettingsBlock description={t("settings.accentColor.description")}>
-                    <div className="flex gap-2 flex-wrap">
-                      {ACCENT_OPTIONS.map(({ id, hex, labelKey }) => {
-                        const swatchColor = id === "system" ? systemAccentHex ?? DEFAULT_ACCENT_HEX : hex ?? DEFAULT_ACCENT_HEX;
-                        return (
-                          <button
-                            key={id}
-                            onClick={() => updateLocalSetting("accent_color", id)}
-                            className="relative w-8 h-8 rounded-full transition-all hover:scale-110"
-                            style={{
-                              backgroundColor: swatchColor,
-                              outline: localSettings.accent_color === id ? `2px solid ${swatchColor}` : "none",
-                              outlineOffset: "3px",
-                            }}
-                            title={t(labelKey)}
-                          >
-                            {id === "system" && (
-                              <Monitor className="w-3.5 h-3.5 text-white absolute inset-0 m-auto" strokeWidth={2.5} />
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
+                      <div className="flex gap-2 flex-wrap">
+                        {ACCENT_OPTIONS.map(({ id, hex, labelKey }) => {
+                          const swatchColor = id === "system" ? systemAccentHex ?? DEFAULT_ACCENT_HEX : hex ?? DEFAULT_ACCENT_HEX;
+                          return (
+                            <button
+                              key={id}
+                              onClick={() => updateLocalSetting("accent_color", id)}
+                              className="relative w-8 h-8 rounded-full transition-all hover:scale-110"
+                              style={{
+                                backgroundColor: swatchColor,
+                                outline: localSettings.accent_color === id ? `2px solid ${swatchColor}` : "none",
+                                outlineOffset: "3px",
+                              }}
+                              title={t(labelKey)}
+                            >
+                              {id === "system" && (
+                                <Monitor className="w-3.5 h-3.5 text-white absolute inset-0 m-auto" strokeWidth={2.5} />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </SettingsBlock>
                   </SettingsGroup>
 
                   <SettingsGroup title={t("settings.density.title")}>
                     <SettingsBlock description={t("settings.density.description")}>
-                    <SegmentedControl
-                      aria-label={t("settings.density.title")}
-                      value={localSettings.density}
-                      onChange={(id) => updateLocalSetting("density", id)}
-                      options={DENSITY_OPTIONS.map(({ id, labelKey }) => ({ value: id, label: t(labelKey) }))}
-                    />
+                      <SegmentedControl
+                        aria-label={t("settings.density.title")}
+                        value={localSettings.density}
+                        onChange={(id) => updateLocalSetting("density", id)}
+                        options={DENSITY_OPTIONS.map(({ id, labelKey }) => ({ value: id, label: t(labelKey) }))}
+                      />
                     </SettingsBlock>
                   </SettingsGroup>
 
                   <SettingsGroup title={t("settings.threadView.title")}>
                     <SettingsBlock description={t("settings.threadView.description")}>
-                    <SegmentedControl
-                      aria-label={t("settings.threadView.title")}
-                      value={localSettings.thread_view}
-                      onChange={(id) => updateLocalSetting("thread_view", id)}
-                      options={THREAD_VIEW_OPTIONS.map(({ id, labelKey }) => ({ value: id, label: t(labelKey) }))}
-                    />
+                      <SegmentedControl
+                        aria-label={t("settings.threadView.title")}
+                        value={localSettings.thread_view}
+                        onChange={(id) => updateLocalSetting("thread_view", id)}
+                        options={THREAD_VIEW_OPTIONS.map(({ id, labelKey }) => ({ value: id, label: t(labelKey) }))}
+                      />
                     </SettingsBlock>
                   </SettingsGroup>
                 </>

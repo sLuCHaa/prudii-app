@@ -204,6 +204,9 @@ describe("shape audit", () => {
     expect(src).toContain("settings-canvas");
     expect(src).toContain("<SettingsGroup");
     expect(src).not.toMatch(/\[&>\*\+\*\]:border-t/);
+    expect((src.match(/<SettingsGroup/g) ?? []).length).toBeGreaterThanOrEqual(12);
+    expect(src).toMatch(/function InfoPanel[\s\S]*?<SettingsGroup/);
+    expect(src).not.toContain('className="text-center py-12"');
   });
 
   it("keeps the privacy trigger square like its title-bar neighbours", () => {
