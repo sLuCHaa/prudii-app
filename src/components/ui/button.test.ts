@@ -51,6 +51,13 @@ describe("Button", () => {
     expect(h).not.toContain("border-transparent");
   });
 
+  it("presses tactile buttons without a transition delay", () => {
+    for (const variant of ["primary", "danger", "success", "signal", "secondary"] as const) {
+      expect(html(createElement(Button, { variant }, "X"))).toContain("active:duration-0");
+    }
+    expect(html(createElement(IconButton, { variant: "secondary", icon: createElement("svg"), "aria-label": "x" }))).toContain("active:duration-0");
+  });
+
   it("does not move while loading", () => {
     expect(html(createElement(Button, { variant: "primary", loading: true }, "X"))).toContain("tactile-static");
   });

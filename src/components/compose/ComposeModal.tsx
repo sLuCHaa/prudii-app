@@ -2004,20 +2004,25 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
                 >
                   {savingDraft ? t("compose.saving") : t("compose.saveDraft")}
                 </Button>
-                <button
+                <Button
+                  variant="ghost"
+                  size="md"
                   onClick={handleDiscardConfirm}
                   disabled={savingDraft}
-                  className="w-full px-4 py-2.5 rounded-lg text-sm font-medium text-danger hover:bg-danger/10 transition-colors"
+                  fullWidth
+                  className="text-danger! hover:bg-danger/10!"
                 >
                   {t("compose.discardMessage")}
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="md"
                   onClick={() => setShowDiscardDialog(false)}
                   disabled={savingDraft}
-                  className="w-full px-4 py-2.5 rounded-lg text-sm text-text-secondary hover:bg-hover transition-colors"
+                  fullWidth
                 >
                   {t("compose.keepEditing")}
-                </button>
+                </Button>
               </div>
             </div>
           </motion.div>

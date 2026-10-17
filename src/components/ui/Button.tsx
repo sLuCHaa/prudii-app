@@ -15,14 +15,15 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   animated?: boolean;
 }
 
-const FILLED = "tactile-filled";
+// The duration utility in TRANSITION outranks the layered :active rule, so the instant press is set here.
+const FILLED = "tactile-filled active:duration-0";
 
 const VARIANT_STYLES: Record<ButtonVariant, string> = {
   primary: `${FILLED} [--tactile-fill:var(--c-accent)] text-on-accent`,
   danger: `${FILLED} [--tactile-fill:var(--c-danger)] text-white`,
   success: `${FILLED} [--tactile-fill:var(--c-success)] text-white`,
   signal: `${FILLED} [--tactile-fill:var(--c-signal)] text-bg`,
-  secondary: "tactile-quiet text-text",
+  secondary: "tactile-quiet active:duration-0 text-text",
   ghost: "bg-transparent text-text-secondary border-transparent hover:bg-hover hover:text-text",
 };
 

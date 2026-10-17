@@ -1009,13 +1009,15 @@ html[data-vibrancy].dark .glass-sidebar {
 
   .tactile-quiet:hover:not(:disabled) {
     transform: translateY(-1px);
-    border-color: color-mix(in srgb, var(--c-border) 80%, black);
+    background: var(--c-hover);
+    border-color: color-mix(in srgb, var(--c-border) 75%, var(--c-text));
     box-shadow: inset 0 1px 0 var(--c-edge-light), 0 6px 12px -6px var(--c-card-drop);
   }
 
+  /* A brightness filter vanishes on dark surfaces; the active token shows in both themes. */
   .tactile-quiet:active:not(:disabled) {
     transform: translateY(1px);
-    filter: brightness(0.92);
+    background: var(--c-active);
     box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.28);
     transition-duration: 0s;
   }

@@ -31,6 +31,12 @@ describe("design tokens", () => {
     expect(css).toMatch(/:root\s*\{[^}]*--c-tile-drop:\s*rgba\(40, 25, 10, 0\.22\)/);
     expect(css).toMatch(/\.dark\s*\{[^}]*--c-tile-drop:\s*rgba\(0, 0, 0, 0\.45\)/);
   });
+  it("lets quiet buttons answer hover and press on dark surfaces", () => {
+    expect(css).toMatch(/\.tactile-quiet:hover:not\(:disabled\)\s*\{[^}]*border-color:\s*color-mix\(in srgb, var\(--c-border\) 75%, var\(--c-text\)\)/);
+    expect(css).toMatch(/\.tactile-quiet:hover:not\(:disabled\)\s*\{[^}]*background:\s*var\(--c-hover\)/);
+    expect(css).toMatch(/\.tactile-quiet:active:not\(:disabled\)\s*\{[^}]*background:\s*var\(--c-active\)/);
+    expect(css).not.toMatch(/\.tactile-quiet:active:not\(:disabled\)\s*\{[^}]*filter/);
+  });
   it("keeps reduced motion still", () => {
     expect(css).toMatch(/prefers-reduced-motion: reduce\)[^{]*\{[^}]*\.tactile-filled[\s\S]*?transform: none/);
   });

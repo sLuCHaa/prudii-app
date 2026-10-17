@@ -120,6 +120,10 @@ describe("shape audit", () => {
     expect(sourceOf("settings/SettingsPanel.tsx")).not.toContain("boxShadow");
   });
 
+  it("matches the save-draft dialog buttons", () => {
+    expect(sourceOf("compose/ComposeModal.tsx")).not.toMatch(/w-full px-4 py-2\.5 rounded-lg/);
+  });
+
   it("gives the compose button soft corners in both states", () => {
     const buttons = classStrings().filter(({ file, cls }) => file.endsWith("ComposeButton.tsx") && cls.includes("items-center justify-center"));
     expect(buttons).toHaveLength(2);
