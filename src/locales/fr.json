@@ -1184,7 +1184,10 @@
   "sync": {
     "doneNew": "{{count}} nouveaux e-mails",
     "doneTime": "en {{ms}}ms",
-    "allCaughtUp": "Tout est à jour ✓"
+    "allCaughtUp": "Tout est à jour ✓",
+    "connecting": "Connexion…",
+    "folders": "Chargement des dossiers…",
+    "prefetching": "Chargement des derniers emails…"
   },
   "emptyState": {
     "inboxZeroTitle": "Boîte Zéro — net comme un sou neuf",

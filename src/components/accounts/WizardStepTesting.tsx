@@ -2,7 +2,8 @@ import { Loader2, AlertCircle } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { SyncProgress } from "../../types";
 import { mapImapError } from "../../lib/imapErrorMap";
-import { parseSyncSubProgress } from "../../lib/syncProgress";
+import { inMailPhase, syncFolderLine, syncStatusKey } from "../../lib/syncProgress";
+import { useSyncRun } from "../../hooks/useSyncRun";
 import { Button } from "../ui/Button";
 import { NumberTween } from "../motion/NumberTween";
 import { useTranslation } from "react-i18next";
@@ -32,6 +33,7 @@ export function WizardStepTesting({
   onSyncInBackground,
 }: WizardStepTestingProps) {
   const { t } = useTranslation();
+  const run = useSyncRun(syncProgress);
 
   if (phase === "oauth_waiting") {
     return (
@@ -53,19 +55,10 @@ export function WizardStepTesting({
     ? mapImapError({ message: testError }, { email, provider: providerId })
     : null;
 
-  // Fetch-phase progress lives in the message ("Fetching X — 3200 of 10323
-  // messages..."); new_mails only counts inserted mails and stays 0 while a
-  // large folder is being paginated. Show whichever is further along so the
-  // counter moves from the first second (same parsing as the sidebar).
-  const sub = parseSyncSubProgress(syncProgress?.message ?? "");
-  const shownCount = Math.max(syncProgress?.new_mails ?? 0, sub.current);
-  const folderCount = syncProgress?.folder_count ?? 0;
-  const progressPercent = folderCount > 0
-    ? Math.min(
-        100,
-        (((syncProgress?.folder_index ?? 0) + (sub.total > 0 ? sub.current / sub.total : 0)) / folderCount) * 100
-      )
-    : 0;
+  const statusKey = syncProgress ? syncStatusKey(syncProgress.status) : null;
+  const detailLine = syncProgress?.status === "prefetching"
+    ? t("sync.prefetching")
+    : syncProgress && syncFolderLine(syncProgress);
 
   return (
     <div className="text-center py-6">
@@ -100,31 +93,26 @@ export function WizardStepTesting({
         </>
       ) : (
         <>
-          {syncProgress?.status === "syncing_mails" ? (
+          {syncProgress && inMailPhase(syncProgress) ? (
             <div className="flex flex-col items-center gap-3 py-8">
               <div className="w-16 h-16 rounded-full bg-accent-soft flex items-center justify-center">
                 <Loader2 className="w-8 h-8 text-accent animate-spin" />
               </div>
               <div className="text-5xl font-bold tabular-nums">
-                <NumberTween from={0} to={shownCount} duration={400} />
+                <NumberTween from={0} to={run.mails} duration={400} />
               </div>
               <div className="text-sm text-text-secondary">{t("wizard.syncingMails")}</div>
-              {syncProgress.folder_name && folderCount > 0 && (
-                <div className="text-xs text-text-tertiary tabular-nums">
-                  {syncProgress.folder_name} ({Math.min(syncProgress.folder_index + 1, folderCount)}/{folderCount})
-                  {sub.total > 0 && <> — {sub.current.toLocaleString()} / {sub.total.toLocaleString()}</>}
-                </div>
+              {detailLine && (
+                <div className="text-xs text-text-tertiary tabular-nums">{detailLine}</div>
               )}
-              {folderCount > 0 && (
-                <div className="w-full max-w-xs mt-1">
-                  <div className="h-1.5 rounded-full bg-border overflow-hidden">
-                    <div
-                      className="h-full bg-accent rounded-full transition-all duration-300"
-                      style={{ width: `${progressPercent}%` }}
-                    />
-                  </div>
+              <div className="w-full max-w-xs mt-1">
+                <div className="h-1.5 rounded-full bg-border overflow-hidden">
+                  <div
+                    className="h-full bg-accent rounded-full transition-all duration-300"
+                    style={{ width: `${run.percent}%` }}
+                  />
                 </div>
-              )}
+              </div>
               <div className="mt-2">
                 <Button variant="secondary" onClick={onSyncInBackground}>
                   {t("wizard.syncInBackground")}
@@ -137,7 +125,7 @@ export function WizardStepTesting({
                 <Loader2 className="w-8 h-8 text-accent animate-spin" />
               </div>
               <h3 className="text-lg font-semibold text-text mb-2">
-                {testStatus}
+                {statusKey ? t(statusKey) : testStatus}
               </h3>
               <p className="text-sm text-text-tertiary">
                 {t("common.pleaseWait")}

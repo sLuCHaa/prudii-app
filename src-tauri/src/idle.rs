@@ -216,6 +216,8 @@ async fn run_idle_session(
                                     folder_name: Some("INBOX".into()),
                                     folder_index: 1,
                                     folder_count: 1,
+                                    folder_done: 0,
+                                    folder_total: 0,
                                     new_mails: stats.new_mails,
                                     message: format!("{} new mails", stats.new_mails),
                                 },

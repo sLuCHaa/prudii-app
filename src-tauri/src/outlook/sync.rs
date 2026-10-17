@@ -117,15 +117,18 @@ pub async fn initial_sync_folder(
         all_messages.extend(resp.value);
         page_num += 1;
 
-        // Emit pagination progress so the UI shows activity.
-        // Use "X of Y messages" format so the frontend progress bar regex picks it up.
+        // The listing downloads the messages themselves, so it carries the folder's progress.
         if let Some((app_handle, folder_idx, folder_count, base_new)) = app {
+            let listed = all_messages.len() as u32;
+            let server_total = folder.total_count.max(0) as u32;
             let _ = app_handle.emit("sync-progress", &SyncProgress {
                 account_id: account_id.to_string(),
                 status: "syncing_mails".into(),
                 folder_name: Some(folder.name.clone()),
                 folder_index: folder_idx,
                 folder_count,
+                folder_done: if server_total > 0 { listed } else { 0 },
+                folder_total: if server_total > 0 { server_total.max(listed) } else { 0 },
                 new_mails: base_new,
                 message: if folder.total_count > 0 {
                     format!("Fetching {} — {} of {} messages...", folder.name, all_messages.len(), folder.total_count)
@@ -202,6 +205,8 @@ pub async fn initial_sync_folder(
                 folder_name: Some(folder.name.clone()),
                 folder_index: folder_idx,
                 folder_count,
+                folder_done: all_messages.len() as u32,
+                folder_total: all_messages.len() as u32,
                 new_mails: base_new + new_count,
                 message: format!("Syncing {} — {} of {} messages...", folder.name, (batch_idx + 1) * batch_size, new_messages.len()),
             });
@@ -216,6 +221,8 @@ pub async fn initial_sync_folder(
             folder_name: Some(folder.name.clone()),
             folder_index: folder_idx,
             folder_count,
+            folder_done: all_messages.len() as u32,
+            folder_total: all_messages.len() as u32,
             new_mails: base_new + new_count,
             message: format!("Syncing {} — {} of {} messages...", folder.name, new_messages.len(), new_messages.len()),
         });
@@ -248,6 +255,8 @@ pub async fn initial_sync_folder(
             folder_name: Some(folder.name.clone()),
             folder_index: folder_idx,
             folder_count,
+            folder_done: all_messages.len() as u32,
+            folder_total: all_messages.len() as u32,
             new_mails: base_new + new_count,
             message: format!("Finalizing {}...", folder.name),
         });

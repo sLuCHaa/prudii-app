@@ -825,7 +825,7 @@ pub async fn sync_mails(
         ids
     };
 
-    for chunk in uids.chunks(batch_size) {
+    for (chunk_idx, chunk) in uids.chunks(batch_size).enumerate() {
         // The chunk is a run of consecutive entries from the sorted UID list,
         // so first:last addresses exactly these messages.
         let set = format!("{}:{}", chunk[0], chunk[chunk.len() - 1]);
@@ -865,6 +865,8 @@ pub async fn sync_mails(
                 folder_name: Some(folder.name.clone()),
                 folder_index: folder_idx,
                 folder_count,
+                folder_done: ((chunk_idx + 1) * batch_size).min(uids.len()) as u32,
+                folder_total: uids.len() as u32,
                 new_mails: base_new + new_count,
                 message: format!(
                     "Syncing {} ({}/{})... {} mails",

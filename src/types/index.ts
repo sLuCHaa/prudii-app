@@ -183,10 +183,12 @@ export interface Attachment {
 
 export interface SyncProgress {
   account_id: string;
-  status: "connecting" | "syncing_folders" | "syncing_mails" | "done" | "error" | "skipped";
+  status: "connecting" | "syncing_folders" | "syncing_mails" | "folder_error" | "prefetching" | "done" | "error" | "skipped";
   folder_name: string | null;
   folder_index: number;
   folder_count: number;
+  folder_done: number;
+  folder_total: number;
   new_mails: number;
   message: string;
 }

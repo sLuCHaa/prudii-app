@@ -125,7 +125,6 @@ export function AccountWizard() {
       } else if (p.status === "error") {
         setTestError(p.message === "PERMISSION_DENIED" ? t("wizard.permissionDenied") : p.message);
       } else if (stepRef.current === "testing") {
-        setTestStatus(p.message);
         setSyncProgress(p);
       }
     });

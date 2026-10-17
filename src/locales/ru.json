@@ -1188,7 +1188,10 @@
   "sync": {
     "doneNew": "{{count}} новых писем",
     "doneTime": "за {{ms}}мс",
-    "allCaughtUp": "Всё актуально ✓"
+    "allCaughtUp": "Всё актуально ✓",
+    "connecting": "Подключение…",
+    "folders": "Загрузка папок…",
+    "prefetching": "Загрузка последних писем…"
   },
   "emptyState": {
     "inboxZeroTitle": "Inbox Zero — чисто и прозрачно",

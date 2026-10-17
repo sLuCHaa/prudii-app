@@ -1184,7 +1184,10 @@
   "sync": {
     "doneNew": "{{count}} neue Mails",
     "doneTime": "in {{ms}}ms",
-    "allCaughtUp": "Alles aktuell ✓"
+    "allCaughtUp": "Alles aktuell ✓",
+    "connecting": "Verbinde…",
+    "folders": "Ordner werden geladen…",
+    "prefetching": "Neueste E-Mails werden vorgeladen…"
   },
   "emptyState": {
     "inboxZeroTitle": "Inbox Zero — sauber wie eine Pfeife",

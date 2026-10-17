@@ -1183,7 +1183,10 @@
   "sync": {
     "doneNew": "{{count}} 封新邮件",
     "doneTime": "用时 {{ms}}ms",
-    "allCaughtUp": "全部已同步 ✓"
+    "allCaughtUp": "全部已同步 ✓",
+    "connecting": "正在连接…",
+    "folders": "正在加载文件夹…",
+    "prefetching": "正在加载最新邮件…"
   },
   "emptyState": {
     "inboxZeroTitle": "收件箱清零 — 干干净净",

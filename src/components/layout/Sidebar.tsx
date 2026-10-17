@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useMemo } from "react";
+import { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { FileText, AlertOctagon, Folder, Plus, ChevronDown, ChevronRight, FolderPlus, Pencil, HardDrive, Cloud, X, Check, Crown, Clock, CalendarClock, PanelLeftClose, PanelLeftOpen, Loader2, AlertCircle, Palette, RefreshCw, RotateCcw, Settings, ClipboardList, UserCheck, CalendarDays } from "lucide-react";
 import { useTodayCount } from "../../hooks/useCalendar";
@@ -28,11 +28,12 @@ import { Collapse } from "../motion/Collapse";
 import { requestMailSweep, SWEEP_DURATION_MS } from "../motion/sweepMails";
 import { createFolder, deleteFolder, renameFolder, updateFolderColor, moveMail, emptyTrash, emptySpam, prefetchFolder, countFolderMails, countCombinedFolderMails, emptyAllTrash, emptyAllSpam, countSnoozedMails, listScheduledMails, forceResyncAccount, syncFolder } from "../../lib/tauri";
 import { useQueryClient } from "@tanstack/react-query";
-import type { BackfillProgress, FolderType, Account as AccountType, Folder as FolderT, MailFlag } from "../../types";
+import type { BackfillProgress, FolderType, Account as AccountType, Folder as FolderT, MailFlag, SyncProgress } from "../../types";
 import { MAIL_FLAG_COLORS } from "../../types";
 import { useTranslation } from "react-i18next";
 import { toastError, causeMessage } from "../../lib/errorToast";
-import { parseSyncSubProgress } from "../../lib/syncProgress";
+import { inMailPhase, syncFolderLine, syncStatusKey } from "../../lib/syncProgress";
+import { useSyncRun } from "../../hooks/useSyncRun";
 import { isMailDrag, readMailDrag } from "../../lib/mailDrag";
 
 // Throttles on-demand syncs of Gmail's "All Mail" archive folder (excluded from
@@ -40,48 +41,33 @@ import { isMailDrag, readMailDrag } from "../../lib/mailDrag";
 const lastArchiveSync = new Map<string, number>();
 const ARCHIVE_SYNC_THROTTLE_MS = 5 * 60 * 1000;
 
-function SyncProgressIndicator({ progress }: { progress: { message: string; folder_name: string | null; folder_index: number; folder_count: number; new_mails: number; status: string } }) {
+function SyncProgressIndicator({ progress }: { progress: SyncProgress }) {
+  const { t } = useTranslation();
   const progressRef = useRef<HTMLDivElement>(null);
   const glowRef = useRef<HTMLDivElement>(null);
   const prevMessageRef = useRef("");
 
-  // Parse "X of Y messages" from backend message for sub-folder progress
-  const { current: subCurrent, total: subTotal } = parseSyncSubProgress(progress.message);
-
-  // Combined progress: folder-level + message-level within current folder
-  const percent = useMemo(() => {
-    if (progress.folder_count <= 0) return 0;
-    const subFraction = subTotal > 0 ? subCurrent / subTotal : 0;
-    return ((progress.folder_index + subFraction) / progress.folder_count) * 100;
-  }, [progress.folder_index, progress.folder_count, subCurrent, subTotal]);
-
-  // Friendly status line (shorter than raw backend message)
-  const statusLine = useMemo(() => {
-    if (progress.status === "connecting") return progress.message;
-    if (progress.status === "syncing_folders") return progress.message;
-    if (progress.status === "done") return progress.message;
-    if (progress.status === "error") return progress.message;
-    if (!progress.folder_name) return progress.message;
-
-    // "Syncing Inbox (2/11) — 150 of 500"
-    const parts = [`${progress.folder_name} (${progress.folder_index + 1}/${progress.folder_count})`];
-    if (subTotal > 0) {
-      parts.push(`${subCurrent.toLocaleString()} / ${subTotal.toLocaleString()}`);
-    }
-    return parts.join(" — ");
-  }, [progress.status, progress.folder_name, progress.folder_index, progress.folder_count, subCurrent, subTotal]);
+  const { percent, mails } = useSyncRun(progress);
+  const showBar = inMailPhase(progress);
+  const statusKey = syncStatusKey(progress.status);
+  const statusLine =
+    statusKey ? t(statusKey)
+    : progress.status === "done" ? (mails > 0 ? t("sync.doneNew", { count: mails }) : t("sync.allCaughtUp"))
+    : progress.status === "error" ? progress.message
+    : syncFolderLine(progress) ?? t("sidebar.sync.syncing");
 
   useEffect(() => {
     if (!progressRef.current || !glowRef.current) return;
     gsap.to(progressRef.current, { width: `${percent}%`, duration: 0.4, ease: "power2.out" });
     gsap.to(glowRef.current, { left: `${percent}%`, duration: 0.4, ease: "power2.out" });
-  }, [percent]);
+  }, [percent, showBar]);
 
   useEffect(() => {
-    if (!glowRef.current || prefersReducedMotion()) return;
-    gsap.to(glowRef.current, { opacity: 0.3, scale: 1.5, duration: 0.8, ease: "power1.inOut", yoyo: true, repeat: -1 });
-    return () => { gsap.killTweensOf(glowRef.current); };
-  }, []);
+    const glow = glowRef.current;
+    if (!glow || prefersReducedMotion()) return;
+    gsap.to(glow, { opacity: 0.3, scale: 1.5, duration: 0.8, ease: "power1.inOut", yoyo: true, repeat: -1 });
+    return () => { gsap.killTweensOf(glow); };
+  }, [showBar]);
 
   // Detect activity: message changes = something is happening
   const isActive = progress.message !== prevMessageRef.current;
@@ -94,11 +80,11 @@ function SyncProgressIndicator({ progress }: { progress: { message: string; fold
         <p className="text-xs text-accent font-medium truncate flex-1">
           {statusLine}
         </p>
-        {progress.new_mails > 0 && (
-          <span className="text-xs text-text-tertiary shrink-0">+{progress.new_mails.toLocaleString()}</span>
+        {mails > 0 && (
+          <span className="text-xs text-text-tertiary shrink-0">+{mails.toLocaleString()}</span>
         )}
       </div>
-      {progress.folder_count > 0 && progress.status === "syncing_mails" && (
+      {showBar && (
         <div className="relative h-1.5 rounded-full bg-border overflow-hidden">
           <div
             ref={progressRef}

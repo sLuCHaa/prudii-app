@@ -157,10 +157,13 @@ pub struct Attachment {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SyncProgress {
     pub account_id: String,
-    pub status: String, // "connecting", "syncing_folders", "syncing_mails", "done", "error"
+    pub status: String, // "connecting", "syncing_folders", "syncing_mails", "folder_error", "prefetching", "done", "error"
     pub folder_name: Option<String>,
     pub folder_index: u32,
     pub folder_count: u32,
+    /// Progress inside the current folder; 0/0 while its size is unknown.
+    pub folder_done: u32,
+    pub folder_total: u32,
     pub new_mails: u32,
     pub message: String,
 }

@@ -270,6 +270,8 @@ pub async fn initial_sync_folder(
                 folder_name: Some(folder.name.clone()),
                 folder_index: folder_idx,
                 folder_count,
+                folder_done: 0,
+                folder_total: 0,
                 new_mails: base_new,
                 message: format!("Fetching {} — {} messages found...", folder.name, all_ids.len()),
             });
@@ -380,6 +382,8 @@ pub async fn initial_sync_folder(
                 folder_name: Some(folder.name.clone()),
                 folder_index: folder_idx,
                 folder_count,
+                folder_done: synced_ids.len() as u32,
+                folder_total: total_to_sync as u32,
                 new_mails: base_new + new_count,
                 message: format!("Syncing {} — {} of {} messages...", folder.name, new_count, total_to_sync),
             });
@@ -409,6 +413,8 @@ pub async fn initial_sync_folder(
                 folder_name: Some(folder.name.clone()),
                 folder_index: folder_idx,
                 folder_count,
+                folder_done: synced_ids.len() as u32,
+                folder_total: total_to_sync as u32,
                 new_mails: base_new + new_count,
                 message: format!("Rate limited — retrying {} messages in {}s...", missing_ids.len(), backoff_secs),
             });
@@ -466,6 +472,8 @@ pub async fn initial_sync_folder(
                     folder_name: Some(folder.name.clone()),
                     folder_index: folder_idx,
                     folder_count,
+                    folder_done: synced_ids.len() as u32,
+                    folder_total: total_to_sync as u32,
                     new_mails: base_new + new_count,
                     message: format!("Retrying — {} of {} messages...", new_count, total_to_sync),
                 });

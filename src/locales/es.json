@@ -1184,7 +1184,10 @@
   "sync": {
     "doneNew": "{{count}} correos nuevos",
     "doneTime": "en {{ms}}ms",
-    "allCaughtUp": "Todo al día ✓"
+    "allCaughtUp": "Todo al día ✓",
+    "connecting": "Conectando…",
+    "folders": "Cargando carpetas…",
+    "prefetching": "Cargando los correos más recientes…"
   },
   "emptyState": {
     "inboxZeroTitle": "Bandeja Cero — limpio como un silbato",

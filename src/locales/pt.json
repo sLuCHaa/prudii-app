@@ -1184,7 +1184,10 @@
   "sync": {
     "doneNew": "{{count}} novos e-mails",
     "doneTime": "em {{ms}}ms",
-    "allCaughtUp": "Tudo em dia ✓"
+    "allCaughtUp": "Tudo em dia ✓",
+    "connecting": "Conectando…",
+    "folders": "Carregando pastas…",
+    "prefetching": "Carregando os emails mais recentes…"
   },
   "emptyState": {
     "inboxZeroTitle": "Caixa Zero — limpinho da silva",
