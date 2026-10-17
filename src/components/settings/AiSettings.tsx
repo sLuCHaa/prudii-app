@@ -6,6 +6,7 @@ import { checkOllamaStatus } from "../../lib/tauri";
 import { Switch } from "../ui/Switch";
 import { Button } from "../ui/Button";
 import { Select } from "../ui/Select";
+import { SettingsGroup, SettingsBlock, SettingsRow } from "./SettingsGroup";
 import type { AppSettings } from "../../types";
 
 interface AiSettingsProps {
@@ -76,26 +77,17 @@ export function AiSettings({ localSettings, updateLocalSetting }: AiSettingsProp
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <div className="flex items-center gap-2 mb-1">
-          <Sparkles className="w-4 h-4 text-text-tertiary" />
-          <h3 className="text-sm font-medium text-text">{t("settings.ai.title")}</h3>
-        </div>
-        <p className="text-xs text-text-tertiary mb-4">
-          {t("settings.ai.description")}
-        </p>
+    <SettingsGroup title={t("settings.ai.title")} icon={<Sparkles className="w-4 h-4" />}>
+      <SettingsBlock description={t("settings.ai.description")} />
+      <SettingsRow
+        icon={<Sparkles className="w-4 h-4 text-text-tertiary shrink-0" />}
+        title={t("settings.ai.enable")}
+        description={t("settings.ai.ollamaRequired")}
+        control={<Switch checked={localSettings.ai_enabled} onChange={(v) => updateLocalSetting("ai_enabled", v)} />}
+      />
 
-        <label className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer mb-4">
-          <Sparkles className="w-4 h-4 text-text-tertiary shrink-0" />
-          <div className="flex-1">
-            <div className="text-sm text-text">{t("settings.ai.enable")}</div>
-            <div className="text-xs text-text-tertiary">{t("settings.ai.ollamaRequired")}</div>
-          </div>
-          <Switch checked={localSettings.ai_enabled} onChange={(v) => updateLocalSetting("ai_enabled", v)} />
-        </label>
-
-        {localSettings.ai_enabled && (
+      {localSettings.ai_enabled && (
+        <SettingsBlock>
           <div className="space-y-4">
             <div>
               <label className="block text-xs font-medium text-text-secondary mb-1.5">
@@ -199,8 +191,8 @@ export function AiSettings({ localSettings, updateLocalSetting }: AiSettingsProp
               </a>
             </div>
           </div>
-        )}
-      </div>
-    </div>
+        </SettingsBlock>
+      )}
+    </SettingsGroup>
   );
 }

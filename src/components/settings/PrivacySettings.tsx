@@ -6,6 +6,7 @@ import { useAccounts } from "../../hooks/useAccounts";
 import { updateAccountSettings } from "../../lib/tauri";
 import { Switch } from "../ui/Switch";
 import { SegmentedControl } from "../ui/SegmentedControl";
+import { SettingsGroup, SettingsBlock, SettingsRow } from "./SettingsGroup";
 import type { Account, AppSettings } from "../../types";
 
 interface PrivacySettingsProps {
@@ -47,44 +48,32 @@ export function PrivacySettings({ localSettings, updateLocalSetting }: PrivacySe
 
   return (
     <>
-      {/* Tracker protection (always on, informational) */}
-      <div>
-        <div className="flex items-center gap-2 mb-1">
-          <Shield className="w-4 h-4 text-text-tertiary" />
-          <h3 className="text-sm font-medium text-text">{t("settings.privacy.trackerBlocking")}</h3>
-        </div>
-        <p className="text-xs text-text-tertiary mb-3">
-          {t("settings.privacy.trackerBlockingDesc")}
-        </p>
-        <div className="flex items-center justify-between p-3 rounded-lg border border-border inset-shadow-edge">
-          <div className="flex items-center gap-2">
-            <Eye className="w-4 h-4 text-text-tertiary" />
-            <span className="text-sm text-text">{t("privacy.trackersBlocked")}</span>
-          </div>
-          <span className="text-sm font-mono text-text-secondary">{trackersBlockedCount}</span>
-        </div>
-      </div>
+      <SettingsGroup title={t("settings.privacy.trackerBlocking")} icon={<Shield className="w-4 h-4" />}>
+        <SettingsBlock description={t("settings.privacy.trackerBlockingDesc")} />
+        <SettingsRow
+          as="div"
+          icon={<Eye className="w-4 h-4 text-text-tertiary shrink-0" />}
+          title={t("privacy.trackersBlocked")}
+          control={<span className="text-sm font-mono text-text-secondary">{trackersBlockedCount}</span>}
+        />
+      </SettingsGroup>
 
-      <div>
-        <div className="flex items-center gap-2 mb-1">
-          <Image className="w-4 h-4 text-text-tertiary" />
-          <h3 className="text-sm font-medium text-text">{t("settings.privacy.externalImages")}</h3>
-        </div>
-        <p className="text-xs text-text-tertiary mb-3">
-          {t("settings.privacy.externalImagesDesc")}
-        </p>
+      <SettingsGroup title={t("settings.privacy.externalImages")} icon={<Image className="w-4 h-4" />}>
+        <SettingsBlock description={t("settings.privacy.externalImagesDesc")} />
         {accounts && accounts.length > 0 ? (
-          <div className="space-y-2">
-            {accounts.map((account) => (
-              <div key={account.id} className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge">
+          accounts.map((account) => (
+            <SettingsRow
+              key={account.id}
+              as="div"
+              icon={
                 <span
                   className="w-3 h-3 rounded-full shrink-0"
                   style={{ backgroundColor: account.color }}
                 />
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-text truncate">{account.display_name}</div>
-                  <div className="text-xs text-text-tertiary truncate">{account.email}</div>
-                </div>
+              }
+              title={<span className="block truncate">{account.display_name}</span>}
+              description={<span className="block truncate">{account.email}</span>}
+              control={
                 <SegmentedControl
                   className="shrink-0"
                   aria-label={`${t("settings.privacy.externalImages")}: ${account.display_name}`}
@@ -95,25 +84,24 @@ export function PrivacySettings({ localSettings, updateLocalSetting }: PrivacySe
                     { value: "never", label: t("settings.account.loadImagesNever") },
                   ]}
                 />
-              </div>
-            ))}
-          </div>
+              }
+            />
+          ))
         ) : (
-          <p className="text-sm text-text-tertiary">{t("settings.accounts.noAccounts")}</p>
+          <SettingsBlock>
+            <p className="text-sm text-text-tertiary">{t("settings.accounts.noAccounts")}</p>
+          </SettingsBlock>
         )}
-      </div>
+      </SettingsGroup>
 
       {/* Link cleaning (app setting, saved via panel Save button) */}
-      <div>
-        <label className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer">
-          <Link2 className="w-4 h-4 text-text-tertiary shrink-0" />
-          <div className="flex-1">
-            <div className="text-sm text-text">{t("settings.privacy.stripTrackingParams")}</div>
-            <div className="text-xs text-text-tertiary">{t("settings.privacy.stripTrackingParamsDesc")}</div>
-          </div>
-          <Switch checked={localSettings.strip_tracking_params} onChange={(v) => updateLocalSetting("strip_tracking_params", v)} />
-        </label>
-      </div>
+      <SettingsGroup title={t("settings.tabs.privacy")} icon={<Link2 className="w-4 h-4" />}>
+        <SettingsRow
+          title={t("settings.privacy.stripTrackingParams")}
+          description={t("settings.privacy.stripTrackingParamsDesc")}
+          control={<Switch checked={localSettings.strip_tracking_params} onChange={(v) => updateLocalSetting("strip_tracking_params", v)} />}
+        />
+      </SettingsGroup>
     </>
   );
 }

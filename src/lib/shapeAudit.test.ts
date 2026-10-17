@@ -209,6 +209,11 @@ describe("shape audit", () => {
     expect(src).not.toContain('className="text-center py-12"');
   });
 
+  it("groups privacy, ai, accounts and account details into section cards", () => {
+    for (const f of ["settings/PrivacySettings.tsx", "settings/AiSettings.tsx", "settings/VacationSection.tsx"]) expect(sourceOf(f)).toContain("<SettingsGroup");
+    expect(sourceOf("settings/SettingsPanel.tsx").match(/<SettingsGroup/g)?.length ?? 0).toBeGreaterThan(14);
+  });
+
   it("keeps the privacy trigger square like its title-bar neighbours", () => {
     const trigger = classStrings().find(({ file, cls }) => file === "ui/PrivacyBadge.tsx" && cls.includes("w-11 h-full"));
     expect(trigger).toBeDefined();

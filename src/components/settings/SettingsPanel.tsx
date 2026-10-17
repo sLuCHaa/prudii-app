@@ -265,225 +265,198 @@ function AccountSettings({
         </Button>
       </div>
 
-      <div ref={scrollRef} className="p-4 space-y-6 overflow-y-auto flex-1">
-        <div>
-          <h3 className="text-sm font-medium text-text mb-1">{t("settings.account.displayName")}</h3>
-          <p className="text-xs text-text-tertiary mb-2">
-            {t("settings.account.displayNameDesc")}
-          </p>
-          <input
-            type="text"
-            value={displayName}
-            onChange={(e) => { setDisplayName(e.target.value); setSaved(false); }}
-            className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm focus:border-accent"
-          />
-        </div>
+      <div ref={scrollRef} className="p-4 space-y-5 overflow-y-auto flex-1 settings-canvas">
+        <SettingsGroup title={t("settings.account.displayName")}>
+          <SettingsBlock description={t("settings.account.displayNameDesc")}>
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => { setDisplayName(e.target.value); setSaved(false); }}
+              className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm focus:border-accent"
+            />
+          </SettingsBlock>
+        </SettingsGroup>
 
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Palette className="w-4 h-4 text-text-tertiary" />
-            <h3 className="text-sm font-medium text-text">{t("settings.account.accountColor")}</h3>
-          </div>
-          <p className="text-xs text-text-tertiary mb-3">
-            {t("settings.account.accountColorDesc")}
-          </p>
-          <div className="flex gap-2 flex-wrap">
-            {ACCOUNT_COLORS.map((c) => (
-              <button
-                key={c}
-                onClick={() => { setColor(c); setSaved(false); }}
-                className={`w-8 h-8 rounded-full transition-all ${
-                  color === c ? "ring-2 ring-offset-2 ring-accent scale-110" : "hover:scale-105"
-                }`}
-                style={{ backgroundColor: c }}
-                title={c}
-              />
-            ))}
-          </div>
-        </div>
+        <SettingsGroup title={t("settings.account.accountColor")} icon={<Palette className="w-4 h-4" />}>
+          <SettingsBlock description={t("settings.account.accountColorDesc")}>
+            <div className="flex gap-2 flex-wrap">
+              {ACCOUNT_COLORS.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => { setColor(c); setSaved(false); }}
+                  className={`w-8 h-8 rounded-full transition-all ${
+                    color === c ? "ring-2 ring-offset-2 ring-accent scale-110" : "hover:scale-105"
+                  }`}
+                  style={{ backgroundColor: c }}
+                  title={c}
+                />
+              ))}
+            </div>
+          </SettingsBlock>
+        </SettingsGroup>
 
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <RefreshCw className="w-4 h-4 text-text-tertiary" />
-            <h3 className="text-sm font-medium text-text">{t("settings.account.autoSync")}</h3>
-          </div>
-          <p className="text-xs text-text-tertiary mb-3">
-            {t("settings.account.autoSyncDesc")}
-          </p>
-          <div className="grid grid-cols-3 gap-2">
-            {SYNC_INTERVAL_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                aria-pressed={syncInterval === option.value}
-                onClick={() => handleSyncIntervalChange(option.value)}
-                className="option-tile px-3 py-2 rounded-control text-xs"
-              >
-                {t(option.labelKey)}
-              </button>
-            ))}
-          </div>
-          {syncInterval === 1 && (
-            <p className="mt-2 text-xs text-warning">
-              {t("settings.account.syncWarning1Min")}
-            </p>
-          )}
-        </div>
+        <SettingsGroup title={t("settings.account.autoSync")} icon={<RefreshCw className="w-4 h-4" />}>
+          <SettingsBlock description={t("settings.account.autoSyncDesc")}>
+            <div className="grid grid-cols-3 gap-2">
+              {SYNC_INTERVAL_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={syncInterval === option.value}
+                  onClick={() => handleSyncIntervalChange(option.value)}
+                  className="option-tile px-3 py-2 rounded-control text-xs"
+                >
+                  {t(option.labelKey)}
+                </button>
+              ))}
+            </div>
+            {syncInterval === 1 && (
+              <p className="mt-2 text-xs text-warning">
+                {t("settings.account.syncWarning1Min")}
+              </p>
+            )}
+          </SettingsBlock>
+        </SettingsGroup>
 
         {!isOAuth && account.auth_type === "password" && (
           <VacationSection accountId={account.id} />
         )}
 
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Image className="w-4 h-4 text-text-tertiary" />
-            <h3 className="text-sm font-medium text-text">{t("settings.account.loadExternalImages")}</h3>
-          </div>
-          <p className="text-xs text-text-tertiary mb-3">
-            {t("settings.account.loadExternalImagesDesc")}
-          </p>
-          <SegmentedControl
-            aria-label={t("settings.account.loadExternalImages")}
-            value={loadExternalImages}
-            onChange={(v) => { setLoadExternalImages(v); setSaved(false); }}
-            options={[
-              { value: "always", label: t("settings.account.loadImagesAlways") },
-              { value: "never", label: t("settings.account.loadImagesNever") },
-            ]}
-          />
-        </div>
+        <SettingsGroup title={t("settings.account.loadExternalImages")} icon={<Image className="w-4 h-4" />}>
+          <SettingsBlock description={t("settings.account.loadExternalImagesDesc")}>
+            <SegmentedControl
+              aria-label={t("settings.account.loadExternalImages")}
+              value={loadExternalImages}
+              onChange={(v) => { setLoadExternalImages(v); setSaved(false); }}
+              options={[
+                { value: "always", label: t("settings.account.loadImagesAlways") },
+                { value: "never", label: t("settings.account.loadImagesNever") },
+              ]}
+            />
+          </SettingsBlock>
+        </SettingsGroup>
 
         {!isOAuth && (
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Lock className="w-4 h-4 text-text-tertiary" />
-              <h3 className="text-sm font-medium text-text">{t("settings.account.password")}</h3>
-            </div>
-            <p className="text-xs text-text-tertiary mb-3">
-              {t("settings.account.passwordDesc")}
-            </p>
-            <div className="relative">
-              <input
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => { setPassword(e.target.value); setSaved(false); }}
-                placeholder={t("settings.account.passwordPlaceholder")}
-                className="w-full px-3 py-2 pr-10 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm font-mono focus:border-accent"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-text"
-              >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
+          <SettingsGroup title={t("settings.account.password")} icon={<Lock className="w-4 h-4" />}>
+            <SettingsBlock description={t("settings.account.passwordDesc")}>
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => { setPassword(e.target.value); setSaved(false); }}
+                  placeholder={t("settings.account.passwordPlaceholder")}
+                  className="w-full px-3 py-2 pr-10 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm font-mono focus:border-accent"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-text"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </SettingsBlock>
+          </SettingsGroup>
         )}
 
         {isOAuth && (
-          <div className="flex items-start gap-2 p-3 rounded-lg bg-accent-soft border border-accent/20">
-            <Info className="w-4 h-4 text-accent shrink-0 mt-0.5" />
-            <p className="text-xs text-text-secondary">
-              {t("settings.account.oauthHint")}
-            </p>
-          </div>
+          <SettingsGroup title={t("settings.account.password")} icon={<Lock className="w-4 h-4" />}>
+            <SettingsBlock>
+              <div className="flex items-start gap-2">
+                <Info className="w-4 h-4 text-accent shrink-0 mt-0.5" />
+                <p className="text-xs text-text-secondary">
+                  {t("settings.account.oauthHint")}
+                </p>
+              </div>
+            </SettingsBlock>
+          </SettingsGroup>
         )}
 
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Server className="w-4 h-4 text-text-tertiary" />
-            <h3 className="text-sm font-medium text-text">{t("settings.account.serverSettings")}</h3>
-          </div>
-          <p className="text-xs text-text-tertiary mb-3">
-            {t("settings.account.serverSettingsDesc")}
-          </p>
-          <div className="space-y-3">
-            <div className="grid grid-cols-[1fr,80px] gap-2">
-              <div>
-                <label className="text-xs text-text-tertiary mb-1 block">{t("settings.account.imapServer")}</label>
-                <input
-                  type="text"
-                  value={imapHost}
-                  onChange={(e) => { setImapHost(e.target.value); setSaved(false); }}
-                  className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm font-mono focus:border-accent"
-                />
+        <SettingsGroup title={t("settings.account.serverSettings")} icon={<Server className="w-4 h-4" />}>
+          <SettingsBlock description={t("settings.account.serverSettingsDesc")}>
+            <div className="space-y-3">
+              <div className="grid grid-cols-[1fr,80px] gap-2">
+                <div>
+                  <label className="text-xs text-text-tertiary mb-1 block">{t("settings.account.imapServer")}</label>
+                  <input
+                    type="text"
+                    value={imapHost}
+                    onChange={(e) => { setImapHost(e.target.value); setSaved(false); }}
+                    className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm font-mono focus:border-accent"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-text-tertiary mb-1 block">{t("settings.account.port")}</label>
+                  <input
+                    type="number"
+                    value={imapPort}
+                    onChange={(e) => { setImapPort(parseInt(e.target.value) || 993); setSaved(false); }}
+                    className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm font-mono focus:border-accent"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-[1fr,80px] gap-2">
+                <div>
+                  <label className="text-xs text-text-tertiary mb-1 block">{t("settings.account.smtpServer")}</label>
+                  <input
+                    type="text"
+                    value={smtpHost}
+                    onChange={(e) => { setSmtpHost(e.target.value); setSaved(false); }}
+                    className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm font-mono focus:border-accent"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-text-tertiary mb-1 block">{t("settings.account.port")}</label>
+                  <input
+                    type="number"
+                    value={smtpPort}
+                    onChange={(e) => { setSmtpPort(parseInt(e.target.value) || 587); setSaved(false); }}
+                    className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm font-mono focus:border-accent"
+                  />
+                </div>
               </div>
               <div>
-                <label className="text-xs text-text-tertiary mb-1 block">{t("settings.account.port")}</label>
-                <input
-                  type="number"
-                  value={imapPort}
-                  onChange={(e) => { setImapPort(parseInt(e.target.value) || 993); setSaved(false); }}
-                  className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm font-mono focus:border-accent"
+                <label className="text-xs text-text-tertiary mb-1 block">{t("settings.account.smtpSecurity")}</label>
+                <SegmentedControl
+                  aria-label={t("settings.account.smtpSecurity")}
+                  value={smtpSecurity}
+                  onChange={(v) => {
+                    setSmtpSecurity(v);
+                    if (v === "ssl" && smtpPort === 587) setSmtpPort(465);
+                    if (v === "starttls" && smtpPort === 465) setSmtpPort(587);
+                    setSaved(false);
+                  }}
+                  options={[
+                    { value: "ssl", label: "SSL/TLS (Port 465)" },
+                    { value: "starttls", label: "STARTTLS (Port 587)" },
+                  ]}
                 />
               </div>
-            </div>
-            <div className="grid grid-cols-[1fr,80px] gap-2">
-              <div>
-                <label className="text-xs text-text-tertiary mb-1 block">{t("settings.account.smtpServer")}</label>
-                <input
-                  type="text"
-                  value={smtpHost}
-                  onChange={(e) => { setSmtpHost(e.target.value); setSaved(false); }}
-                  className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm font-mono focus:border-accent"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-text-tertiary mb-1 block">{t("settings.account.port")}</label>
-                <input
-                  type="number"
-                  value={smtpPort}
-                  onChange={(e) => { setSmtpPort(parseInt(e.target.value) || 587); setSaved(false); }}
-                  className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm font-mono focus:border-accent"
-                />
+              <div className="p-2 rounded bg-bg-secondary">
+                <span className="text-xs text-text-tertiary">{t("settings.account.provider")}: </span>
+                <span className="text-xs text-text capitalize">{account.provider}</span>
               </div>
             </div>
-            <div>
-              <label className="text-xs text-text-tertiary mb-1 block">{t("settings.account.smtpSecurity")}</label>
-              <SegmentedControl
-                aria-label={t("settings.account.smtpSecurity")}
-                value={smtpSecurity}
-                onChange={(v) => {
-                  setSmtpSecurity(v);
-                  if (v === "ssl" && smtpPort === 587) setSmtpPort(465);
-                  if (v === "starttls" && smtpPort === 465) setSmtpPort(587);
-                  setSaved(false);
-                }}
-                options={[
-                  { value: "ssl", label: "SSL/TLS (Port 465)" },
-                  { value: "starttls", label: "STARTTLS (Port 587)" },
-                ]}
-              />
-            </div>
-            <div className="p-2 rounded bg-bg-secondary">
-              <span className="text-xs text-text-tertiary">{t("settings.account.provider")}: </span>
-              <span className="text-xs text-text capitalize">{account.provider}</span>
-            </div>
-          </div>
-        </div>
+          </SettingsBlock>
+        </SettingsGroup>
 
-        <div>
-          <h3 className="text-sm font-medium text-text mb-1">{t("settings.account.signature")}</h3>
-          <p className="text-xs text-text-tertiary mb-3">
-            {t("settings.account.signatureDesc")}
-          </p>
-          <SignatureEditor
-            htmlValue={signatureHtml}
-            textValue={signatureText}
-            onChange={handleSignatureChange}
+        <SettingsGroup title={t("settings.account.signature")}>
+          <SettingsBlock description={t("settings.account.signatureDesc")}>
+            <SignatureEditor
+              htmlValue={signatureHtml}
+              textValue={signatureText}
+              onChange={handleSignatureChange}
+            />
+          </SettingsBlock>
+          <SettingsRow
+            title={t("settings.account.signatureOnCompose")}
+            control={<Switch checked={signatureOnCompose} onChange={(v) => { setSignatureOnCompose(v); setSaved(false); }} />}
           />
-          <div className="mt-4 space-y-2">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <Switch checked={signatureOnCompose} onChange={(v) => { setSignatureOnCompose(v); setSaved(false); }} />
-              <span className="text-sm text-text">{t("settings.account.signatureOnCompose")}</span>
-            </label>
-            <label className="flex items-center gap-3 cursor-pointer">
-              <Switch checked={signatureOnReply} onChange={(v) => { setSignatureOnReply(v); setSaved(false); }} />
-              <span className="text-sm text-text">{t("settings.account.signatureOnReply")}</span>
-            </label>
-          </div>
-        </div>
+          <SettingsRow
+            title={t("settings.account.signatureOnReply")}
+            control={<Switch checked={signatureOnReply} onChange={(v) => { setSignatureOnReply(v); setSaved(false); }} />}
+          />
+        </SettingsGroup>
       </div>
     </>
   );
@@ -989,9 +962,9 @@ export function SettingsPanel() {
               )}
 
               {activeTab === "accounts" && (
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <h3 className="text-sm font-medium text-text">{t("settings.accounts.title")}</h3>
+                <SettingsGroup
+                  title={t("settings.accounts.title")}
+                  action={
                     <Button
                       variant="secondary"
                       size="sm"
@@ -1007,31 +980,24 @@ export function SettingsPanel() {
                     >
                       {t("sidebar.addAccount")}
                     </Button>
-                  </div>
-                  <p className="text-xs text-text-tertiary mb-3">
-                    {t("settings.accounts.description")}
-                  </p>
+                  }
+                >
+                  <SettingsBlock description={t("settings.accounts.description")} />
                   {accounts && accounts.length > 0 ? (
-                    <div className="space-y-2">
-                      {accounts.map((account) => (
-                        <div
-                          key={account.id}
-                          className="flex items-center gap-3 p-3 rounded-lg border border-border inset-shadow-edge hover:bg-hover transition-colors cursor-pointer"
-                          onClick={() => handleAccountClick(account)}
-                        >
+                    accounts.map((account) => (
+                      <SettingsRow
+                        key={account.id}
+                        as="div"
+                        icon={
                           <span
                             className="w-3 h-3 rounded-full shrink-0"
                             style={{ backgroundColor: account.color }}
                           />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium text-text truncate">
-                              {account.display_name}
-                            </div>
-                            <div className="text-xs text-text-tertiary truncate">
-                              {account.email}
-                            </div>
-                          </div>
-
+                        }
+                        title={<span className="block truncate">{account.display_name}</span>}
+                        description={<span className="block truncate">{account.email}</span>}
+                        onClick={() => handleAccountClick(account)}
+                        control={
                           <div className="flex items-center gap-1 shrink-0">
                             <IconButton
                               icon={<Trash2 />}
@@ -1044,13 +1010,15 @@ export function SettingsPanel() {
                             />
                             <ChevronRight className="w-4 h-4 text-text-tertiary" />
                           </div>
-                        </div>
-                      ))}
-                    </div>
+                        }
+                      />
+                    ))
                   ) : (
-                    <p className="text-sm text-text-tertiary">{t("settings.accounts.noAccounts")}</p>
+                    <SettingsBlock>
+                      <p className="text-sm text-text-tertiary">{t("settings.accounts.noAccounts")}</p>
+                    </SettingsBlock>
                   )}
-                </div>
+                </SettingsGroup>
               )}
 
               {activeTab === "calendar" && <CalendarSettingsPanel />}

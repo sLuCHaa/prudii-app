@@ -7,6 +7,7 @@ import { checkSieveSupport, getVacation, setVacation } from "../../lib/tauri";
 import { Button } from "../ui/Button";
 import { DateField } from "../ui/DateField";
 import { SegmentedControl } from "../ui/SegmentedControl";
+import { SettingsGroup, SettingsBlock } from "./SettingsGroup";
 import type { VacationSettings, VacationState } from "../../types";
 
 const INPUT = "w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm focus:border-accent";
@@ -154,14 +155,11 @@ export function VacationSection({ accountId }: { accountId: string }) {
   }
 
   return (
-    <div>
-      <div className="flex items-center gap-2 mb-1">
-        <Plane className="w-4 h-4 text-text-tertiary" />
-        <h3 className="text-sm font-medium text-text">{t("settings.account.vacation.title")}</h3>
-      </div>
-      <p className="text-xs text-text-tertiary mb-3">{t("settings.account.vacation.desc")}</p>
-      {body}
-    </div>
+    <SettingsGroup title={t("settings.account.vacation.title")} icon={<Plane className="w-4 h-4" />}>
+      <SettingsBlock description={t("settings.account.vacation.desc")}>
+        {body}
+      </SettingsBlock>
+    </SettingsGroup>
   );
 }
 
