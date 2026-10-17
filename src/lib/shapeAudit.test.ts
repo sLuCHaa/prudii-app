@@ -155,6 +155,14 @@ describe("shape audit", () => {
     expect(buttons.filter(({ cls }) => /\brounded-(?:full|xl)\b/.test(cls) || !/\brounded-control\b/.test(cls))).toEqual([]);
   });
 
+  it("gives the compose button the tactile look and press in both states", () => {
+    const src = sourceOf("compose/ComposeButton.tsx");
+    expect(src).toMatch(/const ACTIVE = "[^"]*\btactile-filled\b[^"]*\btext-on-accent\b/);
+    const buttons = classStrings().filter(({ file, cls }) => file.endsWith("ComposeButton.tsx") && cls.includes("items-center justify-center"));
+    expect(buttons.filter(({ cls }) => !cls.includes("? ACTIVE : INACTIVE") || /\boverflow-hidden\b/.test(cls))).toEqual([]);
+    expect(src).not.toMatch(/elastic\.out|glowRef/);
+  });
+
   it("shapes the send split button with control corners", () => {
     const src = sourceOf("compose/ComposeModal.tsx");
     expect(src).not.toMatch(/rounded-[lr]-xl\b/);
