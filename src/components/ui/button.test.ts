@@ -36,4 +36,22 @@ describe("Button", () => {
     expect(h).toContain("rounded-control");
     expect(h).not.toContain("rounded-full");
   });
+
+  it("leaves border and background to the tactile classes", () => {
+    expect(html(createElement(Button, { variant: "primary" }, "X"))).not.toContain("border-transparent");
+    const h = html(createElement(Button, { variant: "secondary" }, "X"));
+    expect(h).not.toContain("border-border");
+    expect(h).not.toContain("bg-surface");
+  });
+
+  it("styles filled icon buttons like buttons", () => {
+    const h = html(createElement(IconButton, { variant: "primary", icon: createElement("svg"), "aria-label": "x" }));
+    expect(h).toContain("tactile-filled");
+    expect(h).toContain("rounded-control");
+    expect(h).not.toContain("border-transparent");
+  });
+
+  it("does not move while loading", () => {
+    expect(html(createElement(Button, { variant: "primary", loading: true }, "X"))).toContain("tactile-static");
+  });
 });

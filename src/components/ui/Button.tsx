@@ -15,14 +15,14 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   animated?: boolean;
 }
 
-const FILLED = "tactile-filled border-transparent";
+const FILLED = "tactile-filled";
 
 const VARIANT_STYLES: Record<ButtonVariant, string> = {
   primary: `${FILLED} [--tactile-fill:var(--c-accent)] text-on-accent`,
   danger: `${FILLED} [--tactile-fill:var(--c-danger)] text-white`,
   success: `${FILLED} [--tactile-fill:var(--c-success)] text-white`,
   signal: `${FILLED} [--tactile-fill:var(--c-signal)] text-bg`,
-  secondary: "tactile-quiet bg-surface text-text border-border",
+  secondary: "tactile-quiet text-text",
   ghost: "bg-transparent text-text-secondary border-transparent hover:bg-hover hover:text-text",
 };
 
@@ -43,7 +43,7 @@ const PRESS_GHOST =
   "active:bg-active active:translate-y-px active:duration-0 " +
   "active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.20)] motion-reduce:active:translate-y-0";
 
-function pressStyle(variant: ButtonVariant, animated: boolean, isDisabled?: boolean): string {
+function pressStyle(variant: ButtonVariant, animated: boolean, isDisabled: boolean): string {
   if (variant === "ghost") return animated && !isDisabled ? PRESS_GHOST : "";
   return animated && !isDisabled ? "" : "tactile-static";
 }
@@ -92,7 +92,7 @@ export function Button({
         ${sizeStyles.text}
         ${sizeStyles.gap}
         ${fullWidth ? "w-full" : ""}
-        ${pressStyle(variant, animated, isDisabled)}
+        ${pressStyle(variant, animated, Boolean(isDisabled))}
         ${isDisabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
         ${className}
       `}
@@ -144,11 +144,11 @@ export function IconButton({
     <button
       disabled={isDisabled}
       className={`
-        inline-flex items-center justify-center rounded-control border border-transparent
+        inline-flex items-center justify-center rounded-control border
         ${TRANSITION}
-        ${variant === "ghost" ? "text-text-tertiary hover:text-text hover:bg-hover" : VARIANT_STYLES[variant]}
+        ${variant === "ghost" ? "border-transparent text-text-tertiary hover:text-text hover:bg-hover" : VARIANT_STYLES[variant]}
         ${SIZE_MAP[size]}
-        ${pressStyle(variant, animated, isDisabled)}
+        ${pressStyle(variant, animated, Boolean(isDisabled))}
         ${isDisabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
         ${className}
       `}
