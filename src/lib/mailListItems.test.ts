@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { buildListItems } from "./mailListItems";
+import { buildListItems, rowEstimateFor } from "./mailListItems";
 import type { Mail } from "../types";
 
 const mail = (id: string, date: string) => ({ id, date }) as Mail;
@@ -34,5 +34,13 @@ describe("buildListItems", () => {
       { kind: "mail", mail: expect.objectContaining({ id: "a" }), mailIndex: 0 },
       { kind: "mail", mail: expect.objectContaining({ id: "b" }), mailIndex: 1 },
     ]);
+  });
+});
+
+describe("rowEstimateFor", () => {
+  it("estimates rows with the tile gutter", () => {
+    expect(rowEstimateFor("compact")).toBe(62);
+    expect(rowEstimateFor(null)).toBe(70);
+    expect(rowEstimateFor("spacious")).toBe(82);
   });
 });

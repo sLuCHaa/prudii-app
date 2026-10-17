@@ -45,9 +45,8 @@ export const CardButton = forwardRef<
       ref={ref}
       type="button"
       onClick={onClick}
-      style={{ borderLeft: `3px solid ${selected ? "var(--c-accent)" : "transparent"}` }}
       className={`w-full text-left px-3 py-2 flex items-center gap-2 transition-colors ${
-        selected ? "bg-accent/10 text-accent" : "hover:bg-hover text-text"
+        selected ? "tile-raised font-semibold text-text" : "hover:bg-hover text-text"
       } ${className}`}
       {...rest}
     >

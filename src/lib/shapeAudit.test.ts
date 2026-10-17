@@ -66,4 +66,15 @@ describe("shape audit", () => {
     expect(fields.length).toBeGreaterThan(8);
     expect(fields.filter(({ cls }) => !/\brounded-control\b/.test(cls) || !/\binset-shadow-field\b/.test(cls)).map((f) => `${f.file}:${f.line}`)).toEqual([]);
   });
+
+  it("shows the open mail as a raised tile", () => {
+    const src = sourceOf("layout/MailList.tsx");
+    expect(src).toContain("tile-raised");
+    expect(src).not.toMatch(/mail-item-draggable[^"`]*border-b/);
+    expect(src).not.toMatch(/text-left select-none px-4 py-2\.5 border-b/);
+  });
+
+  it("selects folders as tiles without an accent bar", () => {
+    expect(sourceOf("ui/TabButton.tsx")).not.toContain("borderLeft");
+  });
 });

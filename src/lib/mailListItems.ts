@@ -23,3 +23,7 @@ export function buildListItems(mails: Mail[], labels: Record<string, string>, sh
   });
   return items;
 }
+
+export function rowEstimateFor(density: string | null): number {
+  return density === "compact" ? 62 : density === "spacious" ? 82 : 70;
+}

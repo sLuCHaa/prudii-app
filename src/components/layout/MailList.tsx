@@ -44,7 +44,7 @@ import { SNOOZE_PRESETS, toSnoozeStamp } from "../../lib/snooze";
 const SNOOZE_MENU_WIDTH = 176;
 import { formatMailDate } from "../../lib/dateUtils";
 import { absenceMeansMoved, isDateSort, parseMailSort } from "../../lib/mailSort";
-import { buildListItems, type ListItem } from "../../lib/mailListItems";
+import { buildListItems, rowEstimateFor, type ListItem } from "../../lib/mailListItems";
 import { makeIsOutgoing } from "../../lib/outgoing";
 import { MailSortMenu } from "./MailSortMenu";
 import { runMailAction, toastError, causeMessage } from "../../lib/errorToast";
@@ -389,8 +389,8 @@ function SearchResultsList({ results, isLoading, selectedMailId, setSelectedMail
         <button
           key={result.mail_id}
           onClick={() => setSelectedMailId(result.mail_id)}
-          className={`relative w-full text-left select-none px-4 py-2.5 border-b border-border-light transition-colors ${
-            selectedMailId === result.mail_id ? "bg-selected" : "hover:bg-hover"
+          className={`relative w-[calc(100%-1rem)] mx-2 my-px text-left select-none px-4 py-2.5 rounded-control transition-colors ${
+            selectedMailId === result.mail_id ? "tile-raised" : "hover:bg-hover"
           }`}
         >
           <div
@@ -438,12 +438,6 @@ function SearchResultsList({ results, isLoading, selectedMailId, setSelectedMail
       ))}
     </div>
   );
-}
-
-// Row padding varies by density (index.css data-density rules):
-// compact py-1.5 → ~60px, comfortable py-2.5 → ~68px, spacious py-4 → ~80px.
-function rowEstimateFor(density: string | null): number {
-  return density === "compact" ? 60 : density === "spacious" ? 80 : 68;
 }
 
 interface VirtualMailListProps {
@@ -825,7 +819,7 @@ function VirtualMailList({
                 onDragStart={(e) => handleDragStart(e, mail)}
                 onDrag={handleDrag}
                 onDragEnd={handleDragEnd}
-                className="relative group/mail mail-item-draggable select-none w-full text-left border-b border-border-light transition-colors cursor-pointer"
+                className="relative group/mail mail-item-draggable select-none w-full text-left px-2 py-px transition-colors cursor-pointer"
               >
                 {/* Reveal layers for trackpad swipe. Shown only while a swipe
                     episode is active (inline opacity, same lifecycle as the
@@ -835,16 +829,14 @@ function VirtualMailList({
                   <span className="flex items-center gap-1.5 text-success text-xs font-medium"><Archive className="w-4 h-4" />{t("mailList.batchArchive")}</span>
                   <span className="flex items-center gap-1.5 text-danger text-xs font-medium">{t("mailList.batchTrash")}<Trash2 className="w-4 h-4" /></span>
                 </div>
-                {/* Padding lives here, not on the row root: the backgrounds
-                    below must paint edge-to-edge (the selected/hover tint
-                    otherwise renders as an inset box inside the row). */}
+                {/* The row root's px-2 py-px is the tile gutter, inside the measured height. */}
                 <div
                   ref={(el) => { if (el) swipeTargets.current.set(mail.id, el); else swipeTargets.current.delete(mail.id); }}
-                  className={`relative px-4 py-2.5 transition-colors ${
+                  className={`relative px-4 py-2.5 rounded-control transition-colors ${
                     isSelected
                       ? "bg-accent/15"
                       : selectedMailId === mail.id
-                      ? "bg-selected"
+                      ? "tile-raised"
                       : mailIndex === selectedMailIndex
                       ? "bg-hover"
                       : "bg-surface hover:bg-hover"
