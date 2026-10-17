@@ -8,6 +8,7 @@ import { BackupOptionsForm } from "./BackupOptionsForm";
 import type { BackupOptions, BackupProgress, RestorePreview } from "../../types";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";
+import { SettingsGroup, SettingsBlock } from "./SettingsGroup";
 
 export function BackupRestore() {
   const { t } = useTranslation();
@@ -104,240 +105,233 @@ export function BackupRestore() {
   const anySelected = hasBackupCategory(options);
 
   return (
-    <div>
-      <h3 className="text-sm font-medium text-text mb-1">{t("backup.title")}</h3>
-      <p className="text-xs text-text-tertiary mb-3">
-        {t("backup.description")}
-      </p>
+    <>
+      <SettingsGroup title={t("backup.title")} icon={<HardDrive className="w-4 h-4" />}>
+        <SettingsBlock description={t("backup.description")} />
+      </SettingsGroup>
 
-      <div className="p-3 rounded-lg border border-border space-y-3">
-        <div className="flex items-center gap-2">
-          <Download className="w-4 h-4 text-text-tertiary" />
-          <span className="text-sm font-medium text-text">{t("backup.createBackup")}</span>
-        </div>
+      <SettingsGroup title={t("backup.createBackup")} icon={<Download className="w-4 h-4" />}>
+        <SettingsBlock className="space-y-3">
+          <BackupOptionsForm
+            options={options}
+            onChange={setOptions}
+            passphrase={passphrase}
+            repeat={passphraseRepeat}
+            onPassphraseChange={(p, r) => {
+              setPassphrase(p);
+              setPassphraseRepeat(r);
+            }}
+            validation={validation}
+            disabled={backupBusy || restoreBusy}
+          />
 
-        <BackupOptionsForm
-          options={options}
-          onChange={setOptions}
-          passphrase={passphrase}
-          repeat={passphraseRepeat}
-          onPassphraseChange={(p, r) => {
-            setPassphrase(p);
-            setPassphraseRepeat(r);
-          }}
-          validation={validation}
-          disabled={backupBusy || restoreBusy}
-        />
-
-        {backupProgress && (
-          <div className={`flex items-center gap-2 p-2 rounded-lg text-xs ${
-            backupProgress.status === "error" ? "bg-danger/10 text-danger" :
-            backupProgress.status === "done" ? "bg-success/10 text-success" :
-            "bg-accent/10 text-accent"
-          }`}>
-            {backupProgress.status === "done" ? (
-              <CheckCircle className="w-3.5 h-3.5 shrink-0" />
-            ) : backupProgress.status === "error" ? (
-              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-            ) : (
-              <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
-            )}
-            <span className="truncate">{backupErrorText(backupProgress.message, t)}</span>
-          </div>
-        )}
-
-        <Button
-          variant="primary"
-          size="sm"
-          icon={<Download />}
-          loading={backupBusy}
-          disabled={!anySelected || restoreBusy || !validation.ok}
-          onClick={handleCreateBackup}
-        >
-          {t("backup.createBackup")}
-        </Button>
-      </div>
-
-      <div className="p-3 rounded-lg border border-border space-y-3 mt-3">
-        <div className="flex items-center gap-2">
-          <Upload className="w-4 h-4 text-text-tertiary" />
-          <span className="text-sm font-medium text-text">{t("backup.restoreTitle")}</span>
-        </div>
-
-        {!preview ? (
-          <>
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<Upload />}
-              disabled={backupBusy || restoreBusy}
-              onClick={handleSelectBackupFile}
-            >
-              {t("backup.selectFile")}
-            </Button>
-
-            {restoreProgress && (
-              <div className={`flex items-center gap-2 p-2 rounded-lg text-xs ${
-                restoreProgress.status === "error" ? "bg-danger/10 text-danger" :
-                restoreProgress.status === "done" ? "bg-success/10 text-success" :
-                "bg-accent/10 text-accent"
-              }`}>
-                {restoreProgress.status === "done" ? (
-                  <CheckCircle className="w-3.5 h-3.5 shrink-0" />
-                ) : restoreProgress.status === "error" ? (
-                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                ) : (
-                  <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
-                )}
-                <span className="truncate">{backupErrorText(restoreProgress.message, t)}</span>
-              </div>
-            )}
-
-            {passwordHintEmails.length > 0 && (
-              <div className="flex items-start gap-2 p-2 rounded-lg bg-yellow-500/10 text-xs text-warning-fg">
-                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                <div>
-                  <div className="font-medium">{t("backup.passwordsNeeded")}</div>
-                  <div className="mt-0.5">
-                    {t("backup.passwordsNeededDesc")}
-                    {passwordHintEmails.map((email) => (
-                      <div key={email} className="font-mono mt-0.5">{email}</div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="space-y-3">
-            <div className="p-2 rounded-lg bg-bg-secondary text-xs space-y-1">
-              <div className="flex justify-between">
-                <span className="text-text-tertiary">{t("backup.created")}</span>
-                <span className="text-text">{preview.manifest.created_at}</span>
-              </div>
-              {preview.manifest.includes.accounts && (
-                <div className="flex justify-between">
-                  <span className="text-text-tertiary">{t("backup.accounts")}</span>
-                  <span className="text-text">{preview.manifest.stats.account_count}</span>
-                </div>
+          {backupProgress && (
+            <div className={`flex items-center gap-2 p-2 rounded-lg text-xs ${
+              backupProgress.status === "error" ? "bg-danger/10 text-danger" :
+              backupProgress.status === "done" ? "bg-success/10 text-success" :
+              "bg-accent/10 text-accent"
+            }`}>
+              {backupProgress.status === "done" ? (
+                <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+              ) : backupProgress.status === "error" ? (
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+              ) : (
+                <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
               )}
-              {preview.manifest.includes.folders && (
-                <div className="flex justify-between">
-                  <span className="text-text-tertiary">{t("backup.folders")}</span>
-                  <span className="text-text">{preview.manifest.stats.folder_count}</span>
-                </div>
-              )}
-              {preview.manifest.includes.mails && (
-                <div className="flex justify-between">
-                  <span className="text-text-tertiary">{t("backup.emails")}</span>
-                  <span className="text-text">{preview.manifest.stats.mail_count.toLocaleString()}</span>
-                </div>
-              )}
-              {preview.manifest.includes.attachments && (
-                <div className="flex justify-between">
-                  <span className="text-text-tertiary">{t("backup.attachments")}</span>
-                  <span className="text-text">{preview.manifest.stats.attachment_count}</span>
-                </div>
-              )}
-              {preview.manifest.includes.tasks && (
-                <div className="flex justify-between">
-                  <span className="text-text-tertiary">{t("backup.tasksCount")}</span>
-                  <span className="text-text">{preview.manifest.stats.task_count}</span>
-                </div>
-              )}
-              <div className="flex justify-between">
-                <span className="text-text-tertiary">{t("backup.includes")}</span>
-                <span className="text-text">
-                  {[
-                    preview.manifest.includes.app_settings && t("backup.appSettings"),
-                    preview.manifest.includes.accounts && t("backup.accounts"),
-                    preview.manifest.includes.folders && t("backup.folders"),
-                    preview.manifest.includes.mails && t("backup.emails"),
-                    preview.manifest.includes.attachments && t("backup.attachments"),
-                    preview.manifest.includes.tasks && t("backup.includeTasks"),
-                    preview.manifest.includes.calendar && t("backup.includeCalendar"),
-                    preview.manifest.includes.credentials && t("backup.includeCredentials"),
-                  ].filter(Boolean).join(", ")}
-                </span>
-              </div>
+              <span className="truncate">{backupErrorText(backupProgress.message, t)}</span>
             </div>
+          )}
 
-            {preview.existing_account_emails.length > 0 && (
-              <div className="flex items-start gap-2 p-2 rounded-lg bg-yellow-500/10 text-xs text-warning-fg">
-                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                <div>
-                  <div className="font-medium">{t("backup.existingAccounts")}</div>
-                  <div className="mt-0.5">
-                    {preview.existing_account_emails.map((email) => (
-                      <div key={email} className="font-mono">{email}</div>
-                    ))}
-                  </div>
-                  <div className="mt-1 text-text-tertiary">
-                    {t("backup.mergeHint")}
-                  </div>
-                </div>
-              </div>
-            )}
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<Download />}
+            loading={backupBusy}
+            disabled={!anySelected || restoreBusy || !validation.ok}
+            onClick={handleCreateBackup}
+          >
+            {t("backup.createBackup")}
+          </Button>
+        </SettingsBlock>
+      </SettingsGroup>
 
-            {preview.manifest.includes.accounts && !preview.has_credentials && (
-              <div className="flex items-start gap-2 p-2 rounded-lg bg-accent/5 text-xs text-text-secondary">
-                <HardDrive className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                <span>{t("backup.passwordHint")}</span>
-              </div>
-            )}
-
-            {preview.has_credentials && (
-              <div className="space-y-1">
-                <label htmlFor="backup-restore-passphrase" className="block text-sm font-medium text-text-secondary mb-1">
-                  {t("backup.restorePassphrase")}
-                </label>
-                <input
-                  id="backup-restore-passphrase"
-                  type="password"
-                  autoComplete="new-password"
-                  value={restorePassphrase}
-                  onChange={(e) => setRestorePassphrase(e.target.value)}
-                  disabled={restoreBusy}
-                  className="w-full text-sm px-2 py-1.5 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text focus:border-accent"
-                />
-                <div className="text-xs text-text-tertiary">{t("backup.restoreWithoutCredentials")}</div>
-              </div>
-            )}
-
-            <div className="flex gap-2">
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => handleRestore("merge")}
-                disabled={restoreBusy}
-              >
-                {t("common.merge")}
-              </Button>
-              {preview.existing_account_emails.length > 0 && (
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => handleRestore("replace")}
-                  disabled={restoreBusy}
-                >
-                  {t("common.replace")}
-                </Button>
-              )}
+      <SettingsGroup title={t("backup.restoreTitle")} icon={<Upload className="w-4 h-4" />}>
+        <SettingsBlock className="space-y-3">
+          {!preview ? (
+            <>
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => {
-                  setPreview(null);
-                  setRestorePassphrase("");
-                }}
-                disabled={restoreBusy}
+                icon={<Upload />}
+                disabled={backupBusy || restoreBusy}
+                onClick={handleSelectBackupFile}
               >
-                {t("common.cancel")}
+                {t("backup.selectFile")}
               </Button>
+
+              {restoreProgress && (
+                <div className={`flex items-center gap-2 p-2 rounded-lg text-xs ${
+                  restoreProgress.status === "error" ? "bg-danger/10 text-danger" :
+                  restoreProgress.status === "done" ? "bg-success/10 text-success" :
+                  "bg-accent/10 text-accent"
+                }`}>
+                  {restoreProgress.status === "done" ? (
+                    <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+                  ) : restoreProgress.status === "error" ? (
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  ) : (
+                    <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
+                  )}
+                  <span className="truncate">{backupErrorText(restoreProgress.message, t)}</span>
+                </div>
+              )}
+
+              {passwordHintEmails.length > 0 && (
+                <div className="flex items-start gap-2 p-2 rounded-lg bg-yellow-500/10 text-xs text-warning-fg">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-medium">{t("backup.passwordsNeeded")}</div>
+                    <div className="mt-0.5">
+                      {t("backup.passwordsNeededDesc")}
+                      {passwordHintEmails.map((email) => (
+                        <div key={email} className="font-mono mt-0.5">{email}</div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="space-y-3">
+              <div className="p-2 rounded-lg bg-bg-secondary text-xs space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-text-tertiary">{t("backup.created")}</span>
+                  <span className="text-text">{preview.manifest.created_at}</span>
+                </div>
+                {preview.manifest.includes.accounts && (
+                  <div className="flex justify-between">
+                    <span className="text-text-tertiary">{t("backup.accounts")}</span>
+                    <span className="text-text">{preview.manifest.stats.account_count}</span>
+                  </div>
+                )}
+                {preview.manifest.includes.folders && (
+                  <div className="flex justify-between">
+                    <span className="text-text-tertiary">{t("backup.folders")}</span>
+                    <span className="text-text">{preview.manifest.stats.folder_count}</span>
+                  </div>
+                )}
+                {preview.manifest.includes.mails && (
+                  <div className="flex justify-between">
+                    <span className="text-text-tertiary">{t("backup.emails")}</span>
+                    <span className="text-text">{preview.manifest.stats.mail_count.toLocaleString()}</span>
+                  </div>
+                )}
+                {preview.manifest.includes.attachments && (
+                  <div className="flex justify-between">
+                    <span className="text-text-tertiary">{t("backup.attachments")}</span>
+                    <span className="text-text">{preview.manifest.stats.attachment_count}</span>
+                  </div>
+                )}
+                {preview.manifest.includes.tasks && (
+                  <div className="flex justify-between">
+                    <span className="text-text-tertiary">{t("backup.tasksCount")}</span>
+                    <span className="text-text">{preview.manifest.stats.task_count}</span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-text-tertiary">{t("backup.includes")}</span>
+                  <span className="text-text">
+                    {[
+                      preview.manifest.includes.app_settings && t("backup.appSettings"),
+                      preview.manifest.includes.accounts && t("backup.accounts"),
+                      preview.manifest.includes.folders && t("backup.folders"),
+                      preview.manifest.includes.mails && t("backup.emails"),
+                      preview.manifest.includes.attachments && t("backup.attachments"),
+                      preview.manifest.includes.tasks && t("backup.includeTasks"),
+                      preview.manifest.includes.calendar && t("backup.includeCalendar"),
+                      preview.manifest.includes.credentials && t("backup.includeCredentials"),
+                    ].filter(Boolean).join(", ")}
+                  </span>
+                </div>
+              </div>
+
+              {preview.existing_account_emails.length > 0 && (
+                <div className="flex items-start gap-2 p-2 rounded-lg bg-yellow-500/10 text-xs text-warning-fg">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-medium">{t("backup.existingAccounts")}</div>
+                    <div className="mt-0.5">
+                      {preview.existing_account_emails.map((email) => (
+                        <div key={email} className="font-mono">{email}</div>
+                      ))}
+                    </div>
+                    <div className="mt-1 text-text-tertiary">
+                      {t("backup.mergeHint")}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {preview.manifest.includes.accounts && !preview.has_credentials && (
+                <div className="flex items-start gap-2 p-2 rounded-lg bg-accent/5 text-xs text-text-secondary">
+                  <HardDrive className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <span>{t("backup.passwordHint")}</span>
+                </div>
+              )}
+
+              {preview.has_credentials && (
+                <div className="space-y-1">
+                  <label htmlFor="backup-restore-passphrase" className="block text-sm font-medium text-text-secondary mb-1">
+                    {t("backup.restorePassphrase")}
+                  </label>
+                  <input
+                    id="backup-restore-passphrase"
+                    type="password"
+                    autoComplete="new-password"
+                    value={restorePassphrase}
+                    onChange={(e) => setRestorePassphrase(e.target.value)}
+                    disabled={restoreBusy}
+                    className="w-full text-sm px-2 py-1.5 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text focus:border-accent"
+                  />
+                  <div className="text-xs text-text-tertiary">{t("backup.restoreWithoutCredentials")}</div>
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => handleRestore("merge")}
+                  disabled={restoreBusy}
+                >
+                  {t("common.merge")}
+                </Button>
+                {preview.existing_account_emails.length > 0 && (
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => handleRestore("replace")}
+                    disabled={restoreBusy}
+                  >
+                    {t("common.replace")}
+                  </Button>
+                )}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setPreview(null);
+                    setRestorePassphrase("");
+                  }}
+                  disabled={restoreBusy}
+                >
+                  {t("common.cancel")}
+                </Button>
+              </div>
             </div>
-          </div>
-        )}
-      </div>
-    </div>
+          )}
+        </SettingsBlock>
+      </SettingsGroup>
+    </>
   );
 }

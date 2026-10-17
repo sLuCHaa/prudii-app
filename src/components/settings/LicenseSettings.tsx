@@ -6,6 +6,7 @@ import { licenseLogin, licenseLogout, getLicenseInfo, verifyLicense, activateLic
 import { useTeamSnapshot } from "../../hooks/useTeam";
 import { useAppStore } from "../../stores/appStore";
 import { Button } from "../ui/Button";
+import { SettingsGroup, SettingsBlock } from "./SettingsGroup";
 import type { LicenseInfo } from "../../types";
 
 type LicenseView = "main" | "login" | "activate";
@@ -175,25 +176,24 @@ export function LicenseSettings() {
 
   if (view === "login") {
     return (
-      <div>
-        <h3 className="text-sm font-medium text-text mb-1">{t("settings.license.loginTitle")}</h3>
-        <p className="text-xs text-text-tertiary mb-4">{t("settings.license.loginDesc")}</p>
+      <SettingsGroup title={t("settings.license.loginTitle")} icon={<Key className="w-4 h-4" />}>
+        <SettingsBlock description={t("settings.license.loginDesc")} />
 
-        {license?.session_expired && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-warning/10 border border-warning/20 mb-4">
-            <AlertTriangle className="w-4 h-4 text-warning shrink-0" />
-            <p className="text-xs text-warning">{t("settings.license.sessionExpired")}</p>
-          </div>
-        )}
+        <SettingsBlock className="space-y-3">
+          {license?.session_expired && (
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-warning/10">
+              <AlertTriangle className="w-4 h-4 text-warning shrink-0" />
+              <p className="text-xs text-warning">{t("settings.license.sessionExpired")}</p>
+            </div>
+          )}
 
-        {error && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-danger/10 border border-danger/20 mb-4">
-            <AlertTriangle className="w-4 h-4 text-danger shrink-0" />
-            <p className="text-xs text-danger">{error}</p>
-          </div>
-        )}
+          {error && (
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-danger/10">
+              <AlertTriangle className="w-4 h-4 text-danger shrink-0" />
+              <p className="text-xs text-danger">{error}</p>
+            </div>
+          )}
 
-        <div className="space-y-3">
           <div>
             <label className="text-xs text-text-tertiary mb-1 block">{t("settings.license.email")}</label>
             <input
@@ -232,34 +232,33 @@ export function LicenseSettings() {
               {t("common.cancel")}
             </Button>
           </div>
-        </div>
+        </SettingsBlock>
 
-        <div className="mt-4 pt-4 border-t border-border">
+        <SettingsBlock>
           <button
             onClick={() => { setView("activate"); setError(""); }}
             className="text-xs text-accent hover:underline"
           >
             {t("settings.license.activateKeyInstead")}
           </button>
-        </div>
-      </div>
+        </SettingsBlock>
+      </SettingsGroup>
     );
   }
 
   if (view === "activate") {
     return (
-      <div>
-        <h3 className="text-sm font-medium text-text mb-1">{t("settings.license.activateTitle")}</h3>
-        <p className="text-xs text-text-tertiary mb-4">{t("settings.license.activateDesc")}</p>
+      <SettingsGroup title={t("settings.license.activateTitle")} icon={<Key className="w-4 h-4" />}>
+        <SettingsBlock description={t("settings.license.activateDesc")} />
 
-        {error && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-danger/10 border border-danger/20 mb-4">
-            <AlertTriangle className="w-4 h-4 text-danger shrink-0" />
-            <p className="text-xs text-danger">{error}</p>
-          </div>
-        )}
+        <SettingsBlock className="space-y-3">
+          {error && (
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-danger/10">
+              <AlertTriangle className="w-4 h-4 text-danger shrink-0" />
+              <p className="text-xs text-danger">{error}</p>
+            </div>
+          )}
 
-        <div className="space-y-3">
           <div>
             <label className="text-xs text-text-tertiary mb-1 block">{t("settings.license.licenseKey")}</label>
             <input
@@ -298,28 +297,27 @@ export function LicenseSettings() {
               {t("common.cancel")}
             </Button>
           </div>
-        </div>
+        </SettingsBlock>
 
-        <div className="mt-4 pt-4 border-t border-border">
+        <SettingsBlock>
           <button
             onClick={() => { setView("login"); setError(""); }}
             className="text-xs text-accent hover:underline"
           >
             {t("settings.license.loginInstead")}
           </button>
-        </div>
-      </div>
+        </SettingsBlock>
+      </SettingsGroup>
     );
   }
 
   return (
-    <div>
-      <h3 className="text-sm font-medium text-text mb-1">{t("settings.license.title")}</h3>
-      <p className="text-xs text-text-tertiary mb-4">{t("settings.license.description")}</p>
+    <>
+      <SettingsGroup title={t("settings.license.title")} icon={<Key className="w-4 h-4" />}>
+        <SettingsBlock description={t("settings.license.description")} />
 
-      {!license?.logged_in && (
-        <div className="space-y-3">
-          <div className="p-4 rounded-lg border border-border">
+        {!license?.logged_in && (
+          <SettingsBlock>
             <div className="flex items-center gap-3 mb-3">
               <Shield className="w-5 h-5 text-text-tertiary" />
               <div>
@@ -335,50 +333,52 @@ export function LicenseSettings() {
                 {t("settings.license.activateKey")}
               </Button>
             </div>
-          </div>
-        </div>
-      )}
+          </SettingsBlock>
+        )}
 
-      {license?.logged_in && (
-        <div className="space-y-3">
-          {/* Auth token expired/rejected — a soft hint. Paid features stay available
-              under the grace period; signing in again just refreshes the session. */}
-          {license.session_expired && (
-            <div className="p-4 rounded-lg border border-warning/30 bg-warning/10 space-y-3">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-warning shrink-0" />
-                <p className="text-xs text-warning">{t("settings.license.sessionExpired")}</p>
-              </div>
-              <Button variant="primary" size="sm" onClick={() => { setError(""); setView("login"); }}>
-                {t("settings.license.login")}
-              </Button>
-            </div>
-          )}
-
-          <div className="p-4 rounded-lg border border-border">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-3">
-                <span className={getPlanColor()}>{getPlanIcon()}</span>
-                <div>
-                  <div className="text-sm font-medium text-text capitalize">{license.plan}</div>
-                  <div className="text-xs text-text-tertiary">{license.user_email}</div>
+        {license?.logged_in && (
+          <>
+            {/* Auth token expired/rejected — a soft hint. Paid features stay available
+                under the grace period; signing in again just refreshes the session. */}
+            {license.session_expired && (
+              <SettingsBlock>
+                <div className="p-3 rounded-lg bg-warning/10 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-warning shrink-0" />
+                    <p className="text-xs text-warning">{t("settings.license.sessionExpired")}</p>
+                  </div>
+                  <Button variant="primary" size="sm" onClick={() => { setError(""); setView("login"); }}>
+                    {t("settings.license.login")}
+                  </Button>
                 </div>
+              </SettingsBlock>
+            )}
+
+            <SettingsBlock>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className={getPlanColor()}>{getPlanIcon()}</span>
+                  <div>
+                    <div className="text-sm font-medium text-text capitalize">{license.plan}</div>
+                    <div className="text-xs text-text-tertiary">{license.user_email}</div>
+                  </div>
+                </div>
+                {license.plan === "free" && (
+                  <a
+                    href="https://prudii.com/#pricing"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-accent hover:underline flex items-center gap-1"
+                  >
+                    {t("settings.license.upgrade")}
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
               </div>
-              {license.plan === "free" && (
-                <a
-                  href="https://prudii.com/#pricing"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-accent hover:underline flex items-center gap-1"
-                >
-                  {t("settings.license.upgrade")}
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              )}
-            </div>
+            </SettingsBlock>
 
             {license.plan !== "free" && (
-              <div className="space-y-2 pt-2 border-t border-border">
+              <SettingsBlock className="space-y-2">
                 {license.license_key && (
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-text-tertiary">{t("settings.license.licenseKey")}</span>
@@ -405,70 +405,74 @@ export function LicenseSettings() {
                   </div>
                 )}
                 <div className="pt-2">
+                  <a
+                    href="https://prudii.com/dashboard/billing"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-accent hover:underline flex items-center gap-1"
+                  >
+                    {t("settings.license.manageBilling")}
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                  {teamSnapshot?.team.is_owner && (
                     <a
-                      href="https://prudii.com/dashboard/billing"
+                      href="https://prudii.com/dashboard/team"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-xs text-accent hover:underline flex items-center gap-1"
+                      className="mt-1 text-xs text-accent hover:underline flex items-center gap-1"
                     >
-                      {t("settings.license.manageBilling")}
+                      {t("team.manage")}
                       <ExternalLink className="w-3 h-3" />
                     </a>
-                    {teamSnapshot?.team.is_owner && (
-                      <a
-                        href="https://prudii.com/dashboard/team"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-1 text-xs text-accent hover:underline flex items-center gap-1"
-                      >
-                        {t("team.manage")}
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
-                    )}
-                  </div>
-              </div>
+                  )}
+                </div>
+              </SettingsBlock>
             )}
-          </div>
+          </>
+        )}
+      </SettingsGroup>
 
-          <div className="p-3 rounded-lg border border-border">
-            <div className="flex items-center gap-2 mb-2">
-              <Monitor className="w-4 h-4 text-text-tertiary" />
-              <span className="text-xs font-medium text-text">{t("settings.license.device")}</span>
-            </div>
-            <div className="text-xs text-text-tertiary font-mono">{deviceId || license.device_id}</div>
-          </div>
+      {license?.logged_in && (
+        <>
+          <SettingsGroup title={t("settings.license.device")} icon={<Monitor className="w-4 h-4" />}>
+            <SettingsBlock>
+              <div className="text-xs text-text-tertiary font-mono">{deviceId || license.device_id}</div>
+            </SettingsBlock>
+          </SettingsGroup>
 
-          <div className="p-3 rounded-lg border border-border space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-text-tertiary">{t("settings.license.lastVerified")}</span>
-              <span className="text-xs text-text">
-                {license.last_verified ? new Date(license.last_verified).toLocaleString() : "—"}
-              </span>
-            </div>
-            {error && (
-              <div className="flex items-center gap-2 p-2 rounded bg-danger/10 border border-danger/20">
-                <AlertTriangle className="w-3 h-3 text-danger shrink-0" />
-                <p className="text-xs text-danger">{error}</p>
+          <SettingsGroup title={t("settings.license.refreshLicense")} icon={<RefreshCw className="w-4 h-4" />}>
+            <SettingsBlock className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-text-tertiary">{t("settings.license.lastVerified")}</span>
+                <span className="text-xs text-text">
+                  {license.last_verified ? new Date(license.last_verified).toLocaleString() : "—"}
+                </span>
               </div>
-            )}
-            {verifySuccess && (
-              <div className="flex items-center gap-2 p-2 rounded bg-success/10 border border-success/20">
-                <Check className="w-3 h-3 text-success shrink-0" />
-                <p className="text-xs text-success">{t("settings.license.verifySuccess")}</p>
-              </div>
-            )}
-            <Button variant="secondary" size="sm" loading={verifyLoading} onClick={handleVerify} icon={<RefreshCw />}>
-              {t("settings.license.refreshLicense")}
-            </Button>
-          </div>
+              {error && (
+                <div className="flex items-center gap-2 p-2 rounded bg-danger/10">
+                  <AlertTriangle className="w-3 h-3 text-danger shrink-0" />
+                  <p className="text-xs text-danger">{error}</p>
+                </div>
+              )}
+              {verifySuccess && (
+                <div className="flex items-center gap-2 p-2 rounded bg-success/10">
+                  <Check className="w-3 h-3 text-success shrink-0" />
+                  <p className="text-xs text-success">{t("settings.license.verifySuccess")}</p>
+                </div>
+              )}
+              <Button variant="secondary" size="sm" loading={verifyLoading} onClick={handleVerify} icon={<RefreshCw />}>
+                {t("settings.license.refreshLicense")}
+              </Button>
+            </SettingsBlock>
+          </SettingsGroup>
 
           <div className="pt-2">
             <Button variant="secondary" size="sm" onClick={handleLogout} icon={<LogOut />}>
               {t("settings.license.logout")}
             </Button>
           </div>
-        </div>
+        </>
       )}
-    </div>
+    </>
   );
 }

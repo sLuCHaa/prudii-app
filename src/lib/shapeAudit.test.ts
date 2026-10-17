@@ -218,6 +218,15 @@ describe("shape audit", () => {
     expect(sourceOf("settings/SettingsPanel.tsx").match(/<SettingsGroup/g)?.length ?? 0).toBeGreaterThan(14);
   });
 
+  it("groups backup, license and update into section cards", () => {
+    for (const f of ["settings/BackupRestore.tsx", "settings/LicenseSettings.tsx", "settings/UpdatePanel.tsx"]) expect(sourceOf(f)).toContain("<SettingsGroup");
+  });
+
+  it("leaves no old section heading in the settings", () => {
+    const files = Object.keys(sources).filter((k) => k.includes("settings/") && !k.endsWith("SignaturePreviewEditor.tsx"));
+    expect(files.filter((f) => /<h3 className="text-sm font-medium text-text/.test(sources[f]))).toEqual([]);
+  });
+
   it("keeps the privacy trigger square like its title-bar neighbours", () => {
     const trigger = classStrings().find(({ file, cls }) => file === "ui/PrivacyBadge.tsx" && cls.includes("w-11 h-full"));
     expect(trigger).toBeDefined();
