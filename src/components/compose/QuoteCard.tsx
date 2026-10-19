@@ -67,7 +67,8 @@ export function QuoteCard({ quote, editing, onEdit, onDone, onRestore, onRemove,
               {t(forward ? "compose.quoteForwarded" : "compose.quotedMessage")}
             </span>
             <div className="ml-auto flex items-center gap-1 shrink-0">
-              <Button type="button" variant="secondary" size="sm" icon={<Pencil />} onClick={onEdit}>
+              {/* An empty body is still loading; edits made now would be overwritten by it. */}
+              <Button type="button" variant="secondary" size="sm" icon={<Pencil />} onClick={onEdit} disabled={!quote.body.trim()}>
                 {t("compose.quoteEdit")}
               </Button>
               <IconButton

@@ -107,7 +107,9 @@ export function HtmlMailFrame({ html, allowExternalImages = true, forceLight = f
   if (!editable) frameTheme.current = themeStyles;
   useEffect(() => {
     if (!editable) return;
-    const style = iframeRef.current?.contentDocument?.getElementById(THEME_STYLE_ID);
+    // The last match: the mail itself may carry an element with this id.
+    const styles = iframeRef.current?.contentDocument?.querySelectorAll(`style#${THEME_STYLE_ID}`);
+    const style = styles?.[styles.length - 1];
     if (style) style.textContent = themeStyles + EDIT_STYLES;
     refit();
   }, [editable, themeStyles, refit]);

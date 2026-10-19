@@ -504,19 +504,25 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   const quoteBaseline = useRef<string | null>(null);
   const autosavedQuoteEdit = useRef<string | null>(null);
   const quoteEditingRef = useRef(false);
-  useEffect(() => {
-    quoteEditingRef.current = quoteEditing;
-  }, [quoteEditing]);
+  // Set once a snapshot is restored: late arrivals from the init effect must not overwrite it.
+  const restoredRef = useRef(false);
+
+  const setEditingQuote = (editing: boolean) => {
+    quoteEditingRef.current = editing;
+    setQuoteEditing(editing);
+  };
 
   const applyQuote = useCallback((next: ComposeQuote | null) => {
     setQuote(next);
     setOriginalQuote(next);
     setQuoteRemoved(false);
+    quoteEditingRef.current = false;
     setQuoteEditing(false);
   }, []);
 
   // Late arrivals (fetched body, resolved inline images) must not undo a restore, an edit or a removal.
   const upgradeQuote = useCallback((base: ComposeQuote | null, next: ComposeQuote) => {
+    if (restoredRef.current) return;
     setQuote((cur) => (cur === base && !quoteEditingRef.current ? next : cur));
     setOriginalQuote((cur) => (cur === base ? next : cur));
   }, []);
@@ -536,7 +542,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   const finishQuoteEdit = () => {
     const edited = readQuoteEdit();
     if (edited !== null && quote) setQuote({ ...quote, body: edited });
-    setQuoteEditing(false);
+    setEditingQuote(false);
   };
 
   const handleQuoteEditBaseline = (html: string) => {
@@ -650,6 +656,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     if (!isOpen || !editor) return;
 
     setSendError(null);
+    restoredRef.current = false;
     applyQuote(null);
     let initialQuote: ComposeQuote | null = null;
     const startQuote = (q: ComposeQuote | null) => {
@@ -716,7 +723,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
           });
         }
       }
-      if (cancelled) return;
+      if (cancelled || restoredRef.current) return;
       setAttachments(files);
     }
 
@@ -757,7 +764,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         content = "<p></p>";
         fetchMailBody(originalMail.id)
           .then((updated) => {
-            if (cancelled) return;
+            if (cancelled || restoredRef.current) return;
             const body = updated.body_html || updated.body_text || "";
             if (body && editor) {
               const { rest, quote: draftQuote } = splitQuote(body);
@@ -852,7 +859,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     if (originalMail && (mode === "reply" || mode === "replyAll" || mode === "forward") && !originalMail.body_html && !originalMail.body_text) {
       fetchMailBody(originalMail.id)
         .then((updated) => {
-          if (cancelled) return;
+          if (cancelled || restoredRef.current) return;
           if (!editor || !(updated.body_html || updated.body_text)) return;
           const isReply = mode === "reply" || mode === "replyAll";
           const sig = getSignatureHtml(defaultAccountId, true);
@@ -907,6 +914,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         status: "ready" as const,
       })),
     );
+    restoredRef.current = true;
     applyQuote(quoteFromHtml(restoreSnapshot.quotedHtml));
     setComposeBody(editor, bodyWithoutQuote(restoreSnapshot.bodyHtml, restoreSnapshot.quotedHtml));
     // Clear snapshot so it doesn't re-apply
@@ -1777,7 +1785,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
                   key={quoteRevision}
                   quote={quote}
                   editing={quoteEditing}
-                  onEdit={() => setQuoteEditing(true)}
+                  onEdit={() => setEditingQuote(true)}
                   onDone={finishQuoteEdit}
                   onRestore={() => {
                     setQuote(originalQuote);
