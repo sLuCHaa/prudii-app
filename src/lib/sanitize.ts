@@ -150,8 +150,8 @@ export function sanitizeEmailHtml(html: string, allowExternalImages = true, reve
 
   // Strip url() from inline styles AND <style> blocks to prevent CSS tracking pixels
   // (e.g. background-image: url('https://tracker.example.com/pixel.gif'))
-  const div = document.createElement("div");
-  div.innerHTML = sanitized;
+  // Inert parse: a live element would start fetching the tracker pixels removed below.
+  const div = parseBody(sanitized);
   div.querySelectorAll("[style]").forEach((el) => {
     const style = el.getAttribute("style") || "";
     if (/url\s*\(/i.test(style)) {
