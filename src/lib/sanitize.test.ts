@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { escapeHtml, sanitizeEmailHtml, sanitizeSignatureHtml, sanitizeSignatureHtmlReport } from "./sanitize";
+import { escapeHtml, restoreSanitizedHtml, sanitizeEmailHtml, sanitizeSignatureHtml, sanitizeSignatureHtmlReport, showLocalImages } from "./sanitize";
+
+function parse(html: string): HTMLElement {
+  return new DOMParser().parseFromString(`<!DOCTYPE html><body>${html}`, "text/html").body;
+}
 
 describe("escapeHtml", () => {
   it("escapes all HTML metacharacters", () => {
@@ -62,6 +66,48 @@ describe("sanitizeEmailHtml", () => {
       `<img src="https://click.sendgrid.net/img.png" width="200" height="80">`
     );
     expect(trackers.some((t) => t.type === "tracking_domain")).toBe(true);
+  });
+});
+
+describe("reversible sanitize for editing a quote", () => {
+  const LINK = '<p><a href="https://studio-halde.de/angebot" style="color: red">Angebot</a></p>';
+  const BACKGROUND = `<table><tbody><tr><td style="background-image: url('https://studio-halde.de/bg.png'); color: #1f3d36">Stand</td></tr></tbody></table>`;
+  const STYLE_BLOCK = "<style>.band { background: url(https://studio-halde.de/band.png) }</style><p class=\"band\">Studio Halde</p>";
+
+  it("keeps links from opening while editing", () => {
+    const { html } = sanitizeEmailHtml(LINK, true, true);
+    expect(parse(html).querySelector("a")!.hasAttribute("href")).toBe(false);
+  });
+
+  it("gives links their real target back after editing", () => {
+    const a = parse(restoreSanitizedHtml(sanitizeEmailHtml(LINK, true, true).html)).querySelector("a")!;
+    expect(a.getAttribute("href")).toBe("https://studio-halde.de/angebot");
+    expect(a.getAttribute("style")).toBe("color: red");
+    expect(a.getAttributeNames().sort()).toEqual(["href", "style"]);
+  });
+
+  it("loads no CSS background images while editing", () => {
+    const { html } = sanitizeEmailHtml(BACKGROUND + STYLE_BLOCK, true, true);
+    const body = parse(html);
+    expect(body.querySelector("td")!.getAttribute("style")).not.toMatch(/url\(/);
+    expect(body.querySelector("style")!.textContent).not.toMatch(/url\(/);
+  });
+
+  it("sends CSS background images again after editing", () => {
+    const body = parse(restoreSanitizedHtml(sanitizeEmailHtml(BACKGROUND + STYLE_BLOCK, true, true).html));
+    const td = body.querySelector("td")!;
+    expect(td.getAttribute("style")).toBe("background-image: url('https://studio-halde.de/bg.png'); color: #1f3d36");
+    expect(td.getAttributeNames()).toEqual(["style"]);
+    expect(body.querySelector("style")!.textContent).toBe(".band { background: url(https://studio-halde.de/band.png) }");
+    expect(body.querySelector("style")!.getAttributeNames()).toEqual([]);
+  });
+
+  it("shows stored inline images while editing and sends their file path again", () => {
+    const shown = showLocalImages('<img src="file://C:\\Mail\\logo.png" alt="Logo">', () => "http://asset.localhost/logo.png", true);
+    expect(parse(shown).querySelector("img")!.getAttribute("src")).toBe("http://asset.localhost/logo.png");
+    const img = parse(restoreSanitizedHtml(shown)).querySelector("img")!;
+    expect(img.getAttribute("src")).toBe("file://C:\\Mail\\logo.png");
+    expect(img.getAttributeNames().sort()).toEqual(["alt", "src"]);
   });
 });
 

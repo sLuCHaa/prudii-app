@@ -102,11 +102,22 @@ function isHiddenImage(img: Element): boolean {
   return false;
 }
 
+const ORIGINAL_STYLE = "data-prudii-style";
+const ORIGINAL_CSS = "data-prudii-css";
+const ORIGINAL_SRC = "data-prudii-src";
+
+function parseBody(html: string): HTMLElement {
+  // DOMParser documents are inert: no image loads, no handlers. The explicit
+  // <body> keeps leading <style> blocks out of <head>.
+  return new DOMParser().parseFromString(`<!DOCTYPE html><body>${html}`, "text/html").body;
+}
+
 // Sanitize email HTML: strip scripts, event handlers, dangerous elements
 // but keep formatting, images (including data: URIs), links, tables, etc.
 // When allowExternalImages is false, strips external image src attributes (keeps data: URIs).
 // Detects and removes tracking pixels, returning info about them.
-export function sanitizeEmailHtml(html: string, allowExternalImages = true): SanitizeResult {
+// `reversible` keeps what the display rewrites, so restoreSanitizedHtml can undo it.
+export function sanitizeEmailHtml(html: string, allowExternalImages = true, reversible = false): SanitizeResult {
   const sanitized = DOMPurify.sanitize(html, {
     ALLOWED_TAGS: [
       "html", "head", "body", "div", "span", "p", "br", "hr",
@@ -144,12 +155,14 @@ export function sanitizeEmailHtml(html: string, allowExternalImages = true): San
   div.querySelectorAll("[style]").forEach((el) => {
     const style = el.getAttribute("style") || "";
     if (/url\s*\(/i.test(style)) {
+      if (reversible) el.setAttribute(ORIGINAL_STYLE, style);
       el.setAttribute("style", style.replace(/url\s*\([^)]*\)/gi, "none"));
     }
   });
   div.querySelectorAll("style").forEach((styleEl) => {
     const css = styleEl.textContent || "";
     if (/url\s*\(/i.test(css)) {
+      if (reversible) styleEl.setAttribute(ORIGINAL_CSS, css);
       styleEl.textContent = css.replace(/url\s*\([^)]*\)/gi, "none");
     }
   });
@@ -200,6 +213,7 @@ export function sanitizeEmailHtml(html: string, allowExternalImages = true): San
     if (href) {
       a.setAttribute("data-href", href);
       a.removeAttribute("href");
+      if (reversible) return;
       a.setAttribute("role", "link");
       a.setAttribute("tabindex", "0");
       (a as HTMLElement).style.cursor = "pointer";
@@ -207,4 +221,38 @@ export function sanitizeEmailHtml(html: string, allowExternalImages = true): San
   });
 
   return { html: div.innerHTML, trackers };
+}
+
+/** Point locally stored inline images (file://) at a URL the webview can load. */
+export function showLocalImages(html: string, toDisplay: (fileUrl: string) => string, reversible = false): string {
+  if (!html.includes("file://")) return html;
+  const body = parseBody(html);
+  body.querySelectorAll('img[src^="file://"]').forEach((img) => {
+    const src = img.getAttribute("src") ?? "";
+    if (reversible) img.setAttribute(ORIGINAL_SRC, src);
+    img.setAttribute("src", toDisplay(src));
+  });
+  return body.innerHTML;
+}
+
+/** Undo the display rewrites of a reversible sanitize, for HTML that leaves the app again. */
+export function restoreSanitizedHtml(html: string): string {
+  const body = parseBody(html);
+  body.querySelectorAll("a[data-href]").forEach((a) => {
+    a.setAttribute("href", a.getAttribute("data-href") ?? "");
+    a.removeAttribute("data-href");
+  });
+  body.querySelectorAll(`[${ORIGINAL_STYLE}]`).forEach((el) => {
+    el.setAttribute("style", el.getAttribute(ORIGINAL_STYLE) ?? "");
+    el.removeAttribute(ORIGINAL_STYLE);
+  });
+  body.querySelectorAll(`style[${ORIGINAL_CSS}]`).forEach((el) => {
+    el.textContent = el.getAttribute(ORIGINAL_CSS);
+    el.removeAttribute(ORIGINAL_CSS);
+  });
+  body.querySelectorAll(`img[${ORIGINAL_SRC}]`).forEach((img) => {
+    img.setAttribute("src", img.getAttribute(ORIGINAL_SRC) ?? "");
+    img.removeAttribute(ORIGINAL_SRC);
+  });
+  return body.innerHTML;
 }

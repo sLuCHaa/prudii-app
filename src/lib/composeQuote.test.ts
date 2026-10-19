@@ -1,0 +1,114 @@
+import { describe, it, expect } from "vitest";
+import { quoteFromHtml, renderQuote, splitQuote, type ComposeQuote } from "./composeQuote";
+import { stripQuotedHtml } from "./quotedHistory";
+
+const FORWARD: ComposeQuote = {
+  kind: "forward",
+  meta: {
+    fromName: "Lena Hoffmann",
+    fromEmail: "lena@studio-halde.de",
+    date: "2026-10-14T09:12:00Z",
+    subject: "Angebot Messestand Frühjahr 2027",
+    to: "einkauf@beispiel.de",
+  },
+  body: "<p>Hallo zusammen,</p><table><tbody><tr><td>3</td><td>2.300 €</td></tr></tbody></table>",
+};
+
+const REPLY: ComposeQuote = {
+  kind: "reply",
+  meta: { fromName: "Lena Hoffmann", fromEmail: "lena@studio-halde.de", date: "2026-10-14T09:12:00Z" },
+  body: "<p>Passt Donnerstag?</p>",
+};
+
+const REPLY_MARKER =
+  "{&quot;kind&quot;:&quot;reply&quot;,&quot;fromName&quot;:&quot;Lena Hoffmann&quot;,&quot;fromEmail&quot;:&quot;lena@studio-halde.de&quot;,&quot;date&quot;:&quot;2026-10-14T09:12:00Z&quot;}";
+
+function textOf(html: string): string {
+  return new DOMParser().parseFromString(html, "text/html").body.textContent ?? "";
+}
+
+describe("splitQuote", () => {
+  it("takes a reopened draft apart into the own text and the quote", () => {
+    const draft = `<p>Hi Tom,</p><div data-prudii-quote="${REPLY_MARKER}"><p>Am 14.10.2026 schrieb Lena:</p><blockquote><p>Passt Donnerstag?</p></blockquote></div>`;
+    const { rest, quote } = splitQuote(draft);
+    expect(rest).toBe("<p>Hi Tom,</p>");
+    expect(quote).toEqual(REPLY);
+  });
+
+  it("leaves a draft without a quote untouched", () => {
+    const draft = "<p>Hi Tom,</p><blockquote><p>Passt Donnerstag?</p></blockquote>";
+    expect(splitQuote(draft)).toEqual({ rest: draft, quote: null });
+  });
+
+  it("splits at the outer quote when the quoted mail carries one of its own", () => {
+    const inner = `<div data-prudii-quote="${REPLY_MARKER}"><p>Lena schrieb:</p><blockquote><p>Passt Donnerstag?</p></blockquote></div>`;
+    const outerMarker = REPLY_MARKER.replace("Lena Hoffmann", "Tom Berger").replace("lena@studio-halde.de", "tom@beispiel.de");
+    const draft = `<p>Gut.</p><div data-prudii-quote="${outerMarker}"><p>Tom schrieb:</p><blockquote><p>Ja.</p>${inner}</blockquote></div>`;
+    const { rest, quote } = splitQuote(draft);
+    expect(rest).toBe("<p>Gut.</p>");
+    expect(quote?.kind === "reply" && quote.meta.fromName).toBe("Tom Berger");
+    expect(quote?.body).toBe(`<p>Ja.</p>${inner}`);
+  });
+
+  it("keeps a quote whose layout a mail server rewrote as it is", () => {
+    const wrapper = `<div data-prudii-quote="${REPLY_MARKER}"><p>Lena schrieb:</p><div><p>Passt Donnerstag?</p></div></div>`;
+    const { rest, quote } = splitQuote(`<p>Hi</p>${wrapper}`);
+    expect(rest).toBe("<p>Hi</p>");
+    expect(quote).toEqual({ kind: "raw", body: wrapper });
+  });
+
+  it("keeps a quote with an unreadable marker as it is", () => {
+    const wrapper = `<div data-prudii-quote="{kaputt"><p>Lena schrieb:</p><blockquote><p>Passt Donnerstag?</p></blockquote></div>`;
+    expect(splitQuote(wrapper).quote).toEqual({ kind: "raw", body: wrapper });
+  });
+});
+
+describe("renderQuote", () => {
+  it("comes back intact from the HTML it writes", () => {
+    for (const quote of [FORWARD, REPLY]) {
+      expect(splitQuote(`<p>Hi</p>${renderQuote(quote)}`)).toEqual({ rest: "<p>Hi</p>", quote });
+    }
+  });
+
+  it("shows recipients the classic forward header", () => {
+    const text = textOf(renderQuote(FORWARD));
+    expect(text).toContain("Forwarded message");
+    expect(text).toContain("Lena Hoffmann <lena@studio-halde.de>");
+    expect(text).toContain("Angebot Messestand Frühjahr 2027");
+    expect(text).toContain("einkauf@beispiel.de");
+  });
+
+  it("escapes the sender's name", () => {
+    const quote: ComposeQuote = { ...REPLY, meta: { ...REPLY.meta, fromName: '<img src=x onerror="alert(1)">' } };
+    const html = renderQuote(quote);
+    expect(new DOMParser().parseFromString(html, "text/html").querySelector("img")).toBeNull();
+    expect(splitQuote(html).quote).toEqual(quote);
+  });
+
+  it("sends a raw quote exactly as it was", () => {
+    const body = "<p>On Tue, Lena wrote:</p><blockquote><p>Passt Donnerstag?</p></blockquote>";
+    expect(renderQuote({ kind: "raw", body })).toBe(body);
+  });
+
+  it("lets a sent reply's quote collapse in the thread view", () => {
+    const stripped = stripQuotedHtml(`<p>Donnerstag passt.</p>${renderQuote(REPLY)}`);
+    expect(stripped).toContain("Donnerstag passt.");
+    expect(stripped).not.toContain("Passt Donnerstag?");
+  });
+});
+
+describe("quoteFromHtml", () => {
+  it("brings back a quote saved before quotes were marked, unchanged", () => {
+    const old = "<p>On Tue, Lena wrote:</p><blockquote><p>Passt Donnerstag?</p></blockquote>";
+    expect(quoteFromHtml(old)).toEqual({ kind: "raw", body: old });
+  });
+
+  it("brings back a marked quote with its sender", () => {
+    expect(quoteFromHtml(renderQuote(FORWARD))).toEqual(FORWARD);
+  });
+
+  it("has no quote for an empty snapshot", () => {
+    expect(quoteFromHtml(undefined)).toBeNull();
+    expect(quoteFromHtml("")).toBeNull();
+  });
+});

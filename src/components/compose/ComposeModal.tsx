@@ -5,7 +5,7 @@ import { dateLocale } from "../../lib/dateUtils";
 import { PulseDot } from "../motion/PulseDot";
 import { GradientAvatar } from "../motion/GradientAvatar";
 import { SPRING_SNAPPY } from "../motion/tokens";
-import { X, Paperclip, Trash2, Send, File, FileText, Image, Film, Music, FileCode, FileSpreadsheet, Archive, Sparkles, Loader2, FileType, CalendarClock, ChevronDown, Pencil, Check, Eye } from "lucide-react";
+import { X, Paperclip, Trash2, Send, File, FileText, Image, Film, Music, FileCode, FileSpreadsheet, Archive, Sparkles, Loader2, FileType, CalendarClock, ChevronDown, Undo2, Check, Eye } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { EditorContent } from "@tiptap/react";
 import TiptapImage from "@tiptap/extension-image";
@@ -31,11 +31,12 @@ import { listen, emit } from "@tauri-apps/api/event";
 import { saveDraft, syncAccount, fetchMailBody, suggestReplies, sendMail, scheduleSend, listTemplates, listAttachments, getAttachmentData, trashMail, saveComposeAutosave } from "../../lib/tauri";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AiRepliesEvent, EmailTemplate, ReplySuggestion } from "../../types";
-import { escapeHtml } from "../../lib/sanitize";
+import { escapeHtml, restoreSanitizedHtml } from "../../lib/sanitize";
+import { QUOTE_EDIT_ROOT, quoteFromHtml, renderQuote, splitQuote, type ComposeQuote, type QuoteMeta } from "../../lib/composeQuote";
 import { fillEmptyParagraphs, inlineComposeStyles, composeTypography, extractLocalImages, dropImagesByCid } from "../../lib/outgoingHtml";
 import { resolveInlineImagesInHtml } from "../../lib/inlineImages";
 import { stripMmlTags } from "../../lib/missingParts";
-import { HtmlMailFrame } from "../layout/MailDetail";
+import { QuoteCard } from "./QuoteCard";
 import { RecipientInput, type RecipientInputHandle } from "./RecipientInput";
 import { ComposePreview, type ComposePreviewData } from "./ComposePreview";
 import type { Mail, SendMailRequest, SendAttachment, Attachment, Account, AppSettings } from "../../types";
@@ -195,15 +196,6 @@ function generateForwardSubject(subject: string): string {
   return `Fwd: ${subject}`;
 }
 
-function safeFormatDate(dateStr: string): string {
-  try {
-    const d = new Date(dateStr);
-    return isNaN(d.getTime()) ? dateStr || "" : d.toLocaleString();
-  } catch {
-    return dateStr || "";
-  }
-}
-
 function plainTextToQuotedHtml(text: string): string {
   // An MML placeholder the sender's client never turned into a MIME part is
   // not content: quoting it carries their local paths onward, nothing else.
@@ -283,16 +275,16 @@ async function withResolvedInlineImages(mail: Mail): Promise<Mail | null> {
   return body_html === html ? null : { ...mail, body_html };
 }
 
-function generateReplyBodyHtml(mail: Mail): string {
-  const date = escapeHtml(safeFormatDate(mail.date));
-  const from = mail.from.name
-    ? `${escapeHtml(mail.from.name)} &lt;${escapeHtml(mail.from.email)}&gt;`
-    : escapeHtml(mail.from.email);
-  const intro = i18n.t("compose.replyIntro", { date, from });
-  const quotedContent = mail.body_html
+function quoteFromMail(kind: "reply" | "forward", mail: Mail): ComposeQuote {
+  const body = mail.body_html
     ? cleanEmailHtml(mail.body_html)
     : plainTextToQuotedHtml(mail.body_text || "");
-  return `<p>${intro}</p><blockquote>${quotedContent}</blockquote>`;
+  const meta: QuoteMeta = { fromName: mail.from.name || "", fromEmail: mail.from.email, date: mail.date };
+  if (kind === "forward") {
+    meta.subject = mail.subject;
+    meta.to = mail.to.map((t) => (t.name ? `${t.name} <${t.email}>` : t.email)).join(", ");
+  }
+  return { kind, meta, body };
 }
 
 function findBestFromAccount(
@@ -321,33 +313,6 @@ function findBestFromAccount(
   }
 
   return fallbackAccountId;
-}
-
-function generateForwardBodyHtml(mail: Mail): string {
-  const date = escapeHtml(safeFormatDate(mail.date));
-  const from = mail.from.name
-    ? `${escapeHtml(mail.from.name)} &lt;${escapeHtml(mail.from.email)}&gt;`
-    : escapeHtml(mail.from.email);
-  const to = mail.to
-    .map((t) => (t.name ? `${escapeHtml(t.name)} &lt;${escapeHtml(t.email)}&gt;` : escapeHtml(t.email)))
-    .join(", ");
-  const subject = escapeHtml(mail.subject);
-  const title = i18n.t("compose.forwardHeaderTitle");
-  const fromLabel = i18n.t("compose.forwardHeaderFrom");
-  const dateLabel = i18n.t("compose.forwardHeaderDate");
-  const subjectLabel = i18n.t("compose.forwardHeaderSubject");
-  const toLabel = i18n.t("compose.forwardHeaderTo");
-  const content = mail.body_html
-    ? cleanEmailHtml(mail.body_html)
-    : plainTextToQuotedHtml(mail.body_text || "");
-  return (
-    `<p>${title}</p>` +
-    `<p><strong>${fromLabel}</strong> ${from}</p>` +
-    `<p><strong>${dateLabel}</strong> ${date}</p>` +
-    `<p><strong>${subjectLabel}</strong> ${subject}</p>` +
-    `<p><strong>${toLabel}</strong> ${to}</p>` +
-    `<blockquote>${content}</blockquote>`
-  );
 }
 
 // --- Data passed from the main window to a compose window via event ---
@@ -533,8 +498,54 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   // Bumped when a send fails after the button already showed "sent"; remounting resets it.
   const [sendResetKey, setSendResetKey] = useState(0);
   const [customSchedule, setCustomSchedule] = useState<CustomSchedule | null>(null);
-  const [quotedHtml, setQuotedHtml] = useState("");
+  const [quote, setQuote] = useState<ComposeQuote | null>(null);
+  const [originalQuote, setOriginalQuote] = useState<ComposeQuote | null>(null);
+  const [quoteRemoved, setQuoteRemoved] = useState(false);
+  const [quoteEditing, setQuoteEditing] = useState(false);
+  // Bumped by "restore original" so the edit frame drops unsaved edits even when the quote itself is unchanged.
+  const [quoteRevision, setQuoteRevision] = useState(0);
   const [preview, setPreview] = useState<ComposePreviewData | null>(null);
+  const quoteFrameRef = useRef<HTMLIFrameElement | null>(null);
+  const quoteBaseline = useRef<string | null>(null);
+  const autosavedQuoteEdit = useRef<string | null>(null);
+
+  const applyQuote = useCallback((next: ComposeQuote | null) => {
+    setQuote(next);
+    setOriginalQuote(next);
+    setQuoteRemoved(false);
+    setQuoteEditing(false);
+  }, []);
+
+  // The edit frame's current content, or null while it still matches what it loaded with.
+  const readQuoteEdit = (): string | null => {
+    const root = quoteFrameRef.current?.contentDocument?.getElementById(QUOTE_EDIT_ROOT);
+    if (!root || root.innerHTML === quoteBaseline.current) return null;
+    return restoreSanitizedHtml(root.innerHTML);
+  };
+
+  const outgoingQuoteHtml = (): string => {
+    if (!quote || quoteRemoved) return "";
+    const edited = quoteEditing ? readQuoteEdit() : null;
+    return renderQuote(edited === null ? quote : { ...quote, body: edited });
+  };
+
+  const finishQuoteEdit = () => {
+    const edited = readQuoteEdit();
+    if (edited !== null && quote) setQuote({ ...quote, body: edited });
+    setQuoteEditing(false);
+  };
+
+  const removeQuote = () => {
+    if (quoteEditing) finishQuoteEdit();
+    setQuoteRemoved(true);
+  };
+
+  const handleQuoteFrameLoad = () => {
+    const root = quoteFrameRef.current?.contentDocument?.getElementById(QUOTE_EDIT_ROOT);
+    quoteBaseline.current = root?.innerHTML ?? null;
+    autosavedQuoteEdit.current = null;
+    root?.focus();
+  };
 
   const emailsOf = (list: string[]) => list.map((r) => {
     const m = r.match(/<([^>]+)>/);
@@ -568,12 +579,17 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   }, [editor]);
   useEffect(() => {
     autosaveDirty.current = true;
-  }, [to, cc, bcc, subject, attachments, fromAccountId]);
+  }, [to, cc, bcc, subject, attachments, fromAccountId, quote, quoteRemoved]);
 
   useEffect(() => {
     if (!initData) return; // only real compose windows persist autosaves
     const label = getCurrentWindow().label;
     const interval = setInterval(() => {
+      const quoteEdit = quoteEditing ? readQuoteEdit() : null;
+      if (quoteEdit !== null && quoteEdit !== autosavedQuoteEdit.current) {
+        autosavedQuoteEdit.current = quoteEdit;
+        autosaveDirty.current = true;
+      }
       if (!autosaveDirty.current || sending || savingDraft || !editor) return;
       const hasContent =
         editor.getText().trim().length > 0 || subject.trim().length > 0 ||
@@ -592,7 +608,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         attachments: attachments
           .filter((att) => att.status === "ready")
           .map((att) => ({ name: att.name, size: att.size, type: att.type, data: att.data })),
-        quotedHtml: quotedHtml || undefined,
+        quotedHtml: outgoingQuoteHtml() || undefined,
       };
       const payload = JSON.stringify({ mode, originalMail: originalMail ?? null, snapshot });
       saveComposeAutosave(label, payload)
@@ -604,7 +620,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     }, 5000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initData, editor, sending, savingDraft, to, cc, bcc, subject, attachments, fromAccountId, quotedHtml, mode, originalMail]);
+  }, [initData, editor, sending, savingDraft, to, cc, bcc, subject, attachments, fromAccountId, quote, quoteRemoved, quoteEditing, mode, originalMail]);
 
   const getSignatureHtml = useCallback((accountId: string, isReplyOrForward: boolean): string => {
     const account = accounts?.find((a) => a.id === accountId);
@@ -632,7 +648,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     if (!isOpen || !editor) return;
 
     setSendError(null);
-    setQuotedHtml("");
+    applyQuote(null);
 
     let defaultAccountId = selectedAccountId || accounts?.[0]?.id || "";
     // For reply/forward in unified inbox, pick the account that received the original mail
@@ -716,10 +732,17 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       if (originalMail.account_id) {
         setFromAccountId(originalMail.account_id);
       }
-      // Use draft body as-is (no signature injection)
+      // Use draft body as-is (no signature injection); a quote we wrote goes back into its card.
       const draftBody = originalMail.body_html || originalMail.body_text;
       if (draftBody) {
-        content = draftBody;
+        const { rest, quote: draftQuote } = splitQuote(draftBody);
+        content = rest;
+        applyQuote(draftQuote);
+        if (draftQuote) {
+          void withResolvedInlineImages(originalMail).then((m) => {
+            if (m?.body_html && !cancelled) applyQuote(splitQuote(m.body_html).quote);
+          });
+        }
       } else {
         // Body not loaded yet (header-only sync) — fetch it
         content = "<p></p>";
@@ -728,7 +751,9 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
             if (cancelled) return;
             const body = updated.body_html || updated.body_text || "";
             if (body && editor) {
-              setComposeBody(editor, body);
+              const { rest, quote: draftQuote } = splitQuote(body);
+              setComposeBody(editor, rest);
+              applyQuote(draftQuote);
             }
           })
           .catch(() => {});
@@ -760,8 +785,8 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         setTo(fromFormatted ? [fromFormatted] : []);
         setCc([]);
         setSubject(generateReplySubject(originalMail.subject));
-        setQuotedHtml(generateReplyBodyHtml(originalMail));
-        void withResolvedInlineImages(originalMail).then((m) => { if (m && !cancelled) setQuotedHtml(generateReplyBodyHtml(m)); });
+        applyQuote(quoteFromMail("reply", originalMail));
+        void withResolvedInlineImages(originalMail).then((m) => { if (m && !cancelled) applyQuote(quoteFromMail("reply", m)); });
         if (composeAiReplyText) {
           const aiHtml = `<p>${composeAiReplyText.replace(/\n/g, '<br>')}</p>`;
           content = `${aiHtml}${signature}`;
@@ -784,8 +809,8 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         setCc(ccFormatted);
         setShowCc(ccFormatted.length > 0);
         setSubject(generateReplySubject(originalMail.subject));
-        setQuotedHtml(generateReplyBodyHtml(originalMail));
-        void withResolvedInlineImages(originalMail).then((m) => { if (m && !cancelled) setQuotedHtml(generateReplyBodyHtml(m)); });
+        applyQuote(quoteFromMail("reply", originalMail));
+        void withResolvedInlineImages(originalMail).then((m) => { if (m && !cancelled) applyQuote(quoteFromMail("reply", m)); });
         if (composeAiReplyText) {
           const aiHtml = `<p>${composeAiReplyText.replace(/\n/g, '<br>')}</p>`;
           content = `${aiHtml}${signature}`;
@@ -796,8 +821,8 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         setTo([]);
         setCc([]);
         setSubject(generateForwardSubject(originalMail.subject));
-        setQuotedHtml(generateForwardBodyHtml(originalMail));
-        void withResolvedInlineImages(originalMail).then((m) => { if (m && !cancelled) setQuotedHtml(generateForwardBodyHtml(m)); });
+        applyQuote(quoteFromMail("forward", originalMail));
+        void withResolvedInlineImages(originalMail).then((m) => { if (m && !cancelled) applyQuote(quoteFromMail("forward", m)); });
         content = `<p></p>${signature}`;
 
         if (originalMail.has_attachments) {
@@ -816,9 +841,9 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
           if (!editor || !(updated.body_html || updated.body_text)) return;
           const isReply = mode === "reply" || mode === "replyAll";
           const sig = getSignatureHtml(defaultAccountId, true);
-          const quoteOf = (m: Mail) => (isReply ? generateReplyBodyHtml(m) : generateForwardBodyHtml(m));
-          setQuotedHtml(quoteOf(updated));
-          void withResolvedInlineImages(updated).then((m) => { if (m && !cancelled) setQuotedHtml(quoteOf(m)); });
+          const quoteOf = (m: Mail) => quoteFromMail(isReply ? "reply" : "forward", m);
+          applyQuote(quoteOf(updated));
+          void withResolvedInlineImages(updated).then((m) => { if (m && !cancelled) applyQuote(quoteOf(m)); });
           if (isReply && composeAiReplyText) {
             const aiHtml = `<p>${composeAiReplyText.replace(/\n/g, '<br>')}</p>`;
             setComposeBody(editor, `${aiHtml}${sig}`);
@@ -831,7 +856,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     return () => {
       cancelled = true;
     };
-  }, [isOpen, mode, originalMail, accounts, selectedAccountId, editor, getSignatureHtml, mailtoParams, composeAiReplyText]);
+  }, [isOpen, mode, originalMail, accounts, selectedAccountId, editor, getSignatureHtml, mailtoParams, composeAiReplyText, applyQuote]);
 
   useEffect(() => {
     if (!isOpen || !editor) return;
@@ -866,11 +891,12 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         status: "ready" as const,
       })),
     );
-    setQuotedHtml(restoreSnapshot.quotedHtml || "");
-    setComposeBody(editor, restoreSnapshot.bodyHtml);
+    applyQuote(quoteFromHtml(restoreSnapshot.quotedHtml));
+    // bodyHtml is the whole outgoing body; its quote is already in the card.
+    setComposeBody(editor, splitQuote(restoreSnapshot.bodyHtml).rest);
     // Clear snapshot so it doesn't re-apply
     useAppStore.getState().clearUndoSend();
-  }, [isOpen, editor, restoreSnapshot]);
+  }, [isOpen, editor, restoreSnapshot, applyQuote]);
 
   useEffect(() => {
     if (!aiRequestId) return;
@@ -929,10 +955,6 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     if (!editor) return;
     const aiHtml = `<p>${text.replace(/\n/g, '<br>')}</p>`;
     const signature = getSignatureHtml(fromAccountId, true);
-    if (originalMail) {
-      setQuotedHtml(generateReplyBodyHtml(originalMail));
-    }
-
     editor.commands.setContent(aiHtml + signature);
     setAiReplies([]);
     editor.commands.focus("start");
@@ -1101,6 +1123,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   // `href`s so links work in the recipient's client — the display sanitizer
   // rewrites href→data-href for our iframe and would break outgoing links.
   function buildOutgoingBody(): { bodyHtml: string; bodyText: string } {
+    const quotedHtml = outgoingQuoteHtml();
     if (!editor) return { bodyHtml: quotedHtml, bodyText: "" };
     // Only on the way out: the editor writes a blank line as `<p></p>`, which
     // collapses to nothing when a mail client renders it — and its paragraph
@@ -1233,7 +1256,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         type: att.type,
         data: att.data,
       })),
-      quotedHtml: quotedHtml || undefined,
+      quotedHtml: outgoingQuoteHtml() || undefined,
     };
 
     if (appSettings.undo_send_delay === 0) {
@@ -1471,6 +1494,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     try {
       const editorHtml = editor.getHTML();
       const editorText = editor.getText({ blockSeparator: '\n\n' });
+      const quotedHtml = outgoingQuoteHtml();
       const localHtml = editorHtml + quotedHtml;
       const bodyText = editorText + (quotedHtml ? "\n\n" + quotedHtml.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim() : "");
       // The draft is APPENDed to the server's Drafts folder — quoted signature
@@ -1732,31 +1756,33 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
               className="compose-editor text-sm text-text leading-relaxed"
               style={{ "--compose-font": typography.fontStack, "--compose-font-size": `${typography.fontSizePt}pt` } as React.CSSProperties}
             />
-            {quotedHtml && (
-              <div className="mt-2">
-                <div className="flex items-center justify-between mb-1.5 text-xs text-text-tertiary">
-                  <span>{i18n.t("compose.quotedMessage")}</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!editor) return;
-                      const endPos = editor.state.doc.content.size;
-                      editor.chain()
-                        .insertContentAt(endPos, quotedHtml)
-                        .focus("start")
-                        .run();
-                      setQuotedHtml("");
-                    }}
-                    className="flex items-center gap-1 px-2 py-1 rounded hover:bg-hover text-text-secondary hover:text-text transition-colors"
-                  >
-                    <Pencil className="w-3 h-3" />
-                    <span>{i18n.t("compose.editQuote")}</span>
-                  </button>
-                </div>
-                <div className="border-l-2 border-border pl-3">
-                  <HtmlMailFrame html={quotedHtml} allowExternalImages={true} />
-                </div>
+            {quote && !quoteRemoved && (
+              <div className="mt-5">
+                <QuoteCard
+                  key={quoteRevision}
+                  quote={quote}
+                  editing={quoteEditing}
+                  onEdit={() => setQuoteEditing(true)}
+                  onDone={finishQuoteEdit}
+                  onRestore={() => {
+                    setQuote(originalQuote);
+                    setQuoteRevision((r) => r + 1);
+                  }}
+                  onRemove={removeQuote}
+                  onFrameRef={(el) => { quoteFrameRef.current = el; }}
+                  onFrameLoad={handleQuoteFrameLoad}
+                />
               </div>
+            )}
+            {quote && quoteRemoved && (
+              <button
+                type="button"
+                onClick={() => setQuoteRemoved(false)}
+                className="mt-4 -ml-2 inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs text-text-secondary hover:text-text hover:bg-hover transition-colors"
+              >
+                <Undo2 className="w-3.5 h-3.5" />
+                <span>{t(quote.kind === "forward" ? "compose.quoteReinsertForward" : "compose.quoteReinsertReply")}</span>
+              </button>
             )}
           </div>
 
