@@ -102,6 +102,33 @@ describe("reversible sanitize for editing a quote", () => {
     expect(body.querySelector("style")!.getAttributeNames()).toEqual([]);
   });
 
+  it("sends table background images again after editing", () => {
+    const html = '<table background="https://studio-halde.de/bg.png"><tbody><tr><td>Stand</td></tr></tbody></table>';
+    const { html: editing } = sanitizeEmailHtml(html, true, true);
+    expect(parse(editing).querySelector("table")!.hasAttribute("background")).toBe(false);
+    const table = parse(restoreSanitizedHtml(editing)).querySelector("table")!;
+    expect(table.getAttribute("background")).toBe("https://studio-halde.de/bg.png");
+    expect(table.getAttributeNames()).toEqual(["background"]);
+  });
+
+  it("ignores restore attributes a mail brings along itself", () => {
+    const forged =
+      '<a data-href="javascript:alert(1)">Angebot</a>' +
+      '<img src="https://studio-halde.de/logo.png" data-prudii-src="https://tracker.example/p.gif" width="120" height="40">' +
+      '<p data-prudii-style="background: url(https://tracker.example/p.gif)">Text</p>' +
+      '<table data-prudii-background="https://tracker.example/p.gif"><tbody><tr><td>x</td></tr></tbody></table>';
+    const body = parse(restoreSanitizedHtml(sanitizeEmailHtml(forged, true, true).html));
+    expect(body.querySelector("a")!.hasAttribute("href")).toBe(false);
+    expect(body.querySelector("img")!.getAttribute("src")).toBe("https://studio-halde.de/logo.png");
+    expect(body.querySelector("p")!.hasAttribute("style")).toBe(false);
+    expect(body.querySelector("table")!.hasAttribute("background")).toBe(false);
+  });
+
+  it("keeps a mail from making text clickable without a real link", () => {
+    const { html } = sanitizeEmailHtml('<span data-href="https://evil.example">Hier klicken</span>');
+    expect(parse(html).querySelector("[data-href]")).toBeNull();
+  });
+
   it("shows stored inline images while editing and sends their file path again", () => {
     const shown = showLocalImages('<img src="file://C:\\Mail\\logo.png" alt="Logo">', () => "http://asset.localhost/logo.png", true);
     expect(parse(shown).querySelector("img")!.getAttribute("src")).toBe("http://asset.localhost/logo.png");

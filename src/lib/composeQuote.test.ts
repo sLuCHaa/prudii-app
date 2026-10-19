@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { quoteFromHtml, renderQuote, splitQuote, type ComposeQuote } from "./composeQuote";
+import { bodyWithoutQuote, buildQuote, quoteFromHtml, renderQuote, splitQuote, stripQuoteMarker, type ComposeQuote } from "./composeQuote";
 import { stripQuotedHtml } from "./quotedHistory";
 
 const FORWARD: ComposeQuote = {
@@ -60,6 +60,79 @@ describe("splitQuote", () => {
   it("keeps a quote with an unreadable marker as it is", () => {
     const wrapper = `<div data-prudii-quote="{kaputt"><p>Lena schrieb:</p><blockquote><p>Passt Donnerstag?</p></blockquote></div>`;
     expect(splitQuote(wrapper).quote).toEqual({ kind: "raw", body: wrapper });
+  });
+
+  it("keeps a quote with content after its blockquote as it is", () => {
+    const wrapper = `<div data-prudii-quote="${REPLY_MARKER}"><p>Lena schrieb:</p><blockquote><p>Passt Donnerstag?</p></blockquote><p>Rest</p></div>`;
+    expect(splitQuote(wrapper).quote).toEqual({ kind: "raw", body: wrapper });
+  });
+
+  it("leaves a marker alone that sits inside a quote another client wrote", () => {
+    const draft = `<p>Klar.</p><blockquote type="cite"><p>Tom schrieb:</p><div data-prudii-quote="${REPLY_MARKER}"><p>Lena schrieb:</p><blockquote><p>Passt Donnerstag?</p></blockquote></div></blockquote>`;
+    expect(splitQuote(draft)).toEqual({ rest: draft, quote: null });
+  });
+});
+
+describe("buildQuote", () => {
+  const MAIL = {
+    from: { name: "Lena Hoffmann", email: "lena@studio-halde.de" },
+    to: [{ name: "", email: "einkauf@beispiel.de" }, { name: "Tom Berger", email: "tom@beispiel.de" }],
+    date: "2026-10-14T09:12:00Z",
+    subject: "Angebot Messestand Frühjahr 2027",
+  };
+
+  it("takes sender, date, subject and recipients for a forward", () => {
+    expect(buildQuote("forward", MAIL, "<p>Hallo</p>")).toEqual({
+      kind: "forward",
+      meta: {
+        fromName: "Lena Hoffmann",
+        fromEmail: "lena@studio-halde.de",
+        date: "2026-10-14T09:12:00Z",
+        subject: "Angebot Messestand Frühjahr 2027",
+        to: "einkauf@beispiel.de, Tom Berger <tom@beispiel.de>",
+      },
+      body: "<p>Hallo</p>",
+    });
+  });
+
+  it("takes only sender and date for a reply", () => {
+    expect(buildQuote("reply", MAIL, "<p>Hallo</p>").meta).toEqual({
+      fromName: "Lena Hoffmann",
+      fromEmail: "lena@studio-halde.de",
+      date: "2026-10-14T09:12:00Z",
+    });
+  });
+
+  it("survives a draft round trip when the quoted mail has stray end tags", () => {
+    const quote = buildQuote("reply", MAIL, "<p>Angebot</p></div><p>Mitte</p></blockquote><p>Ende</p>");
+    expect(splitQuote(`<p>Hi</p>${renderQuote(quote)}`)).toEqual({ rest: "<p>Hi</p>", quote });
+    expect(textOf(quote.body)).toBe("AngebotMitteEnde");
+  });
+});
+
+describe("stripQuoteMarker", () => {
+  it("sends the quote without the marker that would give the client away", () => {
+    const body = `<p>Hi</p>${renderQuote(FORWARD)}`;
+    const sent = stripQuoteMarker(body);
+    expect(sent).not.toContain("data-prudii-quote");
+    expect(textOf(sent)).toBe(textOf(body));
+  });
+});
+
+describe("bodyWithoutQuote", () => {
+  it("cuts an unmarked quote off a body saved before quotes were marked", () => {
+    const quoted = "<p>On Tue, Lena wrote:</p><blockquote><p>Passt Donnerstag?</p></blockquote>";
+    expect(bodyWithoutQuote(`<p>Hi</p>${quoted}`, quoted)).toBe("<p>Hi</p>");
+  });
+
+  it("cuts a marked quote off a saved body", () => {
+    const quoted = renderQuote(REPLY);
+    expect(bodyWithoutQuote(`<p>Hi</p>${quoted}`, quoted)).toBe("<p>Hi</p>");
+    expect(bodyWithoutQuote(`<p>Hi</p>${quoted}`, undefined)).toBe("<p>Hi</p>");
+  });
+
+  it("leaves a body without a quote alone", () => {
+    expect(bodyWithoutQuote("<p>Hi</p>", undefined)).toBe("<p>Hi</p>");
   });
 });
 

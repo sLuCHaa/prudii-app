@@ -1,9 +1,11 @@
 import { useTranslation } from "react-i18next";
+import { format } from "date-fns";
 import { Check, Forward, Pencil, Quote, RotateCcw, X } from "lucide-react";
 import { Button, IconButton } from "../ui/Button";
 import { GradientAvatar } from "../motion/GradientAvatar";
 import { HtmlMailFrame } from "../layout/MailDetail";
-import { formatQuoteDate, type ComposeQuote } from "../../lib/composeQuote";
+import { dateLocale } from "../../lib/dateUtils";
+import type { ComposeQuote } from "../../lib/composeQuote";
 
 interface QuoteCardProps {
   quote: ComposeQuote;
@@ -14,13 +16,19 @@ interface QuoteCardProps {
   onRemove: () => void;
   onFrameRef: (el: HTMLIFrameElement | null) => void;
   onFrameLoad: () => void;
+  onEditBaseline: (html: string) => void;
 }
 
-export function QuoteCard({ quote, editing, onEdit, onDone, onRestore, onRemove, onFrameRef, onFrameLoad }: QuoteCardProps) {
+function cardDate(date: string): string {
+  const d = new Date(date);
+  return isNaN(d.getTime()) ? date : format(d, "PPp", { locale: dateLocale() });
+}
+
+export function QuoteCard({ quote, editing, onEdit, onDone, onRestore, onRemove, onFrameRef, onFrameLoad, onEditBaseline }: QuoteCardProps) {
   const { t } = useTranslation();
   const forward = quote.kind === "forward";
   const meta = quote.kind === "raw" ? null : quote.meta;
-  const details = meta ? [forward && meta.to ? t("compose.quoteTo", { to: meta.to }) : "", formatQuoteDate(meta.date)].filter(Boolean).join(" · ") : "";
+  const details = meta ? [forward && meta.to ? t("compose.quoteTo", { to: meta.to }) : "", cardDate(meta.date)].filter(Boolean).join(" · ") : "";
 
   return (
     <div
@@ -89,7 +97,14 @@ export function QuoteCard({ quote, editing, onEdit, onDone, onRestore, onRemove,
         </div>
       )}
 
-      <HtmlMailFrame html={quote.body} allowExternalImages editable={editing} onIframeRef={onFrameRef} onLoad={onFrameLoad} />
+      <HtmlMailFrame
+        html={quote.body}
+        allowExternalImages
+        editable={editing}
+        onIframeRef={onFrameRef}
+        onLoad={onFrameLoad}
+        onEditBaseline={onEditBaseline}
+      />
     </div>
   );
 }

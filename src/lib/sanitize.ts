@@ -105,8 +105,9 @@ function isHiddenImage(img: Element): boolean {
 const ORIGINAL_STYLE = "data-prudii-style";
 const ORIGINAL_CSS = "data-prudii-css";
 const ORIGINAL_SRC = "data-prudii-src";
+const ORIGINAL_BACKGROUND = "data-prudii-background";
 
-function parseBody(html: string): HTMLElement {
+export function parseBody(html: string): HTMLElement {
   // DOMParser documents are inert: no image loads, no handlers. The explicit
   // <body> keeps leading <style> blocks out of <head>.
   return new DOMParser().parseFromString(`<!DOCTYPE html><body>${html}`, "text/html").body;
@@ -137,10 +138,12 @@ export function sanitizeEmailHtml(html: string, allowExternalImages = true, reve
       "class", "id", "style", "dir", "lang", "title",
       "href", "target", "rel",
       "src", "alt", "width", "height", "loading",
-      "colspan", "rowspan", "cellpadding", "cellspacing", "border", "align", "valign", "bgcolor",
+      "colspan", "rowspan", "cellpadding", "cellspacing", "border", "align", "valign", "bgcolor", "background",
       "color", "face", "size",
       "srcset", "sizes", "media", "type",
     ],
+    // Set by this function only; a mail carrying them could turn text into links or swap what an edit restores.
+    FORBID_ATTR: ["data-href", ORIGINAL_STYLE, ORIGINAL_CSS, ORIGINAL_SRC, ORIGINAL_BACKGROUND],
     // file:/asset: carry locally stored inline images (rewritten to asset URLs before display)
     // cid:/blob: load nothing here; kept so the inline-image resolver can map or drop them
     ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel|data|file|asset|cid|blob):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
@@ -152,6 +155,10 @@ export function sanitizeEmailHtml(html: string, allowExternalImages = true, reve
   // (e.g. background-image: url('https://tracker.example.com/pixel.gif'))
   // Inert parse: a live element would start fetching the tracker pixels removed below.
   const div = parseBody(sanitized);
+  div.querySelectorAll("[background]").forEach((el) => {
+    if (reversible) el.setAttribute(ORIGINAL_BACKGROUND, el.getAttribute("background") ?? "");
+    el.removeAttribute("background");
+  });
   div.querySelectorAll("[style]").forEach((el) => {
     const style = el.getAttribute("style") || "";
     if (/url\s*\(/i.test(style)) {
@@ -245,6 +252,10 @@ export function restoreSanitizedHtml(html: string): string {
   body.querySelectorAll(`[${ORIGINAL_STYLE}]`).forEach((el) => {
     el.setAttribute("style", el.getAttribute(ORIGINAL_STYLE) ?? "");
     el.removeAttribute(ORIGINAL_STYLE);
+  });
+  body.querySelectorAll(`[${ORIGINAL_BACKGROUND}]`).forEach((el) => {
+    el.setAttribute("background", el.getAttribute(ORIGINAL_BACKGROUND) ?? "");
+    el.removeAttribute(ORIGINAL_BACKGROUND);
   });
   body.querySelectorAll(`style[${ORIGINAL_CSS}]`).forEach((el) => {
     el.textContent = el.getAttribute(ORIGINAL_CSS);

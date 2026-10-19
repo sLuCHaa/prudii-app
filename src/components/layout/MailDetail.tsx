@@ -9,7 +9,7 @@ import { MailBodyContextMenu } from "./MailBodyContextMenu";
 import { EmptyState } from "../ui/EmptyState";
 import { DaylightSky, useAtmosphereLine } from "../motion/DaylightSky";
 import { ThreadView } from "./ThreadView";
-import { sanitizeEmailHtml, showLocalImages, type TrackerInfo } from "../../lib/sanitize";
+import { parseBody, sanitizeEmailHtml, showLocalImages, type TrackerInfo } from "../../lib/sanitize";
 import { QUOTE_EDIT_ROOT } from "../../lib/composeQuote";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { decodeFileUrl } from "../../lib/outgoingHtml";
@@ -71,7 +71,9 @@ const EDIT_STYLES = `
   img { cursor: auto; }
 `;
 
-export function HtmlMailFrame({ html, allowExternalImages = true, forceLight = false, editable = false, onIframeRef, onLoad, onTrackersDetected, onLinkClick, onImageClick }: { html: string; allowExternalImages?: boolean; /** Render as most recipients see it, ignoring the app's dark mode. */ forceLight?: boolean; /** Edit in place; read `#QUOTE_EDIT_ROOT` back through restoreSanitizedHtml. */ editable?: boolean; onIframeRef?: (el: HTMLIFrameElement | null) => void; onLoad?: () => void; onTrackersDetected?: (trackers: TrackerInfo[]) => void; onLinkClick?: (href: string) => void; onImageClick?: (src: string) => void }) {
+const THEME_STYLE_ID = "prudii-theme";
+
+export function HtmlMailFrame({ html, allowExternalImages = true, forceLight = false, editable = false, onIframeRef, onLoad, onEditBaseline, onTrackersDetected, onLinkClick, onImageClick }: { html: string; allowExternalImages?: boolean; /** Render as most recipients see it, ignoring the app's dark mode. */ forceLight?: boolean; /** Edit in place; read `#QUOTE_EDIT_ROOT` back through restoreSanitizedHtml. */ editable?: boolean; onIframeRef?: (el: HTMLIFrameElement | null) => void; onLoad?: () => void; /** The edit root's innerHTML before any edit. */ onEditBaseline?: (html: string) => void; onTrackersDetected?: (trackers: TrackerInfo[]) => void; onLinkClick?: (href: string) => void; onImageClick?: (src: string) => void }) {
   const darkMode = useAppStore((s) => s.darkMode) && !forceLight;
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const { height, refit } = useMailFrameFit(iframeRef);
@@ -94,16 +96,32 @@ export function HtmlMailFrame({ html, allowExternalImages = true, forceLight = f
     onTrackersDetected?.(trackers);
   }, [html, allowExternalImages]);
 
+  // Parsed like the frame parses it, but without waiting for its load event, which waits for every image.
+  const editBaseline = useMemo(() => (editable ? parseBody(cleanHtml).innerHTML : null), [editable, cleanHtml]);
+  useEffect(() => {
+    if (editBaseline !== null) onEditBaseline?.(editBaseline);
+  }, [editBaseline]);
+
+  // A new srcDoc reloads the frame and drops an edit, so while editing the theme is swapped in place.
+  const frameTheme = useRef(themeStyles);
+  if (!editable) frameTheme.current = themeStyles;
+  useEffect(() => {
+    if (!editable) return;
+    const style = iframeRef.current?.contentDocument?.getElementById(THEME_STYLE_ID);
+    if (style) style.textContent = themeStyles + EDIT_STYLES;
+    refit();
+  }, [editable, themeStyles, refit]);
+
+  // No spellcheck: squiggles under every word of someone else's mail read as broken.
+  const content = editable ? `<div id="${QUOTE_EDIT_ROOT}" contenteditable="true" spellcheck="false">${cleanHtml}</div>` : cleanHtml;
   // The bridge script is allow-listed by its SHA-256 hash in both this iframe's
   // CSP and the parent CSP (tauri.conf.json); a `srcdoc` iframe inherits the
   // parent's CSP, which the production build enforces. Email scripts carry no
   // matching hash, so `allow-scripts` on the sandbox cannot run them.
-  // No spellcheck: squiggles under every word of someone else's mail read as broken.
-  const content = editable ? `<div id="${QUOTE_EDIT_ROOT}" contenteditable="true" spellcheck="false">${cleanHtml}</div>` : cleanHtml;
   const srcDoc = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="script-src '${MAIL_LINK_BRIDGE_CSP_HASH}'; object-src 'none';"><style>
 ${BASE_STYLES}
-</style></head><body>${content}<style>${themeStyles}${editable ? EDIT_STYLES : ""}</style><script>${MAIL_LINK_BRIDGE}</script></body></html>`;
+</style></head><body>${content}<style id="${THEME_STYLE_ID}">${frameTheme.current}${editable ? EDIT_STYLES : ""}</style><script>${MAIL_LINK_BRIDGE}</script></body></html>`;
 
   useEffect(() => {
     refit();
@@ -112,7 +130,13 @@ ${BASE_STYLES}
   // Typing grows the content, and listeners on the frame's document don't fire on macOS.
   useEffect(() => {
     if (!editable) return;
-    const id = setInterval(refit, 400);
+    let lastHeight = 0;
+    const id = setInterval(() => {
+      const h = iframeRef.current?.contentDocument?.body?.scrollHeight ?? 0;
+      if (h === lastHeight) return;
+      lastHeight = h;
+      refit();
+    }, 400);
     return () => clearInterval(id);
   }, [editable, refit]);
 
