@@ -551,7 +551,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   };
 
   const handleQuoteFrameLoad = () => {
-    quoteFrameRef.current?.contentDocument?.getElementById(QUOTE_EDIT_ROOT)?.focus();
+    quoteFrameRef.current?.contentDocument?.getElementById(QUOTE_EDIT_ROOT)?.focus({ preventScroll: true });
   };
 
   const emailsOf = (list: string[]) => list.map((r) => {
