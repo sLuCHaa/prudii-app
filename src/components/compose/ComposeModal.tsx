@@ -35,6 +35,7 @@ import { QUOTE_EDIT_ROOT, bodyWithoutQuote, buildQuote, quoteFromHtml, renderQuo
 import { fillEmptyParagraphs, inlineComposeStyles, addSignatureDivider, composeTypography, extractLocalImages, dropImagesByCid } from "../../lib/outgoingHtml";
 import { currentAccentHex } from "../../lib/accents";
 import { SignatureNode } from "./signatureNode";
+import { MANY_RECIPIENTS, countRecipients, sendBlocker } from "./sendChecks";
 import { resolveInlineImagesInHtml } from "../../lib/inlineImages";
 import { stripMmlTags } from "../../lib/missingParts";
 import { QuoteCard } from "./QuoteCard";
@@ -98,53 +99,6 @@ function getFileColor(mimeType: string, filename: string) {
 }
 
 export type ComposeMode = "new" | "reply" | "replyAll" | "forward" | "draft";
-
-function splitAddressList(input: string): string[] {
-  const segments: string[] = [];
-  let current = "";
-  let inQuotes = false;
-  let inAngle = false;
-  for (const ch of input) {
-    if (ch === '"') {
-      inQuotes = !inQuotes;
-    } else if (!inQuotes && ch === "<") {
-      inAngle = true;
-    } else if (!inQuotes && ch === ">") {
-      inAngle = false;
-    } else if (ch === "," && !inQuotes && !inAngle) {
-      segments.push(current);
-      current = "";
-      continue;
-    }
-    current += ch;
-  }
-  segments.push(current);
-
-  const recipients: string[] = [];
-  let pending: string[] = [];
-  for (const segment of segments) {
-    pending.push(segment);
-    if (segment.includes("@")) {
-      recipients.push(pending.join(",").trim());
-      pending = [];
-    }
-  }
-  if (pending.join(",").trim()) {
-    recipients.push(pending.join(",").trim());
-  }
-  return recipients.filter(Boolean);
-}
-
-function parseRecipients(input: string): { email: string; name?: string }[] {
-  if (!input.trim()) return [];
-  return splitAddressList(input).map((trimmed) => {
-    const match = trimmed.match(/^(.+?)\s*<(.+?)>$/);
-    if (match) {
-      return { name: match[1].trim().replace(/^"|"$/g, "").trim(), email: match[2].trim() };
-    }
-    return { email: trimmed };
-  });
-}
 
 /** Format a MailAddress as a recipient chip string, handling missing/invalid emails */
 function formatAddress(addr: { name: string; email: string }): string | null {
@@ -1153,38 +1107,15 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     });
   }
 
-  async function handleSend(): Promise<boolean> {
-    const pendingTo = toFieldRef.current?.commitPending() ?? null;
-    const pendingCc = ccFieldRef.current?.commitPending() ?? null;
-    const pendingBcc = bccFieldRef.current?.commitPending() ?? null;
-    const effTo = pendingTo ? [...to, pendingTo] : to;
-    const effCc = pendingCc ? [...cc, pendingCc] : cc;
-    const effBcc = pendingBcc ? [...bcc, pendingBcc] : bcc;
-
-    if (effTo.length === 0) {
-      setSendError(t("compose.enterRecipient"));
+  // Sending now and scheduling ask the same questions; only the moment differs.
+  async function passesSendChecks(effTo: string[], effCc: string[], effBcc: string[]): Promise<boolean> {
+    const blocker = sendBlocker(effTo, effCc, effBcc, !!fromAccountId);
+    if (blocker) {
+      setSendError(blocker.key === "compose.invalidEmail" ? t(blocker.key, { email: blocker.email }) : t(blocker.key));
       return false;
     }
-
-    if (!fromAccountId) {
-      setSendError(t("compose.selectAccount"));
-      return false;
-    }
-
     if (!editor) return false;
-
     setSendError(null);
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const allChips = [...effTo, ...effCc, ...effBcc];
-    for (const chip of allChips) {
-      const parsed = parseRecipients(chip);
-      const invalid = parsed.find((r) => !emailRegex.test(r.email));
-      if (invalid) {
-        setSendError(t("compose.invalidEmail", { email: invalid.email }));
-        return false;
-      }
-    }
 
     if (!subject.trim()) {
       const confirmed = await dialog.confirm({
@@ -1197,10 +1128,8 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
 
     if (needsAttachmentReminder(editor, attachments.length) && !(await confirmMissingAttachment())) return false;
 
-    const recipientCount = [...effTo, ...effCc, ...effBcc].reduce(
-      (n, chip) => n + parseRecipients(chip).length, 0,
-    );
-    if (recipientCount > 10) {
+    const recipientCount = countRecipients(effTo, effCc, effBcc);
+    if (recipientCount > MANY_RECIPIENTS) {
       const ok = await dialog.confirm({
         title: t("compose.manyRecipientsTitle"),
         message: t("compose.manyRecipientsMessage", { count: recipientCount }),
@@ -1208,8 +1137,8 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       if (!ok) return false;
     }
 
-    // Never send a mail that is missing an attachment the user added. Sending is the
-    // one irreversible step here, so anything not fully in memory stops it.
+    // Anything not fully in memory stops the mail: sending is irreversible, and a
+    // scheduled mail goes out unattended, after the user could still fix it.
     const notReady = attachments.filter((att) => att.status !== "ready");
     if (notReady.length > 0) {
       const stillLoading = notReady.every((att) => att.status === "loading");
@@ -1224,6 +1153,18 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       });
       return false;
     }
+    return true;
+  }
+
+  async function handleSend(): Promise<boolean> {
+    const pendingTo = toFieldRef.current?.commitPending() ?? null;
+    const pendingCc = ccFieldRef.current?.commitPending() ?? null;
+    const pendingBcc = bccFieldRef.current?.commitPending() ?? null;
+    const effTo = pendingTo ? [...to, pendingTo] : to;
+    const effCc = pendingCc ? [...cc, pendingCc] : cc;
+    const effBcc = pendingBcc ? [...bcc, pendingBcc] : bcc;
+
+    if (!(await passesSendChecks(effTo, effCc, effBcc)) || !editor || !fromAccountId) return false;
 
     const quotedHtml = outgoingQuoteHtml();
     const { bodyHtml: localHtml, bodyText } = buildOutgoingBody(quotedHtml);
@@ -1372,54 +1313,13 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     const effCc = pendingCc ? [...cc, pendingCc] : cc;
     const effBcc = pendingBcc ? [...bcc, pendingBcc] : bcc;
 
-    if (effTo.length === 0 || !fromAccountId || !editor) return;
-
-    setSendError(null);
-
     // Guard against a past schedule time (e.g. typed past the picker's min).
     if (isNaN(scheduledDate.getTime()) || scheduledDate.getTime() <= Date.now()) {
       setSendError(t("compose.scheduledInPast"));
       return;
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const allChips = [...effTo, ...effCc, ...effBcc];
-    for (const chip of allChips) {
-      const parsed = parseRecipients(chip);
-      const invalid = parsed.find((r) => !emailRegex.test(r.email));
-      if (invalid) {
-        setSendError(t("compose.invalidEmail", { email: invalid.email }));
-        return;
-      }
-    }
-
-    if (!subject.trim()) {
-      const confirmed = await dialog.confirm({
-        title: t("compose.noSubjectTitle"),
-        message: t("compose.noSubjectMessage"),
-        confirmLabel: t("compose.sendWithoutSubject"),
-      });
-      if (!confirmed) return;
-    }
-
-    if (needsAttachmentReminder(editor, attachments.length) && !(await confirmMissingAttachment())) return;
-
-    // A scheduled mail goes out unattended — an incomplete attachment must stop it
-    // here, where the user is still around to fix it.
-    const notReady = attachments.filter((att) => att.status !== "ready");
-    if (notReady.length > 0) {
-      const stillLoading = notReady.every((att) => att.status === "loading");
-      await dialog.alert({
-        type: stillLoading ? "info" : "danger",
-        title: stillLoading ? t("compose.attachmentsStillLoadingTitle") : t("compose.attachmentsFailedTitle"),
-        message: stillLoading
-          ? t("compose.attachmentsStillLoadingMessage")
-          : t("compose.attachmentsFailedMessage", {
-              names: notReady.filter((a) => a.status === "failed").map((a) => a.name).join(", "),
-            }),
-      });
-      return;
-    }
+    if (!(await passesSendChecks(effTo, effCc, effBcc)) || !editor || !fromAccountId) return;
 
     const { bodyHtml: localHtml, bodyText } = buildOutgoingBody();
     // Same as handleSend: quoted signature images leave as cid: inline parts.
