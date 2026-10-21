@@ -67,6 +67,17 @@ describe("sanitizeEmailHtml", () => {
     );
     expect(trackers.some((t) => t.type === "tracking_domain")).toBe(true);
   });
+
+  it("renders a mail's light variant whatever the system theme", () => {
+    const { html } = sanitizeEmailHtml(
+      "<style>@media (prefers-color-scheme: dark) { body { color: #fff !important } }" +
+        "@media screen and (prefers-color-scheme:LIGHT) { .logo { display: block } }</style><p>Hallo</p>"
+    );
+    const css = parse(html).querySelector("style")!.textContent!;
+    expect(css).not.toMatch(/prefers-color-scheme/i);
+    expect(css).toContain("@media (max-width: -1px) { body { color: #fff !important } }");
+    expect(css).toContain("@media screen and (min-width: 0px) { .logo { display: block } }");
+  });
 });
 
 describe("reversible sanitize for editing a quote", () => {
@@ -99,6 +110,13 @@ describe("reversible sanitize for editing a quote", () => {
     expect(td.getAttribute("style")).toBe("background-image: url('https://studio-halde.de/bg.png'); color: #1f3d36");
     expect(td.getAttributeNames()).toEqual(["style"]);
     expect(body.querySelector("style")!.textContent).toBe(".band { background: url(https://studio-halde.de/band.png) }");
+    expect(body.querySelector("style")!.getAttributeNames()).toEqual([]);
+  });
+
+  it("sends a mail's dark-mode styles again after editing", () => {
+    const css = "@media (prefers-color-scheme: dark) { .band { color: #fff } }";
+    const body = parse(restoreSanitizedHtml(sanitizeEmailHtml(`<style>${css}</style><p class="band">Studio Halde</p>`, true, true).html));
+    expect(body.querySelector("style")!.textContent).toBe(css);
     expect(body.querySelector("style")!.getAttributeNames()).toEqual([]);
   });
 

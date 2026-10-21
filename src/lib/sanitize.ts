@@ -107,6 +107,13 @@ const ORIGINAL_CSS = "data-prudii-css";
 const ORIGINAL_SRC = "data-prudii-src";
 const ORIGINAL_BACKGROUND = "data-prudii-background";
 
+// The frame renders light and dark mode inverts that, so a mail's own dark variant must never apply.
+function lightSchemeOnly(css: string): string {
+  return css
+    .replace(/\(\s*prefers-color-scheme\s*:\s*dark\s*\)/gi, "(max-width: -1px)")
+    .replace(/\(\s*prefers-color-scheme\s*:\s*light\s*\)/gi, "(min-width: 0px)");
+}
+
 export function parseBody(html: string): HTMLElement {
   // DOMParser documents are inert: no image loads, no handlers. The explicit
   // <body> keeps leading <style> blocks out of <head>.
@@ -168,9 +175,10 @@ export function sanitizeEmailHtml(html: string, allowExternalImages = true, reve
   });
   div.querySelectorAll("style").forEach((styleEl) => {
     const css = styleEl.textContent || "";
-    if (/url\s*\(/i.test(css)) {
+    const shown = lightSchemeOnly(css.replace(/url\s*\([^)]*\)/gi, "none"));
+    if (shown !== css) {
       if (reversible) styleEl.setAttribute(ORIGINAL_CSS, css);
-      styleEl.textContent = css.replace(/url\s*\([^)]*\)/gi, "none");
+      styleEl.textContent = shown;
     }
   });
 
