@@ -32,7 +32,8 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AiRepliesEvent, EmailTemplate, ReplySuggestion } from "../../types";
 import { escapeHtml, restoreSanitizedHtml } from "../../lib/sanitize";
 import { QUOTE_EDIT_ROOT, bodyWithoutQuote, buildQuote, quoteFromHtml, renderQuote, splitQuote, stripQuoteMarker, type ComposeQuote } from "../../lib/composeQuote";
-import { fillEmptyParagraphs, inlineComposeStyles, addSignatureDivider, composeTypography, extractLocalImages, dropImagesByCid } from "../../lib/outgoingHtml";
+import { fillEmptyParagraphs, inlineComposeStyles, addSignatureDivider, composeTypography, extractLocalImages, extractDataImages, dropImagesByCid } from "../../lib/outgoingHtml";
+import { base64Size } from "../../lib/imagePrep";
 import { currentAccentHex } from "../../lib/accents";
 import { SignatureNode } from "./signatureNode";
 import { MANY_RECIPIENTS, countRecipients, sendBlocker } from "./sendChecks";
@@ -160,12 +161,31 @@ function cleanEmailHtml(html: string): string {
 }
 
 /**
- * Turn `file://` images in outgoing HTML (quoted signature logos etc.) into
- * cid: inline attachments. Sending the local paths verbatim leaked the
- * machine's filesystem layout and arrived as broken images — and every
- * further reply quoted the broken reference onward.
+ * Turn the images in outgoing HTML into cid: inline attachments: `file://`
+ * references (quoted signature logos etc.) and `data:` images (pasted pictures,
+ * the signature logo). Sending local paths leaked the machine's filesystem
+ * layout and arrived as broken images; data: URIs are not shown by many clients.
  */
-async function resolveQuotedInlineImages(
+async function embedInlineImages(
+  bodyHtml: string,
+  originalMail: Mail | null,
+): Promise<{ html: string; inlineAttachments: SendAttachment[] }> {
+  const local = await resolveLocalInlineImages(bodyHtml, originalMail);
+  const { html, images } = extractDataImages(local.html);
+  const inlineAttachments = [...local.inlineAttachments];
+  for (const img of images) {
+    inlineAttachments.push({
+      name: img.name,
+      mime_type: img.type,
+      data: img.data,
+      size: base64Size(img.data),
+      content_id: img.cid,
+    });
+  }
+  return { html, inlineAttachments };
+}
+
+async function resolveLocalInlineImages(
   bodyHtml: string,
   originalMail: Mail | null,
 ): Promise<{ html: string; inlineAttachments: SendAttachment[] }> {
@@ -1182,7 +1202,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     const { bodyHtml: localHtml, bodyText } = buildOutgoingBody(quotedHtml);
     // Quoted signature images are stored as file:// paths for display — they
     // must leave as cid: inline attachments, never as local paths.
-    const { html: bodyHtml, inlineAttachments } = await resolveQuotedInlineImages(stripQuoteMarker(localHtml), originalMail ?? null);
+    const { html: bodyHtml, inlineAttachments } = await embedInlineImages(stripQuoteMarker(localHtml), originalMail ?? null);
 
     const request: SendMailRequest = {
       account_id: fromAccountId,
@@ -1335,7 +1355,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
 
     const { bodyHtml: localHtml, bodyText } = buildOutgoingBody();
     // Same as handleSend: quoted signature images leave as cid: inline parts.
-    const { html: bodyHtml, inlineAttachments } = await resolveQuotedInlineImages(stripQuoteMarker(localHtml), originalMail ?? null);
+    const { html: bodyHtml, inlineAttachments } = await embedInlineImages(stripQuoteMarker(localHtml), originalMail ?? null);
 
     const request: SendMailRequest = {
       account_id: fromAccountId,
@@ -1422,7 +1442,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       const bodyText = editorText + (quotedHtml ? "\n\n" + quotedHtml.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim() : "");
       // The draft is APPENDed to the server's Drafts folder — quoted signature
       // images must go as cid: inline parts there too, never as local paths.
-      const { html: bodyHtml, inlineAttachments } = await resolveQuotedInlineImages(localHtml, originalMail ?? null);
+      const { html: bodyHtml, inlineAttachments } = await embedInlineImages(localHtml, originalMail ?? null);
 
       const request: SendMailRequest = {
         account_id: fromAccountId,

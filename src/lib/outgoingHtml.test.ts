@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { fillEmptyParagraphs, inlineComposeStyles, addSignatureDivider, composeTypography, extractLocalImages, dropImagesByCid, decodeFileUrl, OUTGOING_FONT_STACK, COMPOSE_FONTS, DEFAULT_COMPOSE_FONT_SIZE } from "./outgoingHtml";
+import { fillEmptyParagraphs, inlineComposeStyles, addSignatureDivider, composeTypography, extractLocalImages, dropImagesByCid, decodeFileUrl, extractDataImages, OUTGOING_FONT_STACK, COMPOSE_FONTS, DEFAULT_COMPOSE_FONT_SIZE } from "./outgoingHtml";
 
 const DEFAULT_TYPO = composeTypography("prudii", DEFAULT_COMPOSE_FONT_SIZE);
 
@@ -160,6 +160,23 @@ describe("extractLocalImages", () => {
     const { html: out, images } = extractLocalImages(html);
     expect(out).toBe(html);
     expect(images).toHaveLength(0);
+  });
+});
+
+describe("extractDataImages", () => {
+  it("turns data: images into one cid part per distinct image", () => {
+    const logo = "data:image/png;base64,iVBORw0KGgo=";
+    const shot = "data:image/jpeg;base64,/9j/4AAQ";
+    const { html, images } = extractDataImages(`<p><img src="${logo}" width="150"><img src='${shot}'><img src="${logo}"></p>`);
+    expect(html).toBe(`<p><img src="cid:embedded-1@prudii" width="150"><img src='cid:embedded-2@prudii'><img src="cid:embedded-1@prudii"></p>`);
+    expect(images).toEqual([
+      { cid: "embedded-1@prudii", type: "image/png", data: "iVBORw0KGgo=", name: "image-1.png" },
+      { cid: "embedded-2@prudii", type: "image/jpeg", data: "/9j/4AAQ", name: "image-2.jpg" },
+    ]);
+  });
+  it("leaves web, cid and file images alone", () => {
+    const html = `<img src="https://x/y.png"><img src="cid:a@b"><img src="file:///C:/x.png">`;
+    expect(extractDataImages(html)).toEqual({ html, images: [] });
   });
 });
 

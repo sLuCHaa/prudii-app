@@ -176,6 +176,51 @@ export function extractLocalImages(html: string): { html: string; images: LocalI
   return { html: out, images };
 }
 
+export interface DataImageRef {
+  cid: string;
+  type: string;
+  data: string;
+  name: string;
+}
+
+const DATA_IMAGE_EXT: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/jpg": "jpg",
+  "image/gif": "gif",
+  "image/webp": "webp",
+};
+
+/**
+ * Rewrite base64 `data:` image sources to `cid:` references and report the
+ * bytes so the caller can attach them as inline parts — many clients do not
+ * display data: URIs. Same targeted string replacement as extractLocalImages.
+ */
+export function extractDataImages(html: string): { html: string; images: DataImageRef[] } {
+  const images: DataImageRef[] = [];
+  const cidByData = new Map<string, string>();
+
+  const out = html.replace(
+    /(<img\b[^>]*?\bsrc=)(["'])data:(image\/[a-z0-9.+-]+);base64,([^"']+)\2/gi,
+    (m, pre: string, quote: string, type: string, data: string) => {
+      const mime = type.toLowerCase();
+      const ext = DATA_IMAGE_EXT[mime];
+      if (!ext) return m;
+      const key = `${mime};${data}`;
+      let cid = cidByData.get(key);
+      if (!cid) {
+        const n = images.length + 1;
+        cid = `embedded-${n}@prudii`;
+        cidByData.set(key, cid);
+        images.push({ cid, type: mime, data, name: `image-${n}.${ext}` });
+      }
+      return `${pre}${quote}cid:${cid}${quote}`;
+    }
+  );
+
+  return { html: out, images };
+}
+
 export function decodeFileUrl(src: string): string {
   // The backend writes raw platform paths ("file://C:\..."), but HTML that
   // passed through the editor may come back percent-encoded and with the
