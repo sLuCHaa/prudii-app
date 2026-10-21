@@ -644,7 +644,7 @@ button:focus-visible,
    fonts stay on chrome (labels, buttons, titles). */
 /* Keep in sync with OUTGOING_FONT_STACK in src/lib/outgoingHtml.ts. */
 .compose-writing {
-  font-family: 'Avenir Next', Avenir, Candara, 'Segoe UI', 'Trebuchet MS', Verdana, sans-serif;
+  font-family: Bahnschrift, 'Avenir Next', Avenir, 'Segoe UI', sans-serif;
 }
 
 /* The body must render exactly what inlineComposeStyles stamps onto the

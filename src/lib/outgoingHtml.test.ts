@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { fillEmptyParagraphs, inlineComposeStyles, composeTypography, extractLocalImages, dropImagesByCid, decodeFileUrl, OUTGOING_FONT_STACK, COMPOSE_FONTS, DEFAULT_COMPOSE_FONT_SIZE } from "./outgoingHtml";
 
 const DEFAULT_TYPO = composeTypography("prudii", DEFAULT_COMPOSE_FONT_SIZE);
@@ -43,6 +45,22 @@ describe("inlineComposeStyles", () => {
   it("leaves other tags and quoted markup untouched", () => {
     const html = '<div>X</div><blockquote cite="a">Y</blockquote><img src="data:image/png;base64,AAA">';
     expect(inlineComposeStyles(html, DEFAULT_TYPO)).toBe(html);
+  });
+});
+
+describe("Prudii default font", () => {
+  it("leads with Bahnschrift, which ships with Windows, so Outlook there renders it", () => {
+    expect(OUTGOING_FONT_STACK.split(",")[0].trim()).toBe("Bahnschrift");
+  });
+
+  it("falls back to Avenir Next on Apple platforms, which have no Bahnschrift", () => {
+    expect(OUTGOING_FONT_STACK.split(",")[1].trim()).toBe("'Avenir Next'");
+  });
+
+  it("gives subject and recipients the same font as the mail body", () => {
+    const css = readFileSync(resolve(__dirname, "../index.css"), "utf8");
+    const block = css.match(/\.compose-writing \{([^}]*)\}/)![1];
+    expect(block).toContain(`font-family: ${OUTGOING_FONT_STACK};`);
   });
 });
 

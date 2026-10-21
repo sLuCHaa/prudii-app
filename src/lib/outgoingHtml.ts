@@ -32,12 +32,12 @@ export function fillEmptyParagraphs(html: string): string {
 /**
  * Font stack for outgoing mail — distinctive but degrading gracefully: only
  * fonts the recipient has installed can render, so every entry is an OS-bundled
- * face (Avenir Next on Apple platforms, Candara/Segoe on Windows). Keep in sync
- * with `.compose-writing` in index.css, which gives subject and recipients the
- * default body font.
+ * face (Bahnschrift on Windows 10 and later; Apple platforms lack it and get
+ * Avenir Next). Keep in sync with `.compose-writing` in index.css, which gives
+ * subject and recipients the default body font.
  */
 export const OUTGOING_FONT_STACK =
-  "'Avenir Next', Avenir, Candara, 'Segoe UI', 'Trebuchet MS', Verdana, sans-serif";
+  "Bahnschrift, 'Avenir Next', Avenir, 'Segoe UI', sans-serif";
 
 /**
  * Fonts the user can pick for outgoing mail. Apart from the Prudii default,
