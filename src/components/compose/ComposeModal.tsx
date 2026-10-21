@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { EditorContent } from "@tiptap/react";
 import TiptapImage from "@tiptap/extension-image";
 import { useRichTextEditor } from "../editor/RichTextEditor";
-import { setComposeBody } from "./composeBody";
+import { hasOwnText, setComposeBody } from "./composeBody";
 import { needsAttachmentReminder } from "./attachmentReminder";
 import { EditorToolbar } from "../editor/EditorToolbar";
 import { useTranslation } from "react-i18next";
@@ -916,8 +916,18 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     }
   }
 
-  function handleUseAiReply(text: string) {
+  // A template or AI draft replaces the whole body, so it never lands silently on what the user wrote.
+  function confirmReplaceText() {
+    return dialog.confirm({
+      title: t("compose.replaceTextTitle"),
+      message: t("compose.replaceTextMessage"),
+      confirmLabel: t("compose.replaceText"),
+    });
+  }
+
+  async function handleUseAiReply(text: string) {
     if (!editor) return;
+    if (hasOwnText(editor) && !(await confirmReplaceText())) return;
     const aiHtml = `<p>${text.replace(/\n/g, '<br>')}</p>`;
     const signature = getSignatureHtml(fromAccountId, true);
     editor.commands.setContent(aiHtml + signature);
@@ -925,8 +935,11 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     editor.commands.focus("start");
   }
 
-  function handleApplyTemplate(template: EmailTemplate) {
+  async function handleApplyTemplate(template: EmailTemplate) {
     if (!editor) return;
+    setShowTemplateMenu(false);
+    const replacesSubject = !!template.subject && !!subject.trim() && subject.trim() !== template.subject.trim();
+    if ((hasOwnText(editor) || replacesSubject) && !(await confirmReplaceText())) return;
     if (template.subject) setSubject(template.subject);
     // Prefer body_text (the panel's source of truth), escaped here — templates
     // saved before the escaping fix carry broken unescaped body_html.
@@ -935,7 +948,6 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       : template.body_html;
     const signature = getSignatureHtml(fromAccountId, false);
     editor.commands.setContent(bodyContent + signature);
-    setShowTemplateMenu(false);
     editor.commands.focus("start");
   }
 

@@ -2,7 +2,8 @@ import { describe, it, expect, afterEach } from "vitest";
 import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
-import { setComposeBody } from "./composeBody";
+import TiptapImage from "@tiptap/extension-image";
+import { hasOwnText, setComposeBody } from "./composeBody";
 import { SignatureNode } from "./signatureNode";
 
 const SIGNED = `<p></p><div data-type="signature"><p><strong>Patrick</strong></p><p><a href="https://www.messtex.de">www.messtex.de</a></p></div>`;
@@ -13,11 +14,31 @@ afterEach(() => editor?.destroy());
 
 function make() {
   editor = new Editor({
-    extensions: [StarterKit.configure({ heading: false, link: false, underline: false }), Link.configure({ openOnClick: false }), SignatureNode],
+    extensions: [StarterKit.configure({ heading: false, link: false, underline: false }), Link.configure({ openOnClick: false }), TiptapImage.configure({ inline: true, allowBase64: true }), SignatureNode],
     content: "",
   });
   return editor;
 }
+
+describe("hasOwnText", () => {
+  it("does not count the signature or empty lines", () => {
+    const e = make();
+    setComposeBody(e, SIGNED);
+    expect(hasOwnText(e)).toBe(false);
+  });
+
+  it("counts text written above the signature", () => {
+    const e = make();
+    setComposeBody(e, `<p>Hallo Anna</p>${SIGNED}`);
+    expect(hasOwnText(e)).toBe(true);
+  });
+
+  it("counts an image the user put in", () => {
+    const e = make();
+    setComposeBody(e, `<p><img src="data:image/png;base64,iVBORw0KGgo="></p>${SIGNED}`);
+    expect(hasOwnText(e)).toBe(true);
+  });
+});
 
 describe("setComposeBody", () => {
   it("leaves the cursor in the empty first line, not in the signature's trailing link", () => {
