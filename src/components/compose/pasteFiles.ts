@@ -22,6 +22,13 @@ export function displayWidth(pixelWidth: number, devicePixelRatio: number): numb
   return Math.min(640, Math.round(pixelWidth / devicePixelRatio));
 }
 
+// A browser's "Copy image" adds HTML holding only the <img>; that is no text to keep.
+export function clipboardHasText(html: string, plain: string): boolean {
+  if (plain.trim() !== "") return true;
+  if (html.trim() === "") return false;
+  return (new DOMParser().parseFromString(html, "text/html").body.textContent ?? "").trim() !== "";
+}
+
 // Office apps put a picture of the selection next to the text; the text must win.
 export function shouldTakeOverPaste(sorted: SortedPaste, hasText: boolean): boolean {
   if (sorted.attachments.length > 0) return true;
@@ -44,8 +51,7 @@ export const FilePaste = Extension.create<{ onPaste: (files: SortedPaste) => voi
             const data = event.clipboardData;
             if (!data || data.files.length === 0) return false;
             const sorted = sortPastedFiles(Array.from(data.files));
-            const hasText =
-              data.getData("text/html").trim() !== "" || data.getData("text/plain").trim() !== "";
+            const hasText = clipboardHasText(data.getData("text/html"), data.getData("text/plain"));
             if (!shouldTakeOverPaste(sorted, hasText)) return false;
             event.preventDefault();
             onPaste(sorted);

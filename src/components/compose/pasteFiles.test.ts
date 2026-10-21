@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { displayWidth, shouldTakeOverPaste, sortPastedFiles } from "./pasteFiles";
+import { clipboardHasText, displayWidth, shouldTakeOverPaste, sortPastedFiles } from "./pasteFiles";
 
 const file = (name: string, type: string) => new File([], name, { type });
 
@@ -55,5 +55,22 @@ describe("shouldTakeOverPaste", () => {
 
   it("ignores an empty clipboard", () => {
     expect(shouldTakeOverPaste({ inline: [], attachments: [] }, false)).toBe(false);
+  });
+});
+
+describe("clipboardHasText", () => {
+  it("counts Office HTML with text", () => {
+    const office = `<html><head><style>p{margin:0}</style></head><body><!--StartFragment--><p class=MsoNormal>Umsatz Q3</p><!--EndFragment--></body></html>`;
+    expect(clipboardHasText(office, "")).toBe(true);
+  });
+
+  it("does not count HTML that only wraps the copied image", () => {
+    expect(clipboardHasText(`<meta charset="utf-8"><img src="https://x/y.png" alt="">`, "")).toBe(false);
+    expect(clipboardHasText(`<html><body><!--StartFragment--><img src="https://x/y.png">&nbsp;<!--EndFragment--></body></html>`, "")).toBe(false);
+  });
+
+  it("counts plain text and nothing else", () => {
+    expect(clipboardHasText("", "Hallo")).toBe(true);
+    expect(clipboardHasText("", "  \n")).toBe(false);
   });
 });
