@@ -45,6 +45,7 @@ import { ComposePreview, type ComposePreviewData } from "./ComposePreview";
 import type { Mail, SendMailRequest, SendAttachment, Attachment, Account, AppSettings } from "../../types";
 import { formatFileSize } from "../../lib/fileSize";
 import { prepareImage } from "../../lib/imagePrep";
+import { limitConcurrency } from "../../lib/limitConcurrency";
 import { FilePaste, displayWidth } from "./pasteFiles";
 import type { SortedPaste } from "./pasteFiles";
 import {
@@ -54,6 +55,9 @@ import {
   withPrepared,
   type ImageNotes,
 } from "./attachmentImages";
+
+// A 12 MP photo takes 100+ MB while it is decoded and encoded; a batch must not do them all at once.
+const imageQueue = limitConcurrency(2);
 
 interface AttachmentFile extends ImageNotes {
   id: string;
@@ -558,8 +562,11 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   });
   pasteRef.current = ({ inline, attachments: pasted }) => {
     if (pasted.length > 0) addFiles(pasted);
+    let inserted = Promise.resolve();
     for (const file of inline) {
-      void prepareImage(file).then((p) => {
+      const prepared = imageQueue(() => prepareImage(file)).catch(() => null);
+      inserted = inserted.then(async () => {
+        const p = await prepared;
         // Width 0: the webview could not decode it, so it would show as a broken image in the text.
         if (!p || !p.width || !editor) {
           addFiles([file]);
@@ -1103,7 +1110,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       }
 
       const isImage = file.type.startsWith("image/");
-      (isImage ? prepareImage(file) : Promise.resolve(null))
+      (isImage ? imageQueue(() => prepareImage(file)) : Promise.resolve(null))
         .then(async (prepared) => {
           const finalSize = prepared ? prepared.size : file.size;
           if (finalSize > MAX_ATTACHMENT_BYTES) {
