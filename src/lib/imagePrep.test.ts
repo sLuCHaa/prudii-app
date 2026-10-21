@@ -12,12 +12,16 @@ describe("planImage", () => {
   });
   it("re-encodes a turned photo at 92 % without shrinking", () => {
     expect(planImage({ type: "image/jpeg", size: 4e5, width: 1600, height: 1200, orientation: 6 }))
-      .toEqual({ reencode: true, maxEdge: 2048, outputType: "image/jpeg", quality: 0.92 });
+      .toEqual({ reencode: true, maxEdge: Infinity, outputType: "image/jpeg", quality: 0.92 });
   });
   it("keeps PNG as PNG and shrinks it only by edge", () => {
     expect(planImage({ type: "image/png", size: 3e6, width: 1920, height: 1080, orientation: 1 })?.reencode).toBe(false);
     expect(planImage({ type: "image/png", size: 3e6, width: 3840, height: 2160, orientation: 1 }))
       .toMatchObject({ reencode: true, outputType: "image/png" });
+  });
+  it("converts small WebP without shrinking", () => {
+    expect(planImage({ type: "image/webp", size: 3e5, width: 800, height: 600, orientation: 1 }))
+      .toEqual({ reencode: true, maxEdge: Infinity, outputType: "image/jpeg", quality: 0.92 });
   });
   it("turns WebP and HEIC into JPEG and leaves GIF alone", () => {
     expect(planImage({ type: "image/webp", size: 3e5, width: 800, height: 600, orientation: 1 })).toMatchObject({ reencode: true, outputType: "image/jpeg" });

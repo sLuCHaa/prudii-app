@@ -43,7 +43,7 @@ export function planImage(input: {
   const tooBig = longEdge > SHRINK_EDGE || input.size > SHRINK_BYTES;
   if (type === "image/png") {
     const reencode = longEdge > SHRINK_EDGE;
-    return { reencode, maxEdge: TARGET_EDGE, outputType: "image/png", quality: FULL_QUALITY };
+    return { reencode, maxEdge: reencode ? TARGET_EDGE : Infinity, outputType: "image/png", quality: FULL_QUALITY };
   }
   if (type === "image/jpeg") {
     if (tooBig) {
@@ -51,7 +51,7 @@ export function planImage(input: {
     }
     return {
       reencode: input.orientation > 1,
-      maxEdge: TARGET_EDGE,
+      maxEdge: Infinity,
       outputType: "image/jpeg",
       quality: FULL_QUALITY,
     };
@@ -59,7 +59,7 @@ export function planImage(input: {
   if (type === "image/webp" || type === "image/heic" || type === "image/heif") {
     return {
       reencode: true,
-      maxEdge: TARGET_EDGE,
+      maxEdge: tooBig ? TARGET_EDGE : Infinity,
       outputType: "image/jpeg",
       quality: tooBig ? SHRINK_QUALITY : FULL_QUALITY,
     };
@@ -163,42 +163,46 @@ export async function prepareImage(file: File): Promise<PreparedImage | null> {
       if (!plan.reencode && strippedClean) return fromStripped();
 
       const quality = plan.reencode ? plan.quality : FULL_QUALITY;
-      const out = await encode(bitmap, plan.maxEdge, plan.outputType, quality);
-      if (strippedClean && orientation === 1 && out.size >= (stripped as Uint8Array).length) {
-        return fromStripped();
-      }
-
-      const shrunk = out.scaled || quality === SHRINK_QUALITY;
-      let original: PreparedImage["original"] = null;
-      if (shrunk) {
-        try {
-          if (strippedClean && orientation === 1) {
-            original = {
-              data: bytesToBase64(stripped as Uint8Array),
-              type,
-              name: file.name,
-              size: (stripped as Uint8Array).length,
-            };
-          } else {
-            const full = await encode(bitmap, Infinity, plan.outputType, FULL_QUALITY);
-            original = { data: full.data, type: plan.outputType, name: outputName, size: full.size };
-          }
-        } catch {
-          original = null;
+      const maxEdge = plan.reencode ? plan.maxEdge : Infinity;
+      try {
+        const out = await encode(bitmap, maxEdge, plan.outputType, quality);
+        if (strippedClean && orientation === 1 && out.size >= (stripped as Uint8Array).length) {
+          return fromStripped();
         }
-      }
 
-      return {
-        data: out.data,
-        type: plan.outputType,
-        name: outputName,
-        size: out.size,
-        width: out.width,
-        height: out.height,
-        locationRemoved,
-        shrunkFrom: shrunk ? file.size : null,
-        original,
-      };
+        let original: PreparedImage["original"] = null;
+        if (out.scaled) {
+          try {
+            if (strippedClean && orientation === 1) {
+              original = {
+                data: bytesToBase64(stripped as Uint8Array),
+                type,
+                name: file.name,
+                size: (stripped as Uint8Array).length,
+              };
+            } else {
+              const full = await encode(bitmap, Infinity, plan.outputType, FULL_QUALITY);
+              original = { data: full.data, type: plan.outputType, name: outputName, size: full.size };
+            }
+          } catch {
+            original = null;
+          }
+        }
+
+        return {
+          data: out.data,
+          type: plan.outputType,
+          name: outputName,
+          size: out.size,
+          width: out.width,
+          height: out.height,
+          locationRemoved,
+          shrunkFrom: out.scaled ? file.size : null,
+          original,
+        };
+      } catch {
+        return strippedClean ? fromStripped() : null;
+      }
     } finally {
       bitmap.close();
     }
