@@ -45,6 +45,8 @@ import { ComposePreview, type ComposePreviewData } from "./ComposePreview";
 import type { Mail, SendMailRequest, SendAttachment, Attachment, Account, AppSettings } from "../../types";
 import { formatFileSize } from "../../lib/fileSize";
 import { prepareImage } from "../../lib/imagePrep";
+import { FilePaste, displayWidth } from "./pasteFiles";
+import type { SortedPaste } from "./pasteFiles";
 import {
   MAX_ATTACHMENT_BYTES,
   toOriginal,
@@ -537,11 +539,32 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
 
   // Headless: EditorToolbar/EditorContent are rendered at their own spots below
   // since AI-reply suggestions sit between them in this layout.
+  const pasteRef = useRef<(files: SortedPaste) => void>(() => {});
   const editor = useRichTextEditor({
     content: "",
     placeholder: i18n.t("compose.writeMessage"),
-    extraExtensions: [TiptapImage.configure({ inline: true, allowBase64: true }), SignatureNode],
+    extraExtensions: [
+      TiptapImage.configure({ inline: true, allowBase64: true }),
+      SignatureNode,
+      FilePaste.configure({ onPaste: (f) => pasteRef.current(f) }),
+    ],
   });
+  pasteRef.current = ({ inline, attachments: pasted }) => {
+    if (pasted.length > 0) addFiles(pasted);
+    for (const file of inline) {
+      void prepareImage(file).then((p) => {
+        if (!p || !editor) {
+          addFiles([file]);
+          return;
+        }
+        editor
+          .chain()
+          .focus()
+          .setImage({ src: `data:${p.type};base64,${p.data}`, width: displayWidth(p.width, window.devicePixelRatio) })
+          .run();
+      });
+    }
+  };
 
   // ── Autosave: crash/quit safety net ──────────────────────────────────────
   // Snapshots the whole draft into SQLite keyed by this window's label; a
