@@ -44,9 +44,18 @@ import { RecipientInput, type RecipientInputHandle } from "./RecipientInput";
 import { ComposePreview, type ComposePreviewData } from "./ComposePreview";
 import type { Mail, SendMailRequest, SendAttachment, Attachment, Account, AppSettings } from "../../types";
 import { formatFileSize } from "../../lib/fileSize";
+import { prepareImage } from "../../lib/imagePrep";
+import {
+  MAX_ATTACHMENT_BYTES,
+  toOriginal,
+  tooLargeToRead,
+  withPrepared,
+  type ImageNotes,
+} from "./attachmentImages";
 
-interface AttachmentFile {
+interface AttachmentFile extends ImageNotes {
   id: string;
+  source?: { name: string; size: number }; // as picked, for the duplicate check
   name: string;
   size: number;
   type: string;
@@ -1007,7 +1016,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
 
   function addFiles(files: FileList | File[]) {
     Array.from(files).forEach((file) => {
-      if (file.size > 25 * 1024 * 1024) {
+      if (tooLargeToRead(file)) {
         setSendError(t("compose.fileTooLarge", { name: file.name }));
         addToast("error", t("compose.fileTooLarge", { name: file.name }));
         return;
@@ -1021,7 +1030,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       // the updater, where `prev` is the current list — reading `attachments` from the
       // closure misses files added earlier in this same batch.
       setAttachments((prev) => {
-        if (prev.some((a) => a.name === file.name && a.size === file.size)) {
+        if (prev.some((a) => (a.source?.name ?? a.name) === file.name && (a.source?.size ?? a.size) === file.size)) {
           isDuplicate = true;
           return prev;
         }
@@ -1034,6 +1043,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
             type: file.type || "application/octet-stream",
             data: "",
             status: "loading",
+            source: { name: file.name, size: file.size },
           },
         ];
       });
@@ -1043,10 +1053,23 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         return;
       }
 
-      readFileAsBase64(file)
-        .then((base64) => {
+      const isImage = file.type.startsWith("image/");
+      (isImage ? prepareImage(file) : Promise.resolve(null))
+        .then(async (prepared) => {
+          const base64 = prepared ? null : await readFileAsBase64(file);
+          const finalSize = prepared ? prepared.size : file.size;
+          if (finalSize > MAX_ATTACHMENT_BYTES) {
+            setAttachments((prev) => prev.filter((a) => a.id !== id));
+            setSendError(t("compose.fileTooLarge", { name: file.name }));
+            addToast("error", t("compose.fileTooLarge", { name: file.name }));
+            return;
+          }
           setAttachments((prev) =>
-            prev.map((a) => (a.id === id ? { ...a, data: base64, status: "ready" as const } : a)),
+            prev.map((a) => {
+              if (a.id !== id) return a;
+              if (prepared) return { ...withPrepared(a, prepared), status: "ready" as const };
+              return { ...a, data: base64 ?? "", status: "ready" as const };
+            }),
           );
         })
         .catch((err) => {
@@ -1774,6 +1797,27 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
                             ? t("compose.attachmentLoading")
                             : formatFileSize(att.size)}
                       </span>
+                      {!failed && !loading && att.shrunkFrom != null && (
+                        <span className="text-[11px] text-text-tertiary">
+                          {t("compose.imageShrunk", {
+                            from: formatFileSize(att.shrunkFrom),
+                            to: formatFileSize(att.size),
+                          })}
+                        </span>
+                      )}
+                      {!failed && !loading && att.locationRemoved && (
+                        <span className="text-[11px] text-text-tertiary">{t("compose.locationRemoved")}</span>
+                      )}
+                      {!failed && !loading && att.original && (
+                        <button
+                          onClick={() =>
+                            setAttachments((prev) => prev.map((a) => (a.id === att.id ? toOriginal(a) : a)))
+                          }
+                          className="text-[11px] text-accent hover:underline"
+                        >
+                          {t("compose.sendOriginal")}
+                        </button>
+                      )}
                     </div>
                   );
                 })}
