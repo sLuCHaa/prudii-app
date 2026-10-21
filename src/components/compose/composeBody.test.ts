@@ -1,16 +1,9 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { Editor, Node } from "@tiptap/core";
+import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import { setComposeBody } from "./composeBody";
-
-const SignatureNode = Node.create({
-  name: "signature",
-  group: "block",
-  content: "block*",
-  parseHTML() { return [{ tag: 'div[data-type="signature"]' }]; },
-  renderHTML() { return ["div", { "data-type": "signature" }, 0]; },
-});
+import { SignatureNode } from "./signatureNode";
 
 const SIGNED = `<p></p><div data-type="signature"><p><strong>Patrick</strong></p><p><a href="https://www.messtex.de">www.messtex.de</a></p></div>`;
 

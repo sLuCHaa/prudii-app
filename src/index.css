@@ -734,13 +734,17 @@ button:focus-visible,
   margin: 0;
 }
 
-/* Signature block — visually set apart from the message body so it's clear
-   where the signature begins. The node renders as <div data-type="signature">. */
+/* Signature block — the same short accent line the sent mail carries
+   (addSignatureDivider). The node renders as <div data-type="signature">. */
 .compose-editor .tiptap [data-type="signature"] {
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid var(--c-border);
   color: var(--c-text-secondary);
+}
+.compose-editor .tiptap [data-type="signature"]::before {
+  content: "";
+  display: block;
+  width: 48px;
+  margin: 20px 0 14px;
+  border-top: 2px solid var(--c-accent);
 }
 .compose-editor .tiptap [data-type="signature"] > :first-child {
   margin-top: 0;

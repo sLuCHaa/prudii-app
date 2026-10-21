@@ -9,7 +9,6 @@ import { X, Paperclip, Trash2, Send, File, FileText, Image, Film, Music, FileCod
 import { motion, AnimatePresence } from "motion/react";
 import { EditorContent } from "@tiptap/react";
 import TiptapImage from "@tiptap/extension-image";
-import { Node } from "@tiptap/core";
 import { useRichTextEditor } from "../editor/RichTextEditor";
 import { setComposeBody } from "./composeBody";
 import { needsAttachmentReminder } from "./attachmentReminder";
@@ -33,7 +32,9 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AiRepliesEvent, EmailTemplate, ReplySuggestion } from "../../types";
 import { escapeHtml, restoreSanitizedHtml } from "../../lib/sanitize";
 import { QUOTE_EDIT_ROOT, bodyWithoutQuote, buildQuote, quoteFromHtml, renderQuote, splitQuote, stripQuoteMarker, type ComposeQuote } from "../../lib/composeQuote";
-import { fillEmptyParagraphs, inlineComposeStyles, composeTypography, extractLocalImages, dropImagesByCid } from "../../lib/outgoingHtml";
+import { fillEmptyParagraphs, inlineComposeStyles, addSignatureDivider, composeTypography, extractLocalImages, dropImagesByCid } from "../../lib/outgoingHtml";
+import { currentAccentHex } from "../../lib/accents";
+import { SignatureNode } from "./signatureNode";
 import { resolveInlineImagesInHtml } from "../../lib/inlineImages";
 import { stripMmlTags } from "../../lib/missingParts";
 import { QuoteCard } from "./QuoteCard";
@@ -95,19 +96,6 @@ function getFileColor(mimeType: string, filename: string) {
 
   return "text-text-tertiary";
 }
-
-// Custom TipTap node to preserve signature wrapper for find/replace on account change
-const SignatureNode = Node.create({
-  name: "signature",
-  group: "block",
-  content: "block*",
-  parseHTML() {
-    return [{ tag: 'div[data-type="signature"]' }];
-  },
-  renderHTML() {
-    return ["div", { "data-type": "signature" }, 0];
-  },
-});
 
 export type ComposeMode = "new" | "reply" | "replyAll" | "forward" | "draft";
 
@@ -646,7 +634,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       const bodyContent = (doc.body?.innerHTML ?? account.signature_html).trim();
       return `<div data-type="signature">${bodyContent}</div>`;
     } else if (account.signature_text) {
-      return `<div data-type="signature"><p>--<br>${escapeHtml(account.signature_text).replace(/\n/g, "<br>")}</p></div>`;
+      return `<div data-type="signature"><p>${escapeHtml(account.signature_text).replace(/\n/g, "<br>")}</p></div>`;
     }
     return "";
   }, [accounts]);
@@ -1150,7 +1138,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     // Only on the way out: the editor writes a blank line as `<p></p>`, which
     // collapses to nothing when a mail client renders it — and its paragraph
     // spacing/font live in our stylesheet, which does not travel with the mail.
-    const editorHtml = inlineComposeStyles(fillEmptyParagraphs(editor.getHTML()), typography);
+    const editorHtml = addSignatureDivider(inlineComposeStyles(fillEmptyParagraphs(editor.getHTML()), typography), currentAccentHex());
     const editorText = editor.getText({ blockSeparator: '\n\n' });
     const bodyHtml = editorHtml + quotedHtml;
     const bodyText = editorText + (quotedHtml ? "\n\n" + quotedHtml.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim() : "");

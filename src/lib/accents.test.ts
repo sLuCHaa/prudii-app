@@ -1,5 +1,18 @@
-import { describe, it, expect } from "vitest";
-import { ACCENT_OPTIONS, DEFAULT_ACCENT_HEX, effectiveAccentHex, isAccentHex } from "./accents";
+import { describe, it, expect, afterEach } from "vitest";
+import { ACCENT_OPTIONS, DEFAULT_ACCENT_HEX, currentAccentHex, effectiveAccentHex, isAccentHex } from "./accents";
+
+describe("currentAccentHex", () => {
+  afterEach(() => document.documentElement.style.removeProperty("--c-accent"));
+
+  it("reads the accent the window shows", () => {
+    document.documentElement.style.setProperty("--c-accent", "#10b981");
+    expect(currentAccentHex()).toBe("#10b981");
+  });
+
+  it("falls back to the default accent without a usable value", () => {
+    expect(currentAccentHex()).toBe(DEFAULT_ACCENT_HEX);
+  });
+});
 
 describe("ACCENT_OPTIONS", () => {
   it("lists the nine palette colours plus system, each with an i18n key", () => {

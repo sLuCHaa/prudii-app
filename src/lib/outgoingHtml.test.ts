@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { fillEmptyParagraphs, inlineComposeStyles, composeTypography, extractLocalImages, dropImagesByCid, decodeFileUrl, OUTGOING_FONT_STACK, COMPOSE_FONTS, DEFAULT_COMPOSE_FONT_SIZE } from "./outgoingHtml";
+import { fillEmptyParagraphs, inlineComposeStyles, addSignatureDivider, composeTypography, extractLocalImages, dropImagesByCid, decodeFileUrl, OUTGOING_FONT_STACK, COMPOSE_FONTS, DEFAULT_COMPOSE_FONT_SIZE } from "./outgoingHtml";
 
 const DEFAULT_TYPO = composeTypography("prudii", DEFAULT_COMPOSE_FONT_SIZE);
 
@@ -45,6 +45,37 @@ describe("inlineComposeStyles", () => {
   it("leaves other tags and quoted markup untouched", () => {
     const html = '<div>X</div><blockquote cite="a">Y</blockquote><img src="data:image/png;base64,AAA">';
     expect(inlineComposeStyles(html, DEFAULT_TYPO)).toBe(html);
+  });
+});
+
+describe("addSignatureDivider", () => {
+  const SIGNED = `<p>Hallo</p><div data-type="signature"><p>Patrick</p></div>`;
+
+  it("puts a short line in the accent colour above the signature", () => {
+    const out = addSignatureDivider(SIGNED, "#10b981");
+    const signature = out.slice(out.indexOf('<div data-type="signature">'));
+    expect(signature.indexOf("data-prudii-divider")).toBeGreaterThan(0);
+    expect(signature.indexOf("data-prudii-divider")).toBeLessThan(signature.indexOf("Patrick"));
+    expect(out).toContain('width="48"');
+    expect(out).toContain('bgcolor="#10b981"');
+  });
+
+  it("leaves mail without a signature alone", () => {
+    expect(addSignatureDivider("<p>Hallo</p>", "#10b981")).toBe("<p>Hallo</p>");
+  });
+
+  it("adds nothing above an emptied signature", () => {
+    const html = `<p>Hallo</p><div data-type="signature"><p><br></p></div>`;
+    expect(addSignatureDivider(html, "#10b981")).toBe(html);
+  });
+
+  it("sets apart a signature that is only a logo", () => {
+    expect(addSignatureDivider(`<div data-type="signature"><p><img src="cid:logo"></p></div>`, "#10b981")).toContain("data-prudii-divider");
+  });
+
+  it("is idempotent", () => {
+    const once = addSignatureDivider(SIGNED, "#10b981");
+    expect(addSignatureDivider(once, "#10b981")).toBe(once);
   });
 });
 

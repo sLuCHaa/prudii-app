@@ -26,6 +26,12 @@ export function isAccentHex(s: unknown): s is string {
   return typeof s === "string" && /^#[0-9a-fA-F]{6}$/.test(s);
 }
 
+/** The accent this window shows; the system accent arrives asynchronously, so it is read back from CSS. */
+export function currentAccentHex(): string {
+  const hex = getComputedStyle(document.documentElement).getPropertyValue("--c-accent").trim();
+  return isAccentHex(hex) ? hex : DEFAULT_ACCENT_HEX;
+}
+
 export function effectiveAccentHex(accent: AccentColor, systemHex: string | null): string {
   if (accent === "system") return isAccentHex(systemHex) ? systemHex : DEFAULT_ACCENT_HEX;
   return ACCENT_OPTIONS.find((o) => o.id === accent)?.hex ?? DEFAULT_ACCENT_HEX;

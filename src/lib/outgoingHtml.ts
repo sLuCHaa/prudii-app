@@ -108,6 +108,33 @@ export function inlineComposeStyles(html: string, typography: ComposeTypography)
   });
 }
 
+const SIGNATURE_OPEN = '<div data-type="signature">';
+const DIVIDER_MARK = "data-prudii-divider";
+
+/**
+ * Set the signature apart with a short line in the sender's accent colour.
+ *
+ * A table, because Outlook on Windows ignores `width` on a div and would
+ * stretch the line across the mail; each cell carries its own text size so
+ * Outlook keeps it at its height. Reopening a draft drops the line again
+ * (SignatureNode), so it never piles up.
+ */
+export function addSignatureDivider(html: string, color: string): string {
+  const start = html.indexOf(SIGNATURE_OPEN);
+  if (start < 0) return html;
+  const contentStart = start + SIGNATURE_OPEN.length;
+  const end = html.indexOf("</div>", contentStart);
+  const content = html.slice(contentStart, end < 0 ? html.length : end);
+  if (content.includes(DIVIDER_MARK)) return html;
+  const visible = /<img\b/i.test(content) || content.replace(/<[^>]*>/g, "").replace(/&nbsp;|\s/g, "") !== "";
+  if (!visible) return html;
+  const spacer = (px: number) =>
+    `<tr><td height="${px}" style="height:${px}px;font-size:${px}px;line-height:${px}px;mso-line-height-rule:exactly">&nbsp;</td></tr>`;
+  const line = `<tr><td width="48" height="2" bgcolor="${color}" style="width:48px;height:2px;background-color:${color};font-size:2px;line-height:2px;mso-line-height-rule:exactly">&nbsp;</td></tr>`;
+  const divider = `<table ${DIVIDER_MARK} role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse">${spacer(20)}${line}${spacer(14)}</table>`;
+  return html.slice(0, contentStart) + divider + html.slice(contentStart);
+}
+
 export interface LocalImageRef {
   /** Absolute local path of the stored attachment file. */
   path: string;
