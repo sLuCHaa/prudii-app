@@ -122,12 +122,48 @@ function renameFor(name: string, type: string, outputType: string): string {
   return `${dot > 0 ? name.slice(0, dot) : name}.jpg`;
 }
 
+async function decode(file: File): Promise<ImageBitmap | null> {
+  try {
+    return await createImageBitmap(file, { imageOrientation: "from-image" });
+  } catch (err) {
+    // Older WebKit rejects the options bag itself rather than the image.
+    if (!(err instanceof TypeError)) return null;
+  }
+  try {
+    return await createImageBitmap(file);
+  } catch {
+    return null;
+  }
+}
+
+function strip(bytes: Uint8Array, type: string): Uint8Array | null {
+  if (type === "image/jpeg") return stripJpegMetadata(bytes);
+  if (type === "image/png") return stripPngMetadata(bytes);
+  return null;
+}
+
 export async function prepareImage(file: File): Promise<PreparedImage | null> {
   try {
     const type = file.type.toLowerCase();
     const bytes = new Uint8Array(await file.arrayBuffer());
     const locationRemoved = hasGpsData(bytes);
-    const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+    const stripped = strip(bytes, type);
+    const strippedClean = stripped !== null && !hasGpsData(stripped);
+
+    const fromStripped = (width: number, height: number): PreparedImage => ({
+      data: bytesToBase64(stripped as Uint8Array),
+      type,
+      name: file.name,
+      size: (stripped as Uint8Array).length,
+      width,
+      height,
+      locationRemoved,
+      shrunkFrom: null,
+      original: null,
+    });
+
+    const bitmap = await decode(file);
+    if (!bitmap) return strippedClean ? fromStripped(0, 0) : null;
     try {
       const orientation = type === "image/jpeg" ? jpegOrientation(bytes) : 1;
       const plan = planImage({
@@ -139,35 +175,16 @@ export async function prepareImage(file: File): Promise<PreparedImage | null> {
       });
       if (!plan) return null;
 
-      const isLossless = type === "image/jpeg" || type === "image/png";
-      const stripped = !isLossless
-        ? null
-        : type === "image/jpeg"
-          ? stripJpegMetadata(bytes)
-          : stripPngMetadata(bytes);
-      const strippedClean = stripped !== null && !hasGpsData(stripped);
       const outputName = renameFor(file.name, type, plan.outputType);
 
-      const fromStripped = (): PreparedImage => ({
-        data: bytesToBase64(stripped as Uint8Array),
-        type,
-        name: file.name,
-        size: (stripped as Uint8Array).length,
-        width: bitmap.width,
-        height: bitmap.height,
-        locationRemoved,
-        shrunkFrom: null,
-        original: null,
-      });
-
-      if (!plan.reencode && strippedClean) return fromStripped();
+      if (!plan.reencode && strippedClean) return fromStripped(bitmap.width, bitmap.height);
 
       const quality = plan.reencode ? plan.quality : FULL_QUALITY;
       const maxEdge = plan.reencode ? plan.maxEdge : Infinity;
       try {
         const out = await encode(bitmap, maxEdge, plan.outputType, quality);
         if (strippedClean && orientation === 1 && out.size >= (stripped as Uint8Array).length) {
-          return fromStripped();
+          return fromStripped(bitmap.width, bitmap.height);
         }
 
         let original: PreparedImage["original"] = null;
@@ -201,7 +218,7 @@ export async function prepareImage(file: File): Promise<PreparedImage | null> {
           original,
         };
       } catch {
-        return strippedClean ? fromStripped() : null;
+        return strippedClean ? fromStripped(bitmap.width, bitmap.height) : null;
       }
     } finally {
       bitmap.close();

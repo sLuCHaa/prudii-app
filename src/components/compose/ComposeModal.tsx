@@ -553,7 +553,8 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     if (pasted.length > 0) addFiles(pasted);
     for (const file of inline) {
       void prepareImage(file).then((p) => {
-        if (!p || !editor) {
+        // Width 0: the webview could not decode it, so it would show as a broken image in the text.
+        if (!p || !p.width || !editor) {
           addFiles([file]);
           return;
         }
@@ -1079,7 +1080,6 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       const isImage = file.type.startsWith("image/");
       (isImage ? prepareImage(file) : Promise.resolve(null))
         .then(async (prepared) => {
-          const base64 = prepared ? null : await readFileAsBase64(file);
           const finalSize = prepared ? prepared.size : file.size;
           if (finalSize > MAX_ATTACHMENT_BYTES) {
             setAttachments((prev) => prev.filter((a) => a.id !== id));
@@ -1087,6 +1087,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
             addToast("error", t("compose.fileTooLarge", { name: file.name }));
             return;
           }
+          const base64 = prepared ? null : await readFileAsBase64(file);
           setAttachments((prev) =>
             prev.map((a) => {
               if (a.id !== id) return a;
