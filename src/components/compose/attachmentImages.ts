@@ -31,7 +31,7 @@ export function withPrepared<T extends AttachmentBytes>(att: T, prepared: Prepar
     size: prepared.size,
     locationRemoved: prepared.locationRemoved,
     shrunkFrom: prepared.shrunkFrom,
-    original: prepared.original,
+    original: prepared.original && prepared.original.size <= MAX_ATTACHMENT_BYTES ? prepared.original : null,
   };
 }
 

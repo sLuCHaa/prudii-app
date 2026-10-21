@@ -51,6 +51,18 @@ describe("withPrepared", () => {
   });
 });
 
+describe("withPrepared original limit", () => {
+  const base = { id: "a", data: "", type: "x", name: "x", size: 1 };
+  it("drops an original above the attachment limit", () => {
+    const big = { ...prepared, original: { data: "big", type: "image/jpeg", name: "p.jpg", size: 30e6 } };
+    expect(withPrepared(base, big).original).toBeNull();
+  });
+  it("keeps an original within the limit", () => {
+    const ok = { ...prepared, original: { data: "ok", type: "image/jpeg", name: "p.jpg", size: 10e6 } };
+    expect(withPrepared(base, ok).original).toEqual(ok.original);
+  });
+});
+
 describe("toOriginal", () => {
   it("swaps to the original and drops the shrink notes", () => {
     const att = withPrepared({ id: "a", data: "", type: "x", name: "x", size: 1 }, prepared);
