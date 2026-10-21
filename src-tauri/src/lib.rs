@@ -1075,6 +1075,7 @@ pub fn run() {
             commands::mails::empty_all_trash,
             commands::mails::empty_all_spam,
             commands::mails::search_contacts,
+            commands::mails::contact_domains,
             commands::mails::prefetch_folder,
             commands::mails::unsubscribe_mail,
             commands::mails::toggle_pin,

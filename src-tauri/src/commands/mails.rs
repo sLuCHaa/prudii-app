@@ -3286,6 +3286,13 @@ async fn empty_all_by_type(app: tauri::AppHandle, db: State<'_, Database>, folde
     Ok(total)
 }
 
+/// Domains of all contacts, for the compose window's typo check on recipient domains.
+#[tauri::command(async)]
+pub fn contact_domains(db: State<'_, Database>) -> Result<Vec<crate::models::ContactDomain>, String> {
+    let conn = db.lock_db();
+    crate::contacts::contact_domains(&conn).map_err(|e| e.to_string())
+}
+
 /// Search contacts by name or email from previously seen senders/recipients.
 /// Returns up to 8 matches sorted by frequency.
 #[tauri::command(async)]

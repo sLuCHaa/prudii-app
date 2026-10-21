@@ -176,6 +176,7 @@
     "replaceTextTitle": "Deinen Text ersetzen?",
     "replaceTextMessage": "Das ersetzt alles, was du bisher geschrieben hast.",
     "replaceText": "Ersetzen",
+    "didYouMean": "Meintest du {{domain}}?",
     "saveDraftTitle": "Entwurf speichern?",
     "saveDraftMessage": "Möchtest du diese Nachricht als Entwurf speichern oder verwerfen?",
     "saveDraft": "Als Entwurf speichern",

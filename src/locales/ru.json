@@ -180,6 +180,7 @@
     "replaceTextTitle": "Заменить текст?",
     "replaceTextMessage": "Всё, что вы уже написали, будет заменено.",
     "replaceText": "Заменить",
+    "didYouMean": "Возможно, вы имели в виду {{domain}}?",
     "saveDraftTitle": "Сохранить черновик?",
     "saveDraftMessage": "Хочешь сохранить это письмо как черновик или удалить его?",
     "saveDraft": "Сохранить как черновик",

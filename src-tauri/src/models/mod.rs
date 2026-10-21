@@ -205,6 +205,12 @@ pub struct Contact {
     pub frequency: i64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ContactDomain {
+    pub domain: String,
+    pub frequency: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchResult {
     pub mail_id: String,

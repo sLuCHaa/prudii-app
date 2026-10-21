@@ -175,6 +175,7 @@
     "replaceTextTitle": "替换已写内容？",
     "replaceTextMessage": "这会替换你目前写下的全部内容。",
     "replaceText": "替换",
+    "didYouMean": "你是不是想输入 {{domain}}？",
     "saveDraftTitle": "保存草稿？",
     "saveDraftMessage": "是否要将此邮件保存为草稿或丢弃？",
     "saveDraft": "保存为草稿",

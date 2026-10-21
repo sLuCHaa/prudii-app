@@ -176,6 +176,7 @@
     "replaceTextTitle": "Replace your text?",
     "replaceTextMessage": "This replaces everything you have written so far.",
     "replaceText": "Replace",
+    "didYouMean": "Did you mean {{domain}}?",
     "saveDraftTitle": "Save draft?",
     "saveDraftMessage": "Do you want to save this message as a draft or discard it?",
     "saveDraft": "Save as Draft",

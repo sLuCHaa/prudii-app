@@ -199,6 +199,11 @@ export interface Contact {
   frequency: number;
 }
 
+export interface ContactDomain {
+  domain: string;
+  frequency: number;
+}
+
 export interface SearchResult {
   mail_id: string;
   subject: string;

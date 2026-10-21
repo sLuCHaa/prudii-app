@@ -1,4 +1,24 @@
+use crate::models::ContactDomain;
 use rusqlite::Connection;
+
+/// Every domain the mailbox has exchanged mail with, most frequent first, for the
+/// compose window's typo check on recipient domains.
+pub fn contact_domains(conn: &Connection) -> rusqlite::Result<Vec<ContactDomain>> {
+    let mut stmt = conn.prepare(
+        "SELECT LOWER(SUBSTR(email, INSTR(email, '@') + 1)) AS domain, SUM(frequency) AS total
+         FROM contacts
+         WHERE INSTR(email, '@') > 0
+         GROUP BY domain
+         ORDER BY total DESC, domain",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        Ok(ContactDomain {
+            domain: r.get(0)?,
+            frequency: r.get(1)?,
+        })
+    })?;
+    rows.collect()
+}
 
 /// Fold mail rows that arrived since the last scan into the contacts table.
 ///
@@ -70,4 +90,30 @@ pub fn update_contacts_incremental(conn: &Connection) {
         max,
         t0.elapsed()
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::Database;
+
+    #[test]
+    fn groups_contacts_by_domain_most_frequent_first() {
+        let db = Database::new(std::env::temp_dir().join(format!("prudii-contacts-{}", uuid::Uuid::new_v4()))).unwrap();
+        let conn = db.lock_db();
+        for (account, email, frequency) in [
+            ("a", "anna@messtex.de", 5),
+            ("b", "bernd@Messtex.de", 2),
+            ("a", "info@gmail.com", 3),
+            ("a", "no-address", 9),
+        ] {
+            conn.execute(
+                "INSERT INTO contacts (account_id, email, frequency) VALUES (?1, ?2, ?3)",
+                rusqlite::params![account, email, frequency],
+            )
+            .unwrap();
+        }
+        let domains: Vec<(String, i64)> = contact_domains(&conn).unwrap().into_iter().map(|d| (d.domain, d.frequency)).collect();
+        assert_eq!(domains, vec![("messtex.de".to_string(), 7), ("gmail.com".to_string(), 3)]);
+    }
 }

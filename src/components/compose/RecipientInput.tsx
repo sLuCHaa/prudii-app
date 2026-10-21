@@ -1,10 +1,25 @@
 import { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { X } from "lucide-react";
-import { searchContacts } from "../../lib/tauri";
+import { useTranslation } from "react-i18next";
+import { getContactDomains, searchContacts } from "../../lib/tauri";
 import type { Contact } from "../../types";
 import { SPRING_BOUNCY } from "../motion/tokens";
 import { GradientAvatar } from "../motion/GradientAvatar";
+import { domainOf, suggestDomain, withDomain, type KnownDomains } from "./domainTypo";
+
+// Loaded once per window; the To, Cc and Bcc fields share it.
+let knownDomainsPromise: Promise<KnownDomains> | null = null;
+function loadKnownDomains(): Promise<KnownDomains> {
+  knownDomainsPromise ??= getContactDomains()
+    .then((rows) => ({
+      known: new Set(rows.map((r) => r.domain)),
+      // Only regular correspondents: a one-off sender's domain must not turn a new address into a "typo".
+      candidates: rows.filter((r) => r.frequency >= 3).map((r) => r.domain),
+    }))
+    .catch(() => ({ known: new Set<string>(), candidates: [] }));
+  return knownDomainsPromise;
+}
 
 interface RecipientInputProps {
   recipients: string[];
@@ -41,6 +56,16 @@ export const RecipientInput = forwardRef<RecipientInputHandle, RecipientInputPro
     const m = raw.match(/<([^>]+)>/);
     return (m ? m[1] : raw).trim().toLowerCase();
   };
+
+  const { t } = useTranslation();
+  const [knownDomains, setKnownDomains] = useState<KnownDomains | null>(null);
+  useEffect(() => {
+    let alive = true;
+    loadKnownDomains().then((known) => alive && setKnownDomains(known));
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const [inputValue, setInputValue] = useState("");
   const [suggestions, setSuggestions] = useState<Contact[]>([]);
@@ -148,6 +173,14 @@ export const RecipientInput = forwardRef<RecipientInputHandle, RecipientInputPro
 
   function removeRecipient(index: number) {
     onChange(recipients.filter((_, i) => i !== index));
+    inputRef.current?.focus();
+  }
+
+  function fixDomain(index: number, domain: string) {
+    const fixed = withDomain(recipients[index], domain);
+    const email = emailOf(fixed);
+    const exists = recipients.some((r, i) => i !== index && emailOf(r) === email) || blockedEmails.includes(email);
+    onChange(exists ? recipients.filter((_, i) => i !== index) : recipients.map((r, i) => (i === index ? fixed : r)));
     inputRef.current?.focus();
   }
 
@@ -270,6 +303,8 @@ export const RecipientInput = forwardRef<RecipientInputHandle, RecipientInputPro
             const match = recipient.match(/^(.+?)\s*<(.+?)>$/);
             const display = match ? match[1].trim() : recipient;
             const email = match ? match[2] : recipient;
+            const likelyValid = isLikelyValid(recipient);
+            const suggestion = likelyValid && knownDomains ? suggestDomain(domainOf(recipient), knownDomains) : null;
 
             return (
               <motion.span
@@ -295,11 +330,25 @@ export const RecipientInput = forwardRef<RecipientInputHandle, RecipientInputPro
                   setDraggingRecipient(recipient);
                 }}
                 onDragEnd={() => setDraggingRecipient(null)}
-                className={`inline-flex items-center gap-1 max-w-[240px] px-2 py-0.5 rounded-md bg-accent/15 text-accent text-xs font-medium group ${fieldId ? "cursor-grab" : ""}${isLikelyValid(recipient) ? "" : " ring-1 ring-danger/50 text-danger"}`}
-                title={isLikelyValid(recipient) ? (match ? `${display} <${email}>` : email) : "Invalid email address"}
+                className={`inline-flex items-center gap-1 max-w-[240px] px-2 py-0.5 rounded-md bg-accent/15 text-accent text-xs font-medium group ${fieldId ? "cursor-grab" : ""}${likelyValid ? "" : " ring-1 ring-danger/50 text-danger"}${suggestion ? " ring-1 ring-warning/40" : ""}`}
+                title={likelyValid ? (match ? `${display} <${email}>` : email) : "Invalid email address"}
               >
                 <GradientAvatar email={email} name={display} size={18} />
                 <span className="truncate">{display}</span>
+                {suggestion && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      fixDomain(i, suggestion);
+                    }}
+                    title={t("compose.didYouMean", { domain: suggestion })}
+                    aria-label={t("compose.didYouMean", { domain: suggestion })}
+                    className="shrink-0 px-1 rounded-sm bg-warning/15 text-warning-fg hover:bg-warning/30 transition-colors"
+                  >
+                    {suggestion}?
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={(e) => {

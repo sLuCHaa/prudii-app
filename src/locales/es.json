@@ -176,6 +176,7 @@
     "replaceTextTitle": "¿Reemplazar tu texto?",
     "replaceTextMessage": "Esto reemplaza todo lo que has escrito hasta ahora.",
     "replaceText": "Reemplazar",
+    "didYouMean": "¿Quisiste decir {{domain}}?",
     "saveDraftTitle": "¿Guardar borrador?",
     "saveDraftMessage": "¿Quieres guardar este mensaje como borrador o descartarlo?",
     "saveDraft": "Guardar como borrador",

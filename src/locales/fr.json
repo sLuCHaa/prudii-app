@@ -176,6 +176,7 @@
     "replaceTextTitle": "Remplacer votre texte ?",
     "replaceTextMessage": "Cela remplace tout ce que vous avez écrit jusqu'ici.",
     "replaceText": "Remplacer",
+    "didYouMean": "Vouliez-vous dire {{domain}} ?",
     "saveDraftTitle": "Enregistrer le brouillon ?",
     "saveDraftMessage": "Veux-tu enregistrer ce message comme brouillon ou l'abandonner ?",
     "saveDraft": "Enregistrer comme brouillon",

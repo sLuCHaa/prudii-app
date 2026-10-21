@@ -176,6 +176,7 @@
     "replaceTextTitle": "Substituir o texto?",
     "replaceTextMessage": "Isso substitui tudo o que foi escrito até agora.",
     "replaceText": "Substituir",
+    "didYouMean": "Quis dizer {{domain}}?",
     "saveDraftTitle": "Salvar rascunho?",
     "saveDraftMessage": "Você quer salvar esta mensagem como rascunho ou descartá-la?",
     "saveDraft": "Salvar como Rascunho",
