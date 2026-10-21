@@ -178,6 +178,15 @@ describe("extractDataImages", () => {
     const html = `<img src="https://x/y.png"><img src="cid:a@b"><img src="file:///C:/x.png">`;
     expect(extractDataImages(html)).toEqual({ html, images: [] });
   });
+  it("unwraps a payload that quoted HTML broke across lines", () => {
+    const { html, images } = extractDataImages(`<img src="data:image/png;base64,iVBO\r\n Rw0K\tGgo=">`);
+    expect(html).toBe(`<img src="cid:embedded-1@prudii">`);
+    expect(images).toEqual([{ cid: "embedded-1@prudii", type: "image/png", data: "iVBORw0KGgo=", name: "image-1.png" }]);
+  });
+  it("leaves a payload that is not valid base64 as data:", () => {
+    const html = `<img src="data:image/png;base64,iVBO*w0KGgo="><img src="data:image/png;base64,iVBORw0KGgo"><img src="data:image/png;base64,QR==">`;
+    expect(extractDataImages(html)).toEqual({ html, images: [] });
+  });
 });
 
 describe("dropImagesByCid", () => {

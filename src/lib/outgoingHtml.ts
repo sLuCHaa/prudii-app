@@ -191,6 +191,17 @@ const DATA_IMAGE_EXT: Record<string, string> = {
   "image/webp": "webp",
 };
 
+// The backend decodes strictly, so only canonical base64 may become a part; anything else stays data:.
+function strictBase64(raw: string): string | null {
+  const data = raw.replace(/\s+/g, "");
+  if (data.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) return null;
+  try {
+    return btoa(atob(data)) === data ? data : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Rewrite base64 `data:` image sources to `cid:` references and report the
  * bytes so the caller can attach them as inline parts — many clients do not
@@ -202,10 +213,11 @@ export function extractDataImages(html: string): { html: string; images: DataIma
 
   const out = html.replace(
     /(<img\b[^>]*?\bsrc=)(["'])data:(image\/[a-z0-9.+-]+);base64,([^"']+)\2/gi,
-    (m, pre: string, quote: string, type: string, data: string) => {
+    (m, pre: string, quote: string, type: string, raw: string) => {
       const mime = type.toLowerCase();
       const ext = DATA_IMAGE_EXT[mime];
-      if (!ext) return m;
+      const data = ext ? strictBase64(raw) : null;
+      if (!ext || !data) return m;
       const key = `${mime};${data}`;
       let cid = cidByData.get(key);
       if (!cid) {
