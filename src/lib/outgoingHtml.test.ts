@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { fillEmptyParagraphs, inlineComposeStyles, addSignatureDivider, composeTypography, extractLocalImages, dropImagesByCid, decodeFileUrl, extractDataImages, OUTGOING_FONT_STACK, COMPOSE_FONTS, DEFAULT_COMPOSE_FONT_SIZE } from "./outgoingHtml";
+import { fillEmptyParagraphs, inlineComposeStyles, addSignatureDivider, composeTypography, extractLocalImages, dropImagesByCid, decodeFileUrl, extractDataImages, isEmbeddableImageType, OUTGOING_FONT_STACK, COMPOSE_FONTS, DEFAULT_COMPOSE_FONT_SIZE } from "./outgoingHtml";
 
 const DEFAULT_TYPO = composeTypography("prudii", DEFAULT_COMPOSE_FONT_SIZE);
 
@@ -186,6 +186,15 @@ describe("extractDataImages", () => {
   it("leaves a payload that is not valid base64 as data:", () => {
     const html = `<img src="data:image/png;base64,iVBO*w0KGgo="><img src="data:image/png;base64,iVBORw0KGgo"><img src="data:image/png;base64,QR==">`;
     expect(extractDataImages(html)).toEqual({ html, images: [] });
+  });
+});
+
+describe("isEmbeddableImageType", () => {
+  it("accepts the types extractDataImages embeds", () => {
+    expect(isEmbeddableImageType("image/PNG")).toBe(true);
+    expect(isEmbeddableImageType("image/jpeg")).toBe(true);
+    expect(isEmbeddableImageType("image/svg+xml")).toBe(false);
+    expect(isEmbeddableImageType("application/octet-stream")).toBe(false);
   });
 });
 

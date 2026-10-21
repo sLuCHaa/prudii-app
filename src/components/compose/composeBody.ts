@@ -15,3 +15,23 @@ export function hasOwnText(editor: Editor): boolean {
   });
   return own;
 }
+
+/** The distinct `file://` image sources in the body, in document order. */
+export function localImageSources(editor: Editor): string[] {
+  const sources = new Set<string>();
+  editor.state.doc.descendants((node) => {
+    const src = node.type.name === "image" ? String(node.attrs.src ?? "") : "";
+    if (/^file:\/\//i.test(src)) sources.add(src);
+  });
+  return [...sources];
+}
+
+/** Swap image sources in place, so whatever was typed meanwhile survives; the swap is not an undo step. */
+export function replaceImageSources(editor: Editor, bySrc: Map<string, string>) {
+  const { tr } = editor.state;
+  editor.state.doc.descendants((node, pos) => {
+    const next = node.type.name === "image" ? bySrc.get(node.attrs.src) : undefined;
+    if (next) tr.setNodeMarkup(pos, undefined, { ...node.attrs, src: next });
+  });
+  if (tr.docChanged) editor.view.dispatch(tr.setMeta("addToHistory", false));
+}

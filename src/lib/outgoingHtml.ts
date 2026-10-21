@@ -191,6 +191,10 @@ const DATA_IMAGE_EXT: Record<string, string> = {
   "image/webp": "webp",
 };
 
+export function isEmbeddableImageType(type: string): boolean {
+  return Object.prototype.hasOwnProperty.call(DATA_IMAGE_EXT, type.toLowerCase());
+}
+
 // The backend decodes strictly, so only canonical base64 may become a part; anything else stays data:.
 function strictBase64(raw: string): string | null {
   const data = raw.replace(/\s+/g, "");

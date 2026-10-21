@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { EditorContent } from "@tiptap/react";
 import TiptapImage from "@tiptap/extension-image";
 import { useRichTextEditor } from "../editor/RichTextEditor";
-import { hasOwnText, setComposeBody } from "./composeBody";
+import { hasOwnText, localImageSources, replaceImageSources, setComposeBody } from "./composeBody";
 import { needsAttachmentReminder } from "./attachmentReminder";
 import { EditorToolbar } from "../editor/EditorToolbar";
 import { useTranslation } from "react-i18next";
@@ -27,12 +27,12 @@ import { Select } from "../ui/Select";
 import { TimeField } from "../ui/TimeField";
 import { isoDate } from "../../lib/calendar/dates";
 import { listen, emit } from "@tauri-apps/api/event";
-import { saveDraft, syncAccount, fetchMailBody, suggestReplies, sendMail, scheduleSend, listTemplates, listAttachments, getAttachmentData, trashMail, saveComposeAutosave } from "../../lib/tauri";
+import { saveDraft, syncAccount, fetchMailBody, suggestReplies, sendMail, scheduleSend, listTemplates, listAttachments, getAttachmentData, trashMail, saveComposeAutosave, type AttachmentPayload } from "../../lib/tauri";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AiRepliesEvent, EmailTemplate, ReplySuggestion } from "../../types";
 import { escapeHtml, restoreSanitizedHtml } from "../../lib/sanitize";
 import { QUOTE_EDIT_ROOT, bodyWithoutQuote, buildQuote, quoteFromHtml, renderQuote, splitQuote, stripQuoteMarker, type ComposeQuote } from "../../lib/composeQuote";
-import { fillEmptyParagraphs, inlineComposeStyles, addSignatureDivider, composeTypography, extractLocalImages, extractDataImages, dropImagesByCid } from "../../lib/outgoingHtml";
+import { fillEmptyParagraphs, inlineComposeStyles, addSignatureDivider, composeTypography, extractLocalImages, extractDataImages, dropImagesByCid, decodeFileUrl, isEmbeddableImageType } from "../../lib/outgoingHtml";
 import { base64Size } from "../../lib/imagePrep";
 import { currentAccentHex } from "../../lib/accents";
 import { SignatureNode } from "./signatureNode";
@@ -196,6 +196,25 @@ async function embedInlineImages(
   return { html, inlineAttachments };
 }
 
+/** The stored attachment behind each local image path; paths without one are missing from the map. */
+async function loadLocalImages(paths: string[], mail: Mail | null): Promise<Map<string, AttachmentPayload>> {
+  const found = new Map<string, AttachmentPayload>();
+  if (!mail || paths.length === 0) return found;
+
+  const normalize = (p: string) => p.replace(/\//g, "\\").toLowerCase();
+  const stored = await listAttachments(mail.id).catch(() => [] as Attachment[]);
+  const byPath = new Map(
+    stored.filter((a) => a.local_path).map((a) => [normalize(a.local_path!), a])
+  );
+  for (const path of paths) {
+    const att = byPath.get(normalize(path));
+    if (!att || found.has(path)) continue;
+    const payload = await getAttachmentData(att.id).catch(() => null);
+    if (payload) found.set(path, payload);
+  }
+  return found;
+}
+
 async function resolveLocalInlineImages(
   bodyHtml: string,
   originalMail: Mail | null,
@@ -203,34 +222,22 @@ async function resolveLocalInlineImages(
   const { html, images } = extractLocalImages(bodyHtml);
   if (images.length === 0) return { html: bodyHtml, inlineAttachments: [] };
 
-  const normalize = (p: string) => p.replace(/\//g, "\\").toLowerCase();
-  const stored = originalMail
-    ? await listAttachments(originalMail.id).catch(() => [] as Attachment[])
-    : [];
-  const byPath = new Map(
-    stored.filter((a) => a.local_path).map((a) => [normalize(a.local_path!), a])
-  );
-
+  const payloads = await loadLocalImages(images.map((ref) => ref.path), originalMail);
   const inlineAttachments: SendAttachment[] = [];
   const unresolved: string[] = [];
   for (const ref of images) {
-    const att = byPath.get(normalize(ref.path));
-    if (!att) {
+    const payload = payloads.get(ref.path);
+    if (!payload) {
       unresolved.push(ref.cid);
       continue;
     }
-    try {
-      const payload = await getAttachmentData(att.id);
-      inlineAttachments.push({
-        name: payload.name,
-        mime_type: payload.mime_type,
-        data: payload.data,
-        size: payload.size,
-        content_id: ref.cid,
-      });
-    } catch {
-      unresolved.push(ref.cid);
-    }
+    inlineAttachments.push({
+      name: payload.name,
+      mime_type: payload.mime_type,
+      data: payload.data,
+      size: payload.size,
+      content_id: ref.cid,
+    });
   }
 
   // A reference we cannot back with a file must not go out at all — a dangling
@@ -664,6 +671,22 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         if (resolved && !cancelled) upgradeQuote(base, resolved);
       });
     };
+    // The CSP keeps a draft's file:// images out of the editor; types extractDataImages cannot embed stay file:// so they still send.
+    const showDraftImages = (mail: Mail) => {
+      const sources = localImageSources(editor);
+      if (sources.length === 0) return;
+      void loadLocalImages(sources.map(decodeFileUrl), mail).then((found) => {
+        if (cancelled) return;
+        const bySrc = new Map<string, string>();
+        for (const src of sources) {
+          const payload = found.get(decodeFileUrl(src));
+          if (payload && isEmbeddableImageType(payload.mime_type)) {
+            bySrc.set(src, `data:${payload.mime_type};base64,${payload.data}`);
+          }
+        }
+        replaceImageSources(editor, bySrc);
+      });
+    };
 
     let defaultAccountId = selectedAccountId || accounts?.[0]?.id || "";
     // For reply/forward in unified inbox, pick the account that received the original mail
@@ -764,6 +787,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
             if (body && editor) {
               const { rest, quote: draftQuote } = splitQuote(body);
               setComposeBody(editor, rest);
+              showDraftImages(updated);
               if (draftQuote) {
                 upgradeQuote(null, draftQuote);
                 resolveDraftQuoteImages(updated, draftQuote);
@@ -849,6 +873,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     }
 
     setComposeBody(editor, content);
+    if (mode === "draft" && originalMail) showDraftImages(originalMail);
 
     // Fallback: if reply/forward originalMail has no body, fetch it and update editor
     if (originalMail && (mode === "reply" || mode === "replyAll" || mode === "forward") && !originalMail.body_html && !originalMail.body_text) {
