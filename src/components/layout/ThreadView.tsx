@@ -331,10 +331,12 @@ const DARK_STYLES = `
   body {
     color: #1a1a1a;
     filter: invert(0.88) hue-rotate(180deg);
+    /* The filter inverts a light rendering, so system colors like Outlook's windowtext must resolve light. */
+    color-scheme: light;
     /* A mail's body background is painted on the canvas, out of the filter's reach. */
     background: transparent !important;
   }
-  a, a * { color: #2563eb !important; }
+  a { color: #2563eb; }
   img, video, picture, svg {
     filter: invert(1) hue-rotate(180deg) !important;
   }

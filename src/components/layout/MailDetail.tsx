@@ -51,11 +51,13 @@ const DARK_STYLES = `
   body {
     color: #1a1a1a;
     filter: invert(0.88) hue-rotate(180deg);
+    /* The filter inverts a light rendering, so system colors like Outlook's windowtext must resolve light. */
+    color-scheme: light;
   }
   /* Set dark base text color so inversion produces light text.
      No !important, no * — elements with their own inline colors keep them,
      preserving colored text (red warnings, green success, brand colors). */
-  a, a * { color: #2563eb !important; }
+  a { color: #2563eb; }
   /* Re-invert all media so images/videos/SVGs appear in original colors */
   img, video, picture, svg {
     filter: invert(1) hue-rotate(180deg) !important;
