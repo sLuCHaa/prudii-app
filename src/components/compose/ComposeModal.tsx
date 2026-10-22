@@ -46,7 +46,7 @@ import type { Mail, SendMailRequest, SendAttachment, Attachment, Account, AppSet
 import { formatFileSize } from "../../lib/fileSize";
 import { prepareImage } from "../../lib/imagePrep";
 import { limitConcurrency } from "../../lib/limitConcurrency";
-import { FilePaste, displayWidth } from "./pasteFiles";
+import { FilePaste, displayWidth, insertInOrder } from "./pasteFiles";
 import type { SortedPaste } from "./pasteFiles";
 import {
   MAX_ATTACHMENT_BYTES,
@@ -562,23 +562,20 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   });
   pasteRef.current = ({ inline, attachments: pasted }) => {
     if (pasted.length > 0) addFiles(pasted);
-    let inserted = Promise.resolve();
-    for (const file of inline) {
-      const prepared = imageQueue(() => prepareImage(file)).catch(() => null);
-      inserted = inserted.then(async () => {
-        const p = await prepared;
+    void insertInOrder(
+      inline,
+      (file) => imageQueue(() => prepareImage(file)),
+      (_file, p) => {
         // Width 0: the webview could not decode it, so it would show as a broken image in the text.
-        if (!p || !p.width || !editor) {
-          addFiles([file]);
-          return;
-        }
-        editor
+        if (!p || !p.width || !editor) return false;
+        return editor
           .chain()
           .focus()
           .setImage({ src: `data:${p.type};base64,${p.data}`, width: displayWidth(p.width, window.devicePixelRatio) })
           .run();
-      });
-    }
+      },
+      (file) => addFiles([file]),
+    );
   };
 
   // ── Autosave: crash/quit safety net ──────────────────────────────────────

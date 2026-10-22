@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clipboardHasText, displayWidth, shouldTakeOverPaste, sortPastedFiles } from "./pasteFiles";
+import { clipboardHasText, displayWidth, insertInOrder, shouldTakeOverPaste, sortPastedFiles } from "./pasteFiles";
 
 const file = (name: string, type: string) => new File([], name, { type });
 
@@ -72,5 +72,41 @@ describe("clipboardHasText", () => {
   it("counts plain text and nothing else", () => {
     expect(clipboardHasText("", "Hallo")).toBe(true);
     expect(clipboardHasText("", "  \n")).toBe(false);
+  });
+});
+
+describe("insertInOrder", () => {
+  it("places items in their original order even when a later one is ready first", async () => {
+    let releaseFirst!: (v: string) => void;
+    const first = new Promise<string>((r) => (releaseFirst = r));
+    const placed: string[] = [];
+    const done = insertInOrder(["a", "b"], (item) => (item === "a" ? first : Promise.resolve("B")), (_item, p) => { placed.push(p); return true; }, () => placed.push("fallback"));
+    await Promise.resolve();
+    releaseFirst("A");
+    await done;
+    expect(placed).toEqual(["A", "B"]);
+  });
+
+  it("falls back for an item that cannot be placed and still places the rest", async () => {
+    const placed: string[] = [];
+    const fallen: string[] = [];
+    await insertInOrder(
+      ["a", "b", "c"],
+      (item) => (item === "b" ? Promise.reject(new Error("decode")) : Promise.resolve(item.toUpperCase())),
+      (item, p) => {
+        if (item === "c") throw new Error("editor gone");
+        placed.push(p);
+        return true;
+      },
+      (item) => fallen.push(item),
+    );
+    expect(placed).toEqual(["A"]);
+    expect(fallen).toEqual(["b", "c"]);
+  });
+
+  it("falls back when placing declines the prepared item", async () => {
+    const fallen: string[] = [];
+    await insertInOrder(["a"], () => Promise.resolve("A"), () => false, (item) => fallen.push(item));
+    expect(fallen).toEqual(["a"]);
   });
 });

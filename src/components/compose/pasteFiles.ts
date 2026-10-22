@@ -22,6 +22,29 @@ export function displayWidth(pixelWidth: number, devicePixelRatio: number): numb
   return Math.min(640, Math.round(pixelWidth / devicePixelRatio));
 }
 
+/** Places items in their original order; one that cannot be placed falls back instead of stopping the rest. */
+export async function insertInOrder<T, P>(
+  items: T[],
+  prepare: (item: T) => Promise<P>,
+  place: (item: T, prepared: P) => boolean,
+  fallback: (item: T) => void,
+): Promise<void> {
+  const prepared = items.map((item) => prepare(item).then(
+    (value) => ({ ok: true as const, value }),
+    () => ({ ok: false as const }),
+  ));
+  for (let i = 0; i < items.length; i++) {
+    const result = await prepared[i];
+    let placed = false;
+    try {
+      placed = result.ok && place(items[i], result.value);
+    } catch {
+      placed = false;
+    }
+    if (!placed) fallback(items[i]);
+  }
+}
+
 // A browser's "Copy image" adds HTML holding only the <img>; that is no text to keep.
 export function clipboardHasText(html: string, plain: string): boolean {
   if (plain.trim() !== "") return true;
