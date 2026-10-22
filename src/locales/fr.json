@@ -305,6 +305,7 @@
     "deleteConversation": "Supprimer la conversation",
     "latest": "Dernier",
     "you": "Vous",
+    "showAllRecipients": "Afficher tous les destinataires",
     "showQuoted": "Afficher l'historique",
     "hideQuoted": "Masquer l'historique",
     "details": "Détails",
@@ -1333,6 +1334,16 @@
     "title": "Nouveautés de Prudii {{version}}",
     "subtitle": "Voici ce qui a changé depuis votre dernière mise à jour.",
     "done": "Compris",
+    "v1_8_0": {
+      "look": {
+        "title": "Un style plus calme et plus clair",
+        "text": "Des gris neutres à la place du beige, en mode clair comme en mode sombre."
+      },
+      "recipients": {
+        "title": "À qui c'est parti",
+        "text": "Les messages envoyés dans la conversation indiquent désormais leurs destinataires."
+      }
+    },
     "v1_7_3": {
       "images": {
         "title": "Coller des images",

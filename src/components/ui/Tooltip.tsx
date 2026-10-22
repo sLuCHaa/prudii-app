@@ -2,7 +2,8 @@ import { useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 
 interface TooltipProps {
-  label: string;
+  label: React.ReactNode;
+  rich?: boolean;
   /** Preferred side; flips when there is no room. */
   side?: "top" | "bottom";
   delayMs?: number;
@@ -14,7 +15,7 @@ interface TooltipProps {
  * consistent delay. Wraps its child in an inline-flex span; keep aria-labels
  * on the child for screen readers.
  */
-export function Tooltip({ label, side = "bottom", delayMs = 450, children }: TooltipProps) {
+export function Tooltip({ label, rich, side = "bottom", delayMs = 450, children }: TooltipProps) {
   const wrapRef = useRef<HTMLSpanElement>(null);
   const timerRef = useRef<number | null>(null);
   const [pos, setPos] = useState<{ left: number; top: number; side: "top" | "bottom" } | null>(null);
@@ -55,7 +56,7 @@ export function Tooltip({ label, side = "bottom", delayMs = 450, children }: Too
         createPortal(
           <div
             role="tooltip"
-            className="tooltip-bubble"
+            className={rich ? "tooltip-bubble tooltip-bubble-rich" : "tooltip-bubble"}
             style={{
               left: pos.left,
               top: pos.top,

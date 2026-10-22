@@ -18,6 +18,7 @@ import { useScroller } from "../../hooks/useScroller";
 import { useChatAnchor } from "../../hooks/useChatAnchor";
 import { stripQuotedHtml, stripQuotedText, isForwardSubject } from "../../lib/quotedHistory";
 import { makeIsOutgoing } from "../../lib/outgoing";
+import { recipientSummary } from "../../lib/recipientSummary";
 import { openAttachment, startAttachmentDrag, quickLookAttachment, saveAttachment, fetchMailBody, trashMail, archiveMail, getThreadMails, markAsRead, unsubscribeMail } from "../../lib/tauri";
 import { revealLabelKey, revealAttachment } from "../../lib/attachmentActions";
 import { isMacOS, isWindows } from "../../lib/platform";
@@ -322,8 +323,8 @@ const LIGHT_STYLES = `
   html { background: transparent; }
   body { background: transparent; color: #1a1a1a; }
   a { color: #2563eb; }
-  ::-webkit-scrollbar-thumb { background: #D2C8B8; }
-  ::-webkit-scrollbar-thumb:hover { background: #B0A290; }
+  ::-webkit-scrollbar-thumb { background: #D4D4D8; }
+  ::-webkit-scrollbar-thumb:hover { background: #A1A1AA; }
 `;
 
 const DARK_STYLES = `
@@ -847,31 +848,63 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
   if (chat) {
     const name = own ? t("mailDetail.you") : mail.from.name || mail.from.email;
     const shape = own
-      ? "bg-own-bubble border-own-bubble-border rounded-[14px] rounded-tr-[4px]"
-      : "bg-surface border-border rounded-[14px] rounded-tl-[4px]";
-    const divider = own ? "border-own-bubble-border" : "border-border-light";
+      ? "bg-surface border-border border-t-[3px] border-t-accent rounded-xl shadow-sm"
+      : "border-border rounded-[14px] rounded-tl-[4px]";
+    const divider = "border-border-light";
+    const summary = own ? recipientSummary(mail.to, mail.cc) : null;
+    const recipientList = (
+      <div className="flex flex-col gap-1">
+        {[{ label: t("mailDetail.toLabel"), list: mail.to }, { label: t("mailDetail.ccLabel"), list: mail.cc }]
+          .filter((g) => g.list.length > 0)
+          .map((g) => (
+            <div key={g.label}>
+              <div className="opacity-70">{g.label}</div>
+              {g.list.map((a) => <div key={a.email}>{formatRecipient(a)}</div>)}
+            </div>
+          ))}
+      </div>
+    );
     const action = "flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium text-text-secondary hover:bg-hover transition-colors";
 
     return (
       <div className={`flex items-start gap-2.5 min-w-0 ${expanded ? "w-[min(85%,780px)]" : "max-w-[min(85%,780px)]"}`}>
         {!own && <ContactAvatar name={mail.from.name} email={mail.from.email} size={28} className="shrink-0 mt-5.5" />}
         <div className={`flex-1 min-w-0 flex flex-col gap-1 ${own ? "items-end" : "items-start"}`}>
-          <button
-            type="button"
-            onClick={handleToggle}
-            aria-expanded={expanded}
-            className="flex items-center gap-1.5 max-w-full px-1 rounded text-xs text-text-tertiary hover:text-text-secondary transition-colors"
-          >
-            {!mail.is_read && <span className="w-2 h-2 rounded-full bg-accent shrink-0" />}
-            <span className="font-medium text-text-secondary truncate">{name}</span>
-            {isDraft && (
-              <span className="px-1.5 py-0.5 text-[11px] font-medium bg-warning/15 text-warning rounded-sm shrink-0">
-                {t("mailDetail.draft")}
-              </span>
+          <div className="flex items-center gap-1.5 max-w-full px-1 text-xs text-text-tertiary">
+            <button
+              type="button"
+              onClick={handleToggle}
+              aria-expanded={expanded}
+              className="flex items-center gap-1.5 min-w-0 rounded hover:text-text-secondary transition-colors"
+            >
+              {!mail.is_read && <span className="w-2 h-2 rounded-full bg-accent shrink-0" />}
+              <span className="font-medium text-text-secondary truncate">{name}</span>
+              {isDraft && (
+                <span className="px-1.5 py-0.5 text-[11px] font-medium bg-warning/15 text-warning rounded-sm shrink-0">
+                  {t("mailDetail.draft")}
+                </span>
+              )}
+              {own && summary && (
+                <>
+                  <span aria-hidden="true">→</span>
+                  <span className="truncate">{summary.first}</span>
+                </>
+              )}
+            </button>
+            {own && summary && summary.more > 0 && (
+              <Tooltip rich side="top" label={recipientList}>
+                <button
+                  type="button"
+                  aria-label={t("mailDetail.showAllRecipients")}
+                  className="px-1.5 rounded-full bg-bg-tertiary text-[11px] font-medium text-text-secondary hover:bg-hover transition-colors"
+                >
+                  +{summary.more}
+                </button>
+              </Tooltip>
             )}
             <span aria-hidden="true">·</span>
             <span className="shrink-0">{formattedDate}</span>
-          </button>
+          </div>
 
           {expanded ? (
             <div className={`w-full min-w-0 border px-3.5 pt-3 pb-1.5 ${shape} ${isDraft ? "ring-2 ring-warning/40" : ""}`}>
@@ -887,7 +920,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
                   }}
                   aria-expanded={showQuoted}
                   className={`mt-2 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-sm border text-xs font-medium text-text-tertiary hover:bg-hover hover:text-text-secondary transition-colors ${
-                    own ? "border-own-bubble-border" : "border-border"
+                    "border-border"
                   }`}
                 >
                   <Ellipsis className="w-3.5 h-3.5" />

@@ -305,6 +305,7 @@
     "deleteConversation": "Eliminar conversación",
     "latest": "Más reciente",
     "you": "Tú",
+    "showAllRecipients": "Mostrar todos los destinatarios",
     "showQuoted": "Mostrar historial",
     "hideQuoted": "Ocultar historial",
     "details": "Detalles",
@@ -1333,6 +1334,16 @@
     "title": "Novedades de Prudii {{version}}",
     "subtitle": "Esto es lo que ha cambiado desde tu última actualización.",
     "done": "Entendido",
+    "v1_8_0": {
+      "look": {
+        "title": "Un aspecto más claro y sereno",
+        "text": "Grises neutros en lugar de beige, en modo claro y oscuro."
+      },
+      "recipients": {
+        "title": "A quién se envió",
+        "text": "Los mensajes enviados en la conversación ahora muestran a quién iban dirigidos."
+      }
+    },
     "v1_7_3": {
       "images": {
         "title": "Pegar imágenes",

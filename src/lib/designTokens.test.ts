@@ -48,7 +48,7 @@ describe("design tokens", () => {
     expect(css.match(/0 2px 6px -2px var\(--c-tile-drop\)/g)).toHaveLength(2);
   });
   it("deepens the tile shadow in the light theme only", () => {
-    expect(css).toMatch(/:root\s*\{[^}]*--c-tile-drop:\s*rgba\(40, 25, 10, 0\.22\)/);
+    expect(css).toMatch(/:root\s*\{[^}]*--c-tile-drop:\s*rgba\(24, 24, 27, 0\.22\)/);
     expect(css).toMatch(/\.dark\s*\{[^}]*--c-tile-drop:\s*rgba\(0, 0, 0, 0\.45\)/);
   });
   it("lets quiet buttons answer hover and press on dark surfaces", () => {
