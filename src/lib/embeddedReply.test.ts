@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { splitEmbeddedMails, type EmbeddedMail } from "./embeddedMails";
 import { cardBadge, embeddedMailToMail, initiallyOpen, resolveNameOnlySender } from "./embeddedReply";
+import { findBestFromAccount } from "./composeAccount";
 import { visibleText } from "./quotedHistory";
 import type { Contact, Mail } from "../types";
 
@@ -97,6 +98,25 @@ describe("embeddedMailToMail", () => {
   it("falls back to the outer subject without prefixes", () => {
     const target = embeddedMailToMail(outerMail({ subject: "AW: WG: Terminverschiebung" }), part());
     expect(target.subject).toBe("Terminverschiebung");
+  });
+});
+
+describe("account choice for a card", () => {
+  const accounts = [
+    { id: "acc-1", email: "anna.weber@studio-halde.example" },
+    { id: "acc-2", email: "planung@studio-halde.example" },
+  ];
+  const parts = splitEmbeddedMails(CHAIN)!.parts;
+
+  it("answers from the account the card was addressed to", () => {
+    const target = embeddedMailToMail(outerMail(), parts[0]);
+    expect(target.to.map((a) => a.email)).toEqual(["planung@studio-halde.example"]);
+    expect(findBestFromAccount(target, accounts, "acc-1")).toBe("acc-2");
+  });
+
+  it("falls back to the outer mail's account when the card names none of ours", () => {
+    const target = embeddedMailToMail(outerMail(), parts[1]);
+    expect(findBestFromAccount(target, accounts, "acc-2")).toBe("acc-1");
   });
 });
 

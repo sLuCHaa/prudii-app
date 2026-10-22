@@ -121,6 +121,20 @@ describe("splitEmbeddedMails", () => {
     expect(rebuilt).toBe(textOf(f.html));
   });
 
+  it("shows every visible character exactly once across a chain of formats", () => {
+    const chains = [
+      FIXTURES[0].html + FIXTURES[2].html,
+      FIXTURES[1].html + FIXTURES[3].html + FIXTURES[5].html,
+      FIXTURES[4].html + FIXTURES[6].html + FIXTURES[0].html,
+    ];
+    for (const html of chains) {
+      const split = splitEmbeddedMails(html)!;
+      expect(split.parts.length).toBeGreaterThan(1);
+      const shown = textOf(split.outer) + split.parts.map((p) => strip(p.header) + textOf(p.html)).join("");
+      expect(shown).toBe(textOf(html));
+    }
+  });
+
   it("parses the dates of the formats", () => {
     const dates = FIXTURES.slice(0, 5).map((f) => splitEmbeddedMails(f.html)!.parts[0].date);
     expect(new Date(dates[0]).getHours()).toBe(22);
