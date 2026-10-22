@@ -1340,8 +1340,8 @@
         "text": "Neutrale Grautöne statt Beige, im hellen und im dunklen Modus."
       },
       "recipients": {
-        "title": "Wohin gesendet wurde",
-        "text": "Gesendete Nachrichten in der Konversation zeigen jetzt, an wen sie gingen."
+        "title": "Empfänger auf einen Blick",
+        "text": "Im Chat-Verlauf zeigen deine gesendeten Nachrichten jetzt, an wen sie gingen."
       }
     },
     "v1_7_3": {
