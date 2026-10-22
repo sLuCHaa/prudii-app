@@ -1334,7 +1334,7 @@
     "title": "Nouveautés de Prudii {{version}}",
     "subtitle": "Voici ce qui a changé depuis votre dernière mise à jour.",
     "done": "Compris",
-    "v1_8_0": {
+    "v1_7_4": {
       "look": {
         "title": "Un style plus calme et plus clair",
         "text": "Des gris neutres à la place du beige, en mode clair comme en mode sombre."
