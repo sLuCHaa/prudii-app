@@ -132,6 +132,11 @@ describe("SignatureNode", () => {
     expect(css).toMatch(/\.compose-editor \.tiptap \[data-type="signature"\] \{[^}]*contain: paint;/);
   });
 
+  it("lets a signature wider than the editor scroll instead of being cut off", () => {
+    const css = readFileSync(resolve(__dirname, "../../index.css"), "utf8");
+    expect(css).toMatch(/\.compose-editor \.tiptap \[data-type="signature"\] \{[^}]*overflow-x: auto;/);
+  });
+
   it("creates no block for a signature without visible content", () => {
     for (const inner of ["<div><br></div>", "<p>&nbsp;</p>", "<style>p{color:red}</style>"]) {
       const e = make(`<p>Hallo</p>${sig(inner)}`);
