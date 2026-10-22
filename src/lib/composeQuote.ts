@@ -33,6 +33,7 @@ function formatDate(date: string): string {
 }
 
 function address(name: string, email: string): string {
+  if (!email) return name;
   return name ? `${name} <${email}>` : email;
 }
 

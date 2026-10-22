@@ -103,6 +103,14 @@ describe("buildQuote", () => {
     });
   });
 
+  it("writes a sender without an address as the bare name", () => {
+    const mail = { ...MAIL, from: { name: "Lea Kraus", email: "" }, to: [{ name: "Jonas Berger", email: "" }] };
+    expect(buildQuote("forward", mail, "<p>Hallo</p>").meta.to).toBe("Jonas Berger");
+    const html = renderQuote(buildQuote("forward", mail, "<p>Hallo</p>"));
+    expect(textOf(html)).toContain("Lea Kraus");
+    expect(textOf(html)).not.toContain("<>");
+  });
+
   it("survives a draft round trip when the quoted mail has stray end tags", () => {
     const quote = buildQuote("reply", MAIL, "<p>Angebot</p></div><p>Mitte</p></blockquote><p>Ende</p>");
     expect(splitQuote(`<p>Hi</p>${renderQuote(quote)}`)).toEqual({ rest: "<p>Hi</p>", quote });
