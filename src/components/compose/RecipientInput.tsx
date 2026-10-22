@@ -81,7 +81,7 @@ export const RecipientInput = forwardRef<RecipientInputHandle, RecipientInputPro
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
-    if (initialDraft) setInputValue(initialDraft);
+    setInputValue(initialDraft ?? "");
   }, [initialDraft]);
 
   useEffect(() => {

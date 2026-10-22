@@ -24,6 +24,7 @@ import { useDialog } from "../ui/DialogProvider";
 import { Button, IconButton } from "../ui/Button";
 import { DateField } from "../ui/DateField";
 import { formatAddress, replyRecipientDraft } from "../../lib/replyDraft";
+import { findBestFromAccount } from "../../lib/composeAccount";
 import { Select } from "../ui/Select";
 import { TimeField } from "../ui/TimeField";
 import { isoDate } from "../../lib/calendar/dates";
@@ -248,34 +249,6 @@ function quoteFromMail(kind: "reply" | "forward", mail: Mail): ComposeQuote {
     ? cleanEmailHtml(mail.body_html)
     : plainTextToQuotedHtml(mail.body_text || "");
   return buildQuote(kind, mail, body);
-}
-
-function findBestFromAccount(
-  originalMail: Mail,
-  accounts: { id: string; email: string }[],
-  fallbackAccountId: string,
-): string {
-  const accountByEmail = new Map<string, string>();
-  for (const acc of accounts) {
-    accountByEmail.set(acc.email.toLowerCase(), acc.id);
-  }
-
-  const allRecipients = [
-    ...originalMail.to,
-    ...originalMail.cc,
-    ...originalMail.bcc,
-  ];
-
-  for (const addr of allRecipients) {
-    const match = accountByEmail.get(addr.email.toLowerCase());
-    if (match) return match;
-  }
-
-  if (accounts.find((a) => a.id === originalMail.account_id)) {
-    return originalMail.account_id;
-  }
-
-  return fallbackAccountId;
 }
 
 // --- Data passed from the main window to a compose window via event ---
@@ -885,14 +858,14 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     if (!isOpen || !editor) return;
     // For new mails without pre-filled recipients, RecipientInput handles focus.
     // For reply/forward/draft, focus the editor so user can start typing immediately.
-    const shouldFocusEditor = mode !== "new" || to.length > 0;
+    const shouldFocusEditor = (mode !== "new" || to.length > 0) && !toDraft;
     if (shouldFocusEditor) {
       const timer = setTimeout(() => {
         editor.commands.focus("start");
       }, 100);
       return () => clearTimeout(timer);
     }
-  }, [isOpen, editor, mode, to.length]);
+  }, [isOpen, editor, mode, to.length, toDraft]);
 
   // Restore compose state when undo-send is cancelled
   const restoreSnapshot = initData?.snapshot ?? undoSendSnapshot;
@@ -904,6 +877,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     setShowCc(restoreSnapshot.cc.length > 0);
     setShowBcc(restoreSnapshot.bcc.length > 0);
     setSubject(restoreSnapshot.subject);
+    setToDraft(null);
     setFromAccountId(restoreSnapshot.fromAccountId);
     // The snapshot is only taken once the send guard has confirmed every attachment
     // was loaded, so these are ready by construction.
@@ -1638,7 +1612,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
               onChange={setTo}
               placeholder="recipient@example.com"
               accountId={fromAccountId || undefined}
-              autoFocus={mode === "new" && to.length === 0}
+              autoFocus={(mode === "new" && to.length === 0) || !!toDraft}
               fieldId="to"
               onChipDroppedFromField={(src, rec) => handleDropToField("to", src, rec)}
               blockedEmails={[...emailsOf(cc), ...emailsOf(bcc)]}
