@@ -844,7 +844,7 @@ html[data-vibrancy].dark .glass-sidebar {
   --c-accent-soft: rgba(224, 118, 76, 0.18);
   --c-accent-soft-bg: rgba(224, 118, 76, 0.08);
   --c-accent-ring: rgba(224, 118, 76, 0.45);
-  --c-on-accent: #1A1410;
+  --c-on-accent: #18181B;
 }
 
 [data-accent="blue"] {

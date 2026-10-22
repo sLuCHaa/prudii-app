@@ -343,8 +343,8 @@ const DARK_STYLES = `
   }
   hr { opacity: 0.4; }
   blockquote { border-left-color: #888 !important; }
-  ::-webkit-scrollbar-thumb { background: #3E362C; }
-  ::-webkit-scrollbar-thumb:hover { background: #574C3E; }
+  ::-webkit-scrollbar-thumb { background: #3F3F46; }
+  ::-webkit-scrollbar-thumb:hover { background: #52525B; }
 `;
 
 const HtmlMailFrame = memo(function HtmlMailFrame({ mailId, html, tight = false, allowExternalImages = true, onIframeRef, onTrackersDetected, onLinkClick, onImageClick }: { mailId: string; html: string; tight?: boolean; allowExternalImages?: boolean; onIframeRef?: (el: HTMLIFrameElement | null) => void; onTrackersDetected?: (trackers: TrackerInfo[]) => void; onLinkClick?: (href: string) => void; onImageClick?: (src: string) => void }) {
