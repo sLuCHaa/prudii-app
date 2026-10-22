@@ -654,8 +654,8 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
   const quotesHidden = hideQuotes && !!htmlWithoutQuotes;
 
   const embedded = useMemo(
-    () => (showsHtml && !viewSource && !quotesHidden ? splitEmbeddedMails(displayMail.body_html) : null),
-    [showsHtml, viewSource, quotesHidden, displayMail.body_html],
+    () => (expanded && showsHtml && !viewSource && !quotesHidden ? splitEmbeddedMails(displayMail.body_html) : null),
+    [expanded, showsHtml, viewSource, quotesHidden, displayMail.body_html],
   );
   const split = cardsOff ? null : embedded;
 
@@ -686,6 +686,14 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
       incrementTrackersBlocked(detected.length);
     }
   }, [incrementTrackersBlocked]);
+
+  const cardTrackers = useMemo(
+    () => (split ? sanitizeEmailHtml(displayMail.body_html, allowExternalImages).trackers : null),
+    [!!split, displayMail.body_html, allowExternalImages],
+  );
+  useEffect(() => {
+    if (cardTrackers) handleTrackersDetected(cardTrackers);
+  }, [cardTrackers, handleTrackersDetected]);
 
   const hasExternalImages = useMemo(() => {
     if (!displayMail.body_html) return false;
@@ -831,14 +839,15 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
   );
 
   const frame = (html: string, ref?: (el: HTMLIFrameElement | null) => void) => (
-    <HtmlMailFrame mailId={displayMail.id} html={html} tight={!!chat} allowExternalImages={allowExternalImages} onIframeRef={ref} onTrackersDetected={handleTrackersDetected} onLinkClick={onLinkClick} onImageClick={handleInlineImageClick} />
+    <HtmlMailFrame mailId={displayMail.id} html={html} tight={!!chat} allowExternalImages={allowExternalImages} onIframeRef={ref} onTrackersDetected={split ? undefined : handleTrackersDetected} onLinkClick={onLinkClick} onImageClick={handleInlineImageClick} />
   );
   const mainFrameRef = (el: HTMLIFrameElement | null) => { messageIframeRef.current = el; onIframeRef?.(el); };
 
   const handleCardReply = async (index: number) => {
     if (!split) return;
     const target = embeddedMailToMail(displayMail, split.parts[index]);
-    onReply(await resolveNameOnlySender(target, (q) => searchContacts(q, displayMail.account_id)));
+    const resolved = await resolveNameOnlySender(target, (q) => searchContacts(q, displayMail.account_id)).catch(() => target);
+    onReply(resolved);
   };
   const handleCardForward = (index: number) => {
     if (split) onForward(embeddedMailToMail(displayMail, split.parts[index]));
@@ -907,7 +916,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
           .map((g) => (
             <div key={g.label}>
               <div className="opacity-70">{g.label}</div>
-              {g.list.map((a) => <div key={a.email}>{formatRecipient(a)}</div>)}
+              {g.list.map((a, i) => <div key={i}>{formatRecipient(a)}</div>)}
             </div>
           ))}
       </div>
@@ -943,7 +952,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
               <Tooltip rich side="top" label={recipientList}>
                 <button
                   type="button"
-                  aria-label={t("mailDetail.showAllRecipients")}
+                  aria-label={`${t("mailDetail.showAllRecipients")}: ${[...mail.to, ...mail.cc].map(formatRecipient).join(", ")}`}
                   className="px-1.5 rounded-full bg-bg-tertiary text-[11px] font-medium text-text-secondary hover:bg-hover transition-colors"
                 >
                   +{summary.more}
