@@ -31,7 +31,7 @@ import { saveDraft, syncAccount, fetchMailBody, suggestReplies, sendMail, schedu
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AiRepliesEvent, EmailTemplate, ReplySuggestion } from "../../types";
 import { escapeHtml, plainTextParagraph, restoreSanitizedHtml } from "../../lib/sanitize";
-import { QUOTE_EDIT_ROOT, bodyWithoutQuote, buildQuote, quoteFromHtml, renderQuote, splitQuote, stripQuoteMarker, type ComposeQuote } from "../../lib/composeQuote";
+import { QUOTE_EDIT_ROOT, applyQuoteEdit, bodyWithoutQuote, buildQuote, quoteFromHtml, renderQuote, splitQuote, stripQuoteMarker, type ComposeQuote } from "../../lib/composeQuote";
 import { fillEmptyParagraphs, inlineComposeStyles, addSignatureDivider, composeTypography, extractLocalImages, extractDataImages, dropImagesByCid, decodeFileUrl, isEmbeddableImageType } from "../../lib/outgoingHtml";
 import { base64Size } from "../../lib/imagePrep";
 import { currentAccentHex } from "../../lib/accents";
@@ -520,12 +520,17 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
 
   const outgoingQuoteHtml = (edited = quoteEditing ? readQuoteEdit() : null): string => {
     if (!quote || quoteRemoved) return "";
-    return renderQuote(edited === null ? quote : { ...quote, body: edited });
+    const next = edited === null ? quote : applyQuoteEdit(quote, edited);
+    return next ? renderQuote(next) : "";
   };
 
   const finishQuoteEdit = () => {
     const edited = readQuoteEdit();
-    if (edited !== null && quote) setQuote({ ...quote, body: edited });
+    if (edited !== null && quote) {
+      const next = applyQuoteEdit(quote, edited);
+      if (next) setQuote(next);
+      else setQuoteRemoved(true);
+    }
     setEditingQuote(false);
   };
 

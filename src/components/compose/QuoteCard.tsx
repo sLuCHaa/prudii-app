@@ -5,7 +5,7 @@ import { Button, IconButton } from "../ui/Button";
 import { GradientAvatar } from "../motion/GradientAvatar";
 import { HtmlMailFrame } from "../layout/MailDetail";
 import { dateLocale } from "../../lib/dateUtils";
-import type { ComposeQuote } from "../../lib/composeQuote";
+import { editableQuoteHtml, type ComposeQuote } from "../../lib/composeQuote";
 
 interface QuoteCardProps {
   quote: ComposeQuote;
@@ -28,6 +28,8 @@ export function QuoteCard({ quote, editing, onEdit, onDone, onRestore, onRemove,
   const { t } = useTranslation();
   const forward = quote.kind === "forward";
   const meta = quote.kind === "raw" ? null : quote.meta;
+  // Once the sender line is the user's own text, the card shows it as it will be sent.
+  const asSent = editing || (quote.kind !== "raw" && quote.header !== undefined);
   const details = meta ? [forward && meta.to ? t("compose.quoteTo", { to: meta.to }) : "", cardDate(meta.date)].filter(Boolean).join(" · ") : "";
 
   return (
@@ -84,7 +86,7 @@ export function QuoteCard({ quote, editing, onEdit, onDone, onRestore, onRemove,
         )}
       </div>
 
-      {meta && (
+      {meta && !asSent && (
         <div className="flex items-center gap-2.5 px-3.5 py-2.5 bg-bg-secondary border-b border-border">
           <GradientAvatar name={meta.fromName} email={meta.fromEmail} size={30} />
           <div className="flex-1 min-w-0 leading-snug">
@@ -99,7 +101,7 @@ export function QuoteCard({ quote, editing, onEdit, onDone, onRestore, onRemove,
       )}
 
       <HtmlMailFrame
-        html={quote.body}
+        html={asSent ? editableQuoteHtml(quote) : quote.body}
         allowExternalImages
         editable={editing}
         onIframeRef={onFrameRef}

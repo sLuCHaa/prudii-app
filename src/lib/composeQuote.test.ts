@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { bodyWithoutQuote, buildQuote, quoteFromHtml, renderQuote, splitQuote, stripQuoteMarker, type ComposeQuote } from "./composeQuote";
+import { applyQuoteEdit, bodyWithoutQuote, buildQuote, editableQuoteHtml, quoteFromHtml, renderQuote, splitQuote, stripQuoteMarker, type ComposeQuote } from "./composeQuote";
 import { stripQuotedHtml } from "./quotedHistory";
 
 const FORWARD: ComposeQuote = {
@@ -167,6 +167,79 @@ describe("renderQuote", () => {
     const stripped = stripQuotedHtml(`<p>Donnerstag passt.</p>${renderQuote(REPLY)}`);
     expect(stripped).toContain("Donnerstag passt.");
     expect(stripped).not.toContain("Passt Donnerstag?");
+  });
+});
+
+describe("editableQuoteHtml", () => {
+  it("puts the sender line above the quoted text", () => {
+    const html = editableQuoteHtml(REPLY);
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    expect(doc.body.firstElementChild?.textContent).toContain("Lena Hoffmann");
+    expect(doc.body.lastElementChild?.tagName).toBe("BLOCKQUOTE");
+    expect(doc.body.lastElementChild?.innerHTML).toBe(REPLY.body);
+  });
+
+  it("edits a raw quote as it is", () => {
+    const body = "<p>On Tue, Lena wrote:</p><blockquote><p>Passt Donnerstag?</p></blockquote>";
+    expect(editableQuoteHtml({ kind: "raw", body })).toBe(body);
+  });
+});
+
+describe("applyQuoteEdit", () => {
+  const inSentMail = (quote: ComposeQuote) => textOf(renderQuote(quote));
+
+  it("keeps the generated sender line when only the quoted text changed", () => {
+    const edited = editableQuoteHtml(REPLY).replace("Passt Donnerstag?", "Passt Freitag?");
+    expect(applyQuoteEdit(REPLY, edited)).toEqual({ ...REPLY, body: "<p>Passt Freitag?</p>" });
+  });
+
+  it("sends no sender line once the user deleted it", () => {
+    const quote = applyQuoteEdit(FORWARD, `<blockquote>${FORWARD.body}</blockquote>`);
+    expect(quote).not.toBeNull();
+    expect(inSentMail(quote!)).not.toContain("Lena Hoffmann");
+    expect(inSentMail(quote!)).toContain("Hallo zusammen,");
+  });
+
+  it("treats a sender line emptied down to a blank paragraph as deleted", () => {
+    const quote = applyQuoteEdit(REPLY, `<p><br></p><blockquote>${REPLY.body}</blockquote>`);
+    expect(quote?.kind === "reply" && quote.header).toBe("");
+  });
+
+  it("sends the sender line the user rewrote", () => {
+    const edited = editableQuoteHtml(REPLY).replace("Lena Hoffmann", "Mira Okafor");
+    const quote = applyQuoteEdit(REPLY, edited);
+    expect(inSentMail(quote!)).toContain("Mira Okafor");
+    expect(inSentMail(quote!)).not.toContain("Lena Hoffmann");
+  });
+
+  it("keeps a rewritten sender line through a draft round trip", () => {
+    for (const edited of [
+      editableQuoteHtml(REPLY).replace("Lena Hoffmann", "Mira Okafor"),
+      `<blockquote>${REPLY.body}</blockquote>`,
+    ]) {
+      const quote = applyQuoteEdit(REPLY, edited)!;
+      expect(splitQuote(`<p>Hi</p>${renderQuote(quote)}`)).toEqual({ rest: "<p>Hi</p>", quote });
+    }
+  });
+
+  it("removes a quote whose text was deleted completely", () => {
+    expect(applyQuoteEdit(REPLY, "<p><br></p>")).toBeNull();
+    expect(applyQuoteEdit(REPLY, editableQuoteHtml({ ...REPLY, body: "<p><br></p>" }))).toBeNull();
+    expect(applyQuoteEdit({ kind: "raw", body: "<p>x</p>" }, "<p> </p>")).toBeNull();
+  });
+
+  it("keeps a quote that is only an image", () => {
+    expect(applyQuoteEdit(REPLY, '<blockquote><img src="cid:logo"></blockquote>')).not.toBeNull();
+  });
+
+  it("keeps an edit that broke the quote layout as the user left it", () => {
+    const quote = applyQuoteEdit(REPLY, "<p>Nur noch das hier</p>")!;
+    expect(inSentMail(quote)).toBe("Nur noch das hier");
+    expect(splitQuote(`<p>Hi</p>${renderQuote(quote)}`)).toEqual({ rest: "<p>Hi</p>", quote });
+  });
+
+  it("edits a raw quote as it is", () => {
+    expect(applyQuoteEdit({ kind: "raw", body: "<p>alt</p>" }, "<p>neu</p>")).toEqual({ kind: "raw", body: "<p>neu</p>" });
   });
 });
 

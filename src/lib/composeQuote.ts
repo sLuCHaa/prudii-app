@@ -10,7 +10,13 @@ export interface QuoteMeta {
   to?: string;
 }
 
-type MailQuote = { kind: "reply" | "forward"; meta: QuoteMeta; body: string };
+type MailQuote = {
+  kind: "reply" | "forward";
+  meta: QuoteMeta;
+  body: string;
+  /** Only once the user changed the sender line; "" when they deleted it. */
+  header?: string;
+};
 
 export type ComposeQuote =
   | MailQuote
@@ -40,22 +46,67 @@ export function buildQuote(kind: "reply" | "forward", mail: Pick<Mail, "from" | 
   return { kind, meta, body: parseBody(body).innerHTML };
 }
 
-/** The quote as it leaves in the outgoing mail, marked so a reopened draft can find it again. */
-export function renderQuote(quote: ComposeQuote): string {
-  if (quote.kind === "raw") return quote.body;
+function generatedHeader(quote: MailQuote): string {
   const { meta } = quote;
   const from = escapeHtml(address(meta.fromName, meta.fromEmail));
   const date = escapeHtml(formatDate(meta.date));
-  const header =
-    quote.kind === "reply"
-      ? `<p>${i18n.t("compose.replyIntro", { date, from })}</p>`
-      : `<p>${i18n.t("compose.forwardHeaderTitle")}</p>` +
+  return quote.kind === "reply"
+    ? `<p>${i18n.t("compose.replyIntro", { date, from })}</p>`
+    : `<p>${i18n.t("compose.forwardHeaderTitle")}</p>` +
         `<p><strong>${i18n.t("compose.forwardHeaderFrom")}</strong> ${from}</p>` +
         `<p><strong>${i18n.t("compose.forwardHeaderDate")}</strong> ${date}</p>` +
         `<p><strong>${i18n.t("compose.forwardHeaderSubject")}</strong> ${escapeHtml(meta.subject ?? "")}</p>` +
         `<p><strong>${i18n.t("compose.forwardHeaderTo")}</strong> ${escapeHtml(meta.to ?? "")}</p>`;
-  const marker = escapeHtml(JSON.stringify({ kind: quote.kind, ...meta }));
-  return `<div ${QUOTE_ATTR}="${marker}">${header}<blockquote>${quote.body}</blockquote></div>`;
+}
+
+/** The quote as it leaves in the outgoing mail, marked so a reopened draft can find it again. */
+export function renderQuote(quote: ComposeQuote): string {
+  if (quote.kind === "raw") return quote.body;
+  const custom = quote.header === undefined ? {} : { customHeader: true };
+  const marker = escapeHtml(JSON.stringify({ kind: quote.kind, ...quote.meta, ...custom }));
+  return `<div ${QUOTE_ATTR}="${marker}">${quote.header ?? generatedHeader(quote)}<blockquote>${quote.body}</blockquote></div>`;
+}
+
+/** The quote as the edit frame shows it; the sender line is text the user may change too. */
+export function editableQuoteHtml(quote: ComposeQuote): string {
+  if (quote.kind === "raw") return quote.body;
+  return `${quote.header ?? generatedHeader(quote)}<blockquote>${quote.body}</blockquote>`;
+}
+
+function isBlank(node: Node): boolean {
+  if (node.textContent?.trim()) return false;
+  return !(node instanceof Element) || (node.tagName !== "IMG" && !node.querySelector("img"));
+}
+
+function plainText(node: Node): string {
+  return (node.textContent ?? "").replace(/\s+/g, " ").trim();
+}
+
+function nodesBefore(node: Element): HTMLDivElement {
+  const box = node.ownerDocument.createElement("div");
+  for (let n = node.parentNode?.firstChild; n && n !== node; n = n.nextSibling) box.appendChild(n.cloneNode(true));
+  return box;
+}
+
+/** Reads the edit frame back; null once the user deleted the quoted text completely. */
+export function applyQuoteEdit(quote: ComposeQuote, edited: string): ComposeQuote | null {
+  const root = new DOMParser().parseFromString(edited, "text/html").body;
+  if (quote.kind === "raw") return isBlank(root) ? null : { kind: "raw", body: edited };
+
+  let last = root.lastElementChild;
+  while (last && last.tagName !== "BLOCKQUOTE" && isBlank(last)) last = last.previousElementSibling;
+  if (!last || last.tagName !== "BLOCKQUOTE" || !blankAfter(last)) {
+    if (isBlank(root)) return null;
+    const marker = escapeHtml(JSON.stringify({ kind: "raw" }));
+    return { kind: "raw", body: `<div ${QUOTE_ATTR}="${marker}">${edited}</div>` };
+  }
+  if (isBlank(last)) return null;
+
+  const next: MailQuote = { kind: quote.kind, meta: quote.meta, body: last.innerHTML };
+  const header = nodesBefore(last);
+  const generated = new DOMParser().parseFromString(generatedHeader(quote), "text/html").body;
+  if (plainText(header) !== plainText(generated)) next.header = isBlank(header) ? "" : header.innerHTML.trim();
+  return next;
 }
 
 /** The outgoing body without our marker: drafts need it, recipients don't, and it would name the client. */
@@ -77,19 +128,22 @@ function blankAfter(node: Node): boolean {
 
 function readQuote(el: Element): ComposeQuote {
   const blockquote = el.lastElementChild;
-  const wellFormed =
-    blockquote?.tagName === "BLOCKQUOTE" &&
-    blankAfter(blockquote) &&
-    Array.from(el.children).slice(0, -1).every((c) => c.tagName === "P");
   try {
     const data = JSON.parse(el.getAttribute(QUOTE_ATTR) ?? "");
+    const custom = data.customHeader === true;
+    const wellFormed =
+      blockquote?.tagName === "BLOCKQUOTE" &&
+      blankAfter(blockquote) &&
+      (custom || Array.from(el.children).slice(0, -1).every((c) => c.tagName === "P"));
     if (wellFormed && (data.kind === "reply" || data.kind === "forward") && typeof data.fromEmail === "string") {
       const meta: QuoteMeta = { fromName: text(data.fromName), fromEmail: data.fromEmail, date: text(data.date) };
       if (data.kind === "forward") {
         meta.subject = text(data.subject);
         meta.to = text(data.to);
       }
-      return { kind: data.kind, meta, body: blockquote.innerHTML };
+      const quote: MailQuote = { kind: data.kind, meta, body: blockquote.innerHTML };
+      if (custom) quote.header = nodesBefore(blockquote).innerHTML.trim();
+      return quote;
     }
   } catch { /* unreadable marker */ }
   return { kind: "raw", body: el.outerHTML };
