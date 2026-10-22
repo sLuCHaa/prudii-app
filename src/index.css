@@ -18,22 +18,22 @@
 /* ─── Design Tokens ─── */
 :root {
   /* Colors */
-  --c-bg:          #FAF8F4;
-  --c-bg-secondary:#F5F1EA;
-  --c-bg-tertiary: #EDE7DE;
-  --c-surface:     #FFFEFC;
-  --c-tile:        #FFFEFC;
+  --c-bg:          #FFFFFF;
+  --c-bg-secondary:#FAFAFA;
+  --c-bg-tertiary: #EEEEF0;
+  --c-surface:     #FFFFFF;
+  --c-tile:        #FFFFFF;
   --c-edge-light:  rgba(255, 255, 255, 0.75);
-  --c-field-inset: rgba(40, 25, 10, 0.08);
-  --c-card-drop:   rgba(60, 35, 15, 0.4);
-  --c-tile-drop:   rgba(40, 25, 10, 0.22);
-  --c-sidebar:     #F2EDE5;
-  --c-border:      #E2DACE;
-  --c-border-light:#EDE7DE;
+  --c-field-inset: rgba(24, 24, 27, 0.08);
+  --c-card-drop:   rgba(24, 24, 27, 0.4);
+  --c-tile-drop:   rgba(24, 24, 27, 0.22);
+  --c-sidebar:     #F4F4F5;
+  --c-border:      #E4E4E7;
+  --c-border-light:#EEEEF0;
 
-  --c-text:        #221E19;
-  --c-text-secondary: #5A5145;
-  --c-text-tertiary:  #6F6456;
+  --c-text:        #18181B;
+  --c-text-secondary: #52525B;
+  --c-text-tertiary:  #6B6B73;
   --c-text-inverse:   #ffffff;
 
   --c-accent:      #3b82f6;
@@ -62,18 +62,18 @@
   --gradient-warm:    linear-gradient(135deg, #ec4899, #f97316);
   --gradient-success: linear-gradient(135deg, #10b981, #3b82f6);
 
-  --c-hover:       #F1EBE2;
-  --c-active:      #E6DED2;
+  --c-hover:       #EAEAEC;
+  --c-active:      #E0E0E3;
   --c-selected:    rgba(59, 130, 246, 0.1);
 
   /* Opaque so a chat bubble reads the same on any pane background. */
   --c-own-bubble:        color-mix(in srgb, var(--c-accent) 7%, var(--c-surface));
   --c-own-bubble-border: color-mix(in srgb, var(--c-accent) 22%, var(--c-border));
 
-  --c-scrollbar:       #D2C8B8;
-  --c-scrollbar-hover: #B0A290;
+  --c-scrollbar:       #D4D4D8;
+  --c-scrollbar-hover: #A1A1AA;
   --c-overlay:         rgba(0, 0, 0, 0.6);
-  --c-drawer-backdrop: rgba(34, 30, 25, 0.28);
+  --c-drawer-backdrop: rgba(24, 24, 27, 0.28);
 
   /* Spacing: Tailwind's 4px-grid utilities (p-*, gap-*) ARE the spacing
      system — no parallel token set. Typography sizes live in @theme
@@ -110,23 +110,23 @@
 
 .dark {
   /* Colors */
-  --c-bg:          #16130F;
-  --c-bg-secondary:#1F1A15;
-  --c-bg-tertiary: #332C24;
-  --c-surface:     #1F1A15;
-  --c-tile:        #2A241D;
+  --c-bg:          #121214;
+  --c-bg-secondary:#151517;
+  --c-bg-tertiary: #27272A;
+  --c-surface:     #1D1D20;
+  --c-tile:        #232327;
   --c-edge-light:  rgba(255, 255, 255, 0.08);
   --c-field-inset: rgba(0, 0, 0, 0.35);
   --c-card-drop:   rgba(0, 0, 0, 0.6);
   --c-tile-drop:   rgba(0, 0, 0, 0.45);
-  --c-sidebar:     #110E0B;
-  --c-border:      #332C24;
-  --c-border-light:#29231C;
+  --c-sidebar:     #0C0C0E;
+  --c-border:      #2A2A2E;
+  --c-border-light:#212124;
 
-  --c-text:        #F0EAE1;
-  --c-text-secondary: #B0A294;
-  --c-text-tertiary:  #9A8D7D;
-  --c-text-inverse:   #1A1410;
+  --c-text:        #F4F4F5;
+  --c-text-secondary: #A1A1AA;
+  --c-text-tertiary:  #8A8A93;
+  --c-text-inverse:   #18181B;
 
   --c-accent:      #3b82f6;
   --c-accent-hover:#60a5fa;
@@ -153,17 +153,17 @@
      (surface->hover 1.41, hover->active 1.37). Der erste warme Entwurf lag bei
      1.14 und damit deutlich flacher — auf dunklem Grund faellt ein zu kleiner
      Schritt sofort als fehlende Rueckmeldung auf. */
-  --c-hover:       #3D342A;
-  --c-active:      #55483A;
+  --c-hover:       #2C2C30;
+  --c-active:      #3F3F45;
   --c-selected:    rgba(59, 130, 246, 0.2);
 
   --c-own-bubble:        color-mix(in srgb, var(--c-accent) 13%, var(--c-surface));
   --c-own-bubble-border: color-mix(in srgb, var(--c-accent) 32%, var(--c-border));
 
-  --c-scrollbar:       #3E362C;
-  --c-scrollbar-hover: #574C3E;
+  --c-scrollbar:       #3F3F46;
+  --c-scrollbar-hover: #52525B;
   --c-overlay:         rgba(0, 0, 0, 0.6);
-  --c-drawer-backdrop: rgba(10, 8, 6, 0.55);
+  --c-drawer-backdrop: rgba(0, 0, 0, 0.55);
 
   /* Shadows (Dark Mode): stronger, so panels still lift off the dark surfaces. */
   --c-shadow-sm:  0 1px 2px rgba(0,0,0,0.2);
@@ -801,11 +801,11 @@ button:focus-visible,
 
 /* ─── Sidebar base (opaque; ambient tint layers on top, see SidebarAmbient) ─── */
 .glass-sidebar {
-  background: #F2EDE5;
+  background: #F4F4F5;
 }
 
 .dark .glass-sidebar {
-  background: #110E0B;
+  background: #0C0C0E;
 }
 
 /* ─── Vibrancy (translucent sidebar, macOS only) ───
@@ -820,13 +820,13 @@ html[data-vibrancy] .app-shell {
 }
 
 html[data-vibrancy] .glass-sidebar {
-  background: rgba(242, 237, 229, 0.62);
+  background: rgba(244, 244, 245, 0.62);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }
 
 html[data-vibrancy].dark .glass-sidebar {
-  background: rgba(17, 14, 11, 0.55);
+  background: rgba(12, 12, 14, 0.55);
 }
 
 /* ─── Accent Color Themes ─── */

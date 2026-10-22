@@ -184,7 +184,7 @@ export async function openComposeWindow(data: ComposeInitData): Promise<void> {
         : {}),
       // Native window background matching the theme, so the window never flashes
       // WebView2's white default before the web content paints.
-      backgroundColor: data.darkMode ? [15, 23, 42, 255] : [255, 255, 255, 255],
+      backgroundColor: data.darkMode ? [18, 18, 20, 255] : [255, 255, 255, 255],
       maximizable: true,
       visible: false,
       dragDropEnabled: false,

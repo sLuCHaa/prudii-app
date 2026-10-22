@@ -233,9 +233,9 @@ fn set_window_theme(
     // actually render.
     let effective_dark = if follows_system { is_system_dark_mode() } else { dark };
     let bg = if effective_dark {
-        Color(15, 23, 42, 255) // #0f172a
+        Color(12, 12, 14, 255) // #0c0c0e
     } else {
-        Color(255, 255, 255, 255) // #ffffff
+        Color(244, 244, 245, 255) // #f4f4f5
     };
     for (_label, window) in app.webview_windows() {
         let _ = window.set_background_color(Some(bg));
@@ -711,9 +711,9 @@ pub fn run() {
             // Set window background color + DWM theme BEFORE showing the window
             let dark = is_system_dark_mode();
             let bg = if dark {
-                Color(15, 23, 42, 255) // #0f172a
+                Color(12, 12, 14, 255) // #0c0c0e
             } else {
-                Color(255, 255, 255, 255) // #ffffff
+                Color(244, 244, 245, 255) // #f4f4f5
             };
             let _ = window.set_background_color(Some(bg));
             #[cfg(windows)]
@@ -721,7 +721,7 @@ pub fn run() {
                 set_dwm_dark_mode(hwnd.0, dark);
                 // --c-sidebar until the frontend reports its title bar color.
                 if !export_backup {
-                    set_dwm_caption_color(hwnd.0, if dark { 0x0F172A } else { 0xF8FAFC });
+                    set_dwm_caption_color(hwnd.0, if dark { 0x0C0C0E } else { 0xF4F4F5 });
                 }
             }
             let _ = window.show();

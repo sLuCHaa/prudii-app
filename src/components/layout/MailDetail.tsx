@@ -42,12 +42,12 @@ const LIGHT_STYLES = `
   html { background: #ffffff; }
   body { background: #ffffff; color: #1a1a1a; }
   a { color: #2563eb; }
-  ::-webkit-scrollbar-thumb { background: #D2C8B8; }
-  ::-webkit-scrollbar-thumb:hover { background: #B0A290; }
+  ::-webkit-scrollbar-thumb { background: #D4D4D8; }
+  ::-webkit-scrollbar-thumb:hover { background: #A1A1AA; }
 `;
 
 const DARK_STYLES = `
-  html { background: #1F1A15; color-scheme: dark; }
+  html { background: #1D1D20; color-scheme: dark; }
   body {
     color: #1a1a1a;
     filter: invert(0.88) hue-rotate(180deg);
@@ -223,7 +223,7 @@ ${BASE_STYLES}
         className="w-full border-0"
         style={{
           height: `${height}px`,
-          background: darkMode ? "#1F1A15" : "#ffffff",
+          background: darkMode ? "#1D1D20" : "#ffffff",
         }}
         title={t("mailDetail.emailContent")}
       />
