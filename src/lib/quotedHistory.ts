@@ -7,12 +7,12 @@ const ATTRIBUTION = new RegExp(`(?:${ATTRIBUTION_VERBS}).*[:：]\\s*$`, "i");
 // A time or an address tells an attribution from a sentence that ends in "schrieb:".
 const ATTRIBUTION_DETAIL = /\d{1,2}:\d{2}|@/;
 
-const FORWARD_LABELS = "forwarded message|weitergeleitete nachricht|message transféré|mensaje reenviado|mensagem encaminhada|messaggio inoltrato|пересылаемое сообщение|转发邮件|begin forwarded message|anfang der weitergeleiteten nachricht|début du message réexpédié";
+export const FORWARD_LABELS = "forwarded message|weitergeleitete nachricht|message transféré|mensaje reenviado|mensagem encaminhada|messaggio inoltrato|пересылаемое сообщение|转发邮件|begin forwarded message|anfang der weitergeleiteten nachricht|début du message réexpédié";
 const FORWARD_AT_START = new RegExp(`^[-\\s]*(?:${FORWARD_LABELS})`, "i");
 const FORWARD_MARKER = new RegExp(`-{2,}\\s*(?:${FORWARD_LABELS})|(?:begin forwarded message|anfang der weitergeleiteten nachricht|début du message réexpédié)\\s*:`, "i");
-const FORWARD_SUBJECT = /^\s*(?:fwd?|wg|tr|rv|enc)\s*:/i;
+export const FORWARD_SUBJECT = /^\s*(?:fwd?|wg|tr|rv|enc)\s*:/i;
 
-const ORIGINAL_SEPARATOR = /^-{2,}\s*(?:original message|ursprüngliche nachricht|originalnachricht|message d'origine|mensaje original|mensagem original|messaggio originale|исходное сообщение|原始邮件)\s*-{2,}$/i;
+export const ORIGINAL_SEPARATOR = /^-{2,}\s*(?:original message|ursprüngliche nachricht|originalnachricht|message d'origine|mensaje original|mensagem original|messaggio originale|исходное сообщение|原始邮件)\s*-{2,}$/i;
 const HEADER_FROM = /^(?:from|von|de|da|от|发件人|van|od|fra)\s*[:：]/i;
 const HEADER_NEXT = /^(?:sent|gesendet|date|datum|envoyé|enviado|enviada|inviato|отправлено|发送时间|verzonden|wysłano|skickat|sendt|to|an|à|para|a|кому|收件人)\s*[:：]/i;
 const HEADER_SENT = /(?:sent|gesendet|date|datum|envoyé|enviado|inviato|отправлено|发送时间|verzonden|wysłano|skickat|sendt)\s*[:：]/i;
@@ -38,7 +38,7 @@ function isAttribution(text: string, loose = false): boolean {
   return loose ? /[:：]$/.test(t) : ATTRIBUTION.test(t);
 }
 
-function visibleText(node: Node): string {
+export function visibleText(node: Node): string {
   if (node.nodeType === Node.TEXT_NODE) return node.nodeValue ?? "";
   if (node.nodeType !== Node.ELEMENT_NODE || HIDDEN_TAGS.has((node as Element).tagName)) return "";
   const tag = (node as Element).tagName;
@@ -53,7 +53,7 @@ function isTrackingPixel(img: Element): boolean {
   return ["width", "height"].some((a) => /^[01]$/.test(img.getAttribute(a) ?? ""));
 }
 
-function hasVisible(node: Node): boolean {
+export function hasVisible(node: Node): boolean {
   if (visibleText(node).replace(SPACE, "") !== "") return true;
   if (node.nodeType !== Node.ELEMENT_NODE) return false;
   const el = node as Element;
@@ -207,7 +207,7 @@ function cutFrom(start: Node, root: Node) {
   start.parentNode?.removeChild(start);
 }
 
-function trimTrailing(root: Node) {
+export function trimTrailing(root: Node) {
   let parent = root;
   for (;;) {
     const last = parent.lastChild;
