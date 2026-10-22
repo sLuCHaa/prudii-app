@@ -14,6 +14,7 @@ const JPEG_RENDER_MARKERS = new Set([
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 const PNG_KEPT = new Set([
   "IHDR", "PLTE", "IDAT", "IEND", "tRNS", "gAMA", "cHRM", "sRGB", "iCCP", "sBIT", "bKGD", "pHYs", "acTL", "fcTL", "fdAT",
+  "cICP", "mDCv", "cLLi",
 ]);
 const EXIF_HEADER = "Exif\0\0";
 const DROP = new Uint8Array(0);

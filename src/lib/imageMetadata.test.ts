@@ -257,3 +257,10 @@ describe("EXIF readers", () => {
     expect(hasGpsData(bytes("GIF89a...."))).toBe(false);
   });
 });
+
+describe("PNG colour chunks", () => {
+  it("keeps HDR and wide-gamut colour information", () => {
+    const input = png(chunk("IHDR", 13), chunk("cICP", 4), chunk("mDCv", 24), chunk("cLLi", 8), chunk("tEXt", bytes("a\0b")), chunk("IDAT", 4), chunk("IEND"));
+    expect(chunkTypes(stripPngMetadata(input)!)).toEqual(["IHDR", "cICP", "mDCv", "cLLi", "IDAT", "IEND"]);
+  });
+});
