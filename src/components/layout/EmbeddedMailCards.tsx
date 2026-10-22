@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { parseISO } from "date-fns";
-import { ChevronRight, Forward, Reply } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { Forward, Reply } from "../icons";
 import { Tooltip } from "../ui/Tooltip";
 import { ContactAvatar } from "../ui/ContactAvatar";
 import { useAppStore } from "../../stores/appStore";
@@ -13,7 +14,7 @@ import type { EmbeddedMail } from "../../lib/embeddedMails";
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}T/;
 
 const BADGE_CLASS = {
-  original: "bg-accent/10 text-accent",
+  original: "bg-accent/10 text-accent-hover",
   forwarded: "bg-bg-tertiary text-text-secondary",
 };
 
@@ -68,9 +69,9 @@ export function EmbeddedMailCards({ parts, renderBody, onReply, onForward, onSho
                   <ContactAvatar name={part.from.name} email={part.from.email} size={26} className="shrink-0" />
                   <span className="min-w-0 flex flex-1 flex-col">
                     <span className="flex items-baseline gap-1.5 min-w-0">
-                      <span className="font-medium text-text-primary truncate">{name}</span>
+                      <span className="font-medium text-text truncate">{name}</span>
                       {part.from.email && part.from.email !== name && (
-                        <span className="text-text-tertiary truncate">{part.from.email}</span>
+                        <span className="shrink-0 text-text-tertiary">{part.from.email}</span>
                       )}
                     </span>
                     <span className="truncate text-text-tertiary">
