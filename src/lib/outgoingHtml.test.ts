@@ -50,13 +50,13 @@ describe("inlineComposeStyles", () => {
 });
 
 describe("addSignatureDivider", () => {
-  const SIGNED = `<p>Hallo</p><div data-type="signature"><p>Patrick</p></div>`;
+  const SIGNED = `<p>Hallo</p><div data-type="signature"><p>Anna</p></div>`;
 
   it("puts a short line in the accent colour above the signature", () => {
     const out = addSignatureDivider(SIGNED, "#10b981");
     const signature = out.slice(out.indexOf('<div data-type="signature">'));
     expect(signature.indexOf("data-prudii-divider")).toBeGreaterThan(0);
-    expect(signature.indexOf("data-prudii-divider")).toBeLessThan(signature.indexOf("Patrick"));
+    expect(signature.indexOf("data-prudii-divider")).toBeLessThan(signature.indexOf("Anna"));
     expect(out).toContain('width="48"');
     expect(out).toContain('bgcolor="#10b981"');
   });
@@ -317,7 +317,7 @@ describe("fillEmptyParagraphs", () => {
 
   it("does not disturb a signature or its embedded image", () => {
     const signature =
-      '<div data-type="signature"><p><strong>Patrick Sluka</strong></p>' +
+      '<div data-type="signature"><p><strong>Anna Weber</strong></p>' +
       '<p><img src="data:image/png;base64,iVBORw0KGgo=" width="146"></p></div>';
     const html = `<p>Guten Abend Herr Schallwig</p><p></p><p>Vielen Dank</p><p></p>${signature}`;
 
@@ -325,7 +325,7 @@ describe("fillEmptyParagraphs", () => {
 
     expect(out).toContain("data:image/png;base64,iVBORw0KGgo=");
     expect(out).toContain('<div data-type="signature">');
-    expect(out).toContain("<strong>Patrick Sluka</strong>");
+    expect(out).toContain("<strong>Anna Weber</strong>");
     expect(out).toBe(
       `<p>Guten Abend Herr Schallwig</p><p><br></p><p>Vielen Dank</p><p><br></p>${signature}`
     );

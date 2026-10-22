@@ -15,14 +15,14 @@ const PIXEL =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 
 const SIGNATURE = `<table cellpadding="0" style="font-size: 13px;"><tbody><tr><td>
-  <div style="font-weight: bold;">Patrick Sluka</div>
-  <div>Full Stack &amp; Mobile Developer</div>
+  <div style="font-weight: bold;">Anna Weber</div>
+  <div>Product Designer</div>
 </td></tr><tr><td><img src="${PIXEL}" width="146"></td></tr></table>`;
 
 describe("parseSignature", () => {
   it("indexes text nodes in document order and skips whitespace", () => {
     const model = parseSignature(SIGNATURE);
-    expect(model.texts).toEqual(["Patrick Sluka", "Full Stack & Mobile Developer"]);
+    expect(model.texts).toEqual(["Anna Weber", "Product Designer"]);
   });
 
   it("returns no texts for an empty signature", () => {
@@ -36,11 +36,11 @@ describe("setSignatureText", () => {
     const html = setSignatureText(model, 1, "Senior Full Stack Developer");
 
     expect(html).toContain("Senior Full Stack Developer");
-    expect(html).not.toContain("Full Stack &amp; Mobile Developer");
+    expect(html).not.toContain("Product Designer");
     expect(html).toContain('cellpadding="0"');
     expect(html).toContain("font-weight: bold;");
     expect(html).toContain(PIXEL);
-    expect(html).toContain("Patrick Sluka");
+    expect(html).toContain("Anna Weber");
   });
 
   it("escapes markup typed into a text node", () => {
@@ -51,9 +51,9 @@ describe("setSignatureText", () => {
   });
 
   it("leaves attribute values alone when their text resembles the edit", () => {
-    const model = parseSignature('<a href="Patrick">Patrick</a>');
+    const model = parseSignature('<a href="Anna">Anna</a>');
     const html = setSignatureText(model, 0, "Anna");
-    expect(html).toContain('href="Patrick"');
+    expect(html).toContain('href="Anna"');
     expect(html).toContain(">Anna<");
   });
 });
@@ -88,7 +88,7 @@ describe("data URI collapsing", () => {
 
   it("drops the image when its placeholder was deleted", () => {
     const { images } = collapseDataUris(SIGNATURE);
-    const withoutImg = '<table><tbody><tr><td>Patrick</td></tr></tbody></table>';
+    const withoutImg = '<table><tbody><tr><td>Anna</td></tr></tbody></table>';
     expect(expandDataUris(withoutImg, images)).not.toContain(PIXEL);
   });
 
@@ -123,7 +123,7 @@ describe("hasBrokenDataUri", () => {
   });
 
   it("passes a signature with no images at all", () => {
-    expect(hasBrokenDataUri("<div>Patrick</div>")).toBe(false);
+    expect(hasBrokenDataUri("<div>Anna</div>")).toBe(false);
   });
 
   it("catches a placeholder whose closing guillemet was deleted", () => {
@@ -147,7 +147,7 @@ describe("hasBrokenDataUri", () => {
 
   // Deleting the whole <img> is a legitimate edit and must stay allowed.
   it("passes when the image element was removed outright", () => {
-    expect(hasBrokenDataUri("<table><tbody><tr><td>Patrick</td></tr></tbody></table>")).toBe(false);
+    expect(hasBrokenDataUri("<table><tbody><tr><td>Anna</td></tr></tbody></table>")).toBe(false);
   });
 
   // The closing paren must not be read as payload, or every CSS background image
@@ -166,9 +166,9 @@ describe("hasBrokenDataUri", () => {
 describe("derivePlainText", () => {
   it("keeps the visible text and ignores style and script", () => {
     const text = derivePlainText(
-      "<style>.a{color:red}</style><div>Patrick</div><div>Developer</div>"
+      "<style>.a{color:red}</style><div>Anna</div><div>Developer</div>"
     );
-    expect(text).toContain("Patrick");
+    expect(text).toContain("Anna");
     expect(text).toContain("Developer");
     expect(text).not.toContain("color:red");
   });

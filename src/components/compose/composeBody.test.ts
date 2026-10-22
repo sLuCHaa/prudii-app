@@ -11,7 +11,7 @@ import { DESIGNED_SIGNATURE } from "../../lib/signatureFixture";
 import { parseMailtoUrl } from "../../lib/mailtoParser";
 import { plainTextParagraph } from "../../lib/sanitize";
 
-const SIGNED = `<p></p><div data-type="signature"><p><strong>Patrick</strong></p><p><a href="https://www.messtex.de">www.messtex.de</a></p></div>`;
+const SIGNED = `<p></p><div data-type="signature"><p><strong>Anna</strong></p><p><a href="https://www.studio-halde.de">www.studio-halde.de</a></p></div>`;
 
 let editor: Editor;
 
@@ -88,7 +88,7 @@ describe("setComposeBody", () => {
     setComposeBody(e, SIGNED);
     expect(e.state.selection.from).toBe(1);
     expect(e.isActive("link")).toBe(false);
-    expect(e.getHTML()).toContain("www.messtex.de");
+    expect(e.getHTML()).toContain("www.studio-halde.de");
   });
 
   it("puts typed text above the signature", () => {
@@ -114,7 +114,7 @@ describe("draft images", () => {
   const PIXEL = "data:image/png;base64,iVBORw0KGgo=";
   const SHOT = "file:///C:/mail/shot.png";
   const OTHER = "file:///C:/mail/other.png";
-  const DRAFT = `<p>Hi<img src="${SHOT}" width="320"><img src="${SHOT}"><img src="${OTHER}"></p><div data-type="signature"><p>Patrick</p></div>`;
+  const DRAFT = `<p>Hi<img src="${SHOT}" width="320"><img src="${SHOT}"><img src="${OTHER}"></p><div data-type="signature"><p>Anna</p></div>`;
 
   it("lists each local image once", () => {
     const e = make();

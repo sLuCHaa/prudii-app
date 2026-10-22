@@ -102,8 +102,8 @@ mod tests {
         let db = Database::new(std::env::temp_dir().join(format!("prudii-contacts-{}", uuid::Uuid::new_v4()))).unwrap();
         let conn = db.lock_db();
         for (account, email, frequency) in [
-            ("a", "anna@messtex.de", 5),
-            ("b", "bernd@Messtex.de", 2),
+            ("a", "anna@studio-halde.de", 5),
+            ("b", "bernd@Studio-Halde.de", 2),
             ("a", "info@gmail.com", 3),
             ("a", "no-address", 9),
         ] {
@@ -114,6 +114,6 @@ mod tests {
             .unwrap();
         }
         let domains: Vec<(String, i64)> = contact_domains(&conn).unwrap().into_iter().map(|d| (d.domain, d.frequency)).collect();
-        assert_eq!(domains, vec![("messtex.de".to_string(), 7), ("gmail.com".to_string(), 3)]);
+        assert_eq!(domains, vec![("studio-halde.de".to_string(), 7), ("gmail.com".to_string(), 3)]);
     }
 }

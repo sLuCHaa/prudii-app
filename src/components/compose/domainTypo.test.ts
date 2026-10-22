@@ -13,12 +13,12 @@ describe("suggestDomain", () => {
   });
 
   it("catches typos in the domains of your contacts", () => {
-    expect(suggestDomain("messtx.de", known("messtex.de"))).toBe("messtex.de");
+    expect(suggestDomain("studio-hald.de", known("studio-halde.de"))).toBe("studio-halde.de");
   });
 
   it("leaves domains alone that you already write to", () => {
     expect(suggestDomain("gmail.co", known("gmail.co"))).toBeNull();
-    expect(suggestDomain("messtex.de", known("messtex.de"))).toBeNull();
+    expect(suggestDomain("studio-halde.de", known("studio-halde.de"))).toBeNull();
   });
 
   it("does not take a real country domain for a typo", () => {

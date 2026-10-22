@@ -8,30 +8,30 @@ function att(over: Partial<{ filename: string; content_id: string | null }> = {}
 // A forward whose sender's Emacs never turned its MML placeholders into MIME
 // parts: the tags arrive as body text, the files do not arrive at all.
 const STRANDED_FORWARD = `-------- Forwarded Message --------
-From: Volker Hübchen <v.huebchen@kalefeld.de>
+From: Lena Brück <l.brueck@werft-nord.example>
 
 Mit freundlichen Grüßen
-Volker Hübchen
+Lena Brück
 [cid:image002.png@01DD3937.AB133490]
-Kleiner Hagen 4
+Am Deich 7
 
-Matthias Märsch
+Tobias Sänger
 
 [cid:image001.png@01DD3936.B1DFBBF0]
 
-Messtex
-Wehrbach 22a
+Studio Halde
+Hafenweg 3
 
 <#part type=image/png filename="/tmp/image001.png"><#/part>
 <#part type=image/png filename="/tmp/image002.png"><#/part>
-<#part type=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet filename="/tmp/bereinigte WZ-Tauschliste 2026.xlsx"><#/part>
+<#part type=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet filename="/tmp/bereinigte Teileliste 2026.xlsx"><#/part>
 `;
 
 describe("stripMmlTags", () => {
   it("removes the tag block a stranded forward ends with", () => {
     const out = stripMmlTags(STRANDED_FORWARD);
     expect(out).not.toMatch(/<#/);
-    expect(out).toMatch(/Wehrbach 22a$/);
+    expect(out).toMatch(/Hafenweg 3$/);
   });
 
   it("returns a body without MML unchanged", () => {
@@ -58,7 +58,7 @@ describe("stripMmlTags", () => {
 describe("findMissingParts", () => {
   it("names every file the stranded forward announces but does not carry", () => {
     const { names, count } = findMissingParts({ body_text: STRANDED_FORWARD }, []);
-    expect(names).toEqual(["image002.png", "image001.png", "bereinigte WZ-Tauschliste 2026.xlsx"]);
+    expect(names).toEqual(["image002.png", "image001.png", "bereinigte Teileliste 2026.xlsx"]);
     expect(count).toBe(3);
   });
 

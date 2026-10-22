@@ -28,7 +28,7 @@ describe("normalizeLinkInput", () => {
   });
 
   it("accepts phone links and drops their spacing", () => {
-    expect(normalizeLinkInput("tel:+49 8441 47718-15")).toEqual(ok("tel:+4984414771815"));
+    expect(normalizeLinkInput("tel:+49 30 123456-78")).toEqual(ok("tel:+493012345678"));
     expect(normalizeLinkInput("tel:abc")).toEqual(bad("phone"));
   });
 
