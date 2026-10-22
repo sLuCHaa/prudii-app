@@ -71,7 +71,7 @@ describe("SignatureNode", () => {
     try {
       const e = make(sig(`<p>Gruß</p><style>p{color:red}</style><form action="https://evil.example/x"><button>Go</button></form>`), host);
       const shown = rendered(host);
-      expect(shown.querySelector("style, form, button")).toBeNull();
+      expect(shown.querySelector("style:not([data-prudii-editor]), form, button")).toBeNull();
       expect(shown.textContent).toContain("Gruß");
       expect(e.getHTML()).not.toMatch(/<style|<form|<button/);
     } finally {
@@ -116,10 +116,41 @@ describe("SignatureNode", () => {
       make(sig(DESIGNED_SIGNATURE), host);
       const block = host.querySelector('[data-type="signature"]') as HTMLElement;
       expect(block.childNodes).toHaveLength(0);
-      expect(block.shadowRoot!.innerHTML).toBe(DESIGNED_SIGNATURE);
+      const box = document.createElement("div");
+      for (const node of Array.from(block.shadowRoot!.childNodes)) {
+        if (!(node instanceof Element && node.matches("style[data-prudii-editor]"))) box.append(node.cloneNode(true));
+      }
+      expect(box.innerHTML).toBe(DESIGNED_SIGNATURE);
     } finally {
       host.remove();
     }
+  });
+
+  it("lets media in the signature undo the dark editor's inversion", () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    try {
+      make(sig(DESIGNED_SIGNATURE), host);
+      const style = rendered(host).querySelector("style[data-prudii-editor]");
+      expect(style?.textContent).toMatch(/img[^{]*\{\s*filter: var\(--sig-media-filter, none\);/);
+    } finally {
+      host.remove();
+    }
+  });
+
+  it("inverts the signature in the dark editor instead of putting it on a white card", () => {
+    const css = readFileSync(resolve(__dirname, "../../index.css"), "utf8");
+    const dark = css.match(/\.dark \.compose-editor \.tiptap \[data-type="signature"\] \{([^}]*)\}/)?.[1] ?? "";
+    expect(dark).toContain("filter: invert(0.88) hue-rotate(180deg);");
+    expect(dark).toContain("--sig-media-filter: invert(1) hue-rotate(180deg);");
+    expect(dark).not.toMatch(/background:\s*#fff/i);
+    expect(css).toMatch(/\.dark \.compose-editor \.tiptap \[data-type="signature"\]::before \{[^}]*filter: invert\(1\) hue-rotate\(180deg\);/);
+  });
+
+  it("keeps the editor-only style out of the sent signature", () => {
+    const e = make(sig(DESIGNED_SIGNATURE));
+    expect(e.getHTML()).not.toContain("data-prudii-editor");
+    expect(e.getHTML()).not.toContain("--sig-media-filter");
   });
 
   it("gives the block the mail's line height", () => {

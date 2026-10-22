@@ -748,11 +748,15 @@ button:focus-visible,
   margin: 20px 0 14px;
   border-top: 2px solid var(--c-accent);
 }
+/* Same treatment as a mail body in the dark reading pane; the preview shows the original. */
 .dark .compose-editor .tiptap [data-type="signature"] {
-  background: #fff;
   color: #1a1a1a;
-  padding: 12px 16px;
-  border-radius: var(--radius-md);
+  color-scheme: light;
+  filter: invert(0.88) hue-rotate(180deg);
+  --sig-media-filter: invert(1) hue-rotate(180deg);
+}
+.dark .compose-editor .tiptap [data-type="signature"]::before {
+  filter: invert(1) hue-rotate(180deg);
 }
 .compose-editor .tiptap [data-type="signature"].ProseMirror-selectednode {
   outline: 2px solid var(--c-accent-ring);

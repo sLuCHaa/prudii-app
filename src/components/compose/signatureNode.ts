@@ -68,7 +68,8 @@ export const SignatureNode = Node.create({
       dom.setAttribute("contenteditable", "false");
       // A shadow root keeps the editor's and Tailwind's styles out, so only browser defaults apply, as at the recipient.
       const shown = dom.attachShadow({ mode: "open" });
-      shown.innerHTML = sanitizeSignatureBlockHtml(node.attrs.html as string);
+      // The dark editor inverts the block like a mail body; media flip back so logos keep their colours.
+      shown.innerHTML = `<style data-prudii-editor>img, video, picture, svg { filter: var(--sig-media-filter, none); }</style>${sanitizeSignatureBlockHtml(node.attrs.html as string)}`;
       const keepLinksShut = (event: Event) => {
         if ((event.target as Element | null)?.closest?.("a")) event.preventDefault();
       };
