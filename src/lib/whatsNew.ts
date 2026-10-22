@@ -21,6 +21,7 @@ export const RELEASES: WhatsNewRelease[] = [
     items: [
       { icon: "sparkles", tone: "blue", key: "whatsNew.v1_7_4.look" },
       { icon: "mail", tone: "green", key: "whatsNew.v1_7_4.recipients" },
+      { icon: "mail", tone: "violet", key: "whatsNew.v1_7_4.cards" },
     ],
   },
   {

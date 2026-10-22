@@ -1354,6 +1354,10 @@
       "recipients": {
         "title": "À qui c'est parti",
         "text": "Les messages envoyés dans la conversation indiquent désormais leurs destinataires."
+      },
+      "cards": {
+        "title": "Répondez directement à l'e-mail d'origine",
+        "text": "Les e-mails transférés apparaissent sous forme de cartes distinctes. Répondez-y directement à l'expéditeur d'origine, sans passer par les transferts intermédiaires."
       }
     },
     "v1_7_3": {

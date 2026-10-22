@@ -23,6 +23,7 @@ import { useScroller } from "../../hooks/useScroller";
 import { useDialog } from "../ui/DialogProvider";
 import { Button, IconButton } from "../ui/Button";
 import { DateField } from "../ui/DateField";
+import { formatAddress, replyRecipientDraft } from "../../lib/replyDraft";
 import { Select } from "../ui/Select";
 import { TimeField } from "../ui/TimeField";
 import { isoDate } from "../../lib/calendar/dates";
@@ -115,23 +116,6 @@ function getFileColor(mimeType: string, filename: string) {
 }
 
 export type ComposeMode = "new" | "reply" | "replyAll" | "forward" | "draft";
-
-/** Format a MailAddress as a recipient chip string, handling missing/invalid emails */
-function formatAddress(addr: { name: string; email: string }): string | null {
-  const emailLike = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (addr.email && emailLike.test(addr.email)) {
-    // Only use display name if it's a clean phrase — names containing '@' or '<>'
-    // produce RFC 5322 parse failures and break the send pipeline.
-    const cleanName = addr.name?.trim() ?? "";
-    const nameUsable = cleanName && !cleanName.includes('@') && !cleanName.includes('<') && !cleanName.includes('>');
-    return nameUsable ? `${cleanName} <${addr.email}>` : addr.email;
-  }
-  // email field is missing/invalid — check if the name contains a valid email
-  if (addr.name && emailLike.test(addr.name)) {
-    return addr.name;
-  }
-  return null;
-}
 
 // Build the RFC 5322 References chain for a reply: the original's References
 // header (full ancestry) followed by the original's own Message-ID.
@@ -462,6 +446,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   // Typed-but-not-chipped text in the To field still counts as a recipient
   // (handleSend commits it), so it must not leave the send button greyed out.
   const [toHasPending, setToHasPending] = useState(false);
+  const [toDraft, setToDraft] = useState<string | null>(null);
   const [showDiscardDialog, setShowDiscardDialog] = useState(false);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
@@ -814,6 +799,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         const replyTarget = originalMail.reply_to?.length > 0 ? originalMail.reply_to[0] : originalMail.from;
         const fromFormatted = formatAddress(replyTarget);
         setTo(fromFormatted ? [fromFormatted] : []);
+        setToDraft(replyRecipientDraft(replyTarget));
         setCc([]);
         setSubject(generateReplySubject(originalMail.subject));
         const q = quoteFromMail("reply", originalMail);
@@ -829,6 +815,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         const replyTarget = originalMail.reply_to?.length > 0 ? originalMail.reply_to[0] : originalMail.from;
         const fromFormatted = formatAddress(replyTarget);
         setTo(fromFormatted ? [fromFormatted] : []);
+        setToDraft(replyRecipientDraft(replyTarget));
         const ownEmail = accounts?.find((a) => a.id === defaultAccountId)?.email?.toLowerCase();
         // Email addresses are case-insensitive (RFC 5321); drop our own address from
         // both To and Cc so reply-all never includes the sender.
@@ -1656,6 +1643,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
               onChipDroppedFromField={(src, rec) => handleDropToField("to", src, rec)}
               blockedEmails={[...emailsOf(cc), ...emailsOf(bcc)]}
               onPendingChange={setToHasPending}
+              initialDraft={toDraft ?? undefined}
             />
             <div className="flex items-center gap-1 text-xs text-text-tertiary ml-2 pt-1.5">
               {!showCc && (

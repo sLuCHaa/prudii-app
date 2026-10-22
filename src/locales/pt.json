@@ -1354,6 +1354,10 @@
       "recipients": {
         "title": "Para quem foi enviado",
         "text": "As mensagens enviadas na conversa agora mostram para quem foram."
+      },
+      "cards": {
+        "title": "Responda diretamente ao e-mail original",
+        "text": "Os e-mails encaminhados aparecem como cartões próprios. Responda ali diretamente ao remetente original, sem os encaminhamentos pelo meio."
       }
     },
     "v1_7_3": {

@@ -1354,6 +1354,10 @@
       "recipients": {
         "title": "Empfänger auf einen Blick",
         "text": "Im Chat-Verlauf zeigen deine gesendeten Nachrichten jetzt, an wen sie gingen."
+      },
+      "cards": {
+        "title": "Direkt der ursprünglichen Mail antworten",
+        "text": "Weitergeleitete Mails erscheinen als eigene Karten. Antworte dort direkt dem ursprünglichen Absender, ohne die Weiterleitungen dazwischen."
       }
     },
     "v1_7_3": {

@@ -33,6 +33,8 @@ interface RecipientInputProps {
   /** Fires when typed-but-uncommitted text appears/disappears, so the send
       button can count an address that was never chipped via Enter/comma. */
   onPendingChange?: (hasPending: boolean) => void;
+  /** Starts the input with this text, uncommitted. */
+  initialDraft?: string;
 }
 
 export interface RecipientInputHandle {
@@ -51,6 +53,7 @@ export const RecipientInput = forwardRef<RecipientInputHandle, RecipientInputPro
   onChipDroppedFromField,
   blockedEmails = [],
   onPendingChange,
+  initialDraft,
 }: RecipientInputProps, ref) {
   const emailOf = (raw: string) => {
     const m = raw.match(/<([^>]+)>/);
@@ -67,7 +70,7 @@ export const RecipientInput = forwardRef<RecipientInputHandle, RecipientInputPro
     };
   }, []);
 
-  const [inputValue, setInputValue] = useState("");
+  const [inputValue, setInputValue] = useState(initialDraft ?? "");
   const [suggestions, setSuggestions] = useState<Contact[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -76,6 +79,10 @@ export const RecipientInput = forwardRef<RecipientInputHandle, RecipientInputPro
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  useEffect(() => {
+    if (initialDraft) setInputValue(initialDraft);
+  }, [initialDraft]);
 
   useEffect(() => {
     onPendingChange?.(inputValue.trim().length > 0);

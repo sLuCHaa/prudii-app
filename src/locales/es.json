@@ -1354,6 +1354,10 @@
       "recipients": {
         "title": "A quién se envió",
         "text": "Los mensajes enviados en la conversación ahora muestran a quién iban dirigidos."
+      },
+      "cards": {
+        "title": "Responde directamente al correo original",
+        "text": "Los correos reenviados aparecen como tarjetas propias. Responde ahí directamente al remitente original, sin los reenvíos intermedios."
       }
     },
     "v1_7_3": {

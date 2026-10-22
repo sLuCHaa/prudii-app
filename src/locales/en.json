@@ -1354,6 +1354,10 @@
       "recipients": {
         "title": "See who it went to",
         "text": "Sent messages in the conversation now show who they were sent to."
+      },
+      "cards": {
+        "title": "Reply straight to the original mail",
+        "text": "Forwarded mails show up as cards of their own. Reply to the original sender right there, without the forwards in between."
       }
     },
     "v1_7_3": {
