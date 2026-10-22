@@ -1333,6 +1333,20 @@
     "title": "Nouveautés de Prudii {{version}}",
     "subtitle": "Voici ce qui a changé depuis votre dernière mise à jour.",
     "done": "Compris",
+    "v1_7_3": {
+      "images": {
+        "title": "Coller des images",
+        "text": "Collez vos captures directement ; les photos partent réduites et sans localisation."
+      },
+      "font": {
+        "title": "Nouvelle police",
+        "text": "Une police par défaut plus claire, et un trait de votre couleur d'accent avant la signature."
+      },
+      "typos": {
+        "title": "Moins de fautes de frappe",
+        "text": "Prudii repère les adresses mal saisies comme gmial.com."
+      }
+    },
     "v1_7_1": {
       "look": {
         "title": "Nouveau look",

@@ -1333,6 +1333,20 @@
     "title": "New in Prudii {{version}}",
     "subtitle": "Here’s what changed since your last update.",
     "done": "Got it",
+    "v1_7_3": {
+      "images": {
+        "title": "Paste images",
+        "text": "Paste screenshots straight in; photos go out smaller and without location data."
+      },
+      "font": {
+        "title": "New font",
+        "text": "A clearer default font, with a line in your accent color setting off the signature."
+      },
+      "typos": {
+        "title": "Fewer typos",
+        "text": "Prudii spots mistyped addresses like gmial.com."
+      }
+    },
     "v1_7_1": {
       "look": {
         "title": "A fresh look",

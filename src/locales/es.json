@@ -1333,6 +1333,20 @@
     "title": "Novedades de Prudii {{version}}",
     "subtitle": "Esto es lo que ha cambiado desde tu última actualización.",
     "done": "Entendido",
+    "v1_7_3": {
+      "images": {
+        "title": "Pegar imágenes",
+        "text": "Pega capturas directamente; las fotos se envían más pequeñas y sin ubicación."
+      },
+      "font": {
+        "title": "Nueva fuente",
+        "text": "Una fuente predeterminada más clara y una línea en tu color de acento antes de la firma."
+      },
+      "typos": {
+        "title": "Menos erratas",
+        "text": "Prudii detecta direcciones mal escritas como gmial.com."
+      }
+    },
     "v1_7_1": {
       "look": {
         "title": "Nuevo aspecto",

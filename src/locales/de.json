@@ -1333,6 +1333,20 @@
     "title": "Neu in Prudii {{version}}",
     "subtitle": "Das hat sich seit deinem letzten Update getan.",
     "done": "Verstanden",
+    "v1_7_3": {
+      "images": {
+        "title": "Bilder einfügen",
+        "text": "Screenshots einfach einfügen; Fotos gehen verkleinert und ohne Standortdaten raus."
+      },
+      "font": {
+        "title": "Neue Schrift",
+        "text": "Eine klarere Standardschrift, und ein Strich in deiner Akzentfarbe setzt die Signatur ab."
+      },
+      "typos": {
+        "title": "Weniger Tippfehler",
+        "text": "Prudii erkennt vertippte Adressen wie gmial.com."
+      }
+    },
     "v1_7_1": {
       "look": {
         "title": "Neuer Look",

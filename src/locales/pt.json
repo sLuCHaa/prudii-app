@@ -1333,6 +1333,20 @@
     "title": "Novidades do Prudii {{version}}",
     "subtitle": "Veja o que mudou desde a sua última atualização.",
     "done": "Entendi",
+    "v1_7_3": {
+      "images": {
+        "title": "Colar imagens",
+        "text": "Cole capturas de tela direto; as fotos saem menores e sem localização."
+      },
+      "font": {
+        "title": "Nova fonte",
+        "text": "Uma fonte padrão mais clara e uma linha na sua cor de destaque antes da assinatura."
+      },
+      "typos": {
+        "title": "Menos erros de digitação",
+        "text": "O Prudii detecta endereços digitados errado, como gmial.com."
+      }
+    },
     "v1_7_1": {
       "look": {
         "title": "Novo visual",
