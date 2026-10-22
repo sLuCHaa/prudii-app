@@ -215,6 +215,11 @@ describe("splitEmbeddedMails", () => {
     expect(part.to.map((a) => a.email)).toEqual(["jonas.berger@studio-halde.example", "anna.weber@studio-halde.example"]);
   });
 
+  it("leaves ordinary text that looks like a header uncut", () => {
+    expect(splitEmbeddedMails("<p>Reise:</p><p>From: London Heathrow (LHR)<br>To: Paris CDG<br>Date: Fri, 12 Sep 2026</p>")).toBeNull();
+    expect(splitEmbeddedMails("<p>Buchung:</p><p>Von: Girokonto 1234<br>An: Studio Halde<br>Datum: 12.09.2026</p>")).toBeNull();
+  });
+
   it("returns null for a mail without headers", () => {
     expect(splitEmbeddedMails("<p>Hallo Lea,</p><p>bis morgen.</p>")).toBeNull();
   });

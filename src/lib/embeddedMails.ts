@@ -43,6 +43,7 @@ const QUOTE_WRAPPER = "blockquote, .gmail_quote, .gmail_quote_container, [type=c
 const MEDIA_TAGS = new Set(["img", "video", "picture", "svg"]);
 const VISIBLE_CHAR = /[^\s​-‍﻿]/;
 const MIN_LABELS = 3;
+const HAS_EMAIL = /[^\s<>@]+@[^\s<>@]+/;
 const PREVIEW_LENGTH = 140;
 
 const collapse = (s: string) => s.replace(/\s+/g, " ").trim();
@@ -127,7 +128,9 @@ function findBlocks(lines: Line[]): Block[] {
     let first = run[0];
     let before = first - 1;
     while (before >= 0 && isBlank(lines[before])) before--;
-    if (before >= 0 && isHeaderSeparator(lines[before].text)) first = before;
+    const separated = before >= 0 && isHeaderSeparator(lines[before].text);
+    if (separated) first = before;
+    if (!separated && !fields.has("subject") && !fields.get("from")!.some((v) => HAS_EMAIL.test(v))) continue;
 
     const last = lines[run[run.length - 1]];
     blocks.push({
