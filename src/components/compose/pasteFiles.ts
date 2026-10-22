@@ -29,7 +29,7 @@ export async function insertInOrder<T, P>(
   place: (item: T, prepared: P) => boolean,
   fallback: (item: T) => void,
 ): Promise<void> {
-  const prepared = items.map((item) => prepare(item).then(
+  const prepared = items.map((item) => Promise.resolve().then(() => prepare(item)).then(
     (value) => ({ ok: true as const, value }),
     () => ({ ok: false as const }),
   ));
@@ -41,7 +41,12 @@ export async function insertInOrder<T, P>(
     } catch {
       placed = false;
     }
-    if (!placed) fallback(items[i]);
+    if (placed) continue;
+    try {
+      fallback(items[i]);
+    } catch {
+      // Losing one image must not stop the ones after it.
+    }
   }
 }
 

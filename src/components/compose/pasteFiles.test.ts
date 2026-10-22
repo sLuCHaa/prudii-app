@@ -104,6 +104,23 @@ describe("insertInOrder", () => {
     expect(fallen).toEqual(["b", "c"]);
   });
 
+  it("falls back when preparing throws before returning a promise", async () => {
+    const fallen: string[] = [];
+    await insertInOrder(["a"], () => { throw new Error("sync"); }, () => true, (item) => fallen.push(item));
+    expect(fallen).toEqual(["a"]);
+  });
+
+  it("keeps going when the fallback itself fails", async () => {
+    const placed: string[] = [];
+    await insertInOrder(
+      ["a", "b"],
+      (item) => (item === "a" ? Promise.reject(new Error("decode")) : Promise.resolve("B")),
+      (_item, p) => { placed.push(p); return true; },
+      () => { throw new Error("attach failed"); },
+    );
+    expect(placed).toEqual(["B"]);
+  });
+
   it("falls back when placing declines the prepared item", async () => {
     const fallen: string[] = [];
     await insertInOrder(["a"], () => Promise.resolve("A"), () => false, (item) => fallen.push(item));
