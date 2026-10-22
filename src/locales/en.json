@@ -323,6 +323,18 @@
       "message": "External images blocked for privacy.",
       "load": "Load images"
     },
+    "embedded": {
+      "count_one": "{{count}} earlier mail in this mail",
+      "count_other": "{{count}} earlier mails in this mail",
+      "original": "Original mail",
+      "forwarded": "Forwarded",
+      "to": "to {{name}}",
+      "reply": "Reply to {{name}}",
+      "forward": "Forward this mail",
+      "noText": "No text of its own",
+      "showWithout": "Show without cards",
+      "showCards": "Show as cards"
+    },
     "missingParts": {
       "message_one": "The sender did not include {{count}} file.",
       "message_other": "The sender did not include {{count}} files.",

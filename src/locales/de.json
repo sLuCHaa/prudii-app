@@ -323,6 +323,18 @@
       "message": "Externe Bilder aus Datenschutzgründen blockiert.",
       "load": "Bilder laden"
     },
+    "embedded": {
+      "count_one": "{{count}} frühere Mail in dieser Mail",
+      "count_other": "{{count}} frühere Mails in dieser Mail",
+      "original": "Ursprüngliche Mail",
+      "forwarded": "Weitergeleitet",
+      "to": "an {{name}}",
+      "reply": "{{name}} antworten",
+      "forward": "Diese Mail weiterleiten",
+      "noText": "Kein eigener Text",
+      "showWithout": "Ohne Karten anzeigen",
+      "showCards": "Als Karten anzeigen"
+    },
     "missingParts": {
       "message_one": "Der Absender hat {{count}} Datei nicht mitgeschickt.",
       "message_other": "Der Absender hat {{count}} Dateien nicht mitgeschickt.",

@@ -323,6 +323,18 @@
       "message": "Images externes bloquées pour la confidentialité.",
       "load": "Charger les images"
     },
+    "embedded": {
+      "count_one": "{{count}} e-mail antérieur dans cet e-mail",
+      "count_other": "{{count}} e-mails antérieurs dans cet e-mail",
+      "original": "E-mail d'origine",
+      "forwarded": "Transféré",
+      "to": "à {{name}}",
+      "reply": "Répondre à {{name}}",
+      "forward": "Transférer cet e-mail",
+      "noText": "Pas de texte propre",
+      "showWithout": "Afficher sans cartes",
+      "showCards": "Afficher en cartes"
+    },
     "missingParts": {
       "message_one": "L'expéditeur n'a pas joint {{count}} fichier.",
       "message_other": "L'expéditeur n'a pas joint {{count}} fichiers.",

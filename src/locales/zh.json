@@ -322,6 +322,18 @@
       "message": "为保护隐私，外部图片已被阻止。",
       "load": "加载图片"
     },
+    "embedded": {
+      "count_one": "此邮件中包含 {{count}} 封更早的邮件",
+      "count_other": "此邮件中包含 {{count}} 封更早的邮件",
+      "original": "原始邮件",
+      "forwarded": "已转发",
+      "to": "发给 {{name}}",
+      "reply": "回复 {{name}}",
+      "forward": "转发此邮件",
+      "noText": "没有自己的正文",
+      "showWithout": "不以卡片显示",
+      "showCards": "以卡片显示"
+    },
     "missingParts": {
       "message_one": "发件人未附上 {{count}} 个文件。",
       "message_other": "发件人未附上 {{count}} 个文件。",

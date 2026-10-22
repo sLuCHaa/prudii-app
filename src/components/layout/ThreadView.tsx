@@ -16,10 +16,13 @@ import { invalidateMailListQueries } from "../../lib/mailQueries";
 import { useAttachments, useToggleStar, useToggleMailFlag } from "../../hooks/useAccounts";
 import { useScroller } from "../../hooks/useScroller";
 import { useChatAnchor } from "../../hooks/useChatAnchor";
+import { splitEmbeddedMails } from "../../lib/embeddedMails";
+import { embeddedMailToMail, resolveNameOnlySender } from "../../lib/embeddedReply";
+import { EmbeddedMailCards } from "./EmbeddedMailCards";
 import { stripQuotedHtml, stripQuotedText, isForwardSubject } from "../../lib/quotedHistory";
 import { makeIsOutgoing } from "../../lib/outgoing";
 import { recipientSummary } from "../../lib/recipientSummary";
-import { openAttachment, startAttachmentDrag, quickLookAttachment, saveAttachment, fetchMailBody, trashMail, archiveMail, getThreadMails, markAsRead, unsubscribeMail } from "../../lib/tauri";
+import { searchContacts, openAttachment, startAttachmentDrag, quickLookAttachment, saveAttachment, fetchMailBody, trashMail, archiveMail, getThreadMails, markAsRead, unsubscribeMail } from "../../lib/tauri";
 import { revealLabelKey, revealAttachment } from "../../lib/attachmentActions";
 import { isMacOS, isWindows } from "../../lib/platform";
 import { MAIL_LINK_BRIDGE, MAIL_LINK_BRIDGE_CSP_HASH, relayBridgeKey, parseBridgeContextMenu, type BridgeContextMenu } from "../../lib/mailLinkBridge";
@@ -630,6 +633,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
   // only a text part.
   const [viewSource, setViewSource] = useState(false);
   const [trackers, setTrackers] = useState<TrackerInfo[]>([]);
+  const [cardsOff, setCardsOff] = useState(false);
   const [allowImagesOverride, setAllowImagesOverride] = useState(false);
   const hasBody = displayMail.body_html || displayMail.body_text;
   const hasBothFormats = !!displayMail.body_html && !!displayMail.body_text;
@@ -647,6 +651,13 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
   );
   const hasQuotes = !viewSource && (showsHtml ? htmlWithoutQuotes : textWithoutQuotes) !== null;
   const hideQuotes = hasQuotes && !showQuoted;
+  const quotesHidden = hideQuotes && !!htmlWithoutQuotes;
+
+  const embedded = useMemo(
+    () => (showsHtml && !viewSource && !quotesHidden ? splitEmbeddedMails(displayMail.body_html) : null),
+    [showsHtml, viewSource, quotesHidden, displayMail.body_html],
+  );
+  const split = cardsOff ? null : embedded;
 
   const accountAllowsImages = useMemo(() => {
     const acct = accounts.find((a) => a.id === mail.account_id);
@@ -658,6 +669,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
   // Reset per-message image override when navigating to a different mail
   useEffect(() => {
     setAllowImagesOverride(false);
+    setCardsOff(false);
   }, [mail.id]);
 
   const incrementTrackersBlocked = useAppStore((s) => s.incrementTrackersBlocked);
@@ -665,7 +677,10 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
   // The frame re-detects on every HTML change; the tally counts each message once.
   const trackersCountedRef = useRef(false);
   const handleTrackersDetected = useCallback((detected: TrackerInfo[]) => {
-    setTrackers(detected);
+    setTrackers((prev) => {
+      const fresh = detected.filter((d) => !prev.some((p) => p.type === d.type && p.src === d.src));
+      return fresh.length > 0 ? [...prev, ...fresh] : prev;
+    });
     if (detected.length > 0 && !trackersCountedRef.current) {
       trackersCountedRef.current = true;
       incrementTrackersBlocked(detected.length);
@@ -815,10 +830,43 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
     </>
   );
 
+  const frame = (html: string, ref?: (el: HTMLIFrameElement | null) => void) => (
+    <HtmlMailFrame mailId={displayMail.id} html={html} tight={!!chat} allowExternalImages={allowExternalImages} onIframeRef={ref} onTrackersDetected={handleTrackersDetected} onLinkClick={onLinkClick} onImageClick={handleInlineImageClick} />
+  );
+  const mainFrameRef = (el: HTMLIFrameElement | null) => { messageIframeRef.current = el; onIframeRef?.(el); };
+
+  const handleCardReply = async (index: number) => {
+    if (!split) return;
+    const target = embeddedMailToMail(displayMail, split.parts[index]);
+    onReply(await resolveNameOnlySender(target, (q) => searchContacts(q, displayMail.account_id)));
+  };
+  const handleCardForward = (index: number) => {
+    if (split) onForward(embeddedMailToMail(displayMail, split.parts[index]));
+  };
+
   const body = viewSource ? (
     <MailSourceView mailId={displayMail.id} />
+  ) : split ? (
+    <>
+      {split.outer && frame(split.outer, mainFrameRef)}
+      <EmbeddedMailCards
+        key={`${displayMail.id}:${split.parts.length}`}
+        parts={split.parts}
+        renderBody={(html) => frame(html)}
+        onReply={handleCardReply}
+        onForward={handleCardForward}
+        onShowWithout={() => setCardsOff(true)}
+      />
+    </>
   ) : showsHtml ? (
-    <HtmlMailFrame mailId={displayMail.id} html={(hideQuotes && htmlWithoutQuotes) || displayMail.body_html || ""} tight={!!chat} allowExternalImages={allowExternalImages} onIframeRef={(el) => { messageIframeRef.current = el; onIframeRef?.(el); }} onTrackersDetected={handleTrackersDetected} onLinkClick={onLinkClick} onImageClick={handleInlineImageClick} />
+    <>
+      {cardsOff && embedded && (
+        <button type="button" onClick={() => setCardsOff(false)} className="mb-1 px-2 py-1 rounded text-xs font-medium text-text-tertiary hover:text-text-secondary hover:bg-hover transition-colors">
+          {t("mailDetail.embedded.showCards")}
+        </button>
+      )}
+      {frame((hideQuotes && htmlWithoutQuotes) || displayMail.body_html || "", mainFrameRef)}
+    </>
   ) : (
     <pre className="text-sm text-text-secondary whitespace-pre-wrap font-sans leading-relaxed select-text">
       {hideQuotes && textWithoutQuotes !== null ? textWithoutQuotes : plainText}

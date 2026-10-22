@@ -323,6 +323,18 @@
       "message": "Imágenes externas bloqueadas por privacidad.",
       "load": "Cargar imágenes"
     },
+    "embedded": {
+      "count_one": "{{count}} correo anterior en este correo",
+      "count_other": "{{count}} correos anteriores en este correo",
+      "original": "Correo original",
+      "forwarded": "Reenviado",
+      "to": "para {{name}}",
+      "reply": "Responder a {{name}}",
+      "forward": "Reenviar este correo",
+      "noText": "Sin texto propio",
+      "showWithout": "Mostrar sin tarjetas",
+      "showCards": "Mostrar como tarjetas"
+    },
     "missingParts": {
       "message_one": "El remitente no adjuntó {{count}} archivo.",
       "message_other": "El remitente no adjuntó {{count}} archivos.",
