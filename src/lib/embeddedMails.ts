@@ -10,7 +10,7 @@ export interface EmbeddedMail {
   subject: string;
   header: string;
   html: string;
-  quoteHtml: string;
+  quote(): string;
   preview: string;
 }
 
@@ -201,6 +201,7 @@ function split(html: string): SplitMail | null {
   const outerBox = cut(null, blocks[0].start);
   const parts = blocks.map((block, i): EmbeddedMail => {
     const own = cut(block.end, blocks[i + 1]?.start ?? null);
+    const html = styles + own.innerHTML;
     let quote: string | undefined;
     return {
       from: address(block.fields.get("from"))[0] ?? { name: "", email: "" },
@@ -209,10 +210,17 @@ function split(html: string): SplitMail | null {
       date: parseHeaderDate(block.fields.get("date")?.[0] ?? ""),
       subject: block.fields.get("subject")?.[0] ?? "",
       header: block.header,
-      html: styles + own.innerHTML,
-      // Cut on first use: every level repeats the whole chain below it.
-      get quoteHtml() {
-        return (quote ??= styles + cut(block.end, null).innerHTML);
+      html,
+      // Cut on first use (every level repeats the whole chain below it); the part's own text if the cut fails.
+      quote() {
+        if (quote === undefined) {
+          try {
+            quote = styles + cut(block.end, null).innerHTML;
+          } catch {
+            quote = html;
+          }
+        }
+        return quote;
       },
       preview: collapse(visibleText(own)).slice(0, PREVIEW_LENGTH),
     };

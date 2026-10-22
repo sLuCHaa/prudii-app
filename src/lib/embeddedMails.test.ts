@@ -136,10 +136,10 @@ describe("splitEmbeddedMails", () => {
       FIXTURES[2].html;
     const split = splitEmbeddedMails(html)!;
     expect(split.parts.map((p) => p.from.name)).toEqual(["Lea Kraus", "Helga Brandt"]);
-    expect(textOf(split.parts[0].quoteHtml)).toContain(strip("Bitte einplanen."));
-    expect(textOf(split.parts[0].quoteHtml)).toContain(strip("Guten Abend, der Termin rutscht."));
-    expect(textOf(split.parts[1].quoteHtml)).toContain(strip("Guten Abend, der Termin rutscht."));
-    expect(textOf(split.parts[1].quoteHtml)).not.toContain(strip("Bitte einplanen."));
+    expect(textOf(split.parts[0].quote())).toContain(strip("Bitte einplanen."));
+    expect(textOf(split.parts[0].quote())).toContain(strip("Guten Abend, der Termin rutscht."));
+    expect(textOf(split.parts[1].quote())).toContain(strip("Guten Abend, der Termin rutscht."));
+    expect(textOf(split.parts[1].quote())).not.toContain(strip("Bitte einplanen."));
     expect(textOf(split.parts[0].html)).toBe(strip("Bitte einplanen.Zur Kenntnis."));
   });
 
@@ -185,7 +185,7 @@ describe("splitEmbeddedMails", () => {
   it("carries the mail's styles into every part", () => {
     const html = `<html><head><style>.x{color:red}</style></head><body>${FIXTURES[2].html}</body></html>`;
     const split = splitEmbeddedMails(html)!;
-    for (const out of [split.outer, split.parts[0].html, split.parts[0].quoteHtml]) {
+    for (const out of [split.outer, split.parts[0].html, split.parts[0].quote()]) {
       expect(out).toContain("<style>.x{color:red}</style>");
     }
   });
