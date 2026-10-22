@@ -2,6 +2,17 @@ import { describe, it, expect } from "vitest";
 import { cleanPastedHtml } from "./pasteCleanup";
 
 describe("cleanPastedHtml", () => {
+  it("unwraps a signature pasted from elsewhere into normal content", () => {
+    const out = cleanPastedHtml('<div data-type="signature" style="color:red"><p class="x">Gruß</p></div>');
+    expect(out).toBe("<div><p>Gruß</p></div>");
+  });
+
+  it("keeps the editor's own signature block and its design", () => {
+    const block = '<div data-type="signature"><table style="font-size: 13px;"><tbody><tr><td>Anna</td></tr></tbody></table></div>';
+    const out = cleanPastedHtml(`<p data-pm-slice="1 1 []" style="color:red">Hallo</p>${block}`);
+    expect(out).toBe(`<p data-pm-slice="1 1 []">Hallo</p>${block}`);
+  });
+
   it("strips style and class attributes from every element", () => {
     const html = '<p style="color:red" class="foo">Hi <b style="font-weight:900" class="bar">there</b></p>';
     const out = cleanPastedHtml(html);

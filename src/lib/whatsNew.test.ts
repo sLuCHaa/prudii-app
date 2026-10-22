@@ -84,4 +84,15 @@ describe("RELEASES", () => {
     ]);
     expect(r?.items[0].icon).toBe("sparkles");
   });
+
+  it("announces the signature right after pasted images in 1.7.3", () => {
+    const r = RELEASES.find((x) => x.version === "1.7.3");
+    expect(r?.items.map((i) => i.key)).toEqual([
+      "whatsNew.v1_7_3.images",
+      "whatsNew.v1_7_3.signature",
+      "whatsNew.v1_7_3.font",
+      "whatsNew.v1_7_3.typos",
+      "whatsNew.v1_7_0.calendar",
+    ]);
+  });
 });

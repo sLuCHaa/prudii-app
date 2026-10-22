@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { EditorContent } from "@tiptap/react";
 import TiptapImage from "@tiptap/extension-image";
 import { useRichTextEditor } from "../editor/RichTextEditor";
-import { hasOwnText, localImageSources, replaceImageSources, setComposeBody } from "./composeBody";
+import { accountSignatureHtml, hasOwnText, localImageSources, replaceImageSources, setComposeBody, setSignature } from "./composeBody";
 import { needsAttachmentReminder } from "./attachmentReminder";
 import { EditorToolbar } from "../editor/EditorToolbar";
 import { useTranslation } from "react-i18next";
@@ -30,7 +30,7 @@ import { listen, emit } from "@tauri-apps/api/event";
 import { saveDraft, syncAccount, fetchMailBody, suggestReplies, sendMail, scheduleSend, listTemplates, listAttachments, getAttachmentData, trashMail, saveComposeAutosave, type AttachmentPayload } from "../../lib/tauri";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AiRepliesEvent, EmailTemplate, ReplySuggestion } from "../../types";
-import { escapeHtml, restoreSanitizedHtml } from "../../lib/sanitize";
+import { escapeHtml, plainTextParagraph, restoreSanitizedHtml } from "../../lib/sanitize";
 import { QUOTE_EDIT_ROOT, bodyWithoutQuote, buildQuote, quoteFromHtml, renderQuote, splitQuote, stripQuoteMarker, type ComposeQuote } from "../../lib/composeQuote";
 import { fillEmptyParagraphs, inlineComposeStyles, addSignatureDivider, composeTypography, extractLocalImages, extractDataImages, dropImagesByCid, decodeFileUrl, isEmbeddableImageType } from "../../lib/outgoingHtml";
 import { base64Size } from "../../lib/imagePrep";
@@ -641,23 +641,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
 
   const getSignatureHtml = useCallback((accountId: string, isReplyOrForward: boolean): string => {
     const account = accounts?.find((a) => a.id === accountId);
-    if (!account) return "";
-
-    if (isReplyOrForward && !account.signature_on_reply) return "";
-    if (!isReplyOrForward && !account.signature_on_compose) return "";
-
-    if (account.signature_html) {
-      // The stored signature may be a full HTML document (e.g. pasted with
-      // <style>/<head>). Parse it and strip non-content elements so their CSS/JS
-      // text isn't rendered as visible text in the editor; keep only the body.
-      const doc = new DOMParser().parseFromString(account.signature_html, "text/html");
-      doc.querySelectorAll("style, script, link, meta, title, head").forEach((el) => el.remove());
-      const bodyContent = (doc.body?.innerHTML ?? account.signature_html).trim();
-      return `<div data-type="signature">${bodyContent}</div>`;
-    } else if (account.signature_text) {
-      return `<div data-type="signature"><p>${escapeHtml(account.signature_text).replace(/\n/g, "<br>")}</p></div>`;
-    }
-    return "";
+    return account ? accountSignatureHtml(account, isReplyOrForward) : "";
   }, [accounts]);
 
   useEffect(() => {
@@ -811,7 +795,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         setSubject(mailtoParams.subject);
         setShowCc(mailtoParams.cc.length > 0);
         setShowBcc(mailtoParams.bcc.length > 0);
-        const bodyHtml = mailtoParams.body ? `<p>${mailtoParams.body.replace(/\n/g, "<br>")}</p>` : "<p></p>";
+        const bodyHtml = mailtoParams.body ? plainTextParagraph(mailtoParams.body) : "<p></p>";
         content = `${bodyHtml}${signature}`;
       } else {
         setTo([]);
@@ -834,7 +818,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         startQuote(q);
         void withResolvedInlineImages(originalMail).then((m) => { if (m && !cancelled) upgradeQuote(q, quoteFromMail("reply", m)); });
         if (composeAiReplyText) {
-          const aiHtml = `<p>${composeAiReplyText.replace(/\n/g, '<br>')}</p>`;
+          const aiHtml = plainTextParagraph(composeAiReplyText);
           content = `${aiHtml}${signature}`;
         } else {
           content = `<p></p>${signature}`;
@@ -859,7 +843,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         startQuote(q);
         void withResolvedInlineImages(originalMail).then((m) => { if (m && !cancelled) upgradeQuote(q, quoteFromMail("reply", m)); });
         if (composeAiReplyText) {
-          const aiHtml = `<p>${composeAiReplyText.replace(/\n/g, '<br>')}</p>`;
+          const aiHtml = plainTextParagraph(composeAiReplyText);
           content = `${aiHtml}${signature}`;
         } else {
           content = `<p></p>${signature}`;
@@ -895,7 +879,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
           upgradeQuote(initialQuote, fetched);
           void withResolvedInlineImages(updated).then((m) => { if (m && !cancelled) upgradeQuote(fetched, quoteOf(m)); });
           if (isReply && composeAiReplyText) {
-            const aiHtml = `<p>${composeAiReplyText.replace(/\n/g, '<br>')}</p>`;
+            const aiHtml = plainTextParagraph(composeAiReplyText);
             setComposeBody(editor, `${aiHtml}${sig}`);
           } else {
             setComposeBody(editor, `<p></p>${sig}`);
@@ -1013,9 +997,9 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   async function handleUseAiReply(text: string) {
     if (!editor) return;
     if (hasOwnText(editor) && !(await confirmReplaceText())) return;
-    const aiHtml = `<p>${text.replace(/\n/g, '<br>')}</p>`;
+    const aiHtml = plainTextParagraph(text);
     const signature = getSignatureHtml(fromAccountId, true);
-    editor.commands.setContent(aiHtml + signature);
+    setComposeBody(editor, aiHtml + signature);
     setAiReplies([]);
     editor.commands.focus("start");
   }
@@ -1029,10 +1013,10 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     // Prefer body_text (the panel's source of truth), escaped here — templates
     // saved before the escaping fix carry broken unescaped body_html.
     const bodyContent = template.body_text
-      ? `<p>${escapeHtml(template.body_text).replace(/\n/g, "<br>")}</p>`
+      ? plainTextParagraph(template.body_text)
       : template.body_html;
     const signature = getSignatureHtml(fromAccountId, false);
-    editor.commands.setContent(bodyContent + signature);
+    setComposeBody(editor, bodyContent + signature);
     editor.commands.focus("start");
   }
 
@@ -1044,14 +1028,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     const isReplyOrForward = mode === "reply" || mode === "replyAll" || mode === "forward";
     const newSig = getSignatureHtml(newAccountId, isReplyOrForward);
 
-    const html = editor.getHTML();
-    const sigRegex = /<div data-type="signature">[\s\S]*?<\/div>/;
-
-    if (sigRegex.test(html)) {
-      setComposeBody(editor, html.replace(sigRegex, newSig));
-    } else if (newSig) {
-      setComposeBody(editor, html + newSig);
-    }
+    setSignature(editor, newSig || null);
   }
 
   function readFileAsBase64(file: File): Promise<string> {
@@ -1194,8 +1171,8 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   }
 
   // Build the outgoing body from the editor + quoted reply. We send the editor's
-  // raw HTML: TipTap's schema only permits a safe set of nodes/marks (pasted
-  // scripts/handlers are dropped on input), and crucially we must keep real
+  // raw HTML: the schema admits only safe nodes/marks, the signature block only
+  // sanitizeSignatureBlockHtml output, and crucially we must keep real
   // `href`s so links work in the recipient's client — the display sanitizer
   // rewrites href→data-href for our iframe and would break outgoing links.
   function buildOutgoingBody(quotedHtml = outgoingQuoteHtml()): { bodyHtml: string; bodyText: string } {

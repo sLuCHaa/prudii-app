@@ -1338,6 +1338,10 @@
         "title": "Colar imagens",
         "text": "Cole capturas de tela direto; as fotos saem menores e sem localização."
       },
+      "signature": {
+        "title": "Assinatura no design original",
+        "text": "Sua assinatura sai do jeito que você a criou; ela é editada nas Configurações."
+      },
       "font": {
         "title": "Nova fonte",
         "text": "Uma fonte padrão mais clara e uma linha na sua cor de destaque antes da assinatura."

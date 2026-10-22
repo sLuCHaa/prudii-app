@@ -12,11 +12,48 @@ export function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (c) => map[c]);
 }
 
+export function plainTextParagraph(text: string): string {
+  return `<p>${escapeHtml(text).replace(/\n/g, "<br>")}</p>`;
+}
+
 // Sanitize user-authored signature HTML: strips <script>, event handlers and
 // javascript: URLs while keeping normal formatting, links and images. Applied
 // before signature HTML is parsed so pasted markup can't inject anything.
 export function sanitizeSignatureHtml(html: string): string {
   return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+}
+
+// A reopened draft keeps its logo as a local file until the images are inlined, so this variant lets `file:` through on image sources only.
+const keepLocalImageSrc = (node: Element, data: { attrName: string; attrValue: string; forceKeepAttr: boolean | undefined }) => {
+  if (node.nodeName === "IMG" && data.attrName === "src" && /^file:/i.test(data.attrValue.trim())) data.forceKeepAttr = true;
+};
+
+// The block is live DOM inside the compose window, so nothing that styles the page, submits or plays may pass.
+const SIGNATURE_TAGS = [
+  "div", "span", "p", "br", "hr",
+  "b", "i", "u", "s", "em", "strong", "small", "sub", "sup", "mark",
+  "del", "ins", "abbr", "cite", "code", "pre", "blockquote",
+  "h1", "h2", "h3", "h4", "h5", "h6",
+  "ul", "ol", "li", "dl", "dt", "dd",
+  "table", "thead", "tbody", "tfoot", "tr", "th", "td", "caption", "colgroup", "col",
+  "img", "picture", "figure", "figcaption",
+  "a",
+  "center", "section", "article", "header", "footer", "nav", "main", "aside",
+  "font", "wbr",
+];
+
+const SIGNATURE_ATTRS = [
+  "style", "class", "width", "height", "align", "valign", "bgcolor", "border", "cellpadding", "cellspacing",
+  "colspan", "rowspan", "href", "src", "alt", "title", "target", "rel", "color", "face", "size", "dir", "lang",
+];
+
+export function sanitizeSignatureBlockHtml(html: string): string {
+  DOMPurify.addHook("uponSanitizeAttribute", keepLocalImageSrc);
+  try {
+    return DOMPurify.sanitize(html, { ALLOWED_TAGS: SIGNATURE_TAGS, ALLOWED_ATTR: SIGNATURE_ATTRS, ALLOW_DATA_ATTR: false });
+  } finally {
+    DOMPurify.removeHook("uponSanitizeAttribute", keepLocalImageSrc);
+  }
 }
 
 // `removed` counts elements and attributes DOMPurify dropped in this very call.

@@ -1338,6 +1338,10 @@
         "title": "Paste images",
         "text": "Paste screenshots straight in; photos go out smaller and without location data."
       },
+      "signature": {
+        "title": "Signature in its original design",
+        "text": "Your signature goes out exactly as you designed it; you edit it in Settings."
+      },
       "font": {
         "title": "New font",
         "text": "A clearer default font, with a line in your accent color setting off the signature."

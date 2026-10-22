@@ -1338,6 +1338,10 @@
         "title": "Coller des images",
         "text": "Collez vos captures directement ; les photos partent réduites et sans localisation."
       },
+      "signature": {
+        "title": "Signature dans son design d'origine",
+        "text": "Votre signature part telle que vous l'avez conçue ; elle se modifie dans les Paramètres."
+      },
       "font": {
         "title": "Nouvelle police",
         "text": "Une police par défaut plus claire, et un trait de votre couleur d'accent avant la signature."

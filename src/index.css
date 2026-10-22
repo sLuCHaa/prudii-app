@@ -735,9 +735,14 @@ button:focus-visible,
 }
 
 /* Signature block — the same short accent line the sent mail carries
-   (addSignatureDivider). The node renders as <div data-type="signature">. */
+   (addSignatureDivider). The node renders as <div data-type="signature">;
+   its content sits in a shadow root and inherits only font, size, colour and
+   the line height the sent mail's wrapper carries (inlineComposeStyles).
+   Paint containment keeps its inline styles (even position: fixed) inside
+   the block, never over the compose window. */
 .compose-editor .tiptap [data-type="signature"] {
-  color: var(--c-text-secondary);
+  line-height: 1.5;
+  contain: paint;
 }
 .compose-editor .tiptap [data-type="signature"]::before {
   content: "";
@@ -746,8 +751,15 @@ button:focus-visible,
   margin: 20px 0 14px;
   border-top: 2px solid var(--c-accent);
 }
-.compose-editor .tiptap [data-type="signature"] > :first-child {
-  margin-top: 0;
+.dark .compose-editor .tiptap [data-type="signature"] {
+  background: #fff;
+  color: #1a1a1a;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+}
+.compose-editor .tiptap [data-type="signature"].ProseMirror-selectednode {
+  outline: 2px solid var(--c-accent-ring);
+  outline-offset: 2px;
 }
 
 /* ─── Drag & Drop ─── */

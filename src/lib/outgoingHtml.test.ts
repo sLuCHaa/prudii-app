@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { fillEmptyParagraphs, inlineComposeStyles, addSignatureDivider, composeTypography, extractLocalImages, dropImagesByCid, decodeFileUrl, extractDataImages, isEmbeddableImageType, OUTGOING_FONT_STACK, COMPOSE_FONTS, DEFAULT_COMPOSE_FONT_SIZE } from "./outgoingHtml";
+import { DESIGNED_SIGNATURE } from "./signatureFixture";
+import { signatureRange, hasVisibleContent, fillEmptyParagraphs, inlineComposeStyles, addSignatureDivider, composeTypography, extractLocalImages, dropImagesByCid, decodeFileUrl, extractDataImages, isEmbeddableImageType, OUTGOING_FONT_STACK, COMPOSE_FONTS, DEFAULT_COMPOSE_FONT_SIZE } from "./outgoingHtml";
 
 const DEFAULT_TYPO = composeTypography("prudii", DEFAULT_COMPOSE_FONT_SIZE);
 
@@ -79,6 +80,69 @@ describe("addSignatureDivider", () => {
   });
 });
 
+describe("hasVisibleContent", () => {
+  it("sees text and images", () => {
+    expect(hasVisibleContent("<p>Anna</p>")).toBe(true);
+    expect(hasVisibleContent('<p><img src="cid:logo"></p>')).toBe(true);
+  });
+
+  it("ignores empty markup, line breaks and blanks", () => {
+    expect(hasVisibleContent("")).toBe(false);
+    expect(hasVisibleContent("<div><br></div>")).toBe(false);
+    expect(hasVisibleContent("<p>&nbsp; </p><p></p>")).toBe(false);
+  });
+});
+
+describe("signature area", () => {
+  const OPEN = '<div data-type="signature">';
+  const doc = `<p>Hi</p>${OPEN}${DESIGNED_SIGNATURE}</div><p>danach</p>`;
+
+  it("signatureRange spans exactly the nested content", () => {
+    const r = signatureRange(doc)!;
+    expect(doc.slice(r.contentStart, r.contentEnd)).toBe(DESIGNED_SIGNATURE);
+    expect(doc.slice(r.start, r.contentStart)).toBe(OPEN);
+    expect(doc.slice(r.contentEnd, r.end)).toBe("</div>");
+    expect(signatureRange("<p>x</p>")).toBeNull();
+  });
+
+  it("keeps the signature markup byte-identical and styles the outer div", () => {
+    const out = inlineComposeStyles(fillEmptyParagraphs(doc), DEFAULT_TYPO);
+    const r = signatureRange(out)!;
+    expect(out.slice(r.contentStart, r.contentEnd)).toBe(DESIGNED_SIGNATURE);
+    expect(out.slice(r.start, r.contentStart)).toBe(`<div data-type="signature" style="font-family:${OUTGOING_FONT_STACK};font-size:11pt;line-height:1.5">`);
+    expect(out).toContain("<p style=");
+    expect(out.startsWith('<p style="')).toBe(true);
+    expect(out).toContain(">Hi</p>");
+    expect(out).toContain(">danach</p>");
+    expect(out.slice(out.indexOf(">danach") - 120, out.indexOf(">danach"))).toContain("font-size:11pt");
+    expect(inlineComposeStyles(out, DEFAULT_TYPO)).toBe(out);
+  });
+
+  it("adds one divider right after the opening tag and nothing else", () => {
+    const out = addSignatureDivider(doc, "#10b981");
+    expect(out.split("data-prudii-divider")).toHaveLength(2);
+    const r = signatureRange(out)!;
+    expect(out.slice(r.contentStart, r.contentEnd).endsWith(DESIGNED_SIGNATURE)).toBe(true);
+    expect(out.slice(r.contentStart)).toContain("<table data-prudii-divider");
+    expect(addSignatureDivider(out, "#10b981")).toBe(out);
+  });
+
+  it("finds the divider target after the outer div got a style", () => {
+    const styled = inlineComposeStyles(doc, DEFAULT_TYPO);
+    expect(addSignatureDivider(styled, "#10b981")).toContain("data-prudii-divider");
+  });
+
+  it("gives a plain signature the mail's font, size and line height", () => {
+    const out = inlineComposeStyles(`<p>Hi</p>${OPEN}<div>Anna Weber</div></div>`, composeTypography("georgia", 14));
+    expect(out).toContain(`${OPEN.slice(0, -1)} style="font-family:${COMPOSE_FONTS.georgia.stack};font-size:14pt;line-height:1.5"><div>Anna Weber</div>`);
+  });
+
+  it("gives no divider to a signature that is only a line break", () => {
+    const html = `<p>Hi</p>${OPEN}<div><br></div></div>`;
+    expect(addSignatureDivider(html, "#10b981")).toBe(html);
+  });
+});
+
 describe("Prudii default font", () => {
   it("leads with Bahnschrift, which ships with Windows, so Outlook there renders it", () => {
     expect(OUTGOING_FONT_STACK.split(",")[0].trim()).toBe("Bahnschrift");
@@ -153,6 +217,13 @@ describe("extractLocalImages", () => {
     const html = '<img src="file:///C:/Users/x/gr%C3%B6%C3%9Fe.png">';
     const { images } = extractLocalImages(html);
     expect(images[0].path).toBe("C:/Users/x/größe.png");
+  });
+
+  it("takes an apostrophe and an encoded ampersand as part of the path", () => {
+    const html = `<img src="file:///C:/Users/O'Brien/logo.png"><img src='file:///C:/a&amp;b/logo.png'>`;
+    const { html: out, images } = extractLocalImages(html);
+    expect(images.map((i) => i.path)).toEqual(["C:/Users/O'Brien/logo.png", "C:/a&b/logo.png"]);
+    expect(out).toBe(`<img src="cid:inline-1@prudii"><img src='cid:inline-2@prudii'>`);
   });
 
   it("leaves html without local images byte-identical", () => {

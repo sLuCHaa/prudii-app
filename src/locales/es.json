@@ -1338,6 +1338,10 @@
         "title": "Pegar imágenes",
         "text": "Pega capturas directamente; las fotos se envían más pequeñas y sin ubicación."
       },
+      "signature": {
+        "title": "Firma con su diseño original",
+        "text": "Tu firma sale tal como la diseñaste; se edita en Configuración."
+      },
       "font": {
         "title": "Nueva fuente",
         "text": "Una fuente predeterminada más clara y una línea en tu color de acento antes de la firma."

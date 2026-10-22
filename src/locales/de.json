@@ -1338,6 +1338,10 @@
         "title": "Bilder einfügen",
         "text": "Screenshots einfach einfügen; Fotos gehen verkleinert und ohne Standortdaten raus."
       },
+      "signature": {
+        "title": "Signatur im Originaldesign",
+        "text": "Deine Signatur geht so raus, wie du sie gestaltet hast; bearbeitet wird sie in den Einstellungen."
+      },
       "font": {
         "title": "Neue Schrift",
         "text": "Eine klarere Standardschrift, und ein Strich in deiner Akzentfarbe setzt die Signatur ab."

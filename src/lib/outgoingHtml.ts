@@ -26,7 +26,7 @@
 export function fillEmptyParagraphs(html: string): string {
   // `[^>]*` for the attributes assumes no attribute value contains a literal
   // `>`, which holds for what the editor produces.
-  return html.replace(/<p([^>]*)>\s*<\/p>/gi, "<p$1><br></p>");
+  return aroundSignature(html, (part) => part.replace(/<p([^>]*)>\s*<\/p>/gi, "<p$1><br></p>"));
 }
 
 /**
@@ -89,6 +89,15 @@ const OUTGOING_MARGIN = "margin:0 0 0.5em 0";
  * never applied to quoted foreign HTML.
  */
 export function inlineComposeStyles(html: string, typography: ComposeTypography): string {
+  return aroundSignature(html, (part) => stampParagraphs(part, typography), (open) => stampSignatureOpen(open, typography));
+}
+
+function stampSignatureOpen(open: string, typography: ComposeTypography): string {
+  if (/\sstyle\s*=/i.test(open)) return open;
+  return open.replace(/>$/, ` style="font-family:${typography.fontStack};font-size:${typography.fontSizePt}pt;line-height:${OUTGOING_LINE_HEIGHT}">`);
+}
+
+function stampParagraphs(html: string, typography: ComposeTypography): string {
   return html.replace(/<p(\s[^>]*)?>/gi, (tag: string, attrs: string | undefined) => {
     const attrStr = attrs ?? "";
     const styleMatch = attrStr.match(/style\s*=\s*(["'])(.*?)\1/i);
@@ -108,8 +117,43 @@ export function inlineComposeStyles(html: string, typography: ComposeTypography)
   });
 }
 
-const SIGNATURE_OPEN = '<div data-type="signature">';
+const SIGNATURE_OPEN_RE = /<div\b[^>]*\bdata-type="signature"[^>]*>/i;
+
+export interface SignatureRange {
+  start: number;
+  contentStart: number;
+  contentEnd: number;
+  end: number;
+}
+
+/** Locate the first signature div; nested divs are matched by depth, not by the first `</div>`. */
+export function signatureRange(html: string): SignatureRange | null {
+  const open = SIGNATURE_OPEN_RE.exec(html);
+  if (!open) return null;
+  const contentStart = open.index + open[0].length;
+  const tag = /<div\b|<\/div\s*>/gi;
+  tag.lastIndex = contentStart;
+  let depth = 1;
+  for (let m = tag.exec(html); m; m = tag.exec(html)) {
+    depth += m[0][1] === "/" ? -1 : 1;
+    if (depth === 0) return { start: open.index, contentStart, contentEnd: m.index, end: m.index + m[0].length };
+  }
+  return { start: open.index, contentStart, contentEnd: html.length, end: html.length };
+}
+
+function aroundSignature(html: string, fn: (part: string) => string, openFn?: (open: string) => string): string {
+  const r = signatureRange(html);
+  if (!r) return fn(html);
+  const open = html.slice(r.start, r.contentStart);
+  return fn(html.slice(0, r.start)) + (openFn ? openFn(open) : open) + html.slice(r.contentStart, r.contentEnd) + html.slice(r.contentEnd, r.end) + fn(html.slice(r.end));
+}
+
 const DIVIDER_MARK = "data-prudii-divider";
+
+/** Whether the markup shows anything: an image or text other than blanks. */
+export function hasVisibleContent(html: string): boolean {
+  return /<img\b/i.test(html) || html.replace(/<[^>]*>/g, "").replace(/&nbsp;|\s/g, "") !== "";
+}
 
 /**
  * Set the signature apart with a short line in the sender's accent colour.
@@ -120,14 +164,11 @@ const DIVIDER_MARK = "data-prudii-divider";
  * (SignatureNode), so it never piles up.
  */
 export function addSignatureDivider(html: string, color: string): string {
-  const start = html.indexOf(SIGNATURE_OPEN);
-  if (start < 0) return html;
-  const contentStart = start + SIGNATURE_OPEN.length;
-  const end = html.indexOf("</div>", contentStart);
-  const content = html.slice(contentStart, end < 0 ? html.length : end);
-  if (content.includes(DIVIDER_MARK)) return html;
-  const visible = /<img\b/i.test(content) || content.replace(/<[^>]*>/g, "").replace(/&nbsp;|\s/g, "") !== "";
-  if (!visible) return html;
+  const range = signatureRange(html);
+  if (!range) return html;
+  const { contentStart, contentEnd } = range;
+  const content = html.slice(contentStart, contentEnd);
+  if (content.includes(DIVIDER_MARK) || !hasVisibleContent(content)) return html;
   const spacer = (px: number) =>
     `<tr><td height="${px}" style="height:${px}px;font-size:${px}px;line-height:${px}px;mso-line-height-rule:exactly">&nbsp;</td></tr>`;
   const line = `<tr><td width="48" height="2" bgcolor="${color}" style="width:48px;height:2px;background-color:${color};font-size:2px;line-height:2px;mso-line-height-rule:exactly">&nbsp;</td></tr>`;
@@ -160,9 +201,10 @@ export function extractLocalImages(html: string): { html: string; images: LocalI
   const cidByPath = new Map<string, string>();
 
   const out = html.replace(
-    /(<img\b[^>]*?\bsrc=)(["'])(file:\/\/[^"']+)\2/gi,
-    (_m, pre: string, quote: string, src: string) => {
-      const path = decodeFileUrl(src);
+    /(<img\b[^>]*?\bsrc=)(?:"(file:\/\/[^"]+)"|'(file:\/\/[^']+)')/gi,
+    (_m, pre: string, doubleQuoted: string | undefined, singleQuoted: string | undefined) => {
+      const quote = doubleQuoted === undefined ? "'" : '"';
+      const path = decodeFileUrl(decodeAttribute(doubleQuoted ?? singleQuoted ?? ""));
       let cid = cidByPath.get(path);
       if (!cid) {
         cid = `inline-${cidByPath.size + 1}@prudii`;
@@ -174,6 +216,12 @@ export function extractLocalImages(html: string): { html: string; images: LocalI
   );
 
   return { html: out, images };
+}
+
+const ATTRIBUTE_ENTITIES: Record<string, string> = { amp: "&", quot: '"', "#39": "'", lt: "<", gt: ">" };
+
+function decodeAttribute(value: string): string {
+  return value.replace(/&(amp|quot|#39|lt|gt);/g, (_m, name: string) => ATTRIBUTE_ENTITIES[name]);
 }
 
 export interface DataImageRef {

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { escapeHtml, restoreSanitizedHtml, sanitizeEmailHtml, sanitizeSignatureHtml, sanitizeSignatureHtmlReport, showLocalImages } from "./sanitize";
+import { escapeHtml, plainTextParagraph, restoreSanitizedHtml, sanitizeEmailHtml, sanitizeSignatureBlockHtml, sanitizeSignatureHtml, sanitizeSignatureHtmlReport, showLocalImages } from "./sanitize";
+import { DESIGNED_SIGNATURE } from "./signatureFixture";
 
 function parse(html: string): HTMLElement {
   return new DOMParser().parseFromString(`<!DOCTYPE html><body>${html}`, "text/html").body;
@@ -10,6 +11,12 @@ describe("escapeHtml", () => {
     expect(escapeHtml(`<img src="x" onerror='a&b'>`)).toBe(
       "&lt;img src=&quot;x&quot; onerror=&#39;a&amp;b&#39;&gt;"
     );
+  });
+});
+
+describe("plainTextParagraph", () => {
+  it("escapes markup and turns newlines into line breaks", () => {
+    expect(plainTextParagraph(`<b>Hi</b>\nA & B`)).toBe("<p>&lt;b&gt;Hi&lt;/b&gt;<br>A &amp; B</p>");
   });
 });
 
@@ -171,5 +178,66 @@ describe("sanitizeSignatureHtml", () => {
     const out = sanitizeSignatureHtml(`<p><b>Alice</b></p><script>x()</script>`);
     expect(out).toContain("<b>Alice</b>");
     expect(out).not.toContain("script");
+  });
+});
+
+describe("sanitizeSignatureBlockHtml", () => {
+  const attr = (html: string, tag: string, name: string) => {
+    const el = new DOMParser().parseFromString(sanitizeSignatureBlockHtml(html), "text/html").querySelector(tag);
+    return el?.getAttribute(name) ?? null;
+  };
+
+  it("keeps a local file source on an image", () => {
+    expect(attr('<img src="file:///C:/x/logo.png">', "img", "src")).toBe("file:///C:/x/logo.png");
+  });
+
+  it("drops a local file link", () => {
+    expect(attr('<a href="file:///C:/x/doc.pdf">x</a>', "a", "href")).toBeNull();
+  });
+
+  it("drops a javascript link", () => {
+    expect(attr('<a href="javascript:alert(1)">x</a>', "a", "href")).toBeNull();
+  });
+
+  it("keeps an inline data image", () => {
+    expect(attr('<img src="data:image/png;base64,AAA=">', "img", "src")).toBe("data:image/png;base64,AAA=");
+  });
+
+  it("drops event handlers", () => {
+    expect(attr('<p onclick="x()">Hi</p>', "p", "onclick")).toBeNull();
+  });
+
+  it("leaves the plain sanitizer unaffected afterwards", () => {
+    sanitizeSignatureBlockHtml('<img src="file:///C:/x/logo.png">');
+    expect(sanitizeSignatureHtml('<img src="file:///C:/x/logo.png">')).not.toContain("file:");
+  });
+
+  it("drops style sheets, forms, form controls and media", () => {
+    const out = parse(sanitizeSignatureBlockHtml(
+      `<p>a</p><style>p{color:red}</style><form action="https://evil.example/x"><input name="q"><textarea>t</textarea>` +
+      `<select><option>o</option></select><button>Go</button></form><video autoplay src="https://evil.example/v.mp4"><source src="v.webm"><track src="t.vtt"></video>` +
+      `<audio src="https://evil.example/a.mp3"></audio><dialog open>d</dialog><template><p>t</p></template><details open><summary>s</summary>x</details>`,
+    ));
+    expect(out.querySelector("style, form, input, textarea, select, option, button, video, source, track, audio, dialog, template, details, summary")).toBeNull();
+    expect(out.querySelector("p")?.textContent).toBe("a");
+    expect(out.textContent).not.toContain("color:red");
+  });
+
+  it("keeps a designed signature byte-identical", () => {
+    expect(sanitizeSignatureBlockHtml(DESIGNED_SIGNATURE)).toBe(DESIGNED_SIGNATURE);
+  });
+
+  it("keeps the attributes classic signatures are laid out with", () => {
+    const html =
+      `<table width="400" bgcolor="#eeeeee" border="1" cellpadding="4" cellspacing="0" align="left"><tbody><tr>` +
+      `<td valign="top" colspan="2" rowspan="1" class="c" dir="ltr" lang="de"><font face="Arial" color="#333333" size="2">Anna</font>` +
+      `<a href="https://example.com" target="_blank" rel="noopener" title="t">x</a><img src="https://example.com/l.png" alt="l" width="80" height="20"></td></tr></tbody></table>`;
+    expect(sanitizeSignatureBlockHtml(html)).toBe(html);
+  });
+
+  it("drops ids and data attributes", () => {
+    const out = parse(sanitizeSignatureBlockHtml(`<div id="x" data-type="signature"><p>a</p></div>`));
+    expect(out.querySelector("[id], [data-type]")).toBeNull();
+    expect(out.textContent).toBe("a");
   });
 });

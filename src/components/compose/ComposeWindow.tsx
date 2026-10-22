@@ -87,7 +87,7 @@ export function ComposeWindow() {
   useEffect(() => {
     const onContextMenu = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
-      if (target?.closest('input, textarea, [contenteditable="true"]')) return;
+      if (target?.closest("input, textarea") || target?.isContentEditable) return;
       e.preventDefault();
     };
     window.addEventListener("contextmenu", onContextMenu);
