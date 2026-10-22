@@ -21,7 +21,7 @@ export function headerLabel(line: string): { field: HeaderField; value: string }
   return field ? { field, value: groups.value.trim() } : null;
 }
 
-function splitList(text: string): string[] {
+function splitList(text: string, separators: string): string[] {
   const parts: string[] = [];
   let current = "";
   let quoted = false;
@@ -30,7 +30,7 @@ function splitList(text: string): string[] {
     if (ch === '"') quoted = !quoted;
     else if (!quoted && (ch === "<" || ch === "[")) depth++;
     else if (!quoted && (ch === ">" || ch === "]")) depth = Math.max(0, depth - 1);
-    if (!quoted && depth === 0 && (ch === ";" || ch === ",")) {
+    if (!quoted && depth === 0 && separators.includes(ch)) {
       parts.push(current);
       current = "";
     } else {
@@ -56,8 +56,33 @@ function parseAddress(raw: string): MailAddress | null {
   return { name, email };
 }
 
+const hasAddress = (piece: string) => EMAIL.test(piece);
+
+function splitMailboxes(text: string): string[] {
+  const groups = splitList(text, ";");
+  return groups.flatMap((group) => {
+    const pieces = splitList(group, ",");
+    if (!pieces.some(hasAddress)) return groups.length > 1 ? [group] : pieces;
+    const merged: string[] = [];
+    let pending: string[] = [];
+    for (const piece of pieces) {
+      pending.push(piece);
+      if (hasAddress(piece)) {
+        merged.push(pending.join(","));
+        pending = [];
+      }
+    }
+    return [...merged, ...pending];
+  });
+}
+
 export function parseAddressList(text: string): MailAddress[] {
-  return splitList(text).map(parseAddress).filter((a): a is MailAddress => !!a);
+  return splitMailboxes(text).map(parseAddress).filter((a): a is MailAddress => !!a);
+}
+
+export function parseMailbox(text: string): MailAddress | null {
+  const emails = text.match(new RegExp(EMAIL.source, "g")) ?? [];
+  return emails.length > 1 ? parseAddressList(text)[0] ?? null : parseAddress(text);
 }
 
 const MONTHS: Record<string, number> = {

@@ -41,6 +41,15 @@ describe("parseAddressList", () => {
       anna,
     ]);
   });
+
+  it("keeps the address of a Nachname, Vorname sender and recipient list", () => {
+    expect(parseAddressList("Kraus, Lea <lea.kraus@studio-halde.example>")).toEqual([{ name: "Kraus, Lea", email: "lea.kraus@studio-halde.example" }]);
+    expect(parseAddressList("Berger, Jonas <jonas.berger@studio-halde.example>; Weber, Anna <anna.weber@studio-halde.example>")).toEqual([
+      { name: "Berger, Jonas", email: "jonas.berger@studio-halde.example" },
+      { name: "Weber, Anna", email: "anna.weber@studio-halde.example" },
+    ]);
+    expect(parseAddressList("Lea Kraus, Jonas Berger")).toHaveLength(2);
+  });
 });
 
 describe("parseHeaderDate", () => {

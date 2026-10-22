@@ -1,5 +1,5 @@
 import type { MailAddress } from "../types";
-import { headerLabel, isHeaderSeparator, parseAddressList, parseHeaderDate, type HeaderField } from "./embeddedHeader";
+import { headerLabel, isHeaderSeparator, parseAddressList, parseHeaderDate, parseMailbox, type HeaderField } from "./embeddedHeader";
 import { hasVisible, visibleText } from "./quotedHistory";
 
 export interface EmbeddedMail {
@@ -204,7 +204,7 @@ function split(html: string): SplitMail | null {
     const html = styles + own.innerHTML;
     let quote: string | undefined;
     return {
-      from: address(block.fields.get("from"))[0] ?? { name: "", email: "" },
+      from: parseMailbox(block.fields.get("from")?.[0] ?? "") ?? { name: "", email: "" },
       to: address(block.fields.get("to")),
       cc: address(block.fields.get("cc")),
       date: parseHeaderDate(block.fields.get("date")?.[0] ?? ""),

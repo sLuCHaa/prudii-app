@@ -207,6 +207,14 @@ describe("splitEmbeddedMails", () => {
     expect(splitEmbeddedMails(html)!.outer).toBe("");
   });
 
+  it("keeps the address of a Nachname, Vorname sender", () => {
+    const html =
+      "<p>Oben.</p><p><b>Von:</b> Kraus, Lea &lt;lea.kraus@studio-halde.example&gt;<br><b>Gesendet:</b> Freitag, 12. September 2026 22:22<br><b>An:</b> Berger, Jonas &lt;jonas.berger@studio-halde.example&gt;; Weber, Anna &lt;anna.weber@studio-halde.example&gt;<br><b>Betreff:</b> Termin</p><p>Text</p>";
+    const part = splitEmbeddedMails(html)!.parts[0];
+    expect(part.from).toEqual({ name: "Kraus, Lea", email: "lea.kraus@studio-halde.example" });
+    expect(part.to.map((a) => a.email)).toEqual(["jonas.berger@studio-halde.example", "anna.weber@studio-halde.example"]);
+  });
+
   it("returns null for a mail without headers", () => {
     expect(splitEmbeddedMails("<p>Hallo Lea,</p><p>bis morgen.</p>")).toBeNull();
   });
