@@ -744,6 +744,7 @@ button:focus-visible,
   line-height: 1.5;
   contain: paint;
   overflow-x: auto;
+  overflow-y: hidden;
 }
 .compose-editor .tiptap [data-type="signature"]::before {
   content: "";
