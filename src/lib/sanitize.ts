@@ -45,6 +45,7 @@ const SIGNATURE_TAGS = [
 const SIGNATURE_ATTRS = [
   "style", "class", "width", "height", "align", "valign", "bgcolor", "border", "cellpadding", "cellspacing",
   "colspan", "rowspan", "href", "src", "alt", "title", "target", "rel", "color", "face", "size", "dir", "lang",
+  "nowrap", "clear", "span", "start", "type", "noshade",
 ];
 
 export function sanitizeSignatureBlockHtml(html: string): string {

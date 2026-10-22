@@ -241,3 +241,18 @@ describe("sanitizeSignatureBlockHtml", () => {
     expect(out.textContent).toBe("a");
   });
 });
+
+describe("sanitizeSignatureBlockHtml layout attributes", () => {
+  it("keeps the classic layout attributes signatures from Gmail and Outlook rely on", () => {
+    const out = sanitizeSignatureBlockHtml(
+      '<table><colgroup><col span="2"></colgroup><tbody><tr><td nowrap="">Anna</td></tr></tbody></table>' +
+        '<br clear="all"><ol start="3" type="a"><li>x</li></ol><hr noshade="">'
+    );
+    expect(out).toContain('span="2"');
+    expect(out).toContain("nowrap");
+    expect(out).toContain('clear="all"');
+    expect(out).toContain('start="3"');
+    expect(out).toContain('type="a"');
+    expect(out).toContain("noshade");
+  });
+});
