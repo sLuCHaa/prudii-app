@@ -17,6 +17,13 @@ export interface WhatsNewRelease {
 
 export const RELEASES: WhatsNewRelease[] = [
   {
+    version: "1.8.0",
+    items: [
+      { icon: "sparkles", tone: "blue", key: "whatsNew.v1_8_0.look" },
+      { icon: "mail", tone: "green", key: "whatsNew.v1_8_0.recipients" },
+    ],
+  },
+  {
     version: "1.7.3",
     items: [
       { icon: "image", tone: "green", key: "whatsNew.v1_7_3.images" },
