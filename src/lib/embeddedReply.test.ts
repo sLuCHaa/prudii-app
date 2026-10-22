@@ -84,6 +84,16 @@ describe("embeddedMailToMail", () => {
     expect(target.has_attachments).toBe(true);
   });
 
+  it("never has an empty body, so compose cannot fetch the outer body", () => {
+    const empty = splitEmbeddedMails(
+      '<p>Fürs Protokoll.</p><p><b>Von:</b> Lea Kraus &lt;kontakt@studio-halde.example&gt;<br><b>Gesendet:</b> Freitag, 12. September 2026 22:22<br><b>An:</b> planung@studio-halde.example<br><b>Betreff:</b> Anhang</p>',
+    )!;
+    const target = embeddedMailToMail(outerMail(), empty.parts[0]);
+    expect(target.body_html || target.body_text).toBeTruthy();
+    expect(visible(target.body_html)).not.toContain("Protokoll");
+    expect(visible(target.body_html)).not.toContain("Kraus");
+  });
+
   it("falls back to the outer subject without prefixes", () => {
     const target = embeddedMailToMail(outerMail({ subject: "AW: WG: Terminverschiebung" }), part());
     expect(target.subject).toBe("Terminverschiebung");

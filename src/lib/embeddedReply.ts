@@ -26,7 +26,7 @@ export function embeddedMailToMail(outer: Mail, part: EmbeddedMail): Mail {
     references: "",
     thread_id: null,
     subject: part.subject || outer.subject.replace(SUBJECT_PREFIX, ""),
-    body_html: part.quote(),
+    body_html: part.quote() || "<p></p>",
     body_text: "",
     snippet: part.preview,
     is_read: false,
