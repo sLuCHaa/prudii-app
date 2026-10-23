@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback, useImperativeHandle, forwardRef } from "react";
 import type { ReactNode } from "react";
 import { format, formatDistanceToNowStrict } from "date-fns";
 import { dateLocale } from "../../lib/dateUtils";
@@ -73,6 +73,12 @@ interface AttachmentFile extends ImageNotes {
   // worse than one that refuses to go out.
   status: "loading" | "ready" | "failed";
   error?: string;
+}
+
+function AttachmentThumb({ type, data }: { type: string; data: string }) {
+  // Memoized so a re-render hands React the same string instead of re-comparing megabytes.
+  const src = useMemo(() => `data:${type};base64,${data}`, [type, data]);
+  return <img src={src} alt="" className="w-full h-full object-cover" />;
 }
 
 function getFileIcon(mimeType: string, filename: string) {
@@ -1719,6 +1725,91 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
               className="compose-editor text-sm text-text leading-relaxed"
               style={{ "--compose-font": typography.fontStack, "--compose-font-size": `${typography.fontSizePt}pt` } as React.CSSProperties}
             />
+            {attachments.length > 0 && (
+              <div className="mt-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Paperclip className="w-4 h-4 text-text-tertiary" />
+                  <span className="text-xs font-medium text-text-secondary">
+                    {t("compose.attachment", { count: attachments.length })}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {attachments.map((att, index) => {
+                    const FileIcon = getFileIcon(att.type, att.name);
+                    const iconColor = getFileColor(att.type, att.name);
+                    const failed = att.status === "failed";
+                    const loading = att.status === "loading";
+                    const preview = att.status === "ready" && isEmbeddableImageType(att.type);
+                    return (
+                      <div
+                        key={att.id}
+                        title={failed ? att.error : undefined}
+                        className={`group relative flex flex-col items-center p-3 rounded-lg bg-bg-secondary border transition-colors ${
+                          failed ? "border-danger" : "border-border hover:border-border-light"
+                        }`}
+                      >
+                        <button
+                          onClick={() => removeAttachment(index)}
+                          className="absolute top-1 right-1 p-1 rounded-full bg-surface border border-border opacity-0 group-hover:opacity-100 hover:bg-danger hover:border-danger hover:text-white text-text-tertiary transition-all"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                        <div className={`${preview ? "w-full h-20 overflow-hidden" : "w-10 h-10"} rounded-lg bg-surface flex items-center justify-center mb-2 ${failed ? "text-danger" : iconColor}`}>
+                          {loading ? (
+                            <Loader2 className="w-5 h-5 animate-spin text-text-tertiary" />
+                          ) : preview ? (
+                            <AttachmentThumb type={att.type} data={att.data} />
+                          ) : (
+                            <FileIcon className="w-6 h-6" />
+                          )}
+                        </div>
+                        <span className="text-xs text-text truncate w-full text-center font-medium">{att.name}</span>
+                        <span className={`text-[11px] ${failed ? "text-danger" : "text-text-tertiary"}`}>
+                          {failed
+                            ? t("compose.attachmentFailed")
+                            : loading
+                              ? t("compose.attachmentLoading")
+                              : formatFileSize(att.size)}
+                        </span>
+                        {!failed && !loading && att.shrunkFrom != null && (
+                          <span className="text-[11px] text-text-tertiary">
+                            {t("compose.imageShrunk", {
+                              from: formatFileSize(att.shrunkFrom),
+                              to: formatFileSize(att.size),
+                            })}
+                          </span>
+                        )}
+                        {!failed && !loading && att.locationRemoved && (
+                          <span className="text-[11px] text-text-tertiary">{t("compose.locationRemoved")}</span>
+                        )}
+                        {!failed && !loading && att.original && (
+                          <button
+                            onClick={() =>
+                              setAttachments((prev) => prev.map((a) => (a.id === att.id ? toOriginal(a) : a)))
+                            }
+                            className="text-[11px] text-accent hover:underline"
+                          >
+                            {t("compose.sendOriginal")}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {(() => {
+                  const totalBytes = attachments.reduce((s, a) => s + a.size, 0);
+                  const totalMB = totalBytes / 1024 / 1024;
+                  const tone = totalMB > 20 ? "danger" : totalMB > 15 ? "warning" : "normal";
+                  const colorClass = tone === "danger" ? "text-danger" : tone === "warning" ? "text-warning" : "text-text-tertiary";
+                  return (
+                    <div className={`text-xs ${colorClass} mt-1`}>
+                      {t("compose.attachmentsSize", { size: formatFileSize(totalBytes) })}
+                      {tone !== "normal" && ` — ${t("compose.attachmentsSizeWarning")}`}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
             {quote && !quoteRemoved && (
               <div className="mt-5">
                 <QuoteCard
@@ -1750,89 +1841,6 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
               </button>
             )}
           </div>
-
-          {attachments.length > 0 && (
-            <div className="px-4 pb-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Paperclip className="w-4 h-4 text-text-tertiary" />
-                <span className="text-xs font-medium text-text-secondary">
-                  {t("compose.attachment", { count: attachments.length })}
-                </span>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {attachments.map((att, index) => {
-                  const FileIcon = getFileIcon(att.type, att.name);
-                  const iconColor = getFileColor(att.type, att.name);
-                  const failed = att.status === "failed";
-                  const loading = att.status === "loading";
-                  return (
-                    <div
-                      key={att.id}
-                      title={failed ? att.error : undefined}
-                      className={`group relative flex flex-col items-center p-3 rounded-lg bg-bg-secondary border transition-colors ${
-                        failed ? "border-danger" : "border-border hover:border-border-light"
-                      }`}
-                    >
-                      <button
-                        onClick={() => removeAttachment(index)}
-                        className="absolute top-1 right-1 p-1 rounded-full bg-surface border border-border opacity-0 group-hover:opacity-100 hover:bg-danger hover:border-danger hover:text-white text-text-tertiary transition-all"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                      <div className={`w-10 h-10 rounded-lg bg-surface flex items-center justify-center mb-2 ${failed ? "text-danger" : iconColor}`}>
-                        {loading ? (
-                          <Loader2 className="w-5 h-5 animate-spin text-text-tertiary" />
-                        ) : (
-                          <FileIcon className="w-6 h-6" />
-                        )}
-                      </div>
-                      <span className="text-xs text-text truncate w-full text-center font-medium">{att.name}</span>
-                      <span className={`text-[11px] ${failed ? "text-danger" : "text-text-tertiary"}`}>
-                        {failed
-                          ? t("compose.attachmentFailed")
-                          : loading
-                            ? t("compose.attachmentLoading")
-                            : formatFileSize(att.size)}
-                      </span>
-                      {!failed && !loading && att.shrunkFrom != null && (
-                        <span className="text-[11px] text-text-tertiary">
-                          {t("compose.imageShrunk", {
-                            from: formatFileSize(att.shrunkFrom),
-                            to: formatFileSize(att.size),
-                          })}
-                        </span>
-                      )}
-                      {!failed && !loading && att.locationRemoved && (
-                        <span className="text-[11px] text-text-tertiary">{t("compose.locationRemoved")}</span>
-                      )}
-                      {!failed && !loading && att.original && (
-                        <button
-                          onClick={() =>
-                            setAttachments((prev) => prev.map((a) => (a.id === att.id ? toOriginal(a) : a)))
-                          }
-                          className="text-[11px] text-accent hover:underline"
-                        >
-                          {t("compose.sendOriginal")}
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-              {(() => {
-                const totalBytes = attachments.reduce((s, a) => s + a.size, 0);
-                const totalMB = totalBytes / 1024 / 1024;
-                const tone = totalMB > 20 ? "danger" : totalMB > 15 ? "warning" : "normal";
-                const colorClass = tone === "danger" ? "text-danger" : tone === "warning" ? "text-warning" : "text-text-tertiary";
-                return (
-                  <div className={`text-xs ${colorClass} mt-1`}>
-                    {t("compose.attachmentsSize", { size: formatFileSize(totalBytes) })}
-                    {tone !== "normal" && ` — ${t("compose.attachmentsSizeWarning")}`}
-                  </div>
-                );
-              })()}
-            </div>
-          )}
         </div>
 
         <div className="border-t border-border bg-bg-secondary">
