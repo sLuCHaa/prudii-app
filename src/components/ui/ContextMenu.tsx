@@ -206,8 +206,13 @@ export function ContextMenu({ entries, x, y, onClose, variant = "menu", minWidth
     function onMouseDown(e: MouseEvent) {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) onClose();
     }
+    // A click into a mail iframe never reaches this document, it only blurs the window.
+    window.addEventListener("blur", onClose);
     document.addEventListener("mousedown", onMouseDown);
-    return () => document.removeEventListener("mousedown", onMouseDown);
+    return () => {
+      window.removeEventListener("blur", onClose);
+      document.removeEventListener("mousedown", onMouseDown);
+    };
   }, [onClose]);
 
   const measure = useCallback(

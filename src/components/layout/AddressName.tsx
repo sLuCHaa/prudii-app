@@ -19,6 +19,7 @@ export function AddressName({ address, children, className }: AddressNameProps) 
   const { t } = useTranslation();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const label = children ?? (address.name || address.email);
+  if (!address.email) return <span className={className}>{label}</span>;
   const showsAddress = typeof label === "string" && label.includes(address.email);
 
   const span = (

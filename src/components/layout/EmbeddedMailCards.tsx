@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { Forward, Reply } from "../icons";
 import { Tooltip } from "../ui/Tooltip";
 import { ContactAvatar } from "../ui/ContactAvatar";
+import { AddressName } from "./AddressName";
 import { useAppStore } from "../../stores/appStore";
 import { formatDateTime } from "../../lib/dateUtils";
 import { hasVisible } from "../../lib/quotedHistory";
@@ -69,13 +70,15 @@ export function EmbeddedMailCards({ parts, renderBody, onReply, onForward, onSho
                   <ContactAvatar name={part.from.name} email={part.from.email} size={26} className="shrink-0" />
                   <span className="min-w-0 flex flex-1 flex-col">
                     <span className="flex items-baseline gap-1.5 min-w-0">
-                      <span className="font-medium text-text truncate">{name}</span>
+                      <AddressName address={part.from} className="block font-medium text-text truncate">{name}</AddressName>
                       {part.from.email && part.from.email !== name && (
-                        <span className="shrink-0 text-text-tertiary">{part.from.email}</span>
+                        <AddressName address={part.from} className="shrink-0 text-text-tertiary">{part.from.email}</AddressName>
                       )}
                     </span>
                     <span className="truncate text-text-tertiary">
-                      {recipient && t("mailDetail.embedded.to", { name: recipient.name || recipient.email })}
+                      {recipient && (
+                        <AddressName address={recipient}>{t("mailDetail.embedded.to", { name: recipient.name || recipient.email })}</AddressName>
+                      )}
                       {!isOpen && part.preview && `${recipient ? " · " : ""}${part.preview}`}
                     </span>
                   </span>
