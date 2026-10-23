@@ -317,6 +317,7 @@
     "messagesWithAttachments_other": "{{count}} 封带附件的邮件",
     "loadingAttachments": "加载附件中...",
     "copyEmail": "复制邮箱地址",
+    "newMailTo": "新邮件给 {{name}}",
     "print": "打印",
     "imagesBlocked": {
       "message": "为保护隐私，外部图片已被阻止。",

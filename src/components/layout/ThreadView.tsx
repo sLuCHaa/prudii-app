@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback, memo, useMemo } from "react";
+import { Fragment, useEffect, useState, useRef, useCallback, memo, useMemo } from "react";
 import { Tooltip } from "../ui/Tooltip";
 import { parseISO } from "date-fns";
 import { FileText, Image, Film, Music, File, Loader2, Download, ChevronDown, ChevronRight, ChevronUp, MessageSquare, Copy, Check, Code, Eye, FileCode, FileType, Printer, MailMinus, ImageOff, FileWarning, FolderOpen, ClipboardList, ClipboardPlus, Ellipsis } from "lucide-react";
@@ -19,6 +19,7 @@ import { useChatAnchor } from "../../hooks/useChatAnchor";
 import { splitEmbeddedMails } from "../../lib/embeddedMails";
 import { embeddedMailToMail, resolveNameOnlySender } from "../../lib/embeddedReply";
 import { EmbeddedMailCards } from "./EmbeddedMailCards";
+import { AddressName } from "./AddressName";
 import { stripQuotedHtml, stripQuotedText, isForwardSubject } from "../../lib/quotedHistory";
 import { makeIsOutgoing } from "../../lib/outgoing";
 import { recipientSummary } from "../../lib/recipientSummary";
@@ -66,6 +67,15 @@ function getFileIcon(mimeType: string | null) {
 
 function formatRecipient(a: MailAddress): string {
   return a.name && a.name !== a.email ? `${a.name} <${a.email}>` : a.email;
+}
+
+function addressList(list: MailAddress[]) {
+  return list.map((a, i) => (
+    <Fragment key={i}>
+      {i > 0 && ", "}
+      <AddressName address={a}>{formatRecipient(a)}</AddressName>
+    </Fragment>
+  ));
 }
 
 const AttachmentItem = memo(function AttachmentItem({
@@ -712,12 +722,10 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
     formatDateTime(parseISO(mail.date), appSettings.use_24h_clock)
   , [mail.date, appSettings.use_24h_clock]);
 
-  const recipients = useMemo(() =>
-    mail.to.map(formatRecipient).join(", ")
-  , [mail.to]);
+  const recipients = useMemo(() => addressList(mail.to), [mail.to]);
 
   const ccRecipients = useMemo(() =>
-    mail.cc.length > 0 ? mail.cc.map(formatRecipient).join(", ") : null
+    mail.cc.length > 0 ? addressList(mail.cc) : null
   , [mail.cc]);
 
   const isDraft = useMemo(
@@ -727,8 +735,8 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
 
   const fromLine = (
     <div className="flex items-center gap-1.5 mb-0.5">
-      <span className="text-text-secondary font-medium select-text">{mail.from.name || mail.from.email}</span>
-      <span className="select-text">&lt;{mail.from.email}&gt;</span>
+      <AddressName address={mail.from} className="text-text-secondary font-medium select-text" />
+      <AddressName address={mail.from} className="select-text">{`<${mail.from.email}>`}</AddressName>
       <CopyEmailButton email={mail.from.email} />
     </div>
   );
@@ -935,7 +943,11 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
               className="flex items-center gap-1.5 min-w-0 rounded hover:text-text-secondary transition-colors"
             >
               {!mail.is_read && <span className="w-2 h-2 rounded-full bg-accent shrink-0" />}
-              <span className="font-medium text-text-secondary truncate">{name}</span>
+              {own ? (
+                <span className="font-medium text-text-secondary truncate">{name}</span>
+              ) : (
+                <AddressName address={mail.from} className="block font-medium text-text-secondary truncate" />
+              )}
               {isDraft && (
                 <span className="px-1.5 py-0.5 text-[11px] font-medium bg-warning/15 text-warning rounded-sm shrink-0">
                   {t("mailDetail.draft")}
@@ -944,7 +956,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
               {own && summary && (
                 <>
                   <span aria-hidden="true">→</span>
-                  <span className="truncate">{summary.first}</span>
+                  <AddressName address={mail.to[0] ?? mail.cc[0]} className="block truncate">{summary.first}</AddressName>
                 </>
               )}
             </button>
@@ -1075,9 +1087,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-text text-sm truncate select-text">
-              {mail.from.name || mail.from.email}
-            </span>
+            <AddressName address={mail.from} className="block font-medium text-text text-sm truncate select-text" />
             {isDraft && (
               <span className="px-1.5 py-0.5 text-[11px] font-medium bg-warning/15 text-warning rounded-sm shrink-0">
                 {t("mailDetail.draft")}

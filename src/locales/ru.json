@@ -322,6 +322,7 @@
     "messagesWithAttachments_other": "{{count}} писем с вложениями",
     "loadingAttachments": "Загрузка вложений...",
     "copyEmail": "Скопировать email адрес",
+    "newMailTo": "Новое письмо: {{name}}",
     "print": "Печать",
     "imagesBlocked": {
       "message": "Внешние изображения заблокированы для защиты конфиденциальности.",

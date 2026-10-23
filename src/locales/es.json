@@ -318,6 +318,7 @@
     "messagesWithAttachments_other": "{{count}} mensajes con adjuntos",
     "loadingAttachments": "Cargando adjuntos...",
     "copyEmail": "Copiar dirección de correo",
+    "newMailTo": "Nuevo correo a {{name}}",
     "print": "Imprimir",
     "imagesBlocked": {
       "message": "Imágenes externas bloqueadas por privacidad.",

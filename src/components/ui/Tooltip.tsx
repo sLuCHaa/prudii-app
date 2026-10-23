@@ -7,6 +7,7 @@ interface TooltipProps {
   /** Preferred side; flips when there is no room. */
   side?: "top" | "bottom";
   delayMs?: number;
+  className?: string;
   children: React.ReactNode;
 }
 
@@ -15,7 +16,7 @@ interface TooltipProps {
  * consistent delay. Wraps its child in an inline-flex span; keep aria-labels
  * on the child for screen readers.
  */
-export function Tooltip({ label, rich, side = "bottom", delayMs = 450, children }: TooltipProps) {
+export function Tooltip({ label, rich, side = "bottom", delayMs = 450, className, children }: TooltipProps) {
   const wrapRef = useRef<HTMLSpanElement>(null);
   const timerRef = useRef<number | null>(null);
   const [pos, setPos] = useState<{ left: number; top: number; side: "top" | "bottom" } | null>(null);
@@ -44,7 +45,7 @@ export function Tooltip({ label, rich, side = "bottom", delayMs = 450, children 
   return (
     <span
       ref={wrapRef}
-      className="inline-flex"
+      className={className ? `inline-flex ${className}` : "inline-flex"}
       onMouseEnter={show}
       onMouseLeave={hide}
       onMouseDown={hide}
