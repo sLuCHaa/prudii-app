@@ -686,8 +686,8 @@ export function SettingsPanel() {
             </div>
 
             <div className="border-b border-border shrink-0">
-              <div className="overflow-x-auto scrollbar-none px-4 py-2">
-                <div role="tablist" className="segmented-track w-max min-w-full">
+              <div className="px-4 py-2">
+                <div role="tablist" className="segmented-track flex-wrap">
                 {SETTINGS_TABS.map(({ id, labelKey, icon: Icon, premium }) => (
                   <TabButton
                     key={id}
