@@ -914,7 +914,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
     const name = own ? t("mailDetail.you") : mail.from.name || mail.from.email;
     const shape = own
       ? "bg-surface border-border border-t-[3px] border-t-accent rounded-xl shadow-sm"
-      : "border-border rounded-[14px] rounded-tl-[4px]";
+      : "bg-surface border-border rounded-[14px] rounded-tl-[4px]";
     const divider = "border-border-light";
     const summary = own ? recipientSummary(mail.to, mail.cc) : null;
     const recipientList = (
