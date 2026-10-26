@@ -22,7 +22,8 @@ export function usePopover(anchor: DOMRect, onClose: () => void) {
     const panel = ref.current;
     const previous = document.activeElement as HTMLElement | null;
     const first = panel?.querySelector<HTMLElement>('button, [href], input, [tabindex]:not([tabindex="-1"])');
-    (first ?? panel)?.focus();
+    // A link inside the clamped description would otherwise scroll the clamp box to itself.
+    (first ?? panel)?.focus({ preventScroll: true });
     return () => {
       const active = document.activeElement;
       if (
@@ -40,14 +41,15 @@ export function usePopover(anchor: DOMRect, onClose: () => void) {
       e.stopPropagation();
       onClose();
     }
-    function onDown(e: MouseEvent) {
+    function onDown(e: PointerEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     }
     document.addEventListener("keydown", onKey, true);
-    document.addEventListener("mousedown", onDown, true);
+    // Not mousedown: the time grid cancels pointerdown to drag-create, which suppresses it.
+    document.addEventListener("pointerdown", onDown, true);
     return () => {
       document.removeEventListener("keydown", onKey, true);
-      document.removeEventListener("mousedown", onDown, true);
+      document.removeEventListener("pointerdown", onDown, true);
     };
   }, [onClose]);
 
