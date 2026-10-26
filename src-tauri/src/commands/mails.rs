@@ -2131,7 +2131,9 @@ pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id:
             // IMAP operation in background â€” don't block the UI
             let app = app.clone();
             let account_id_for_registry = account_id.clone();
+            let running = super::sync::claim_pending_op(&mail_id, "trash");
             crate::task_registry::spawn_for_account(&account_id_for_registry, async move {
+                let Some(_running) = running else { return };
                 let pool = app.state::<ImapPool>();
                 let credential = match credentials::resolve_credential(&account_id, &auth_type, &provider).await {
                     Ok(p) => p,
@@ -2255,7 +2257,9 @@ pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id:
             let db_path = db.data_dir.join("prudii.db");
             let op_mail_id = mail_id.clone();
             let account_id_for_registry = account_id.clone();
+            let running = super::sync::claim_pending_op(&mail_id, "delete");
             crate::task_registry::spawn_for_account(&account_id_for_registry, async move {
+                let Some(_running) = running else { return };
                 let pool = app.state::<ImapPool>();
                 let credential = match credentials::resolve_credential(&account_id, &auth_type, &provider).await {
                     Ok(p) => p,
@@ -3040,7 +3044,9 @@ pub async fn archive_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_i
 
     let app = app.clone();
     let account_id_for_registry = account_id.clone();
+    let running = super::sync::claim_pending_op(&mail_id, "archive");
     crate::task_registry::spawn_for_account(&account_id_for_registry, async move {
+        let Some(_running) = running else { return };
         let pool = app.state::<ImapPool>();
         let credential = match credentials::resolve_credential(&account_id, &auth_type, &provider).await {
             Ok(p) => p,

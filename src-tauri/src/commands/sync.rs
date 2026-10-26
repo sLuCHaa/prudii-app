@@ -14,6 +14,21 @@ use tauri::{AppHandle, Emitter, Manager, State};
 pub static SYNCING_ACCOUNTS: std::sync::LazyLock<Mutex<HashSet<String>>> =
     std::sync::LazyLock::new(|| Mutex::new(HashSet::new()));
 
+static RUNNING_OPS: std::sync::LazyLock<Mutex<HashSet<String>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashSet::new()));
+
+/// A queued op runs right away from its command and again in the next sync's
+/// retry pass. A COPY-based move run twice at once leaves two copies in the
+/// destination, so each op gets a single runner at a time.
+pub(crate) fn claim_pending_op(mail_id: &str, op_type: &str) -> Option<crate::cleanup_guard::SetGuard> {
+    let key = format!("{}:{}", op_type, mail_id);
+    let mut running = RUNNING_OPS.lock().unwrap_or_else(|e| e.into_inner());
+    if !running.insert(key.clone()) {
+        return None;
+    }
+    Some(crate::cleanup_guard::SetGuard::new(&RUNNING_OPS, key))
+}
+
 fn emit_progress(app: &AppHandle, progress: &SyncProgress) {
     let _ = app.emit("sync-progress", progress);
 }
@@ -272,6 +287,13 @@ async fn process_pending_ops_imap(session: &mut imap::ImapSession, account_id: &
     log::info!("Processing {} pending ops for IMAP account {}", ops.len(), account_id);
 
     for (id, mail_id, op_type, payload) in &ops {
+        let Some(_running) = claim_pending_op(mail_id, op_type) else { continue };
+        // The immediate run may have finished since the list was read.
+        let still_queued = db.lock_db()
+            .query_row("SELECT 1 FROM pending_ops WHERE id = ?1", rusqlite::params![id], |_| Ok(()))
+            .is_ok();
+        if !still_queued { continue; }
+
         let parsed: serde_json::Value = match serde_json::from_str(payload) {
             Ok(v) => v,
             Err(_) => { delete_stale_op(db, *id); continue; }
@@ -2051,4 +2073,19 @@ pub async fn force_resync_account(
 
     // Trigger a normal sync which will now do a full initial sync
     sync_account(app, db, account_id, None).await
+}
+
+#[cfg(test)]
+mod pending_op_claim_tests {
+    use super::claim_pending_op;
+
+    #[test]
+    fn a_running_op_has_a_single_runner() {
+        let first = claim_pending_op("mail-claim-1", "trash");
+        assert!(first.is_some());
+        assert!(claim_pending_op("mail-claim-1", "trash").is_none());
+        assert!(claim_pending_op("mail-claim-1", "delete").is_some());
+        drop(first);
+        assert!(claim_pending_op("mail-claim-1", "trash").is_some());
+    }
 }
