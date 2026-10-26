@@ -11,6 +11,7 @@ import { EditorContent } from "@tiptap/react";
 import TiptapImage from "@tiptap/extension-image";
 import { useRichTextEditor } from "../editor/RichTextEditor";
 import { accountSignatureHtml, hasOwnText, localImageSources, replaceImageSources, setComposeBody, setSignature } from "./composeBody";
+import { threadingHeaders } from "./threading";
 import { needsAttachmentReminder } from "./attachmentReminder";
 import { EditorToolbar } from "../editor/EditorToolbar";
 import { useTranslation } from "react-i18next";
@@ -123,17 +124,6 @@ function getFileColor(mimeType: string, filename: string) {
 }
 
 export type ComposeMode = "new" | "reply" | "replyAll" | "forward" | "draft";
-
-// Build the RFC 5322 References chain for a reply: the original's References
-// header (full ancestry) followed by the original's own Message-ID.
-function buildReferencesChain(mail: Mail | null | undefined): string | undefined {
-  if (!mail?.message_id) return undefined;
-  const prior = (mail.references || mail.in_reply_to || "").trim();
-  const chain = prior ? `${prior} ${mail.message_id}` : mail.message_id;
-  const seen = new Set<string>();
-  const ids = chain.split(/\s+/).filter((id) => id && !seen.has(id) && seen.add(id));
-  return ids.join(" ") || undefined;
-}
 
 function generateReplySubject(subject: string): string {
   if (subject.toLowerCase().startsWith("re:")) return subject;
@@ -1237,8 +1227,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       subject: subject || t("compose.noSubject"),
       body_text: bodyText,
       body_html: bodyHtml,
-      in_reply_to: originalMail?.message_id || undefined,
-      references: buildReferencesChain(originalMail),
+      ...threadingHeaders(mode, originalMail),
       attachments: [
         ...attachments.map((att) => ({
           name: att.name,
@@ -1390,8 +1379,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       subject: subject || t("compose.noSubject"),
       body_text: bodyText,
       body_html: bodyHtml,
-      in_reply_to: originalMail?.message_id || undefined,
-      references: buildReferencesChain(originalMail),
+      ...threadingHeaders(mode, originalMail),
       attachments: [
         ...attachments.map((att) => ({
           name: att.name,
@@ -1477,8 +1465,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         subject: subject || t("compose.noSubject"),
         body_text: bodyText,
         body_html: bodyHtml,
-        in_reply_to: originalMail?.message_id || undefined,
-        references: buildReferencesChain(originalMail),
+        ...threadingHeaders(mode, originalMail),
         // Only attachments whose bytes are present go into the draft — a failed one
         // would be baked in as an empty file and the send guard could never clear it.
         // The user is told which ones were left out.
