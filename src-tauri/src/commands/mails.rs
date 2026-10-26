@@ -736,6 +736,62 @@ pub fn open_attachment(
     Ok(canonical_path.to_string_lossy().into_owned())
 }
 
+/// A name the temp copy can carry on every OS: no path, nothing Windows rejects.
+fn preview_file_name(name: &str) -> String {
+    let last = name.rsplit(['/', '\\']).next().unwrap_or("");
+    let cleaned: String = last
+        .chars()
+        .map(|c| if c.is_control() || matches!(c, '<' | '>' | ':' | '"' | '|' | '?' | '*') { '_' } else { c })
+        .collect();
+    let trimmed = cleaned.trim_end_matches(['.', ' ']).trim_start();
+    if trimmed.is_empty() { "attachment".to_string() } else { trimmed.to_string() }
+}
+
+/// The default handler runs these instead of showing them.
+const PROGRAM_EXTENSIONS: &[&str] = &[
+    "exe", "com", "bat", "cmd", "msi", "msp", "scr", "pif", "cpl", "lnk", "url", "reg", "hta", "jar",
+    "js", "jse", "vbs", "vbe", "wsf", "wsh", "ps1", "psm1", "msc", "appref-ms", "application", "gadget",
+    "sh", "bash", "desktop", "appimage", "run", "command", "app", "pkg",
+];
+
+fn launches_program(name: &str) -> bool {
+    name.rsplit_once('.')
+        .is_some_and(|(_, ext)| PROGRAM_EXTENSIONS.iter().any(|p| ext.eq_ignore_ascii_case(p)))
+}
+
+/// Shows a compose attachment, whose bytes live only in the compose window, from a
+/// temp copy: Quick Look on macOS, the default app elsewhere. Edits there never
+/// reach the attachment. `false` when the file would run as a program.
+#[tauri::command(async)]
+pub fn open_compose_attachment(db: State<'_, Database>, name: String, data: String) -> Result<bool, String> {
+    let file_name = preview_file_name(&name);
+    if !cfg!(target_os = "macos") && launches_program(&file_name) {
+        return Ok(false);
+    }
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(data.as_bytes())
+        .map_err(|e| format!("Invalid attachment data: {}", e))?;
+    // One folder per copy keeps the real file name, which the opening app shows.
+    let dir = db.data_dir.join("temp_previews").join(uuid::Uuid::new_v4().to_string());
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = dir.join(&file_name);
+    std::fs::write(&path, &bytes).map_err(|e| e.to_string())?;
+    #[cfg(target_os = "macos")]
+    {
+        let mut child = std::process::Command::new("qlmanage")
+            .arg("-p")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+        std::thread::spawn(move || {
+            let _ = child.wait();
+        });
+    }
+    #[cfg(not(target_os = "macos"))]
+    open_path_with_os(&path)?;
+    Ok(true)
+}
+
 // Uses the `drag` crate directly (its Tauri plugin wrapper needs a
 // webview-side IPC Channel) so the resolved path never reaches JS.
 pub(crate) fn start_native_drag(window: &tauri::Window, path: std::path::PathBuf) -> Result<(), String> {
@@ -5217,5 +5273,40 @@ mod list_tests {
         }
         // filter_clause("unread") appends this shape; the exclusion must compose with it.
         assert_eq!(count(&db, &starred_where(false, " AND is_read = 0"), &[]), 1);
+    }
+}
+
+#[cfg(test)]
+mod compose_preview_tests {
+    use super::{launches_program, preview_file_name};
+
+    #[test]
+    fn keeps_only_the_last_path_component() {
+        assert_eq!(preview_file_name("../../Angebot.docx"), "Angebot.docx");
+        assert_eq!(preview_file_name(r"C:\Users\anna\Rechnung.pdf"), "Rechnung.pdf");
+    }
+
+    #[test]
+    fn replaces_characters_windows_forbids() {
+        assert_eq!(preview_file_name("Plan: Q4 <final>?.xlsx"), "Plan_ Q4 _final__.xlsx");
+        assert_eq!(preview_file_name("Notiz\u{7}.txt"), "Notiz_.txt");
+    }
+
+    #[test]
+    fn falls_back_when_nothing_usable_is_left() {
+        assert_eq!(preview_file_name(""), "attachment");
+        assert_eq!(preview_file_name("..."), "attachment");
+        assert_eq!(preview_file_name("Bericht. "), "Bericht");
+    }
+
+    #[test]
+    fn flags_programs_and_scripts() {
+        assert!(launches_program("setup.EXE"));
+        assert!(launches_program("tool.ps1"));
+        assert!(launches_program("Verknüpfung.lnk"));
+        assert!(launches_program("start.sh"));
+        assert!(!launches_program("Angebot.pdf"));
+        assert!(!launches_program("archiv.tar.gz"));
+        assert!(!launches_program("ohne-endung"));
     }
 }

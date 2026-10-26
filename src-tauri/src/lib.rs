@@ -533,7 +533,12 @@ pub fn run() {
                 tauri::async_runtime::spawn(async move {
                     if let Ok(entries) = std::fs::read_dir(&cleanup_dir) {
                         for entry in entries.flatten() {
-                            let _ = std::fs::remove_file(entry.path());
+                            let path = entry.path();
+                            if path.is_dir() {
+                                let _ = std::fs::remove_dir_all(&path);
+                            } else {
+                                let _ = std::fs::remove_file(&path);
+                            }
                         }
                     }
                 });
@@ -1055,6 +1060,7 @@ pub fn run() {
             commands::mails::open_attachment,
             commands::mails::start_attachment_drag,
             commands::mails::quick_look_attachment,
+            commands::mails::open_compose_attachment,
             commands::mails::reveal_attachment,
             commands::mails::save_attachment,
             commands::mails::toggle_star,

@@ -30,7 +30,7 @@ import { Select } from "../ui/Select";
 import { TimeField } from "../ui/TimeField";
 import { isoDate } from "../../lib/calendar/dates";
 import { listen, emit } from "@tauri-apps/api/event";
-import { saveDraft, syncAccount, fetchMailBody, suggestReplies, sendMail, scheduleSend, listTemplates, listAttachments, getAttachmentData, deleteMailPermanently, saveComposeAutosave, type AttachmentPayload } from "../../lib/tauri";
+import { saveDraft, syncAccount, fetchMailBody, suggestReplies, sendMail, scheduleSend, listTemplates, listAttachments, getAttachmentData, deleteMailPermanently, openComposeAttachment, saveComposeAutosave, type AttachmentPayload } from "../../lib/tauri";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AiRepliesEvent, EmailTemplate, ReplySuggestion } from "../../types";
 import { escapeHtml, plainTextParagraph, restoreSanitizedHtml } from "../../lib/sanitize";
@@ -45,6 +45,9 @@ import { stripMmlTags } from "../../lib/missingParts";
 import { QuoteCard } from "./QuoteCard";
 import { RecipientInput, type RecipientInputHandle } from "./RecipientInput";
 import { ComposePreview, type ComposePreviewData } from "./ComposePreview";
+import { ImageLightbox, type ImageLightboxItem } from "../layout/ImageLightbox";
+import { PdfQuickView } from "./PdfQuickView";
+import { viewKind, viewableOfKind } from "./attachmentView";
 import type { Mail, SendMailRequest, SendAttachment, Attachment, Account, AppSettings } from "../../types";
 import { formatFileSize } from "../../lib/fileSize";
 import { prepareImage } from "../../lib/imagePrep";
@@ -438,6 +441,22 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   // Bumped by "restore original" so the edit frame drops unsaved edits even when the quote itself is unchanged.
   const [quoteRevision, setQuoteRevision] = useState(0);
   const [preview, setPreview] = useState<ComposePreviewData | null>(null);
+  const [viewer, setViewer] = useState<{ kind: "image" | "pdf"; id: string } | null>(null);
+  // Memoized: the lightbox would otherwise get megabyte data: strings rebuilt on every keystroke.
+  const viewerImages = useMemo<ImageLightboxItem[]>(
+    () =>
+      viewer?.kind === "image"
+        ? viewableOfKind(attachments, "image").map((a) => ({
+            id: a.id,
+            filename: a.name,
+            src: `data:${a.type};base64,${a.data}`,
+            sizeBytes: a.size,
+            canDownload: false,
+          }))
+        : [],
+    [viewer?.kind, attachments],
+  );
+  const viewerPdfs = useMemo(() => (viewer?.kind === "pdf" ? viewableOfKind(attachments, "pdf") : []), [viewer?.kind, attachments]);
   const quoteFrameRef = useRef<HTMLIFrameElement | null>(null);
   const quoteBaseline = useRef<string | null>(null);
   const autosavedQuoteEdit = useRef<string | null>(null);
@@ -1129,6 +1148,20 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     setAttachments((prev) => prev.filter((_, i) => i !== index));
   }
 
+  function viewAttachment(att: AttachmentFile) {
+    if (att.status !== "ready") return;
+    const kind = viewKind(att.type, att.name);
+    if (kind !== "file") {
+      setViewer({ kind, id: att.id });
+      return;
+    }
+    openComposeAttachment(att.name, att.data)
+      .then((opened) => {
+        if (!opened) addToast("warning", t("compose.attachmentIsProgram", { name: att.name }));
+      })
+      .catch((err) => addToast("error", t("compose.openAttachmentFailed"), err instanceof Error ? err.message : String(err)));
+  }
+
   // Build the outgoing body from the editor + quoted reply. We send the editor's
   // raw HTML: the schema admits only safe nodes/marks, the signature block only
   // sanitizeSignatureBlockHtml output, and crucially we must keep real
@@ -1413,7 +1446,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   const dialog = useDialog();
   // Keep escBlockedRef current every render so the capture-once keydown listener
   // can check it without a stale closure.
-  escBlockedRef.current = showDiscardDialog || linkDialogOpen || dialog.isOpen || preview !== null;
+  escBlockedRef.current = showDiscardDialog || linkDialogOpen || dialog.isOpen || preview !== null || viewer !== null;
 
   function openPreview() {
     const account = accounts?.find((a) => a.id === fromAccountId);
@@ -1741,16 +1774,24 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
                         >
                           <X className="w-3 h-3" />
                         </button>
-                        <div className={`${preview ? "w-full h-20 overflow-hidden" : "w-10 h-10"} rounded-lg bg-surface flex items-center justify-center mb-2 ${failed ? "text-danger" : iconColor}`}>
-                          {loading ? (
-                            <Loader2 className="w-5 h-5 animate-spin text-text-tertiary" />
-                          ) : preview ? (
-                            <AttachmentThumb type={att.type} data={att.data} />
-                          ) : (
-                            <FileIcon className="w-6 h-6" />
-                          )}
-                        </div>
-                        <span className="text-xs text-text truncate w-full text-center font-medium">{att.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => viewAttachment(att)}
+                          disabled={att.status !== "ready"}
+                          title={att.status === "ready" ? t("compose.viewAttachment") : undefined}
+                          className="flex flex-col items-center w-full min-w-0 enabled:cursor-pointer"
+                        >
+                          <div className={`${preview ? "w-full h-20 overflow-hidden" : "w-10 h-10"} rounded-lg bg-surface flex items-center justify-center mb-2 ${failed ? "text-danger" : iconColor}`}>
+                            {loading ? (
+                              <Loader2 className="w-5 h-5 animate-spin text-text-tertiary" />
+                            ) : preview ? (
+                              <AttachmentThumb type={att.type} data={att.data} />
+                            ) : (
+                              <FileIcon className="w-6 h-6" />
+                            )}
+                          </div>
+                          <span className="text-xs text-text truncate w-full text-center font-medium">{att.name}</span>
+                        </button>
                         <span className={`text-[11px] ${failed ? "text-danger" : "text-text-tertiary"}`}>
                           {failed
                             ? t("compose.attachmentFailed")
@@ -1981,6 +2022,21 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       </div>
 
       {preview && <ComposePreview data={preview} onClose={() => setPreview(null)} />}
+      {viewer?.kind === "image" && viewerImages.length > 0 && (
+        <ImageLightbox
+          images={viewerImages}
+          initialIndex={Math.max(0, viewerImages.findIndex((i) => i.id === viewer.id))}
+          onClose={() => setViewer(null)}
+          onDownload={() => {}}
+        />
+      )}
+      {viewer?.kind === "pdf" && viewerPdfs.length > 0 && (
+        <PdfQuickView
+          items={viewerPdfs}
+          initialIndex={Math.max(0, viewerPdfs.findIndex((a) => a.id === viewer.id))}
+          onClose={() => setViewer(null)}
+        />
+      )}
 
       {showDiscardDialog && (
         <motion.div

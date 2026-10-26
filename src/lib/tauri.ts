@@ -177,6 +177,11 @@ export async function quickLookAttachment(attachmentId: string): Promise<void> {
   return invoke("quick_look_attachment", { attachmentId });
 }
 
+/** Opens a compose attachment from a temp copy; `false` when it would run as a program. */
+export async function openComposeAttachment(name: string, data: string): Promise<boolean> {
+  return invoke("open_compose_attachment", { name, data });
+}
+
 export async function revealAttachment(attachmentId: string): Promise<void> {
   return invoke("reveal_attachment", { attachmentId });
 }
