@@ -4,7 +4,7 @@ import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { useTranslation } from "react-i18next";
 import { emit } from "@tauri-apps/api/event";
 import { useAppStore } from "../../stores/appStore";
-import { sendMail, saveDraft, syncAccount, trashMail } from "../../lib/tauri";
+import { sendMail, saveDraft, syncAccount, deleteMailPermanently } from "../../lib/tauri";
 import { causeMessage } from "../../lib/errorToast";
 import { playSentSound } from "../../lib/sounds";
 
@@ -36,12 +36,12 @@ export function UndoToast() {
     setPhase("sending");
     try {
       await sendMail(undoSend.request);
-      // Sent from a saved draft — remove the original draft (moves it to Trash).
-      // Awaited: it queues the server-side move as a pending op, and the sync below
+      // Sent from a saved draft — delete the original draft for good.
+      // Awaited: it queues the server-side delete as a pending op, and the sync below
       // only runs those before re-fetching the folders. Starting the sync first lets
       // it re-import the draft that is still sitting in the server's Drafts folder.
       if (undoSend.composeMode === "draft" && undoSend.composeMail) {
-        await trashMail(undoSend.composeMail.id).catch((err) => {
+        await deleteMailPermanently(undoSend.composeMail.id).catch((err) => {
           console.error("draft cleanup after send failed", err);
           useAppStore.getState().addToast(
             "warning",
@@ -50,7 +50,7 @@ export function UndoToast() {
           );
         });
       }
-      // The trashed draft is already gone from the local DB — show that now instead
+      // The deleted draft is already gone from the local DB — show that now instead
       // of waiting for the sync; the sent copy emits its own event once it lands.
       emit("mails-changed", { account_id: undoSend.request.account_id });
       syncAccount(undoSend.request.account_id).catch(() => {});

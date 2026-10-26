@@ -208,6 +208,11 @@ export async function trashMail(mailId: string): Promise<void> {
   return invoke("trash_mail", { mailId });
 }
 
+/** Deletes on the server without a stop in Trash — for a draft that was sent or saved anew. */
+export async function deleteMailPermanently(mailId: string): Promise<void> {
+  return invoke("trash_mail", { mailId, permanent: true });
+}
+
 export async function moveMail(mailId: string, destFolderId: string): Promise<void> {
   return invoke("move_mail", { mailId, destFolderId });
 }

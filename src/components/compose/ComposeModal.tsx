@@ -30,7 +30,7 @@ import { Select } from "../ui/Select";
 import { TimeField } from "../ui/TimeField";
 import { isoDate } from "../../lib/calendar/dates";
 import { listen, emit } from "@tauri-apps/api/event";
-import { saveDraft, syncAccount, fetchMailBody, suggestReplies, sendMail, scheduleSend, listTemplates, listAttachments, getAttachmentData, trashMail, saveComposeAutosave, type AttachmentPayload } from "../../lib/tauri";
+import { saveDraft, syncAccount, fetchMailBody, suggestReplies, sendMail, scheduleSend, listTemplates, listAttachments, getAttachmentData, deleteMailPermanently, saveComposeAutosave, type AttachmentPayload } from "../../lib/tauri";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AiRepliesEvent, EmailTemplate, ReplySuggestion } from "../../types";
 import { escapeHtml, plainTextParagraph, restoreSanitizedHtml } from "../../lib/sanitize";
@@ -1261,12 +1261,12 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       // Undo-send disabled — send directly
       setSending(true);
       sendMail(request).then(async () => {
-        // Sent from a saved draft — remove the original draft (moves it to Trash).
-        // Awaited before the sync: the cleanup queues the server-side move as a pending
+        // Sent from a saved draft — delete the original draft for good.
+        // Awaited before the sync: the cleanup queues the server-side delete as a pending
         // op, which the sync runs before re-fetching folders. Syncing first lets it
         // re-import the draft that is still in the server's Drafts folder.
         if (mode === "draft" && originalMail) {
-          await trashMail(originalMail.id).catch((err) => {
+          await deleteMailPermanently(originalMail.id).catch((err) => {
             console.error("draft cleanup after send failed", err);
           });
         }
@@ -1494,7 +1494,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       const savedMailId = await saveDraft(request);
       // Editing an existing draft saves a new one — drop the superseded version.
       if (mode === "draft" && originalMail) {
-        await trashMail(originalMail.id).catch((err) => {
+        await deleteMailPermanently(originalMail.id).catch((err) => {
           console.error("superseded draft cleanup failed", err);
         });
       }

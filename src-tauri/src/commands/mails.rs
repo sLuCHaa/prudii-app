@@ -1730,8 +1730,10 @@ enum TrashAction {
     },
 }
 
+/// `permanent` skips the Trash: a draft that was sent or saved as a newer version.
 #[tauri::command]
-pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id: String) -> Result<(), String> {
+pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id: String, permanent: Option<bool>) -> Result<(), String> {
+    let permanent = permanent.unwrap_or(false);
     if let Some((api_msg_id, account_id)) = get_api_message_id(&db, &mail_id) {
         let (api_type, provider, auth_type) = get_api_type(&db, &account_id);
         match api_type {
@@ -1746,7 +1748,7 @@ pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id:
                     ).unwrap_or(false)
                 };
 
-                if in_trash {
+                if in_trash || permanent {
                     let data_dir = db.data_dir.clone();
                     {
                         let conn = db.lock_db();
@@ -1854,7 +1856,7 @@ pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id:
                     ).unwrap_or(false)
                 };
 
-                if in_trash {
+                if in_trash || permanent {
                     let data_dir = db.data_dir.clone();
                     {
                         let conn = db.lock_db();
@@ -2021,7 +2023,7 @@ pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id:
             mail_id, current_folder_id, uid, trash_info, already_in_trash
         );
 
-        if already_in_trash || trash_info.is_none() {
+        if permanent || already_in_trash || trash_info.is_none() {
             let trash_path = trash_info.as_ref().map(|(_, p)| p.clone());
             Some(TrashAction::PermanentDelete {
                 account_id,
@@ -4028,7 +4030,7 @@ pub async fn batch_update_mails(
             for mail_id in mail_ids {
                 let app_clone = app.clone();
                 let db_ref = app.state::<Database>();
-                if let Err(e) = trash_mail(app_clone, db_ref, mail_id.clone()).await {
+                if let Err(e) = trash_mail(app_clone, db_ref, mail_id.clone(), None).await {
                     log::warn!("batch trash_mail failed for {}: {}", mail_id, e);
                 }
             }
