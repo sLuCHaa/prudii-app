@@ -517,7 +517,7 @@ function VirtualMailList({
 }: VirtualMailListProps) {
   // Themed overlay scrollbar on the virtualized list (keeps listRef as the
   // scroll viewport, so the virtualizer and onScroll keep working).
-  useScroller(listRef);
+  const { host: listHostRef } = useScroller(listRef);
 
   const virtualItems = useMemo<ListItem[]>(
     () => buildListItems(filteredMails, dateGroupLabels, showDateGroups),
@@ -675,367 +675,369 @@ function VirtualMailList({
   }, [filteredMails, setPendingRemoveIds, invalidateMailQueries, archiveMail, trashMail, onArchiveSuccess]);
 
   return (
-    <div
-      ref={listRef}
-      className="flex-1 overflow-y-auto overscroll-contain flex flex-col"
-      style={{ contain: "strict" }}
-      onScroll={handleListScroll}
-    >
+    <div ref={listHostRef} className="flex flex-1 min-h-0">
       <div
-        className="shrink-0"
-        style={{
-          height: rowVirtualizer.getTotalSize(),
-          width: "100%",
-          position: "relative",
-        }}
+        ref={listRef}
+        className="flex-1 overflow-y-auto overscroll-contain flex flex-col"
+        style={{ contain: "strict" }}
+        onScroll={handleListScroll}
       >
-        {rowVirtualizer.getVirtualItems().map((vRow) => {
-          if (vRow.index >= virtualItems.length) {
-            return (
-              <div
-                key="__spinner"
-                data-index={vRow.index}
-                ref={rowVirtualizer.measureElement}
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  transform: `translateY(${vRow.start}px)`,
-                }}
-                className="flex justify-center py-3"
-              >
-                {isFetchingNextPage && (
-                  <Loader2 className="w-4 h-4 animate-spin text-text-tertiary" />
-                )}
-              </div>
-            );
-          }
-
-          const item = virtualItems[vRow.index];
-
-          if (item.kind === "separator") {
-            return (
-              <div
-                key={item.key}
-                data-index={vRow.index}
-                ref={rowVirtualizer.measureElement}
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  transform: `translateY(${vRow.start}px)`,
-                  zIndex: 10,
-                }}
-                className="px-4 py-1.5 bg-bg flex items-center gap-2"
-              >
-                <span className="text-[11px] font-semibold uppercase tracking-widest text-text-tertiary">
-                  {item.label}
-                </span>
-                <div className="flex-1 h-px bg-border" />
-              </div>
-            );
-          }
-
-          const { mail, mailIndex } = item;
-          const isSelected = selectedMailIds.has(mail.id);
-          const recipient = isOutgoing(mail) ? mail.to[0] : undefined;
-
-          return (
-            <div
-              key={mail.id}
-              data-index={vRow.index}
-              ref={rowVirtualizer.measureElement}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                transform: `translateY(${vRow.start}px)`,
-                zIndex: selectedMailId === mail.id ? 1 : undefined,
-              }}
-            >
-              <div
-                ref={(el) => {
-                  setMailItemRef(mail.id, el);
-                  if (!el) return;
-                  // Non-passive: React's onWheel is registered passive at the
-                  // root, so e.preventDefault() there would silently no-op
-                  // (and warn). A native listener is the only way to actually
-                  // suppress the browser's horizontal scroll/navigation here.
-                  const handleWheel = (e: WheelEvent) => {
-                    if (prefersReducedMotion() || multiSelectMode) return;
-                    if (!isHorizontalIntent(e.deltaX, e.deltaY)) return;
-                    e.preventDefault();
-                    const s = swipe.current;
-                    // Already actioned this row (latch held past settle) —
-                    // ignore trailing wheel ticks (trackpad momentum) so a
-                    // quick second swipe can't double-trigger the action.
-                    // Momentum dies within ~half a second; past that the same
-                    // mail id means the row legitimately re-appeared (e.g.
-                    // archived, then the archive folder opened), so release
-                    // the latch instead of deadening the gesture forever.
-                    if (s.mailId === mail.id && s.fired) {
-                      if (performance.now() - s.firedAt < 600) return;
-                      s.mailId = null;
-                      s.fired = false;
-                    }
-                    if (s.mailId !== mail.id) {
-                      settleSwipe(triggerSwipeAction);
-                      s.mailId = mail.id;
-                      s.offset = 0;
-                      s.fired = false;
-                      // Clip this row's own translation and show its reveal
-                      // labels for the episode's duration only — both cleared
-                      // again in settleSwipe's tween onComplete once the
-                      // gesture resolves.
-                      el.style.overflow = "hidden";
-                      const reveal = el.firstElementChild as HTMLElement | null;
-                      if (reveal) reveal.style.opacity = "1";
-                    }
-                    s.offset = accumulate(s.offset, e.deltaX);
-                    const target = swipeTargets.current.get(mail.id);
-                    if (target) gsap.set(target, { x: s.offset });
-                    window.clearTimeout(s.timer);
-                    s.timer = window.setTimeout(() => settleSwipe(triggerSwipeAction), 140);
-                  };
-                  el.addEventListener("wheel", handleWheel, { passive: false });
-                  return () => {
-                    el.removeEventListener("wheel", handleWheel);
-                    setMailItemRef(mail.id, null);
-                  };
-                }}
-                role="button"
-                tabIndex={0}
-                data-mail-row=""
-                onClick={(e) => handleMailClick(e, mail, mailIndex)}
-                onKeyDown={(e) => {
-                  if (e.key !== "Enter" && e.key !== " ") return;
-                  e.preventDefault();
-                  handleMailClick(e, mail, mailIndex);
-                }}
-                onContextMenu={(e) => handleContextMenu(e, mail)}
-                draggable={!multiSelectMode}
-                onDragStart={(e) => handleDragStart(e, mail)}
-                onDrag={handleDrag}
-                onDragEnd={handleDragEnd}
-                className="relative group/mail mail-item-draggable select-none w-full text-left px-2 py-px transition-colors cursor-pointer"
-              >
-                {/* Reveal layers for trackpad swipe. Shown only while a swipe
-                    episode is active (inline opacity, same lifecycle as the
-                    overflow clip): selection tints are alpha
-                    colors, so at rest the labels would shine through them. */}
-                <div aria-hidden className="absolute inset-0 flex items-center justify-between px-5 pointer-events-none opacity-0">
-                  <span className="flex items-center gap-1.5 text-success text-xs font-medium"><Archive className="w-4 h-4" />{t("mailList.batchArchive")}</span>
-                  <span className="flex items-center gap-1.5 text-danger text-xs font-medium">{t("mailList.batchTrash")}<Trash2 className="w-4 h-4" /></span>
-                </div>
-                {/* The row root's px-2 py-px is the tile gutter, inside the measured height. */}
+        <div
+          className="shrink-0"
+          style={{
+            height: rowVirtualizer.getTotalSize(),
+            width: "100%",
+            position: "relative",
+          }}
+        >
+          {rowVirtualizer.getVirtualItems().map((vRow) => {
+            if (vRow.index >= virtualItems.length) {
+              return (
                 <div
-                  ref={(el) => { if (el) swipeTargets.current.set(mail.id, el); else swipeTargets.current.delete(mail.id); }}
-                  className={`mail-row-body relative px-4 py-2.5 rounded-control transition-colors ${
-                    isSelected
-                      ? "bg-accent/15"
-                      : selectedMailId === mail.id
-                      ? "tile-raised"
-                      : mailIndex === selectedMailIndex
-                      ? "bg-hover"
-                      : "bg-bg hover:bg-hover"
-                  }`}
-                >
-                {/* Left stripe: gold = starred, blue = unread — fixed colors so the
-                    two are always clearly distinguishable (independent of theme/account color). */}
-                <div
-                  aria-hidden
-                  className="absolute left-0.5 top-2.5 bottom-2.5 w-[3px] rounded-r"
+                  key="__spinner"
+                  data-index={vRow.index}
+                  ref={rowVirtualizer.measureElement}
                   style={{
-                    background: mail.is_starred
-                      ? "linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%)"
-                      : !mail.is_read
-                        ? "#3b82f6"
-                        : "transparent",
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    transform: `translateY(${vRow.start}px)`,
                   }}
-                />
-                <div className="flex items-start gap-3">
-                  {multiSelectMode ? (
-                    <div
-                      className="shrink-0"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleMailSelection(mail.id);
-                      }}
-                    >
+                  className="flex justify-center py-3"
+                >
+                  {isFetchingNextPage && (
+                    <Loader2 className="w-4 h-4 animate-spin text-text-tertiary" />
+                  )}
+                </div>
+              );
+            }
+
+            const item = virtualItems[vRow.index];
+
+            if (item.kind === "separator") {
+              return (
+                <div
+                  key={item.key}
+                  data-index={vRow.index}
+                  ref={rowVirtualizer.measureElement}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    transform: `translateY(${vRow.start}px)`,
+                    zIndex: 10,
+                  }}
+                  className="px-4 py-1.5 bg-bg flex items-center gap-2"
+                >
+                  <span className="text-[11px] font-semibold uppercase tracking-widest text-text-tertiary">
+                    {item.label}
+                  </span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+              );
+            }
+
+            const { mail, mailIndex } = item;
+            const isSelected = selectedMailIds.has(mail.id);
+            const recipient = isOutgoing(mail) ? mail.to[0] : undefined;
+
+            return (
+              <div
+                key={mail.id}
+                data-index={vRow.index}
+                ref={rowVirtualizer.measureElement}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  transform: `translateY(${vRow.start}px)`,
+                  zIndex: selectedMailId === mail.id ? 1 : undefined,
+                }}
+              >
+                <div
+                  ref={(el) => {
+                    setMailItemRef(mail.id, el);
+                    if (!el) return;
+                    // Non-passive: React's onWheel is registered passive at the
+                    // root, so e.preventDefault() there would silently no-op
+                    // (and warn). A native listener is the only way to actually
+                    // suppress the browser's horizontal scroll/navigation here.
+                    const handleWheel = (e: WheelEvent) => {
+                      if (prefersReducedMotion() || multiSelectMode) return;
+                      if (!isHorizontalIntent(e.deltaX, e.deltaY)) return;
+                      e.preventDefault();
+                      const s = swipe.current;
+                      // Already actioned this row (latch held past settle) —
+                      // ignore trailing wheel ticks (trackpad momentum) so a
+                      // quick second swipe can't double-trigger the action.
+                      // Momentum dies within ~half a second; past that the same
+                      // mail id means the row legitimately re-appeared (e.g.
+                      // archived, then the archive folder opened), so release
+                      // the latch instead of deadening the gesture forever.
+                      if (s.mailId === mail.id && s.fired) {
+                        if (performance.now() - s.firedAt < 600) return;
+                        s.mailId = null;
+                        s.fired = false;
+                      }
+                      if (s.mailId !== mail.id) {
+                        settleSwipe(triggerSwipeAction);
+                        s.mailId = mail.id;
+                        s.offset = 0;
+                        s.fired = false;
+                        // Clip this row's own translation and show its reveal
+                        // labels for the episode's duration only — both cleared
+                        // again in settleSwipe's tween onComplete once the
+                        // gesture resolves.
+                        el.style.overflow = "hidden";
+                        const reveal = el.firstElementChild as HTMLElement | null;
+                        if (reveal) reveal.style.opacity = "1";
+                      }
+                      s.offset = accumulate(s.offset, e.deltaX);
+                      const target = swipeTargets.current.get(mail.id);
+                      if (target) gsap.set(target, { x: s.offset });
+                      window.clearTimeout(s.timer);
+                      s.timer = window.setTimeout(() => settleSwipe(triggerSwipeAction), 140);
+                    };
+                    el.addEventListener("wheel", handleWheel, { passive: false });
+                    return () => {
+                      el.removeEventListener("wheel", handleWheel);
+                      setMailItemRef(mail.id, null);
+                    };
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  data-mail-row=""
+                  onClick={(e) => handleMailClick(e, mail, mailIndex)}
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter" && e.key !== " ") return;
+                    e.preventDefault();
+                    handleMailClick(e, mail, mailIndex);
+                  }}
+                  onContextMenu={(e) => handleContextMenu(e, mail)}
+                  draggable={!multiSelectMode}
+                  onDragStart={(e) => handleDragStart(e, mail)}
+                  onDrag={handleDrag}
+                  onDragEnd={handleDragEnd}
+                  className="relative group/mail mail-item-draggable select-none w-full text-left px-2 py-px transition-colors cursor-pointer"
+                >
+                  {/* Reveal layers for trackpad swipe. Shown only while a swipe
+                      episode is active (inline opacity, same lifecycle as the
+                      overflow clip): selection tints are alpha
+                      colors, so at rest the labels would shine through them. */}
+                  <div aria-hidden className="absolute inset-0 flex items-center justify-between px-5 pointer-events-none opacity-0">
+                    <span className="flex items-center gap-1.5 text-success text-xs font-medium"><Archive className="w-4 h-4" />{t("mailList.batchArchive")}</span>
+                    <span className="flex items-center gap-1.5 text-danger text-xs font-medium">{t("mailList.batchTrash")}<Trash2 className="w-4 h-4" /></span>
+                  </div>
+                  {/* The row root's px-2 py-px is the tile gutter, inside the measured height. */}
+                  <div
+                    ref={(el) => { if (el) swipeTargets.current.set(mail.id, el); else swipeTargets.current.delete(mail.id); }}
+                    className={`mail-row-body relative px-4 py-2.5 rounded-control transition-colors ${
+                      isSelected
+                        ? "bg-accent/15"
+                        : selectedMailId === mail.id
+                        ? "tile-raised"
+                        : mailIndex === selectedMailIndex
+                        ? "bg-hover"
+                        : "bg-bg hover:bg-hover"
+                    }`}
+                  >
+                  {/* Left stripe: gold = starred, blue = unread — fixed colors so the
+                      two are always clearly distinguishable (independent of theme/account color). */}
+                  <div
+                    aria-hidden
+                    className="absolute left-0.5 top-2.5 bottom-2.5 w-[3px] rounded-r"
+                    style={{
+                      background: mail.is_starred
+                        ? "linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%)"
+                        : !mail.is_read
+                          ? "#3b82f6"
+                          : "transparent",
+                    }}
+                  />
+                  <div className="flex items-start gap-3">
+                    {multiSelectMode ? (
                       <div
-                        className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
-                          isSelected
-                            ? "bg-accent text-white"
-                            : "border-2 border-border-light hover:border-accent"
-                        }`}
-                      >
-                        {isSelected && <Check className="w-3.5 h-3.5" />}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="relative shrink-0 group/check">
-                      <GradientAvatar
-                        name={recipient ? recipient.name : mail.from.name}
-                        email={recipient ? recipient.email : mail.from.email}
-                        size={36}
-                        className="group-hover/check:invisible"
-                      />
-                      <div
-                        className="absolute inset-0 invisible group-hover/check:visible flex items-center justify-center"
+                        className="shrink-0"
                         onClick={(e) => {
                           e.stopPropagation();
                           toggleMailSelection(mail.id);
                         }}
                       >
-                        {/* Opaque fill: row backgrounds can be alpha tints, and
-                            the old border-light ring was invisible on them. */}
-                        <div className="w-7 h-7 rounded-full bg-surface border-2 border-accent hover:bg-accent/10 flex items-center justify-center transition-colors" />
+                        <div
+                          className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
+                            isSelected
+                              ? "bg-accent text-white"
+                              : "border-2 border-border-light hover:border-accent"
+                          }`}
+                        >
+                          {isSelected && <Check className="w-3.5 h-3.5" />}
+                        </div>
                       </div>
+                    ) : (
+                      <div className="relative shrink-0 group/check">
+                        <GradientAvatar
+                          name={recipient ? recipient.name : mail.from.name}
+                          email={recipient ? recipient.email : mail.from.email}
+                          size={36}
+                          className="group-hover/check:invisible"
+                        />
+                        <div
+                          className="absolute inset-0 invisible group-hover/check:visible flex items-center justify-center"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleMailSelection(mail.id);
+                          }}
+                        >
+                          {/* Opaque fill: row backgrounds can be alpha tints, and
+                              the old border-light ring was invisible on them. */}
+                          <div className="w-7 h-7 rounded-full bg-surface border-2 border-accent hover:bg-accent/10 flex items-center justify-center transition-colors" />
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-2">
+                        <span
+                          className={`flex-1 min-w-0 truncate text-sm ${
+                            !mail.is_read ? "font-semibold text-text" : "text-text-secondary"
+                          }`}
+                        >
+                          {recipient
+                            ? t("mailList.toRecipient", { name: recipient.name || recipient.email })
+                            : mail.from.name || mail.from.email}
+                        </span>
+                        <span className="shrink-0 text-xs text-text-tertiary tabular-nums">
+                          {formatMailDate(mail.date, appSettings.use_24h_clock)}
+                        </span>
+                      </div>
+
+                      <div className="mt-0.5 flex items-center gap-2">
+                        <span
+                          className={`flex-1 min-w-0 truncate text-sm ${
+                            !mail.is_read ? "text-text" : "text-text-secondary"
+                          }`}
+                        >
+                          {mail.subject || t("compose.noSubject")}
+                        </span>
+                        {(mail.is_pinned || mail.is_starred || (mail.flags && mail.flags.length > 0) || mail.has_attachments || taskCounts[mail.id] > 0 || assignments.has(mail.message_id)) && (
+                          <span className="flex shrink-0 items-center gap-1.5 text-text-tertiary">
+                            {mail.is_pinned && <Pin className="w-3 h-3 text-accent" />}
+                            {mail.is_starred && <StarIcon size={12} color="var(--c-warning)" />}
+                            {mail.flags && mail.flags.length > 0 && <FlagDots flags={mail.flags} size={9} />}
+                            {mail.has_attachments && <Paperclip className="w-3 h-3" />}
+                            {assignments.has(mail.message_id) && (
+                              <AssigneeChip
+                                member={members.get(assignments.get(mail.message_id)!.assigned_to)}
+                                done={assignments.get(mail.message_id)!.status === "done"}
+                              />
+                            )}
+                            {taskCounts[mail.id] > 0 && <MailTaskChip count={taskCounts[mail.id]} t={t} />}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="mt-0.5 truncate text-xs text-text-tertiary">{mail.snippet}</div>
+                    </div>
+                  </div>
+                  </div>
+                  {!multiSelectMode && (
+                    <div
+                      className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover/mail:opacity-100 transition-opacity duration-150 pointer-events-none group-hover/mail:pointer-events-auto"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const preActionVisible = filteredMails.length;
+                          setPendingRemoveIds([mail.id]);
+                          runMailAction(() => archiveMail(mail.id), {
+                            errorKey: "errors.archive",
+                            invalidate: invalidateMailQueries,
+                            onPendingClear: () => setPendingRemoveIds([]),
+                            onSuccess: () => onArchiveSuccess([mail.id], preActionVisible),
+                          });
+                        }}
+                        className="w-7 h-7 rounded-md bg-surface hover:bg-hover border border-border flex items-center justify-center text-text-secondary"
+                        title={t("mailDetail.archive")}
+                        aria-label={t("mailDetail.archive")}
+                      >
+                        <Archive className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const prev = mail.is_starred;
+                          setMails((prev_) =>
+                            prev_.map((m) =>
+                              m.id === mail.id ? { ...m, is_starred: !prev } : m
+                            )
+                          );
+                          toggleStarMutation.mutate(mail.id, {
+                            onError: () =>
+                              setMails((prev_) =>
+                                prev_.map((m) =>
+                                  m.id === mail.id ? { ...m, is_starred: prev } : m
+                                )
+                              ),
+                          });
+                        }}
+                        className="w-7 h-7 rounded-md bg-surface hover:bg-hover border border-border flex items-center justify-center"
+                        title={t("mailDetail.star")}
+                        aria-label={t("mailDetail.star")}
+                      >
+                        <Star className={`w-3.5 h-3.5 ${mail.is_starred ? "text-warning fill-warning" : "text-text-secondary"}`} />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPendingRemoveIds([mail.id]);
+                          runMailAction(() => trashMail(mail.id), {
+                            errorKey: "errors.trash",
+                            invalidate: invalidateMailQueries,
+                            onPendingClear: () => setPendingRemoveIds([]),
+                          });
+                        }}
+                        className="w-7 h-7 rounded-md bg-surface hover:bg-hover border border-border flex items-center justify-center text-danger"
+                        title={t("mailDetail.trash")}
+                        aria-label={t("mailDetail.trash")}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        // Kept from the document-level mousedown that ContextMenu closes
+                        // on, so a second click on this button toggles instead of
+                        // dismissing and immediately reopening the menu.
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openSnoozeMenu(e, mail);
+                        }}
+                        className={`w-7 h-7 rounded-md hover:bg-hover border border-border flex items-center justify-center text-text-secondary ${
+                          snoozeMenuMailId === mail.id ? "bg-hover" : "bg-surface"
+                        }`}
+                        title={t("snooze.snooze")}
+                        aria-label={t("snooze.snooze")}
+                      >
+                        <Clock className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   )}
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline gap-2">
-                      <span
-                        className={`flex-1 min-w-0 truncate text-sm ${
-                          !mail.is_read ? "font-semibold text-text" : "text-text-secondary"
-                        }`}
-                      >
-                        {recipient
-                          ? t("mailList.toRecipient", { name: recipient.name || recipient.email })
-                          : mail.from.name || mail.from.email}
-                      </span>
-                      <span className="shrink-0 text-xs text-text-tertiary tabular-nums">
-                        {formatMailDate(mail.date, appSettings.use_24h_clock)}
-                      </span>
-                    </div>
-
-                    <div className="mt-0.5 flex items-center gap-2">
-                      <span
-                        className={`flex-1 min-w-0 truncate text-sm ${
-                          !mail.is_read ? "text-text" : "text-text-secondary"
-                        }`}
-                      >
-                        {mail.subject || t("compose.noSubject")}
-                      </span>
-                      {(mail.is_pinned || mail.is_starred || (mail.flags && mail.flags.length > 0) || mail.has_attachments || taskCounts[mail.id] > 0 || assignments.has(mail.message_id)) && (
-                        <span className="flex shrink-0 items-center gap-1.5 text-text-tertiary">
-                          {mail.is_pinned && <Pin className="w-3 h-3 text-accent" />}
-                          {mail.is_starred && <StarIcon size={12} color="var(--c-warning)" />}
-                          {mail.flags && mail.flags.length > 0 && <FlagDots flags={mail.flags} size={9} />}
-                          {mail.has_attachments && <Paperclip className="w-3 h-3" />}
-                          {assignments.has(mail.message_id) && (
-                            <AssigneeChip
-                              member={members.get(assignments.get(mail.message_id)!.assigned_to)}
-                              done={assignments.get(mail.message_id)!.status === "done"}
-                            />
-                          )}
-                          {taskCounts[mail.id] > 0 && <MailTaskChip count={taskCounts[mail.id]} t={t} />}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="mt-0.5 truncate text-xs text-text-tertiary">{mail.snippet}</div>
-                  </div>
                 </div>
-                </div>
-                {!multiSelectMode && (
-                  <div
-                    className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover/mail:opacity-100 transition-opacity duration-150 pointer-events-none group-hover/mail:pointer-events-auto"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const preActionVisible = filteredMails.length;
-                        setPendingRemoveIds([mail.id]);
-                        runMailAction(() => archiveMail(mail.id), {
-                          errorKey: "errors.archive",
-                          invalidate: invalidateMailQueries,
-                          onPendingClear: () => setPendingRemoveIds([]),
-                          onSuccess: () => onArchiveSuccess([mail.id], preActionVisible),
-                        });
-                      }}
-                      className="w-7 h-7 rounded-md bg-surface hover:bg-hover border border-border flex items-center justify-center text-text-secondary"
-                      title={t("mailDetail.archive")}
-                      aria-label={t("mailDetail.archive")}
-                    >
-                      <Archive className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const prev = mail.is_starred;
-                        setMails((prev_) =>
-                          prev_.map((m) =>
-                            m.id === mail.id ? { ...m, is_starred: !prev } : m
-                          )
-                        );
-                        toggleStarMutation.mutate(mail.id, {
-                          onError: () =>
-                            setMails((prev_) =>
-                              prev_.map((m) =>
-                                m.id === mail.id ? { ...m, is_starred: prev } : m
-                              )
-                            ),
-                        });
-                      }}
-                      className="w-7 h-7 rounded-md bg-surface hover:bg-hover border border-border flex items-center justify-center"
-                      title={t("mailDetail.star")}
-                      aria-label={t("mailDetail.star")}
-                    >
-                      <Star className={`w-3.5 h-3.5 ${mail.is_starred ? "text-warning fill-warning" : "text-text-secondary"}`} />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPendingRemoveIds([mail.id]);
-                        runMailAction(() => trashMail(mail.id), {
-                          errorKey: "errors.trash",
-                          invalidate: invalidateMailQueries,
-                          onPendingClear: () => setPendingRemoveIds([]),
-                        });
-                      }}
-                      className="w-7 h-7 rounded-md bg-surface hover:bg-hover border border-border flex items-center justify-center text-danger"
-                      title={t("mailDetail.trash")}
-                      aria-label={t("mailDetail.trash")}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      // Kept from the document-level mousedown that ContextMenu closes
-                      // on, so a second click on this button toggles instead of
-                      // dismissing and immediately reopening the menu.
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openSnoozeMenu(e, mail);
-                      }}
-                      className={`w-7 h-7 rounded-md hover:bg-hover border border-border flex items-center justify-center text-text-secondary ${
-                        snoozeMenuMailId === mail.id ? "bg-hover" : "bg-surface"
-                      }`}
-                      title={t("snooze.snooze")}
-                      aria-label={t("snooze.snooze")}
-                    >
-                      <Clock className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
               </div>
-            </div>
-          );
-        })}
-      </div>
-      {/* A short list ends in the empty state's sky instead of a blank column. */}
-      <div
-        aria-hidden
-        className="relative flex-1 min-h-0 overflow-hidden"
-        style={{ maskImage: SKY_FADE, WebkitMaskImage: SKY_FADE }}
-      >
-        <DaylightSky />
+            );
+          })}
+        </div>
+        {/* A short list ends in the empty state's sky instead of a blank column. */}
+        <div
+          aria-hidden
+          className="relative flex-1 min-h-0 overflow-hidden"
+          style={{ maskImage: SKY_FADE, WebkitMaskImage: SKY_FADE }}
+        >
+          <DaylightSky />
+        </div>
       </div>
     </div>
   );

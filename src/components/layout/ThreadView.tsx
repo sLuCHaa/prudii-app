@@ -1502,7 +1502,7 @@ interface ThreadViewProps {
 
 export function ThreadView({ mail }: ThreadViewProps) {
   const { t } = useTranslation();
-  const messagesScrollRef = useScroller<HTMLDivElement>();
+  const { host: messagesHostRef, viewport: messagesScrollRef } = useScroller<HTMLDivElement>();
   const scrollToMessage = useCallback((mailId: string) => {
     messagesScrollRef.current
       ?.querySelector(`[data-mail-id="${CSS.escape(mailId)}"]`)
@@ -1855,25 +1855,29 @@ export function ThreadView({ mail }: ThreadViewProps) {
 
       {!isSingleMail && <ThreadAttachments threadMails={threadMails} loading={loading} onLocate={scrollToMessage} />}
 
-      <div ref={messagesScrollRef} className="relative flex-1 overflow-y-auto overscroll-contain px-4 pt-1 pb-4">
-        {/* Reading measure: on a maximized window plain-text mails otherwise
-            stretch across the full pane width. HTML newsletters bring their
-            own (narrower) layout and are unaffected. */}
-        {/* Chat bubbles cap their own width; the free space belongs between the sides. */}
-        <div ref={messagesContentRef} className={`mx-auto w-full ${chatView && !isSingleMail ? "max-w-7xl" : "max-w-[840px]"}`}>
-          <ThreadMessages
-            threadMails={threadMails}
-            isSingleMail={isSingleMail}
-            selectedMailId={mail.id}
-            chat={chatView}
-            isOwn={isOwn}
-            onCollapse={revealMessageStart}
-            onReply={handleReply}
-            onReplyAll={handleReplyAll}
-            onForward={handleForward}
-            onLinkClick={handleLinkClick}
-            onUpdateMail={handleUpdateThreadMail}
-          />
+      <div ref={messagesHostRef} className="flex flex-1 min-h-0">
+        <div ref={messagesScrollRef} className="relative flex-1 overflow-y-auto overscroll-contain">
+          <div className="px-4 pt-1 pb-4">
+            {/* Reading measure: on a maximized window plain-text mails otherwise
+                stretch across the full pane width. HTML newsletters bring their
+                own (narrower) layout and are unaffected. */}
+            {/* Chat bubbles cap their own width; the free space belongs between the sides. */}
+            <div ref={messagesContentRef} className={`mx-auto w-full ${chatView && !isSingleMail ? "max-w-7xl" : "max-w-[840px]"}`}>
+              <ThreadMessages
+                threadMails={threadMails}
+                isSingleMail={isSingleMail}
+                selectedMailId={mail.id}
+                chat={chatView}
+                isOwn={isOwn}
+                onCollapse={revealMessageStart}
+                onReply={handleReply}
+                onReplyAll={handleReplyAll}
+                onForward={handleForward}
+                onLinkClick={handleLinkClick}
+                onUpdateMail={handleUpdateThreadMail}
+              />
+            </div>
+          </div>
         </div>
       </div>
 

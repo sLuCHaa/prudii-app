@@ -104,7 +104,7 @@ export function AttachmentBrowser() {
   const listRef = useRef<HTMLDivElement>(null);
   // Themed overlay scrollbar on the list (keeps listRef as the scroll
   // viewport, so the infinite-scroll onScroll handler keeps working).
-  useScroller(listRef);
+  const { host: listHostRef } = useScroller(listRef);
   const PAGE_SIZE = 50;
 
   useEffect(() => {
@@ -662,140 +662,142 @@ export function AttachmentBrowser() {
         />
       ) : (
         <div className="flex-1 flex min-h-0">
-          <div ref={listRef} className="flex-1 min-w-0 overflow-auto" onScroll={handleScroll}>
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 z-10 bg-bg-secondary/80 backdrop-blur-sm">
-                <tr className="border-b border-border text-left text-xs text-text-tertiary uppercase tracking-wider">
-                  <th className="w-10 pl-6 pr-1 py-2">
-                    <button
-                      onClick={toggleSelectAll}
-                      className={`w-4 h-4 rounded border-[1.5px] flex items-center justify-center transition-colors ${
-                        selectedIds.size > 0 && selectedIds.size === displayedAttachments.length
-                          ? "border-accent bg-accent text-white"
-                          : selectedIds.size > 0
-                          ? "border-accent bg-accent/20 text-accent"
-                          : "border-text-tertiary/40 hover:border-accent"
-                      }`}
-                    >
-                      {selectedIds.size > 0 && selectedIds.size === displayedAttachments.length && <Check className="w-2.5 h-2.5" />}
-                      {selectedIds.size > 0 && selectedIds.size < displayedAttachments.length && <span className="w-1.5 h-0.5 bg-accent rounded" />}
-                    </button>
-                  </th>
-                  <th className="py-2 px-3">
-                    <button onClick={() => handleSort("filename")} className="group/th flex items-center gap-1.5 hover:text-text transition-colors">
-                      {t("attachments.colFilename")}
-                      <SortIcon column="filename" activeSort={sortBy} activeOrder={sortOrder} />
-                    </button>
-                  </th>
-                  <th className="py-2 px-3 w-24">
-                    <button onClick={() => handleSort("size")} className="group/th flex items-center gap-1.5 hover:text-text transition-colors">
-                      {t("attachments.colSize")}
-                      <SortIcon column="size" activeSort={sortBy} activeOrder={sortOrder} />
-                    </button>
-                  </th>
-                  <th className="py-2 px-3">{t("attachments.colFrom")}</th>
-                  <th className="py-2 px-3">{t("attachments.colSubject")}</th>
-                  <th className="py-2 px-3 w-32">{t("attachments.colFolder")}</th>
-                  <th className="py-2 px-3 w-32">
-                    <button onClick={() => handleSort("date")} className="group/th flex items-center gap-1.5 hover:text-text transition-colors">
-                      {t("attachments.colDate")}
-                      <SortIcon column="date" activeSort={sortBy} activeOrder={sortOrder} />
-                    </button>
-                  </th>
-                  <th className="w-8 pr-6 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {displayedAttachments.map((att) => {
-                  const isSelected = selectedIds.has(att.id);
-                  const isPreviewing = previewAttachment?.id === att.id;
-                  return (
-                    <tr
-                      key={att.id}
-                      className={`group border-b border-border-light transition-colors hover:bg-hover cursor-pointer ${
-                        isPreviewing ? "bg-accent/10" : isSelected ? "bg-accent/5" : ""
-                      }`}
-                      onClick={() => setPreviewAttachment(att)}
-                      onDoubleClick={() => {
-                        if (att.mime_type?.startsWith("image/") && att.local_path) {
-                          openLightboxFor(att);
-                        } else {
-                          openMail(att);
-                        }
-                      }}
-                      draggable={!!att.local_path}
-                      onDragStart={(e) => {
-                        // HTML5 drag cannot hand a file to the OS; the native session takes over.
-                        e.preventDefault();
-                        startAttachmentDrag(att.id).catch((err) => {
-                          addToast("error", t("errors.attachmentOpen"), err instanceof Error ? err.message : String(err));
-                        });
-                      }}
-                    >
-                      <td className="pl-6 pr-1 py-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleSelection(att.id);
-                          }}
-                          className={`w-4 h-4 rounded border-[1.5px] flex items-center justify-center transition-colors ${
-                            isSelected
-                              ? "border-accent bg-accent text-white"
-                              : "border-text-tertiary/30 hover:border-accent"
-                          }`}
-                        >
-                          {isSelected && <Check className="w-2.5 h-2.5" />}
-                        </button>
-                      </td>
-                      <td className="py-2 px-3">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="shrink-0">{getFileIcon(att.mime_type, att.filename)}</span>
-                          <span className="truncate font-medium text-text">{att.filename}</span>
-                        </div>
-                      </td>
-                      <td className="py-2 px-3 text-text-tertiary tabular-nums">
-                        {formatFileSize(att.size_bytes)}
-                      </td>
-                      <td className="py-2 px-3 text-text-secondary truncate max-w-[200px]">
-                        {att.mail_from_name || att.mail_from_email}
-                      </td>
-                      <td className="py-2 px-3 text-text-secondary truncate max-w-[250px]">
-                        {att.mail_subject}
-                      </td>
-                      <td className="py-2 px-3">
-                        {att.folder_name && (
-                          <span className="text-[11px] px-1.5 py-0.5 rounded bg-surface-alt text-text-tertiary">
-                            {att.folder_name}
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-2 px-3 text-text-tertiary whitespace-nowrap">
-                        {formatMailDate(att.mail_date, appSettings.use_24h_clock)}
-                      </td>
-                      <td className="pr-6 py-2">
-                        {att.local_path && (
-                          <Tooltip label={t(revealLabelKey({ isMac: isMacOS, isWindows }))}>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); revealAttachment(att.id).catch(() => {}); }}
-                              className="p-1 rounded hover:bg-hover transition-colors opacity-0 group-hover:opacity-100 text-text-tertiary hover:text-text"
-                              aria-label={t(revealLabelKey({ isMac: isMacOS, isWindows }))}
-                            >
-                              <FolderOpen className="w-3.5 h-3.5" />
-                            </button>
-                          </Tooltip>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div ref={listHostRef} className="flex flex-1 min-w-0">
+            <div ref={listRef} className="flex-1 min-w-0 overflow-auto" onScroll={handleScroll}>
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 z-10 bg-bg-secondary/80 backdrop-blur-sm">
+                  <tr className="border-b border-border text-left text-xs text-text-tertiary uppercase tracking-wider">
+                    <th className="w-10 pl-6 pr-1 py-2">
+                      <button
+                        onClick={toggleSelectAll}
+                        className={`w-4 h-4 rounded border-[1.5px] flex items-center justify-center transition-colors ${
+                          selectedIds.size > 0 && selectedIds.size === displayedAttachments.length
+                            ? "border-accent bg-accent text-white"
+                            : selectedIds.size > 0
+                            ? "border-accent bg-accent/20 text-accent"
+                            : "border-text-tertiary/40 hover:border-accent"
+                        }`}
+                      >
+                        {selectedIds.size > 0 && selectedIds.size === displayedAttachments.length && <Check className="w-2.5 h-2.5" />}
+                        {selectedIds.size > 0 && selectedIds.size < displayedAttachments.length && <span className="w-1.5 h-0.5 bg-accent rounded" />}
+                      </button>
+                    </th>
+                    <th className="py-2 px-3">
+                      <button onClick={() => handleSort("filename")} className="group/th flex items-center gap-1.5 hover:text-text transition-colors">
+                        {t("attachments.colFilename")}
+                        <SortIcon column="filename" activeSort={sortBy} activeOrder={sortOrder} />
+                      </button>
+                    </th>
+                    <th className="py-2 px-3 w-24">
+                      <button onClick={() => handleSort("size")} className="group/th flex items-center gap-1.5 hover:text-text transition-colors">
+                        {t("attachments.colSize")}
+                        <SortIcon column="size" activeSort={sortBy} activeOrder={sortOrder} />
+                      </button>
+                    </th>
+                    <th className="py-2 px-3">{t("attachments.colFrom")}</th>
+                    <th className="py-2 px-3">{t("attachments.colSubject")}</th>
+                    <th className="py-2 px-3 w-32">{t("attachments.colFolder")}</th>
+                    <th className="py-2 px-3 w-32">
+                      <button onClick={() => handleSort("date")} className="group/th flex items-center gap-1.5 hover:text-text transition-colors">
+                        {t("attachments.colDate")}
+                        <SortIcon column="date" activeSort={sortBy} activeOrder={sortOrder} />
+                      </button>
+                    </th>
+                    <th className="w-8 pr-6 py-2" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayedAttachments.map((att) => {
+                    const isSelected = selectedIds.has(att.id);
+                    const isPreviewing = previewAttachment?.id === att.id;
+                    return (
+                      <tr
+                        key={att.id}
+                        className={`group border-b border-border-light transition-colors hover:bg-hover cursor-pointer ${
+                          isPreviewing ? "bg-accent/10" : isSelected ? "bg-accent/5" : ""
+                        }`}
+                        onClick={() => setPreviewAttachment(att)}
+                        onDoubleClick={() => {
+                          if (att.mime_type?.startsWith("image/") && att.local_path) {
+                            openLightboxFor(att);
+                          } else {
+                            openMail(att);
+                          }
+                        }}
+                        draggable={!!att.local_path}
+                        onDragStart={(e) => {
+                          // HTML5 drag cannot hand a file to the OS; the native session takes over.
+                          e.preventDefault();
+                          startAttachmentDrag(att.id).catch((err) => {
+                            addToast("error", t("errors.attachmentOpen"), err instanceof Error ? err.message : String(err));
+                          });
+                        }}
+                      >
+                        <td className="pl-6 pr-1 py-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleSelection(att.id);
+                            }}
+                            className={`w-4 h-4 rounded border-[1.5px] flex items-center justify-center transition-colors ${
+                              isSelected
+                                ? "border-accent bg-accent text-white"
+                                : "border-text-tertiary/30 hover:border-accent"
+                            }`}
+                          >
+                            {isSelected && <Check className="w-2.5 h-2.5" />}
+                          </button>
+                        </td>
+                        <td className="py-2 px-3">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="shrink-0">{getFileIcon(att.mime_type, att.filename)}</span>
+                            <span className="truncate font-medium text-text">{att.filename}</span>
+                          </div>
+                        </td>
+                        <td className="py-2 px-3 text-text-tertiary tabular-nums">
+                          {formatFileSize(att.size_bytes)}
+                        </td>
+                        <td className="py-2 px-3 text-text-secondary truncate max-w-[200px]">
+                          {att.mail_from_name || att.mail_from_email}
+                        </td>
+                        <td className="py-2 px-3 text-text-secondary truncate max-w-[250px]">
+                          {att.mail_subject}
+                        </td>
+                        <td className="py-2 px-3">
+                          {att.folder_name && (
+                            <span className="text-[11px] px-1.5 py-0.5 rounded bg-surface-alt text-text-tertiary">
+                              {att.folder_name}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-text-tertiary whitespace-nowrap">
+                          {formatMailDate(att.mail_date, appSettings.use_24h_clock)}
+                        </td>
+                        <td className="pr-6 py-2">
+                          {att.local_path && (
+                            <Tooltip label={t(revealLabelKey({ isMac: isMacOS, isWindows }))}>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); revealAttachment(att.id).catch(() => {}); }}
+                                className="p-1 rounded hover:bg-hover transition-colors opacity-0 group-hover:opacity-100 text-text-tertiary hover:text-text"
+                                aria-label={t(revealLabelKey({ isMac: isMacOS, isWindows }))}
+                              >
+                                <FolderOpen className="w-3.5 h-3.5" />
+                              </button>
+                            </Tooltip>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
 
-            {loadingMore && (
-              <div className="flex justify-center py-3">
-                <Loader2 className="w-4 h-4 animate-spin text-text-tertiary" />
-              </div>
-            )}
+              {loadingMore && (
+                <div className="flex justify-center py-3">
+                  <Loader2 className="w-4 h-4 animate-spin text-text-tertiary" />
+                </div>
+              )}
+            </div>
           </div>
 
           {previewAttachment && (

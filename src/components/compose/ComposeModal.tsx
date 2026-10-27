@@ -378,7 +378,7 @@ function SendButton({ onSend, disabled, onPhaseChange }: { onSend: () => Promise
 
 export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(function ComposeForm({ isOpen, onClose, mode, originalMail, initData }, ref) {
   const { t } = useTranslation();
-  const scrollRef = useScroller<HTMLDivElement>();
+  const { host: scrollHostRef, viewport: scrollRef } = useScroller<HTMLDivElement>();
 
   // In separate window mode, use initData; in modal mode, use hooks/store
   const { data: hookAccounts } = useAccounts();
@@ -1609,265 +1609,267 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
           )}
         </AnimatePresence>
 
-        <div ref={scrollRef} data-compose-scroll className="flex-1 overflow-y-auto">
-          {accounts && accounts.length > 1 && (() => {
-            const selected = accounts.find((a) => a.id === fromAccountId);
-            return (
-              <div className="flex items-center gap-3 px-5 py-2.5 border-b border-border-light">
-                <GradientAvatar name={selected?.display_name} email={selected?.email ?? ""} size={28} />
-                <div className="relative flex-1 min-w-0">
-                  <Select
-                    value={fromAccountId}
-                    onChange={handleFromChange}
-                    options={accounts.map((account) => ({
-                      value: account.id,
-                      label: `${account.display_name} <${account.email}>`,
-                    }))}
-                    className="w-full flex items-center gap-2 bg-transparent text-sm font-medium text-text pr-1 text-left focus:outline-none"
-                  />
+        <div ref={scrollHostRef} className="flex flex-1 min-h-0">
+          <div ref={scrollRef} data-compose-scroll className="flex-1 overflow-y-auto">
+            {accounts && accounts.length > 1 && (() => {
+              const selected = accounts.find((a) => a.id === fromAccountId);
+              return (
+                <div className="flex items-center gap-3 px-5 py-2.5 border-b border-border-light">
+                  <GradientAvatar name={selected?.display_name} email={selected?.email ?? ""} size={28} />
+                  <div className="relative flex-1 min-w-0">
+                    <Select
+                      value={fromAccountId}
+                      onChange={handleFromChange}
+                      options={accounts.map((account) => ({
+                        value: account.id,
+                        label: `${account.display_name} <${account.email}>`,
+                      }))}
+                      className="w-full flex items-center gap-2 bg-transparent text-sm font-medium text-text pr-1 text-left focus:outline-none"
+                    />
+                  </div>
                 </div>
-              </div>
-            );
-          })()}
+              );
+            })()}
 
-          <div className="flex items-start px-5 py-2 border-b border-border-light">
-            <label className="w-16 text-sm text-text-tertiary shrink-0 pt-1.5">{t("compose.to")}</label>
-            <RecipientInput
-              ref={toFieldRef}
-              recipients={to}
-              onChange={setTo}
-              placeholder="recipient@example.com"
-              accountId={fromAccountId || undefined}
-              autoFocus={(mode === "new" && to.length === 0) || !!toDraft}
-              fieldId="to"
-              onChipDroppedFromField={(src, rec) => handleDropToField("to", src, rec)}
-              blockedEmails={[...emailsOf(cc), ...emailsOf(bcc)]}
-              onPendingChange={setToHasPending}
-              initialDraft={toDraft ?? undefined}
-            />
-            <div className="flex items-center gap-1 text-xs text-text-tertiary ml-2 pt-1.5">
-              {!showCc && (
-                <button tabIndex={-1} onClick={() => setShowCc(true)} className="hover:text-text transition-colors">
-                  Cc
-                </button>
-              )}
-              {!showBcc && (
-                <button tabIndex={-1} onClick={() => setShowBcc(true)} className="hover:text-text transition-colors">
-                  Bcc
-                </button>
-              )}
-            </div>
-          </div>
-
-          {showCc && (
             <div className="flex items-start px-5 py-2 border-b border-border-light">
-              <label className="w-16 text-sm text-text-tertiary shrink-0 pt-1.5">Cc</label>
+              <label className="w-16 text-sm text-text-tertiary shrink-0 pt-1.5">{t("compose.to")}</label>
               <RecipientInput
-                ref={ccFieldRef}
-                recipients={cc}
-                onChange={setCc}
-                placeholder="cc@example.com"
+                ref={toFieldRef}
+                recipients={to}
+                onChange={setTo}
+                placeholder="recipient@example.com"
                 accountId={fromAccountId || undefined}
-                fieldId="cc"
-                onChipDroppedFromField={(src, rec) => handleDropToField("cc", src, rec)}
-                blockedEmails={[...emailsOf(to), ...emailsOf(bcc)]}
+                autoFocus={(mode === "new" && to.length === 0) || !!toDraft}
+                fieldId="to"
+                onChipDroppedFromField={(src, rec) => handleDropToField("to", src, rec)}
+                blockedEmails={[...emailsOf(cc), ...emailsOf(bcc)]}
+                onPendingChange={setToHasPending}
+                initialDraft={toDraft ?? undefined}
               />
-            </div>
-          )}
-
-          {showBcc && (
-            <div className="flex items-start px-5 py-2 border-b border-border-light">
-              <label className="w-16 text-sm text-text-tertiary shrink-0 pt-1.5">Bcc</label>
-              <RecipientInput
-                ref={bccFieldRef}
-                recipients={bcc}
-                onChange={setBcc}
-                placeholder="bcc@example.com"
-                accountId={fromAccountId || undefined}
-                fieldId="bcc"
-                onChipDroppedFromField={(src, rec) => handleDropToField("bcc", src, rec)}
-                blockedEmails={[...emailsOf(to), ...emailsOf(cc)]}
-              />
-            </div>
-          )}
-
-          <div className="flex items-center px-5 py-2 border-b border-border-light">
-            <label className="w-16 text-sm text-text-tertiary shrink-0">{t("compose.subject")}</label>
-            <input
-              type="text"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              placeholder={t("compose.subjectPlaceholder")}
-              className="compose-writing flex-1 bg-transparent text-sm text-text placeholder:text-text-secondary"
-            />
-          </div>
-
-          <EditorToolbar editor={editor} linkDialogOpen={linkDialogOpen} setLinkDialogOpen={setLinkDialogOpen} />
-
-          {aiReplies.length > 0 && (
-            <div className="px-4 py-3 border-b border-border-light bg-accent/5">
-              <div className="flex items-center gap-2 mb-2">
-                <Sparkles className="w-3.5 h-3.5 text-accent" />
-                <span className="text-xs font-semibold text-accent">{t("ai.suggestReply")}</span>
-                <button onClick={() => setAiReplies([])} className="ml-auto p-1 rounded hover:bg-hover text-text-tertiary">
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                {aiReplies.map((reply, i) => (
-                  <button
-                    key={i}
-                    onClick={() => handleUseAiReply(reply.text)}
-                    className="p-2.5 rounded-lg border border-border hover:border-accent/40 hover:bg-accent/5 text-left transition-colors"
-                  >
-                    <span className="text-[11px] font-semibold text-accent block mb-1">
-                      {t(`ai.${reply.tone}`, reply.tone)}
-                    </span>
-                    <p className="text-xs text-text-secondary leading-relaxed line-clamp-3">
-                      {reply.text}
-                    </p>
+              <div className="flex items-center gap-1 text-xs text-text-tertiary ml-2 pt-1.5">
+                {!showCc && (
+                  <button tabIndex={-1} onClick={() => setShowCc(true)} className="hover:text-text transition-colors">
+                    Cc
                   </button>
-                ))}
+                )}
+                {!showBcc && (
+                  <button tabIndex={-1} onClick={() => setShowBcc(true)} className="hover:text-text transition-colors">
+                    Bcc
+                  </button>
+                )}
               </div>
             </div>
-          )}
 
-          {aiLoading && (
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-border-light bg-accent/5">
-              <Loader2 className="w-4 h-4 text-accent animate-spin" />
-              <span className="text-xs text-text-tertiary">{t("ai.generatingReplies")}</span>
-            </div>
-          )}
-
-          <div className="p-4 min-h-[250px]">
-            <EditorContent
-              editor={editor}
-              className="compose-editor text-sm text-text leading-relaxed"
-              style={{ "--compose-font": typography.fontStack, "--compose-font-size": `${typography.fontSizePt}pt` } as React.CSSProperties}
-            />
-            {attachments.length > 0 && (
-              <div className="mt-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Paperclip className="w-4 h-4 text-text-tertiary" />
-                  <span className="text-xs font-medium text-text-secondary">
-                    {t("compose.attachment", { count: attachments.length })}
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {attachments.map((att, index) => {
-                    const FileIcon = getFileIcon(att.type, att.name);
-                    const iconColor = getFileColor(att.type, att.name);
-                    const failed = att.status === "failed";
-                    const loading = att.status === "loading";
-                    const preview = att.status === "ready" && isEmbeddableImageType(att.type);
-                    return (
-                      <div
-                        key={att.id}
-                        title={failed ? att.error : undefined}
-                        className={`group relative flex flex-col items-center p-3 rounded-lg bg-bg-secondary border transition-colors ${
-                          failed ? "border-danger" : "border-border hover:border-border-light"
-                        }`}
-                      >
-                        <button
-                          onClick={() => removeAttachment(index)}
-                          className="absolute top-1 right-1 p-1 rounded-full bg-surface border border-border opacity-0 group-hover:opacity-100 hover:bg-danger hover:border-danger hover:text-white text-text-tertiary transition-all"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => viewAttachment(att)}
-                          disabled={att.status !== "ready"}
-                          title={att.status === "ready" ? t("compose.viewAttachment") : undefined}
-                          className="flex flex-col items-center w-full min-w-0 enabled:cursor-pointer"
-                        >
-                          <div className={`${preview ? "w-full h-20 overflow-hidden" : "w-10 h-10"} rounded-lg bg-surface flex items-center justify-center mb-2 ${failed ? "text-danger" : iconColor}`}>
-                            {loading ? (
-                              <Loader2 className="w-5 h-5 animate-spin text-text-tertiary" />
-                            ) : preview ? (
-                              <AttachmentThumb type={att.type} data={att.data} />
-                            ) : (
-                              <FileIcon className="w-6 h-6" />
-                            )}
-                          </div>
-                          <span className="text-xs text-text truncate w-full text-center font-medium">{att.name}</span>
-                        </button>
-                        <span className={`text-[11px] ${failed ? "text-danger" : "text-text-tertiary"}`}>
-                          {failed
-                            ? t("compose.attachmentFailed")
-                            : loading
-                              ? t("compose.attachmentLoading")
-                              : formatFileSize(att.size)}
-                        </span>
-                        {!failed && !loading && att.shrunkFrom != null && (
-                          <span className="text-[11px] text-text-tertiary">
-                            {t("compose.imageShrunk", {
-                              from: formatFileSize(att.shrunkFrom),
-                              to: formatFileSize(att.size),
-                            })}
-                          </span>
-                        )}
-                        {!failed && !loading && att.locationRemoved && (
-                          <span className="text-[11px] text-text-tertiary">{t("compose.locationRemoved")}</span>
-                        )}
-                        {!failed && !loading && att.original && (
-                          <button
-                            onClick={() =>
-                              setAttachments((prev) => prev.map((a) => (a.id === att.id ? toOriginal(a) : a)))
-                            }
-                            className="text-[11px] text-accent hover:underline"
-                          >
-                            {t("compose.sendOriginal")}
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-                {(() => {
-                  const totalBytes = attachments.reduce((s, a) => s + a.size, 0);
-                  const totalMB = totalBytes / 1024 / 1024;
-                  const tone = totalMB > 20 ? "danger" : totalMB > 15 ? "warning" : "normal";
-                  const colorClass = tone === "danger" ? "text-danger" : tone === "warning" ? "text-warning" : "text-text-tertiary";
-                  return (
-                    <div className={`text-xs ${colorClass} mt-1`}>
-                      {t("compose.attachmentsSize", { size: formatFileSize(totalBytes) })}
-                      {tone !== "normal" && ` — ${t("compose.attachmentsSizeWarning")}`}
-                    </div>
-                  );
-                })()}
-              </div>
-            )}
-            {quote && !quoteRemoved && (
-              <div className="mt-5">
-                <QuoteCard
-                  key={quoteRevision}
-                  quote={quote}
-                  editing={quoteEditing}
-                  onEdit={() => setEditingQuote(true)}
-                  onDone={finishQuoteEdit}
-                  onRestore={() => {
-                    setQuote(originalQuote);
-                    setQuoteRevision((r) => r + 1);
-                    autosaveDirty.current = true;
-                  }}
-                  onRemove={() => setQuoteRemoved(true)}
-                  onFrameRef={(el) => { quoteFrameRef.current = el; }}
-                  onFrameLoad={handleQuoteFrameLoad}
-                  onEditBaseline={handleQuoteEditBaseline}
+            {showCc && (
+              <div className="flex items-start px-5 py-2 border-b border-border-light">
+                <label className="w-16 text-sm text-text-tertiary shrink-0 pt-1.5">Cc</label>
+                <RecipientInput
+                  ref={ccFieldRef}
+                  recipients={cc}
+                  onChange={setCc}
+                  placeholder="cc@example.com"
+                  accountId={fromAccountId || undefined}
+                  fieldId="cc"
+                  onChipDroppedFromField={(src, rec) => handleDropToField("cc", src, rec)}
+                  blockedEmails={[...emailsOf(to), ...emailsOf(bcc)]}
                 />
               </div>
             )}
-            {quote && quoteRemoved && (
-              <button
-                type="button"
-                onClick={() => setQuoteRemoved(false)}
-                className="mt-4 -ml-2 inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs text-text-secondary hover:text-text hover:bg-hover transition-colors"
-              >
-                <Undo2 className="w-3.5 h-3.5" />
-                <span>{t(quote.kind === "forward" ? "compose.quoteReinsertForward" : "compose.quoteReinsertReply")}</span>
-              </button>
+
+            {showBcc && (
+              <div className="flex items-start px-5 py-2 border-b border-border-light">
+                <label className="w-16 text-sm text-text-tertiary shrink-0 pt-1.5">Bcc</label>
+                <RecipientInput
+                  ref={bccFieldRef}
+                  recipients={bcc}
+                  onChange={setBcc}
+                  placeholder="bcc@example.com"
+                  accountId={fromAccountId || undefined}
+                  fieldId="bcc"
+                  onChipDroppedFromField={(src, rec) => handleDropToField("bcc", src, rec)}
+                  blockedEmails={[...emailsOf(to), ...emailsOf(cc)]}
+                />
+              </div>
             )}
+
+            <div className="flex items-center px-5 py-2 border-b border-border-light">
+              <label className="w-16 text-sm text-text-tertiary shrink-0">{t("compose.subject")}</label>
+              <input
+                type="text"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder={t("compose.subjectPlaceholder")}
+                className="compose-writing flex-1 bg-transparent text-sm text-text placeholder:text-text-secondary"
+              />
+            </div>
+
+            <EditorToolbar editor={editor} linkDialogOpen={linkDialogOpen} setLinkDialogOpen={setLinkDialogOpen} />
+
+            {aiReplies.length > 0 && (
+              <div className="px-4 py-3 border-b border-border-light bg-accent/5">
+                <div className="flex items-center gap-2 mb-2">
+                  <Sparkles className="w-3.5 h-3.5 text-accent" />
+                  <span className="text-xs font-semibold text-accent">{t("ai.suggestReply")}</span>
+                  <button onClick={() => setAiReplies([])} className="ml-auto p-1 rounded hover:bg-hover text-text-tertiary">
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {aiReplies.map((reply, i) => (
+                    <button
+                      key={i}
+                      onClick={() => handleUseAiReply(reply.text)}
+                      className="p-2.5 rounded-lg border border-border hover:border-accent/40 hover:bg-accent/5 text-left transition-colors"
+                    >
+                      <span className="text-[11px] font-semibold text-accent block mb-1">
+                        {t(`ai.${reply.tone}`, reply.tone)}
+                      </span>
+                      <p className="text-xs text-text-secondary leading-relaxed line-clamp-3">
+                        {reply.text}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {aiLoading && (
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-border-light bg-accent/5">
+                <Loader2 className="w-4 h-4 text-accent animate-spin" />
+                <span className="text-xs text-text-tertiary">{t("ai.generatingReplies")}</span>
+              </div>
+            )}
+
+            <div className="p-4 min-h-[250px]">
+              <EditorContent
+                editor={editor}
+                className="compose-editor text-sm text-text leading-relaxed"
+                style={{ "--compose-font": typography.fontStack, "--compose-font-size": `${typography.fontSizePt}pt` } as React.CSSProperties}
+              />
+              {attachments.length > 0 && (
+                <div className="mt-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Paperclip className="w-4 h-4 text-text-tertiary" />
+                    <span className="text-xs font-medium text-text-secondary">
+                      {t("compose.attachment", { count: attachments.length })}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {attachments.map((att, index) => {
+                      const FileIcon = getFileIcon(att.type, att.name);
+                      const iconColor = getFileColor(att.type, att.name);
+                      const failed = att.status === "failed";
+                      const loading = att.status === "loading";
+                      const preview = att.status === "ready" && isEmbeddableImageType(att.type);
+                      return (
+                        <div
+                          key={att.id}
+                          title={failed ? att.error : undefined}
+                          className={`group relative flex flex-col items-center p-3 rounded-lg bg-bg-secondary border transition-colors ${
+                            failed ? "border-danger" : "border-border hover:border-border-light"
+                          }`}
+                        >
+                          <button
+                            onClick={() => removeAttachment(index)}
+                            className="absolute top-1 right-1 p-1 rounded-full bg-surface border border-border opacity-0 group-hover:opacity-100 hover:bg-danger hover:border-danger hover:text-white text-text-tertiary transition-all"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => viewAttachment(att)}
+                            disabled={att.status !== "ready"}
+                            title={att.status === "ready" ? t("compose.viewAttachment") : undefined}
+                            className="flex flex-col items-center w-full min-w-0 enabled:cursor-pointer"
+                          >
+                            <div className={`${preview ? "w-full h-20 overflow-hidden" : "w-10 h-10"} rounded-lg bg-surface flex items-center justify-center mb-2 ${failed ? "text-danger" : iconColor}`}>
+                              {loading ? (
+                                <Loader2 className="w-5 h-5 animate-spin text-text-tertiary" />
+                              ) : preview ? (
+                                <AttachmentThumb type={att.type} data={att.data} />
+                              ) : (
+                                <FileIcon className="w-6 h-6" />
+                              )}
+                            </div>
+                            <span className="text-xs text-text truncate w-full text-center font-medium">{att.name}</span>
+                          </button>
+                          <span className={`text-[11px] ${failed ? "text-danger" : "text-text-tertiary"}`}>
+                            {failed
+                              ? t("compose.attachmentFailed")
+                              : loading
+                                ? t("compose.attachmentLoading")
+                                : formatFileSize(att.size)}
+                          </span>
+                          {!failed && !loading && att.shrunkFrom != null && (
+                            <span className="text-[11px] text-text-tertiary">
+                              {t("compose.imageShrunk", {
+                                from: formatFileSize(att.shrunkFrom),
+                                to: formatFileSize(att.size),
+                              })}
+                            </span>
+                          )}
+                          {!failed && !loading && att.locationRemoved && (
+                            <span className="text-[11px] text-text-tertiary">{t("compose.locationRemoved")}</span>
+                          )}
+                          {!failed && !loading && att.original && (
+                            <button
+                              onClick={() =>
+                                setAttachments((prev) => prev.map((a) => (a.id === att.id ? toOriginal(a) : a)))
+                              }
+                              className="text-[11px] text-accent hover:underline"
+                            >
+                              {t("compose.sendOriginal")}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {(() => {
+                    const totalBytes = attachments.reduce((s, a) => s + a.size, 0);
+                    const totalMB = totalBytes / 1024 / 1024;
+                    const tone = totalMB > 20 ? "danger" : totalMB > 15 ? "warning" : "normal";
+                    const colorClass = tone === "danger" ? "text-danger" : tone === "warning" ? "text-warning" : "text-text-tertiary";
+                    return (
+                      <div className={`text-xs ${colorClass} mt-1`}>
+                        {t("compose.attachmentsSize", { size: formatFileSize(totalBytes) })}
+                        {tone !== "normal" && ` — ${t("compose.attachmentsSizeWarning")}`}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+              {quote && !quoteRemoved && (
+                <div className="mt-5">
+                  <QuoteCard
+                    key={quoteRevision}
+                    quote={quote}
+                    editing={quoteEditing}
+                    onEdit={() => setEditingQuote(true)}
+                    onDone={finishQuoteEdit}
+                    onRestore={() => {
+                      setQuote(originalQuote);
+                      setQuoteRevision((r) => r + 1);
+                      autosaveDirty.current = true;
+                    }}
+                    onRemove={() => setQuoteRemoved(true)}
+                    onFrameRef={(el) => { quoteFrameRef.current = el; }}
+                    onFrameLoad={handleQuoteFrameLoad}
+                    onEditBaseline={handleQuoteEditBaseline}
+                  />
+                </div>
+              )}
+              {quote && quoteRemoved && (
+                <button
+                  type="button"
+                  onClick={() => setQuoteRemoved(false)}
+                  className="mt-4 -ml-2 inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs text-text-secondary hover:text-text hover:bg-hover transition-colors"
+                >
+                  <Undo2 className="w-3.5 h-3.5" />
+                  <span>{t(quote.kind === "forward" ? "compose.quoteReinsertForward" : "compose.quoteReinsertReply")}</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
