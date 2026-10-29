@@ -1971,7 +1971,7 @@ fn do_restore_backup_inner(
             let attachments_base = data_dir.join("attachments");
             for i in 0..archive2.len() {
                 let mut entry = archive2.by_index(i).map_err(|e| e.to_string())?;
-                let name = entry.name().to_string();
+                let name = entry.name().map_err(|e| e.to_string())?.into_owned();
                 if name.starts_with("attachment_files/") && !entry.is_dir() {
                     // attachment_files/{mail_id}/{filename}
                     let rel_path = &name["attachment_files/".len()..];

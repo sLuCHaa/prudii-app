@@ -51,7 +51,7 @@ pub fn sources_from_zip<R: Read + Seek>(reader: R, label: &str, limits: &ZipLimi
     let mut wanted = Vec::new();
     for i in 0..archive.len() {
         let entry = archive.by_index(i).map_err(|_| "calendar.errors.notCalendar".to_string())?;
-        let name = entry.name().to_string();
+        let Ok(name) = entry.name().map(|n| n.into_owned()) else { continue };
         let base = base_name(&name);
         if !entry.is_dir() && !name.starts_with("__MACOSX/") && !base.starts_with('.') && is_calendar_file(base) {
             wanted.push((i, name));
