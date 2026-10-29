@@ -44,12 +44,18 @@
     ],
     "windows": {
       "nsis": {
+        "template": "nsis/installer.nsi",
         "headerImage": "nsis/header.bmp",
+        "uninstallerHeaderImage": "nsis/header.bmp",
         "sidebarImage": "nsis/sidebar.bmp",
         "installerIcon": "icons/icon.ico",
         "displayLanguageSelector": false,
         "installMode": "currentUser",
         "installerHooks": "nsis/hooks.nsh"
+      },
+      "wix": {
+        "bannerPath": "wix/banner.bmp",
+        "dialogImagePath": "wix/dialog.bmp"
       }
     }
   },
