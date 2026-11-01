@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "motion/react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
-import { X, Sun, Moon, Monitor, Trash2, ChevronRight, ArrowLeft, Save, RefreshCw, Server, Palette, Clock, FolderOpen, Power, AppWindow, Globe, Bell, Volume2, Image, Settings2, Users, Database, Filter, Info, Sparkles, Mail, Key, FileType, Send, Download, Eye, EyeOff, Plus, PanelLeft, Shield, Type, CalendarDays } from "lucide-react";
+import { X, Sun, Moon, Monitor, Trash2, ChevronRight, ArrowLeft, Save, RefreshCw, Server, Palette, Clock, FolderOpen, Power, AppWindow, Globe, Bell, Volume2, Image, Settings2, Users, Database, Filter, Info, Sparkles, Mail, Key, FileType, Send, Download, Eye, EyeOff, Plus, PanelLeft, Shield, Type, CalendarDays, Tags } from "lucide-react";
 import { Lock } from "../icons";
 import { CalendarSettingsPanel } from "../calendar/CalendarSettings";
 import { useTranslation } from "react-i18next";
@@ -17,6 +17,7 @@ import { SignatureEditor } from "./SignatureEditor";
 import { BackupRestore } from "./BackupRestore";
 import { RulesPanel } from "./RulesPanel";
 import { AiSettings } from "./AiSettings";
+import { SortingSettings } from "./SortingSettings";
 import { PrivacySettings } from "./PrivacySettings";
 import { LicenseSettings } from "./LicenseSettings";
 import { TemplatesPanel } from "./TemplatesPanel";
@@ -35,7 +36,7 @@ import type { Account, SmtpSecurity } from "../../types";
 
 type ThemeMode = "light" | "dark" | "system";
 type SettingsView = "main" | "account";
-type SettingsTab = "general" | "privacy" | "accounts" | "calendar" | "rules" | "templates" | "backup" | "ai" | "license" | "update" | "info";
+type SettingsTab = "general" | "privacy" | "accounts" | "calendar" | "rules" | "sorting" | "templates" | "backup" | "ai" | "license" | "update" | "info";
 
 const SETTINGS_TABS: { id: SettingsTab; labelKey: string; icon: typeof Settings2; premium?: boolean }[] = [
   { id: "general", labelKey: "settings.tabs.general", icon: Settings2 },
@@ -43,6 +44,7 @@ const SETTINGS_TABS: { id: SettingsTab; labelKey: string; icon: typeof Settings2
   { id: "accounts", labelKey: "settings.tabs.accounts", icon: Users },
   { id: "calendar", labelKey: "settings.tabs.calendar", icon: CalendarDays },
   { id: "rules", labelKey: "settings.tabs.rules", icon: Filter, premium: true },
+  { id: "sorting", labelKey: "settings.tabs.sorting", icon: Tags },
   { id: "templates", labelKey: "settings.tabs.templates", icon: FileType, premium: true },
   { id: "backup", labelKey: "settings.tabs.backup", icon: Database },
   { id: "ai", labelKey: "settings.tabs.ai", icon: Sparkles, premium: true },
@@ -1041,6 +1043,13 @@ export function SettingsPanel() {
                       </SettingsBlock>
                     </SettingsGroup>
                   )
+                )}
+
+                {activeTab === "sorting" && (
+                  <SortingSettings
+                    localSettings={localSettings}
+                    updateLocalSetting={updateLocalSetting}
+                  />
                 )}
 
                 {activeTab === "templates" && (
