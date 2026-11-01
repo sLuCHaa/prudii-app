@@ -1,5 +1,6 @@
 pub mod heuristics;
 pub mod signals;
+pub mod store;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;

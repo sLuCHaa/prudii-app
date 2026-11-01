@@ -3828,12 +3828,6 @@ pub async fn batch_update_mails(
     Ok(())
 }
 
-#[tauri::command(async)]
-pub fn classify_unclassified_mails(db: State<'_, Database>) -> Result<i32, String> {
-    let conn = db.lock_db();
-    Ok(crate::classify::classify_unclassified(&conn))
-}
-
 use crate::models::{InboxSplit, SplitConditions};
 
 #[tauri::command(async)]

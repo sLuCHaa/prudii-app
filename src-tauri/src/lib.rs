@@ -2,7 +2,6 @@ pub mod ai;
 pub mod calendar;
 pub mod calendar_reminders;
 pub mod categorize;
-pub mod classify;
 pub mod cleanup_guard;
 pub mod commands;
 pub mod connectivity;
@@ -1200,7 +1199,7 @@ pub fn run() {
             commands::team::team_set_assignment_status,
             commands::team::team_unassign,
             commands::mails::list_mails_by_message_ids,
-            commands::mails::classify_unclassified_mails,
+            commands::categories::categorize_pending_mails,
             commands::mails::list_inbox_splits,
             commands::mails::create_inbox_split,
             commands::mails::update_inbox_split,
