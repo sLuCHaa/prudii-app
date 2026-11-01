@@ -104,3 +104,20 @@ pub fn request_cancel() {
 pub fn take_cancel() -> bool {
     CANCEL.swap(false, Ordering::SeqCst)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn running_flag_clears_when_an_export_panics() {
+        let guard = RunGuard::acquire().unwrap();
+        assert!(export_in_progress() && RunGuard::acquire().is_none());
+        let unwound = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+            let _guard = guard;
+            panic!("hostile mail");
+        }));
+        assert!(unwound.is_err());
+        assert!(!export_in_progress());
+    }
+}
