@@ -684,7 +684,6 @@ impl Database {
         }
 
         // Mail categories (schema 46); "duplicate column" on re-runs is expected.
-        // mails.auto_labels stays physically but is no longer used.
         for sql in [
             "ALTER TABLE mails ADD COLUMN category TEXT",
             "ALTER TABLE mails ADD COLUMN category_source TEXT",

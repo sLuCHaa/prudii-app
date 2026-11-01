@@ -283,6 +283,7 @@ fn do_create_backup_inner(
         let json = serde_json::to_string_pretty(&settings_data).map_err(|e| e.to_string())?;
         zip.start_file("app_settings.json", zip_options).map_err(|e| e.to_string())?;
         zip.write_all(json.as_bytes()).map_err(|e| e.to_string())?;
+        export_sender_categories(&db, &mut zip, &zip_options)?;
 
         // Email Templates (bundled with settings)
         let templates: Vec<serde_json::Value> = {
@@ -514,7 +515,6 @@ fn do_create_backup_inner(
 
         zip.write_all(b"]").map_err(|e| e.to_string())?;
         stats.mail_count = offset as u64;
-        export_sender_categories(&db, &mut zip, &zip_options)?;
 
         current_step += 1;
         emit_backup_progress(app, &BackupProgress {
@@ -1050,8 +1050,6 @@ fn insert_json_rows<'a>(
     Ok(written)
 }
 
-/// Writes the four calendar tables. The reminder log stays behind: it only
-/// suppresses repeat toasts on this machine.
 pub(crate) fn read_mail_batch(conn: &rusqlite::Connection, limit: i64, offset: i64) -> Result<Vec<serde_json::Value>, String> {
     let mut stmt = conn
         .prepare(
@@ -1218,7 +1216,11 @@ pub(crate) fn export_sender_categories<W: Write + Seek>(
 pub(crate) fn import_sender_categories<R: Read + Seek>(
     archive: &mut zip::ZipArchive<R>,
     conn: &rusqlite::Connection,
+    is_replace: bool,
 ) -> Result<(), String> {
+    if is_replace {
+        conn.execute("DELETE FROM sender_categories", []).map_err(|e| e.to_string())?;
+    }
     let Ok(mut f) = archive.by_name("sender_categories.json") else {
         return Ok(());
     };
@@ -1642,6 +1644,7 @@ fn do_restore_backup_inner(
                 ).map_err(|e| e.to_string())?;
             }
         }
+        import_sender_categories(&mut archive, &db.lock_db(), is_replace)?;
     }
 
     // Email Templates (bundled with settings)
@@ -1856,8 +1859,6 @@ fn do_restore_backup_inner(
                 None
             }
         };
-
-        import_sender_categories(&mut archive, &db.lock_db())?;
 
         if let Some(mails_str) = mails_json {
             current_step += 1;
@@ -2702,7 +2703,7 @@ mod category_roundtrip {
         archive.by_name("mails.json").unwrap().read_to_string(&mut s).unwrap();
         let mails: Vec<serde_json::Value> = serde_json::from_str(&s).unwrap();
         let conn = db.lock_db();
-        import_sender_categories(&mut archive, &conn).unwrap();
+        import_sender_categories(&mut archive, &conn, false).unwrap();
         import_mail_chunk(&conn, &mails, false).unwrap();
     }
 
@@ -2768,6 +2769,22 @@ mod category_roundtrip {
             .query_row("SELECT email, category, created_at FROM sender_categories", [], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
             .unwrap();
         assert_eq!(rule, ("anna.weber@studio-halde.example".into(), "important".into(), "2026-01-02 03:04:05".into()));
+    }
+
+    #[test]
+    fn replace_import_clears_existing_sender_rules() {
+        let db_a = temp_db();
+        db_a.lock_db().execute("INSERT INTO sender_categories (email, category) VALUES ('anna.weber@studio-halde.example', 'important')", []).unwrap();
+        let bytes = export_all(&db_a);
+
+        let db_b = temp_db();
+        db_b.lock_db().execute("INSERT INTO sender_categories (email, category) VALUES ('news@designweekly.example', 'newsletters')", []).unwrap();
+        let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+        let conn = db_b.lock_db();
+        import_sender_categories(&mut archive, &conn, true).unwrap();
+        let emails: Vec<String> =
+            conn.prepare("SELECT email FROM sender_categories").unwrap().query_map([], |r| r.get(0)).unwrap().collect::<Result<_, _>>().unwrap();
+        assert_eq!(emails, ["anna.weber@studio-halde.example"]);
     }
 
     #[test]

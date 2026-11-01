@@ -298,3 +298,51 @@ fn invite_columns_are_added_to_existing_mails() {
     drop(conn);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn upgrade_from_45_adds_category_schema() {
+    let dir = temp_dir("category-upgrade");
+    {
+        let db = Database::new(dir.clone()).unwrap();
+        let conn = db.lock_db();
+        insert_mail(&conn, "m1", "Before categories", "", "<c-1@example.com>");
+        conn.execute_batch(
+            "DROP INDEX IF EXISTS idx_mails_category;
+             DROP INDEX IF EXISTS idx_mails_category_pending;
+             DROP TABLE IF EXISTS sender_categories;
+             ALTER TABLE mails DROP COLUMN category;
+             ALTER TABLE mails DROP COLUMN category_source;
+             ALTER TABLE mails DROP COLUMN category_confidence;
+             ALTER TABLE mails DROP COLUMN category_reasons;
+             ALTER TABLE mails DROP COLUMN signal_headers;
+             ALTER TABLE mails ADD COLUMN auto_labels TEXT;
+             CREATE INDEX idx_mails_auto_labels ON mails(auto_labels);
+             CREATE TABLE inbox_splits (id TEXT PRIMARY KEY, name TEXT);",
+        )
+        .unwrap();
+        conn.pragma_update(None, "user_version", 45u32).unwrap();
+    }
+
+    let db = Database::new(dir.clone()).unwrap();
+    let conn = db.lock_db();
+    let names = |sql: &str| -> Vec<String> {
+        conn.prepare(sql).unwrap().query_map([], |r| r.get::<_, String>(0)).unwrap().collect::<Result<_, _>>().unwrap()
+    };
+
+    let columns = names("SELECT name FROM pragma_table_info('mails')");
+    for c in ["category", "category_source", "category_confidence", "category_reasons", "signal_headers"] {
+        assert!(columns.contains(&c.to_string()), "{c}");
+    }
+    let objects = names("SELECT name FROM sqlite_master");
+    for o in ["sender_categories", "idx_mails_category", "idx_mails_category_pending"] {
+        assert!(objects.contains(&o.to_string()), "{o}");
+    }
+    for o in ["inbox_splits", "idx_mails_auto_labels"] {
+        assert!(!objects.contains(&o.to_string()), "{o}");
+    }
+    let category: Option<String> = conn.query_row("SELECT category FROM mails WHERE id = 'm1'", [], |r| r.get(0)).unwrap();
+    assert_eq!(category, None);
+
+    drop(conn);
+    let _ = std::fs::remove_dir_all(&dir);
+}
