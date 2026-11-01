@@ -18,10 +18,12 @@ use std::panic::AssertUnwindSafe;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 const CHUNK: i64 = 500;
 const CONCURRENCY: usize = 4;
 const PROGRESS_EVERY: u32 = 25;
+const PROGRESS_INTERVAL: Duration = Duration::from_millis(100);
 const PREVIEW_CHARS: usize = 120;
 const ACCOUNT_DIR_CHARS: usize = 30;
 const FOLDER_DIR_CHARS: usize = 30;
@@ -429,6 +431,7 @@ where
         progress(ExportProgress { processed, total, local_copy, failed });
     };
     emit(0, 0, 0);
+    let mut last_emit = Instant::now();
 
     let mut account_dirs: HashMap<String, (String, NameSet)> = HashMap::new();
     let mut root_names = NameSet::new();
@@ -496,8 +499,9 @@ where
                     MailOutcome::LocalCopy => local_copy += 1,
                     MailOutcome::Failed => failed += 1,
                 }
-                if processed % PROGRESS_EVERY == 0 {
+                if processed % PROGRESS_EVERY == 0 || last_emit.elapsed() >= PROGRESS_INTERVAL {
                     emit(processed, local_copy, failed);
+                    last_emit = Instant::now();
                 }
                 done.push((i, result));
             }
@@ -745,6 +749,36 @@ JVBERi0xLjQ=\n\
         assert_eq!((summary.exported, summary.local_copy, summary.failed, summary.cancelled), (1, 0, 0, false));
         let last = seen.lock().unwrap().last().cloned().unwrap();
         assert_eq!((last.processed, last.total), (1, 1));
+    }
+
+    #[tokio::test]
+    async fn slow_fetches_report_progress_between_steps() {
+        let w = world();
+        for day in 1..=3 {
+            add_mail(&w, "Termin", &format!("2026-10-0{day} 09:00:00"));
+        }
+        let out = Out::new();
+        let seen = Mutex::new(Vec::new());
+        let cancel = AtomicBool::new(false);
+        let raw = fixture();
+        run_export(
+            &w.db,
+            &options(vec![w.folder.clone()]),
+            &labels(),
+            &out.0,
+            |_| {
+                let raw = raw.clone();
+                async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+                    Ok(raw)
+                }
+            },
+            &cancel,
+            |p| seen.lock().unwrap().push(p.processed),
+        )
+        .await;
+        let seen = seen.into_inner().unwrap();
+        assert!(seen.iter().any(|&n| n > 0 && n < 3), "{seen:?}");
     }
 
     #[tokio::test]
