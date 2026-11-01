@@ -7,6 +7,7 @@ pub mod bootstrap;
 pub mod categories;
 pub mod calendar;
 pub mod connectivity;
+pub mod export;
 pub mod license;
 pub mod mails;
 pub mod mailto;
