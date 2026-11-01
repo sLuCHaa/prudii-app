@@ -77,7 +77,7 @@ describe("SortingSettings", () => {
   it("lists remembered senders and removes one", async () => {
     await render();
     expect(host.textContent).toContain("anna.weber@studio-halde.example");
-    expect(host.textContent).toContain("Wichtig");
+    expect(host.textContent).toContain("Persönlich");
     await act(async () => buttonByText("Entfernen").click());
     expect(deleteSenderCategory).toHaveBeenCalledWith("anna.weber@studio-halde.example");
   });

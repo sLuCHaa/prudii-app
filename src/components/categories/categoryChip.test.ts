@@ -83,7 +83,7 @@ describe("CategoryChip", () => {
   it("corrects the category and remembers the sender by default", () => {
     render("newsletters");
     act(() => chip()!.click());
-    act(() => button("Wichtig").click());
+    act(() => button("Persönlich").click());
     expect(mutate).toHaveBeenCalledWith({ mailId: "m1", category: "important", rememberSender: true });
     expect(popover()).toBeNull();
   });
@@ -114,7 +114,7 @@ describe("CategoryChip", () => {
     });
     act(() => chip()!.click());
     act(() => {
-      button("Wichtig").dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
+      button("Persönlich").dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
     });
     expect(rowKey).not.toHaveBeenCalled();
   });

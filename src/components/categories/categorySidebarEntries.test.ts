@@ -71,11 +71,11 @@ describe("CategorySidebarEntries", () => {
 
   it("opens a category on click and clears it when already active", () => {
     render("f1", "a1");
-    act(() => rowOf("Wichtig")!.click());
+    act(() => rowOf("Persönlich")!.click());
     expect(openCategory).toHaveBeenCalledWith("important", "f1", "a1");
     state = { ...state, activeCategory: "important", selectedFolderId: "f1" };
     render("f1");
-    act(() => rowOf("Wichtig")!.click());
+    act(() => rowOf("Persönlich")!.click());
     expect(setActiveCategory).toHaveBeenCalledWith(null);
   });
 
