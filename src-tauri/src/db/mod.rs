@@ -144,8 +144,6 @@ impl Database {
 
         // Reply-To header support (RFC 2822)
         let _ = conn.execute_batch("ALTER TABLE mails ADD COLUMN reply_to_json TEXT DEFAULT '[]';");
-        // Kept until the old classifier and backup code stop reading it.
-        let _ = conn.execute_batch("ALTER TABLE mails ADD COLUMN auto_labels TEXT DEFAULT '';");
 
         // v38: bracket-normalized message-id columns for thread lookup.
         // Message-IDs are stored inconsistently (with/without <>) depending on
@@ -214,29 +212,6 @@ impl Database {
                 PRIMARY KEY (account_id, email)
             );"
         );
-
-        // Inbox splits table for split inbox feature
-        let _ = conn.execute_batch(
-            "CREATE TABLE IF NOT EXISTS inbox_splits (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                position INTEGER NOT NULL DEFAULT 0,
-                icon TEXT NOT NULL DEFAULT 'inbox',
-                conditions TEXT NOT NULL DEFAULT '{}',
-                is_default INTEGER NOT NULL DEFAULT 0,
-                created_at TEXT NOT NULL DEFAULT (datetime('now'))
-            );"
-        );
-
-        let split_count: i32 = conn.query_row("SELECT COUNT(*) FROM inbox_splits", [], |r| r.get(0)).unwrap_or(0);
-        if split_count == 0 {
-            let _ = conn.execute_batch(
-                "INSERT INTO inbox_splits (id, name, position, icon, conditions, is_default) VALUES
-                ('primary', 'Primary', 0, 'inbox', '{}', 1),
-                ('notifications', 'Notifications', 1, 'bell', '{\"from_contains\":[\"noreply@\",\"notifications@\",\"no-reply@\"]}', 1),
-                ('newsletters', 'Newsletters', 2, 'newspaper', '{\"has_auto_label\":[\"newsletter\"]}', 1);"
-            );
-        }
 
         // Drafts table: add missing columns for scheduled sends
         let _ = conn.execute_batch("ALTER TABLE drafts ADD COLUMN attachments_json TEXT DEFAULT '';");
@@ -723,6 +698,7 @@ impl Database {
             )",
             "CREATE INDEX IF NOT EXISTS idx_mails_category ON mails(folder_id, category) WHERE category IS NOT NULL AND category != ''",
             "CREATE INDEX IF NOT EXISTS idx_mails_category_pending ON mails(folder_id) WHERE category IS NULL",
+            "DROP TABLE IF EXISTS inbox_splits",
             "DROP INDEX IF EXISTS idx_mails_auto_labels",
             "DROP INDEX IF EXISTS idx_mails_unclassified",
         ] {

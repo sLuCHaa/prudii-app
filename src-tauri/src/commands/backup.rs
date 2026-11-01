@@ -312,35 +312,6 @@ fn do_create_backup_inner(
             zip.start_file("email_templates.json", zip_options).map_err(|e| e.to_string())?;
             zip.write_all(json.as_bytes()).map_err(|e| e.to_string())?;
         }
-
-        // Inbox Splits (bundled with settings)
-        let splits: Vec<serde_json::Value> = {
-            let conn = db.lock_db();
-            let mut stmt = conn.prepare(
-                "SELECT id, name, position, icon, conditions, is_default, created_at
-                 FROM inbox_splits ORDER BY position"
-            ).map_err(|e| e.to_string())?;
-            let rows = stmt.query_map([], |row| {
-                Ok(serde_json::json!({
-                    "id": row.get::<_, String>(0)?,
-                    "name": row.get::<_, String>(1)?,
-                    "position": row.get::<_, i32>(2)?,
-                    "icon": row.get::<_, String>(3)?,
-                    "conditions": row.get::<_, String>(4)?,
-                    "is_default": row.get::<_, i32>(5)?,
-                    "created_at": row.get::<_, String>(6)?,
-                }))
-            })
-            .map_err(|e| e.to_string())?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| e.to_string())?;
-            rows
-        };
-        if !splits.is_empty() {
-            let json = serde_json::to_string_pretty(&splits).map_err(|e| e.to_string())?;
-            zip.start_file("inbox_splits.json", zip_options).map_err(|e| e.to_string())?;
-            zip.write_all(json.as_bytes()).map_err(|e| e.to_string())?;
-        }
     }
 
     if options.include_accounts {
@@ -512,62 +483,7 @@ fn do_create_backup_inner(
         let mut first = true;
 
         loop {
-            let batch: Vec<serde_json::Value> = {
-                let conn = db.lock_db();
-                let mut stmt = conn.prepare(
-                    "SELECT id, account_id, folder_id, message_id, uid, subject,
-                            from_name, from_email, to_json, cc_json, bcc_json,
-                            date, snippet, body_text, body_html,
-                            is_read, is_starred, is_flagged, is_replied, is_forwarded,
-                            has_attachments, thread_id, in_reply_to, size_bytes,
-                            COALESCE(flags, ''),
-                            COALESCE(list_unsubscribe, ''),
-                            COALESCE(is_pinned, 0),
-                            COALESCE(snoozed_until, ''),
-                            COALESCE(reply_to_json, '[]'),
-                            COALESCE(auto_labels, '')
-                     FROM mails ORDER BY date DESC LIMIT ?1 OFFSET ?2"
-                ).map_err(|e| e.to_string())?;
-
-                let rows = stmt.query_map(rusqlite::params![batch_size, offset], |row| {
-                    Ok(serde_json::json!({
-                        "id": row.get::<_, String>(0)?,
-                        "account_id": row.get::<_, String>(1)?,
-                        "folder_id": row.get::<_, String>(2)?,
-                        "message_id": row.get::<_, Option<String>>(3)?,
-                        "uid": row.get::<_, Option<u32>>(4)?,
-                        "subject": row.get::<_, String>(5)?,
-                        "from_name": row.get::<_, String>(6)?,
-                        "from_email": row.get::<_, String>(7)?,
-                        "to_json": row.get::<_, String>(8)?,
-                        "cc_json": row.get::<_, String>(9)?,
-                        "bcc_json": row.get::<_, String>(10)?,
-                        "date": row.get::<_, String>(11)?,
-                        "snippet": row.get::<_, String>(12)?,
-                        "body_text": row.get::<_, String>(13)?,
-                        "body_html": row.get::<_, String>(14)?,
-                        "is_read": row.get::<_, i32>(15)?,
-                        "is_starred": row.get::<_, i32>(16)?,
-                        "is_flagged": row.get::<_, i32>(17)?,
-                        "is_replied": row.get::<_, i32>(18)?,
-                        "is_forwarded": row.get::<_, i32>(19)?,
-                        "has_attachments": row.get::<_, i32>(20)?,
-                        "thread_id": row.get::<_, Option<String>>(21)?,
-                        "in_reply_to": row.get::<_, Option<String>>(22)?,
-                        "size_bytes": row.get::<_, Option<i64>>(23)?,
-                        "flags": row.get::<_, String>(24)?,
-                        "list_unsubscribe": row.get::<_, String>(25)?,
-                        "is_pinned": row.get::<_, i32>(26)?,
-                        "snoozed_until": row.get::<_, String>(27)?,
-                        "reply_to_json": row.get::<_, String>(28)?,
-                        "auto_labels": row.get::<_, String>(29)?,
-                    }))
-                })
-                .map_err(|e| e.to_string())?
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| e.to_string())?;
-                rows
-            };
+            let batch = read_mail_batch(&db.lock_db(), batch_size, offset)?;
 
             if batch.is_empty() {
                 break;
@@ -598,6 +514,7 @@ fn do_create_backup_inner(
 
         zip.write_all(b"]").map_err(|e| e.to_string())?;
         stats.mail_count = offset as u64;
+        export_sender_categories(&db, &mut zip, &zip_options)?;
 
         current_step += 1;
         emit_backup_progress(app, &BackupProgress {
@@ -1135,6 +1052,198 @@ fn insert_json_rows<'a>(
 
 /// Writes the four calendar tables. The reminder log stays behind: it only
 /// suppresses repeat toasts on this machine.
+pub(crate) fn read_mail_batch(conn: &rusqlite::Connection, limit: i64, offset: i64) -> Result<Vec<serde_json::Value>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, account_id, folder_id, message_id, uid, subject,
+                    from_name, from_email, to_json, cc_json, bcc_json,
+                    date, snippet, body_text, body_html,
+                    is_read, is_starred, is_flagged, is_replied, is_forwarded,
+                    has_attachments, thread_id, in_reply_to, size_bytes,
+                    COALESCE(flags, ''),
+                    COALESCE(list_unsubscribe, ''),
+                    COALESCE(is_pinned, 0),
+                    COALESCE(snoozed_until, ''),
+                    COALESCE(reply_to_json, '[]'),
+                    category, category_source, category_confidence, category_reasons, signal_headers
+             FROM mails ORDER BY date DESC, id LIMIT ?1 OFFSET ?2",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rows = stmt
+        .query_map(rusqlite::params![limit, offset], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, String>(0)?,
+                "account_id": row.get::<_, String>(1)?,
+                "folder_id": row.get::<_, String>(2)?,
+                "message_id": row.get::<_, Option<String>>(3)?,
+                "uid": row.get::<_, Option<u32>>(4)?,
+                "subject": row.get::<_, String>(5)?,
+                "from_name": row.get::<_, String>(6)?,
+                "from_email": row.get::<_, String>(7)?,
+                "to_json": row.get::<_, String>(8)?,
+                "cc_json": row.get::<_, String>(9)?,
+                "bcc_json": row.get::<_, String>(10)?,
+                "date": row.get::<_, String>(11)?,
+                "snippet": row.get::<_, String>(12)?,
+                "body_text": row.get::<_, String>(13)?,
+                "body_html": row.get::<_, String>(14)?,
+                "is_read": row.get::<_, i32>(15)?,
+                "is_starred": row.get::<_, i32>(16)?,
+                "is_flagged": row.get::<_, i32>(17)?,
+                "is_replied": row.get::<_, i32>(18)?,
+                "is_forwarded": row.get::<_, i32>(19)?,
+                "has_attachments": row.get::<_, i32>(20)?,
+                "thread_id": row.get::<_, Option<String>>(21)?,
+                "in_reply_to": row.get::<_, Option<String>>(22)?,
+                "size_bytes": row.get::<_, Option<i64>>(23)?,
+                "flags": row.get::<_, String>(24)?,
+                "list_unsubscribe": row.get::<_, String>(25)?,
+                "is_pinned": row.get::<_, i32>(26)?,
+                "snoozed_until": row.get::<_, String>(27)?,
+                "reply_to_json": row.get::<_, String>(28)?,
+                "category": row.get::<_, Option<String>>(29)?,
+                "category_source": row.get::<_, Option<String>>(30)?,
+                "category_confidence": row.get::<_, Option<f64>>(31)?,
+                "category_reasons": row.get::<_, Option<String>>(32)?,
+                "signal_headers": row.get::<_, Option<String>>(33)?,
+            }))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(rows)
+}
+
+pub(crate) fn import_mail_chunk(conn: &rusqlite::Connection, mails: &[serde_json::Value], is_replace: bool) -> Result<(), String> {
+    let insert_or = if is_replace { "INSERT OR REPLACE" } else { "INSERT OR IGNORE" };
+    let sql = format!(
+        "{} INTO mails (id, account_id, folder_id, message_id, uid, subject,
+         from_name, from_email, to_json, cc_json, bcc_json,
+         date, snippet, body_text, body_html,
+         is_read, is_starred, is_flagged, is_replied, is_forwarded,
+         has_attachments, thread_id, in_reply_to, size_bytes, flags,
+         list_unsubscribe, is_pinned, snoozed_until, reply_to_json,
+         category, category_source, category_confidence, category_reasons, signal_headers)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25,?26,?27,?28,?29,?30,?31,?32,?33,?34)",
+        insert_or
+    );
+
+    conn.execute_batch("BEGIN TRANSACTION;").map_err(|e| e.to_string())?;
+    let result = (|| -> Result<(), String> {
+        for mail in mails {
+            conn.execute(
+                &sql,
+                rusqlite::params![
+                    mail.get("id").and_then(|v| v.as_str()).unwrap_or(""),
+                    mail.get("account_id").and_then(|v| v.as_str()).unwrap_or(""),
+                    mail.get("folder_id").and_then(|v| v.as_str()).unwrap_or(""),
+                    mail.get("message_id").and_then(|v| v.as_str()),
+                    mail.get("uid").and_then(|v| v.as_u64()).map(|u| u as u32),
+                    mail.get("subject").and_then(|v| v.as_str()).unwrap_or(""),
+                    mail.get("from_name").and_then(|v| v.as_str()).unwrap_or(""),
+                    mail.get("from_email").and_then(|v| v.as_str()).unwrap_or(""),
+                    mail.get("to_json").and_then(|v| v.as_str()).unwrap_or("[]"),
+                    mail.get("cc_json").and_then(|v| v.as_str()).unwrap_or("[]"),
+                    mail.get("bcc_json").and_then(|v| v.as_str()).unwrap_or("[]"),
+                    mail.get("date").and_then(|v| v.as_str()).unwrap_or(""),
+                    mail.get("snippet").and_then(|v| v.as_str()).unwrap_or(""),
+                    mail.get("body_text").and_then(|v| v.as_str()).unwrap_or(""),
+                    mail.get("body_html").and_then(|v| v.as_str()).unwrap_or(""),
+                    mail.get("is_read").and_then(|v| v.as_i64()).unwrap_or(0),
+                    mail.get("is_starred").and_then(|v| v.as_i64()).unwrap_or(0),
+                    mail.get("is_flagged").and_then(|v| v.as_i64()).unwrap_or(0),
+                    mail.get("is_replied").and_then(|v| v.as_i64()).unwrap_or(0),
+                    mail.get("is_forwarded").and_then(|v| v.as_i64()).unwrap_or(0),
+                    mail.get("has_attachments").and_then(|v| v.as_i64()).unwrap_or(0),
+                    mail.get("thread_id").and_then(|v| v.as_str()),
+                    mail.get("in_reply_to").and_then(|v| v.as_str()),
+                    mail.get("size_bytes").and_then(|v| v.as_i64()),
+                    mail.get("flags").and_then(|v| v.as_str()).unwrap_or(""),
+                    mail.get("list_unsubscribe").and_then(|v| v.as_str()).unwrap_or(""),
+                    mail.get("is_pinned").and_then(|v| v.as_i64()).unwrap_or(0),
+                    mail.get("snoozed_until").and_then(|v| v.as_str()).unwrap_or(""),
+                    mail.get("reply_to_json").and_then(|v| v.as_str()).unwrap_or("[]"),
+                    mail.get("category").and_then(|v| v.as_str()),
+                    mail.get("category_source").and_then(|v| v.as_str()),
+                    mail.get("category_confidence").and_then(|v| v.as_f64()),
+                    mail.get("category_reasons").and_then(|v| v.as_str()),
+                    mail.get("signal_headers").and_then(|v| v.as_str()),
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    })();
+    match result {
+        Ok(()) => conn.execute_batch("COMMIT;").map_err(|e| e.to_string()),
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(e)
+        }
+    }
+}
+
+pub(crate) fn export_sender_categories<W: Write + Seek>(
+    db: &Database,
+    zip: &mut zip::ZipWriter<W>,
+    opts: &zip::write::SimpleFileOptions,
+) -> Result<(), String> {
+    let rules: Vec<serde_json::Value> = {
+        let conn = db.lock_db();
+        let mut stmt = conn
+            .prepare("SELECT email, category, created_at FROM sender_categories ORDER BY email")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(serde_json::json!({
+                    "email": row.get::<_, String>(0)?,
+                    "category": row.get::<_, String>(1)?,
+                    "created_at": row.get::<_, String>(2)?,
+                }))
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        rows
+    };
+    if rules.is_empty() {
+        return Ok(());
+    }
+    let json = serde_json::to_string_pretty(&rules).map_err(|e| e.to_string())?;
+    zip.start_file("sender_categories.json", *opts).map_err(|e| e.to_string())?;
+    zip.write_all(json.as_bytes()).map_err(|e| e.to_string())
+}
+
+pub(crate) fn import_sender_categories<R: Read + Seek>(
+    archive: &mut zip::ZipArchive<R>,
+    conn: &rusqlite::Connection,
+) -> Result<(), String> {
+    let Ok(mut f) = archive.by_name("sender_categories.json") else {
+        return Ok(());
+    };
+    let mut s = String::new();
+    f.read_to_string(&mut s).map_err(|e| e.to_string())?;
+    let rules: Vec<serde_json::Value> = serde_json::from_str(&s).map_err(|e| e.to_string())?;
+    for rule in &rules {
+        let email = rule.get("email").and_then(|v| v.as_str()).unwrap_or("").trim().to_lowercase();
+        if email.is_empty() {
+            continue;
+        }
+        conn.execute(
+            "INSERT OR REPLACE INTO sender_categories (email, category, created_at)
+             VALUES (?1, ?2, COALESCE(NULLIF(?3, ''), datetime('now')))",
+            rusqlite::params![
+                email,
+                rule.get("category").and_then(|v| v.as_str()).unwrap_or(""),
+                rule.get("created_at").and_then(|v| v.as_str()).unwrap_or(""),
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 pub(crate) fn export_calendar<W: Write + Seek>(
     db: &Database,
     zip: &mut zip::ZipWriter<W>,
@@ -1562,33 +1671,6 @@ fn do_restore_backup_inner(
                 ]).map_err(|e| e.to_string())?;
             }
         }
-
-        // Inbox Splits (bundled with settings)
-        if let Ok(mut f) = archive.by_name("inbox_splits.json") {
-            let mut s = String::new();
-            f.read_to_string(&mut s).map_err(|e| e.to_string())?;
-            let splits: Vec<serde_json::Value> = serde_json::from_str(&s).map_err(|e| e.to_string())?;
-            let conn = db.lock_db();
-            if is_replace {
-                conn.execute_batch("DELETE FROM inbox_splits;").map_err(|e| e.to_string())?;
-            }
-            let insert_or = if is_replace { "INSERT OR REPLACE" } else { "INSERT OR IGNORE" };
-            let sql = format!(
-                "{} INTO inbox_splits (id, name, position, icon, conditions, is_default, created_at)
-                 VALUES (?1,?2,?3,?4,?5,?6,?7)", insert_or
-            );
-            for split in &splits {
-                conn.execute(&sql, rusqlite::params![
-                    split.get("id").and_then(|v| v.as_str()).unwrap_or(""),
-                    split.get("name").and_then(|v| v.as_str()).unwrap_or(""),
-                    split.get("position").and_then(|v| v.as_i64()).unwrap_or(0),
-                    split.get("icon").and_then(|v| v.as_str()).unwrap_or("inbox"),
-                    split.get("conditions").and_then(|v| v.as_str()).unwrap_or("{}"),
-                    split.get("is_default").and_then(|v| v.as_i64()).unwrap_or(0),
-                    split.get("created_at").and_then(|v| v.as_str()).unwrap_or(""),
-                ]).map_err(|e| e.to_string())?;
-            }
-        }
     }
 
     if manifest.includes.accounts {
@@ -1775,6 +1857,8 @@ fn do_restore_backup_inner(
             }
         };
 
+        import_sender_categories(&mut archive, &db.lock_db())?;
+
         if let Some(mails_str) = mails_json {
             current_step += 1;
             emit_restore_progress(app, &BackupProgress {
@@ -1789,62 +1873,11 @@ fn do_restore_backup_inner(
 
             let conn = db.lock_db();
             let insert_or = if is_replace { "INSERT OR REPLACE" } else { "INSERT OR IGNORE" };
-            let sql = format!(
-                "{} INTO mails (id, account_id, folder_id, message_id, uid, subject,
-                 from_name, from_email, to_json, cc_json, bcc_json,
-                 date, snippet, body_text, body_html,
-                 is_read, is_starred, is_flagged, is_replied, is_forwarded,
-                 has_attachments, thread_id, in_reply_to, size_bytes, flags,
-                 list_unsubscribe, is_pinned, snoozed_until, reply_to_json, auto_labels)
-                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25,?26,?27,?28,?29,?30)",
-                insert_or
-            );
-
             let batch_size = 1000;
             let total_mails = mails.len();
             for chunk_start in (0..total_mails).step_by(batch_size) {
                 let chunk_end = (chunk_start + batch_size).min(total_mails);
-                conn.execute_batch("BEGIN TRANSACTION;").map_err(|e| e.to_string())?;
-
-                for mail in &mails[chunk_start..chunk_end] {
-                    conn.execute(
-                        &sql,
-                        rusqlite::params![
-                            mail.get("id").and_then(|v| v.as_str()).unwrap_or(""),
-                            mail.get("account_id").and_then(|v| v.as_str()).unwrap_or(""),
-                            mail.get("folder_id").and_then(|v| v.as_str()).unwrap_or(""),
-                            mail.get("message_id").and_then(|v| v.as_str()),
-                            mail.get("uid").and_then(|v| v.as_u64()).map(|u| u as u32),
-                            mail.get("subject").and_then(|v| v.as_str()).unwrap_or(""),
-                            mail.get("from_name").and_then(|v| v.as_str()).unwrap_or(""),
-                            mail.get("from_email").and_then(|v| v.as_str()).unwrap_or(""),
-                            mail.get("to_json").and_then(|v| v.as_str()).unwrap_or("[]"),
-                            mail.get("cc_json").and_then(|v| v.as_str()).unwrap_or("[]"),
-                            mail.get("bcc_json").and_then(|v| v.as_str()).unwrap_or("[]"),
-                            mail.get("date").and_then(|v| v.as_str()).unwrap_or(""),
-                            mail.get("snippet").and_then(|v| v.as_str()).unwrap_or(""),
-                            mail.get("body_text").and_then(|v| v.as_str()).unwrap_or(""),
-                            mail.get("body_html").and_then(|v| v.as_str()).unwrap_or(""),
-                            mail.get("is_read").and_then(|v| v.as_i64()).unwrap_or(0),
-                            mail.get("is_starred").and_then(|v| v.as_i64()).unwrap_or(0),
-                            mail.get("is_flagged").and_then(|v| v.as_i64()).unwrap_or(0),
-                            mail.get("is_replied").and_then(|v| v.as_i64()).unwrap_or(0),
-                            mail.get("is_forwarded").and_then(|v| v.as_i64()).unwrap_or(0),
-                            mail.get("has_attachments").and_then(|v| v.as_i64()).unwrap_or(0),
-                            mail.get("thread_id").and_then(|v| v.as_str()),
-                            mail.get("in_reply_to").and_then(|v| v.as_str()),
-                            mail.get("size_bytes").and_then(|v| v.as_i64()),
-                            mail.get("flags").and_then(|v| v.as_str()).unwrap_or(""),
-                            mail.get("list_unsubscribe").and_then(|v| v.as_str()).unwrap_or(""),
-                            mail.get("is_pinned").and_then(|v| v.as_i64()).unwrap_or(0),
-                            mail.get("snoozed_until").and_then(|v| v.as_str()).unwrap_or(""),
-                            mail.get("reply_to_json").and_then(|v| v.as_str()).unwrap_or("[]"),
-                            mail.get("auto_labels").and_then(|v| v.as_str()).unwrap_or(""),
-                        ],
-                    ).map_err(|e| e.to_string())?;
-                }
-
-                conn.execute_batch("COMMIT;").map_err(|e| e.to_string())?;
+                import_mail_chunk(&conn, &mails[chunk_start..chunk_end], is_replace)?;
 
                 emit_restore_progress(app, &BackupProgress {
                     status: "restoring_mails".into(),
@@ -2644,5 +2677,128 @@ mod calendar_roundtrip {
         assert_eq!(restore_calendar_links(&links_b, &entries, std::slice::from_ref(&sub)), 1);
         assert_eq!(links_b.get(&sub).unwrap(), "https://example.com/secret.ics");
         assert_eq!(subscription_ids(&db_a.lock_db()), vec![sub]);
+    }
+}
+
+#[cfg(test)]
+mod category_roundtrip {
+    use super::*;
+    use crate::test_support::*;
+    use std::io::Cursor;
+
+    fn export_all(db: &Database) -> Vec<u8> {
+        let opts = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        let mails = read_mail_batch(&db.lock_db(), 5000, 0).unwrap();
+        zip.start_file("mails.json", opts).unwrap();
+        zip.write_all(serde_json::to_string(&mails).unwrap().as_bytes()).unwrap();
+        export_sender_categories(db, &mut zip, &opts).unwrap();
+        zip.finish().unwrap().into_inner()
+    }
+
+    fn import_all(db: &Database, bytes: Vec<u8>) {
+        let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+        let mut s = String::new();
+        archive.by_name("mails.json").unwrap().read_to_string(&mut s).unwrap();
+        let mails: Vec<serde_json::Value> = serde_json::from_str(&s).unwrap();
+        let conn = db.lock_db();
+        import_sender_categories(&mut archive, &conn).unwrap();
+        import_mail_chunk(&conn, &mails, false).unwrap();
+    }
+
+    fn seed_into(db: &Database, f: impl FnOnce(&rusqlite::Connection, &str, &str)) {
+        let conn = db.lock_db();
+        let account = seed_account(&conn, "me@studio-halde.example");
+        let inbox = seed_folder(&conn, &account, "inbox");
+        f(&conn, &account, &inbox);
+    }
+
+    #[test]
+    fn category_and_sender_rules_round_trip() {
+        let db_a = temp_db();
+        seed_into(&db_a, |conn, account, inbox| {
+            let id = seed_mail(
+                conn,
+                &SeedMail {
+                    account_id: account,
+                    folder_id: inbox,
+                    from_email: "anna.weber@studio-halde.example",
+                    signal_headers: r#"{"list-id":"x.studio-halde.example"}"#,
+                    category: Some("purchases"),
+                    category_source: Some("user"),
+                    ..Default::default()
+                },
+            );
+            conn.execute(
+                "UPDATE mails SET category_confidence = 1.0, category_reasons = '[{\"code\":\"user_choice\",\"params\":{}}]' WHERE id = ?1",
+                rusqlite::params![id],
+            )
+            .unwrap();
+            conn.execute("INSERT INTO sender_categories VALUES ('anna.weber@studio-halde.example', 'important', '2026-01-02 03:04:05')", []).unwrap();
+        });
+        let bytes = export_all(&db_a);
+
+        let db_b = temp_db();
+        let (account_a, inbox_a): (String, String) =
+            db_a.lock_db().query_row("SELECT account_id, folder_id FROM mails", [], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+        {
+            let conn = db_b.lock_db();
+            conn.execute_batch("PRAGMA foreign_keys = OFF;").unwrap();
+            conn.execute(
+                "INSERT INTO accounts (id, email, display_name, provider, imap_host, smtp_host) VALUES (?1, 'me@studio-halde.example', 'me', 'imap', 'h', 'h')",
+                rusqlite::params![account_a],
+            )
+            .unwrap();
+            conn.execute("INSERT INTO folders (id, account_id, name, folder_type, path) VALUES (?1, ?2, 'inbox', 'inbox', 'inbox')", rusqlite::params![inbox_a, account_a]).unwrap();
+        }
+        import_all(&db_b, bytes);
+
+        let conn = db_b.lock_db();
+        let row: (String, String, f64, String, String) = conn
+            .query_row("SELECT category, category_source, category_confidence, category_reasons, signal_headers FROM mails", [], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
+            })
+            .unwrap();
+        assert_eq!(row.0, "purchases");
+        assert_eq!(row.1, "user");
+        assert_eq!(row.2, 1.0);
+        assert!(row.3.contains("user_choice"));
+        assert!(row.4.contains("list-id"));
+        let rule: (String, String, String) = conn
+            .query_row("SELECT email, category, created_at FROM sender_categories", [], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .unwrap();
+        assert_eq!(rule, ("anna.weber@studio-halde.example".into(), "important".into(), "2026-01-02 03:04:05".into()));
+    }
+
+    #[test]
+    fn legacy_backup_with_auto_labels_restores() {
+        let db = temp_db();
+        let (account, inbox) = {
+            let conn = db.lock_db();
+            let account = seed_account(&conn, "me@studio-halde.example");
+            let inbox = seed_folder(&conn, &account, "inbox");
+            (account, inbox)
+        };
+        let mail = serde_json::json!({
+            "id": "m1", "account_id": account, "folder_id": inbox, "subject": "Hallo",
+            "from_email": "anna.weber@studio-halde.example", "date": "2026-01-01 00:00:00",
+            "auto_labels": "[\"newsletter\"]"
+        });
+        let split = serde_json::json!([{ "id": "primary", "name": "Primary", "position": 0, "icon": "inbox", "conditions": "{}", "is_default": 1, "created_at": "" }]);
+
+        let opts = zip::write::SimpleFileOptions::default();
+        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        zip.start_file("mails.json", opts).unwrap();
+        zip.write_all(serde_json::to_string(&vec![mail]).unwrap().as_bytes()).unwrap();
+        zip.start_file("inbox_splits.json", opts).unwrap();
+        zip.write_all(split.to_string().as_bytes()).unwrap();
+        let bytes = zip.finish().unwrap().into_inner();
+
+        import_all(&db, bytes);
+
+        let (count, category): (i64, Option<String>) =
+            db.lock_db().query_row("SELECT COUNT(*), MAX(category) FROM mails WHERE id = 'm1'", [], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+        assert_eq!(count, 1);
+        assert_eq!(category, None);
     }
 }
