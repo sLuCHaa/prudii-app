@@ -190,17 +190,16 @@ pub(crate) fn get_api_type(db: &Database, account_id: &str) -> (ApiType, String,
         |row| Ok((row.get(0)?, row.get(1)?)),
     );
     match result {
-        Ok((provider, auth_type)) => {
-            let api = if provider == "google" && auth_type == "oauth" {
-                ApiType::Gmail
-            } else if provider == "microsoft" && auth_type == "oauth" {
-                ApiType::Outlook
-            } else {
-                ApiType::Imap
-            };
-            (api, provider, auth_type)
-        }
+        Ok((provider, auth_type)) => (api_type_of(&provider, &auth_type), provider, auth_type),
         Err(_) => (ApiType::Imap, String::new(), String::new()),
+    }
+}
+
+pub(crate) fn api_type_of(provider: &str, auth_type: &str) -> ApiType {
+    match (provider, auth_type) {
+        ("google", "oauth") => ApiType::Gmail,
+        ("microsoft", "oauth") => ApiType::Outlook,
+        _ => ApiType::Imap,
     }
 }
 
@@ -1062,7 +1061,7 @@ pub async fn fetch_mail_source(
         }
     }
 
-    let raw = crate::export::source::fetch_raw_message(&db, &pool, &mail_id).await?;
+    let raw = crate::export::source::fetch_raw_message(&db, &pool, &mail_id).await.map_err(|e| e.to_string())?;
     Ok(crate::export::source::display_source(raw))
 }
 

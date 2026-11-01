@@ -4,7 +4,9 @@ use super::render::{
     render_index_data_js, render_index_html, render_mail_page, url_encode_segment, IndexAccount, IndexData, IndexEntry,
     IndexFolder, PageContext, APP_JS, STYLE_CSS,
 };
+use super::source::FetchError;
 use super::{ExportLabels, ExportOptions, ExportProgress, ExportSummary, MailOutcome};
+use crate::commands::mails::{api_type_of, ApiType};
 use crate::db::Database;
 use chrono::{NaiveDate, NaiveDateTime};
 use futures_util::stream::{self, StreamExt};
@@ -14,6 +16,7 @@ use std::future::Future;
 use std::panic::AssertUnwindSafe;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 
 const CHUNK: i64 = 500;
 const CONCURRENCY: usize = 4;
@@ -22,13 +25,14 @@ const PREVIEW_CHARS: usize = 120;
 const ACCOUNT_DIR_CHARS: usize = 30;
 const FOLDER_DIR_CHARS: usize = 30;
 const MAIL_BASE_CHARS: usize = 70;
+const AUTH_FAILURE_LIMIT: u32 = 5;
 
 struct FolderInfo {
     id: String,
     name: String,
     folder_type: String,
     is_local: bool,
-    provider: String,
+    uses_api: bool,
     account_id: String,
     account_email: String,
     account_name: String,
@@ -52,26 +56,51 @@ struct MailResult {
     entry: IndexEntry,
 }
 
+// A revoked token would otherwise cost one refresh attempt per remaining mail.
+#[derive(Default)]
+struct AuthBreaker {
+    failures: Mutex<HashMap<String, u32>>,
+}
+
+impl AuthBreaker {
+    fn is_open(&self, account_id: &str) -> bool {
+        self.failures.lock().unwrap_or_else(|e| e.into_inner()).get(account_id).is_some_and(|n| *n >= AUTH_FAILURE_LIMIT)
+    }
+
+    fn record(&self, account_id: &str, auth_failed: bool) {
+        let mut failures = self.failures.lock().unwrap_or_else(|e| e.into_inner());
+        let count = failures.entry(account_id.to_string()).or_default();
+        if *count >= AUTH_FAILURE_LIMIT {
+            return;
+        }
+        *count = if auth_failed { *count + 1 } else { 0 };
+        if *count == AUTH_FAILURE_LIMIT {
+            log::warn!("mail export: repeated sign-in errors, the rest of this account comes from the local copy");
+        }
+    }
+}
+
 fn load_folders(db: &Database, labels: &ExportLabels, ids: &[String]) -> Vec<FolderInfo> {
     let conn = db.lock_db();
     let mut out = Vec::new();
     for id in ids {
         let found = conn.query_row(
-            "SELECT f.id, f.name, f.folder_type, COALESCE(f.is_local, 0), a.id, a.email, a.display_name, a.provider
+            "SELECT f.id, f.name, f.folder_type, COALESCE(f.is_local, 0), a.id, a.email, a.display_name, a.provider, a.auth_type
              FROM folders f JOIN accounts a ON a.id = f.account_id WHERE f.id = ?1",
             rusqlite::params![id],
             |row| {
                 let folder_type: String = row.get(2)?;
                 let name: String = row.get(1)?;
+                let (provider, auth_type): (String, String) = (row.get(7)?, row.get(8)?);
                 Ok(FolderInfo {
                     id: row.get(0)?,
                     name: labels.folder_names.get(&folder_type).cloned().unwrap_or(name),
                     folder_type,
                     is_local: row.get::<_, i64>(3)? != 0,
+                    uses_api: !matches!(api_type_of(&provider, &auth_type), ApiType::Imap),
                     account_id: row.get(4)?,
                     account_email: row.get(5)?,
                     account_name: row.get(6)?,
-                    provider: row.get(7)?,
                 })
             },
         );
@@ -268,6 +297,7 @@ async fn process_mail<F, Fut>(
     opts: &ExportOptions,
     labels: &ExportLabels,
     cancel: &AtomicBool,
+    breaker: &AuthBreaker,
     folder: &FolderInfo,
     folder_path: &Path,
     rel_dir: &str,
@@ -276,17 +306,20 @@ async fn process_mail<F, Fut>(
 ) -> Option<MailResult>
 where
     F: Fn(String) -> Fut,
-    Fut: Future<Output = Result<Vec<u8>, String>>,
+    Fut: Future<Output = Result<Vec<u8>, FetchError>>,
 {
     if cancel.load(Ordering::SeqCst) {
         return None;
     }
     let row_date = parse_local_date(&row.date);
-    let local_only = folder.is_local && !matches!(folder.provider.as_str(), "google" | "microsoft");
+    // The server mailbox of a local IMAP folder is unknown, its stored UID would fetch another mail.
+    let local_only = folder.is_local && !folder.uses_api;
 
     let mut original: Option<(Vec<u8>, ParsedMail)> = None;
-    if !local_only {
-        match fetch(row.id.clone()).await {
+    if !local_only && !breaker.is_open(&folder.account_id) {
+        let fetched = fetch(row.id.clone()).await;
+        breaker.record(&folder.account_id, fetched.as_ref().err().is_some_and(|e| e.auth));
+        match fetched {
             Ok(raw) => match parse_raw(&raw) {
                 Some(parsed) => original = Some((raw, parsed)),
                 None => log::warn!("mail export: server source could not be parsed, using the local copy"),
@@ -354,7 +387,7 @@ pub async fn run_export<F, Fut>(
 ) -> ExportSummary
 where
     F: Fn(String) -> Fut + Send + Sync,
-    Fut: Future<Output = Result<Vec<u8>, String>> + Send,
+    Fut: Future<Output = Result<Vec<u8>, FetchError>> + Send,
 {
     let folders = load_folders(db, labels, &options.folder_ids);
     let total = count_mails(db, &folders);
@@ -368,6 +401,7 @@ where
 
     let mut account_dirs: HashMap<String, (String, NameSet)> = HashMap::new();
     let mut root_names = NameSet::new();
+    let breaker = AuthBreaker::default();
     let mut accounts: Vec<IndexAccount> = Vec::new();
     let mut account_pos: HashMap<String, usize> = HashMap::new();
     let mut local_list: Vec<IndexEntry> = Vec::new();
@@ -404,12 +438,12 @@ where
                 })
                 .collect();
 
-            let fetch_ref = &fetch;
+            let (fetch_ref, breaker_ref) = (&fetch, &breaker);
             let (folder_ref, path_ref, rel_ref) = (folder, folder_path.as_path(), rel_dir.as_str());
             let mut running = stream::iter(jobs)
                 .map(move |(i, row, base)| async move {
                     let fallback = failed_entry(&row);
-                    let work = process_mail(db, fetch_ref, options, labels, cancel, folder_ref, path_ref, rel_ref, row, base);
+                    let work = process_mail(db, fetch_ref, options, labels, cancel, breaker_ref, folder_ref, path_ref, rel_ref, row, base);
                     let result = AssertUnwindSafe(work).catch_unwind().await.unwrap_or_else(|_| {
                         log::error!("mail export: processing a mail panicked, listing it as failed");
                         Some(MailResult { outcome: MailOutcome::Failed, entry: fallback })
@@ -493,7 +527,7 @@ mod tests {
     use crate::db::Database;
     use crate::test_support::{seed_account, seed_folder, seed_mail, temp_db, SeedMail};
     use std::collections::HashMap;
-    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::{AtomicBool, AtomicUsize};
     use std::sync::Mutex;
 
     const FIXTURE_SUBJECT: &str = "Angebot Neubau Waldweg";
@@ -631,7 +665,7 @@ JVBERi0xLjQ=\n\
             &labels(),
             out,
             move |id| {
-                let r = results.get(&id).cloned().unwrap_or_else(|| Err("offline".into()));
+                let r = results.get(&id).cloned().unwrap_or_else(|| Err("offline".into())).map_err(FetchError::from);
                 async move { r }
             },
             &cancel,
@@ -718,7 +752,7 @@ JVBERi0xLjQ=\n\
             &options(vec![w.folder.clone()]),
             &labels(),
             &out.0,
-            |_| async { panic!("fetch must not be called") as Result<Vec<u8>, String> },
+            |_| async { panic!("fetch must not be called") as Result<Vec<u8>, FetchError> },
             &cancel,
             |_| {},
         )
@@ -727,32 +761,129 @@ JVBERi0xLjQ=\n\
         assert_eq!(files(&out.0, "html").len(), 1);
     }
 
-    #[tokio::test]
-    async fn local_folder_of_an_api_account_still_fetches() {
+    async fn local_folder_fetches(provider: &str, auth_type: &str) -> usize {
         let w = world();
-        add_mail(&w, FIXTURE_SUBJECT, "2026-10-21 13:28:44");
+        let id = add_mail(&w, FIXTURE_SUBJECT, "2026-10-21 13:28:44");
+        set_body(&w, &id, "<p>Hallo Anna</p>", "");
         w.db.lock_db().execute("UPDATE folders SET is_local = 1", []).unwrap();
-        w.db.lock_db().execute("UPDATE accounts SET provider = 'google'", []).unwrap();
+        w.db.lock_db()
+            .execute("UPDATE accounts SET provider = ?1, auth_type = ?2", rusqlite::params![provider, auth_type])
+            .unwrap();
         let out = Out::new();
-        let called = AtomicBool::new(false);
+        let calls = AtomicUsize::new(0);
         let cancel = AtomicBool::new(false);
-        let raw = fixture();
         let summary = run_export(
             &w.db,
             &options(vec![w.folder.clone()]),
             &labels(),
             &out.0,
             |_| {
-                called.store(true, std::sync::atomic::Ordering::SeqCst);
-                let raw = raw.clone();
-                async move { Ok::<_, String>(raw) }
+                calls.fetch_add(1, Ordering::SeqCst);
+                async { Ok::<_, FetchError>(fixture()) }
             },
             &cancel,
             |_| {},
         )
         .await;
-        assert!(called.load(std::sync::atomic::Ordering::SeqCst));
-        assert_eq!(summary.exported, 1);
+        assert_eq!(summary.exported + summary.local_copy, 1);
+        calls.load(Ordering::SeqCst)
+    }
+
+    #[tokio::test]
+    async fn local_folder_of_an_api_account_still_fetches() {
+        assert_eq!(local_folder_fetches("google", "oauth").await, 1);
+        assert_eq!(local_folder_fetches("microsoft", "oauth").await, 1);
+    }
+
+    #[tokio::test]
+    async fn local_folder_of_a_password_account_never_fetches() {
+        for provider in ["google", "microsoft", "imap"] {
+            assert_eq!(local_folder_fetches(provider, "password").await, 0, "{provider}");
+        }
+    }
+
+    fn second_account(w: &World, mails: usize) -> (String, Vec<String>) {
+        let conn = w.db.lock_db();
+        let account = seed_account(&conn, "jonas.brandt@studio-halde.example");
+        let folder = seed_folder(&conn, &account, "inbox");
+        let ids = (0..mails)
+            .map(|i| {
+                seed_mail(
+                    &conn,
+                    &SeedMail {
+                        account_id: &account,
+                        folder_id: &folder,
+                        from_email: "anna@studio-halde.example",
+                        subject: &format!("Antwort {i}"),
+                        date: &format!("2026-09-{:02} 10:00:00", i + 1),
+                        ..Default::default()
+                    },
+                )
+            })
+            .collect();
+        (folder, ids)
+    }
+
+    #[tokio::test]
+    async fn repeated_auth_errors_stop_fetching_for_that_account_only() {
+        let w = world();
+        for i in 0..12 {
+            let id = add_mail(&w, &format!("Mail {i}"), &format!("2026-10-{:02} 10:00:00", i + 1));
+            set_body(&w, &id, "<p>Hallo Anna</p>", "");
+        }
+        let (other_folder, other_ids) = second_account(&w, 3);
+        let (revoked, fine) = (AtomicUsize::new(0), AtomicUsize::new(0));
+        let out = Out::new();
+        let cancel = AtomicBool::new(false);
+        let summary = run_export(
+            &w.db,
+            &options(vec![w.folder.clone(), other_folder]),
+            &labels(),
+            &out.0,
+            |id| {
+                let result = if other_ids.contains(&id) {
+                    fine.fetch_add(1, Ordering::SeqCst);
+                    Ok(fixture())
+                } else {
+                    revoked.fetch_add(1, Ordering::SeqCst);
+                    Err(FetchError { message: "Credentials: invalid_grant".into(), auth: true })
+                };
+                async move { result }
+            },
+            &cancel,
+            |_| {},
+        )
+        .await;
+        let revoked = revoked.load(Ordering::SeqCst);
+        assert!((5..5 + CONCURRENCY).contains(&revoked), "{revoked}");
+        assert_eq!(fine.load(Ordering::SeqCst), 3);
+        assert_eq!((summary.exported, summary.local_copy, summary.failed), (3, 12, 0));
+    }
+
+    #[tokio::test]
+    async fn other_fetch_errors_keep_fetching() {
+        let w = world();
+        for i in 0..8 {
+            add_mail(&w, &format!("Mail {i}"), &format!("2026-10-{:02} 10:00:00", i + 1));
+        }
+        let calls = AtomicUsize::new(0);
+        let out = Out::new();
+        let cancel = AtomicBool::new(false);
+        let summary = run_export(
+            &w.db,
+            &options(vec![w.folder.clone()]),
+            &labels(),
+            &out.0,
+            |_| {
+                calls.fetch_add(1, Ordering::SeqCst);
+                async { Err::<Vec<u8>, _>(FetchError::from("get_message failed (404 Not Found)")) }
+            },
+            &cancel,
+            |_| {},
+        )
+        .await;
+        assert_eq!(calls.load(Ordering::SeqCst), 8);
+        assert_eq!(summary.failed, 8);
     }
 
     fn fetch_all(w: &World, id: &str) -> HashMap<String, Result<Vec<u8>, String>> {
@@ -798,7 +929,7 @@ JVBERi0xLjQ=\n\
             &options(vec![w.folder.clone()]),
             &labels(),
             &out.0,
-            |_| async { Ok::<_, String>(fixture()) },
+            |_| async { Ok::<_, FetchError>(fixture()) },
             &cancel,
             |_| cancel.store(true, std::sync::atomic::Ordering::SeqCst),
         )
@@ -826,7 +957,7 @@ JVBERi0xLjQ=\n\
                     if hostile {
                         panic!("hostile mail");
                     }
-                    Ok::<_, String>(fixture())
+                    Ok::<_, FetchError>(fixture())
                 }
             },
             &cancel,
