@@ -56,6 +56,7 @@ struct MailRow {
     body_html: String,
     body_text: String,
     has_attachments: bool,
+    has_uid: bool,
 }
 
 struct MailResult {
@@ -146,7 +147,7 @@ fn read_chunk(db: &Database, folder_id: &str, after: &Option<PageKey>) -> Vec<Ma
         None => (None, None),
     };
     let mut stmt = match conn.prepare(
-        "SELECT id, subject, from_name, from_email, to_json, cc_json, bcc_json, date, body_html, body_text, has_attachments
+        "SELECT id, subject, from_name, from_email, to_json, cc_json, bcc_json, date, body_html, body_text, has_attachments, uid IS NOT NULL
          FROM mails
          WHERE folder_id = ?1 AND (?2 IS NULL OR date < ?2 OR (date = ?2 AND id > ?3))
          ORDER BY date DESC, id ASC LIMIT ?4",
@@ -171,6 +172,7 @@ fn read_chunk(db: &Database, folder_id: &str, after: &Option<PageKey>) -> Vec<Ma
             body_html: lossy(row, 8),
             body_text: lossy(row, 9),
             has_attachments: matches!(row.get_ref(10), Ok(ValueRef::Integer(n)) if n != 0),
+            has_uid: matches!(row.get_ref(11), Ok(ValueRef::Integer(n)) if n != 0),
         })
     });
     let mut out = Vec::new();
@@ -344,8 +346,8 @@ where
         return None;
     }
     let row_date = parse_local_date(&row.date);
-    // The server mailbox of a local IMAP folder is unknown, its stored UID would fetch another mail.
-    let local_only = folder.is_local && !folder.uses_api;
+    // A local IMAP folder's stored UID would fetch another mail; a moved or sent mail has none until the next sync.
+    let local_only = !folder.uses_api && (folder.is_local || !row.has_uid);
 
     let mut original: Option<(Vec<u8>, ParsedMail)> = None;
     if !local_only && !breaker.is_open(&folder.account_id) {
@@ -654,9 +656,14 @@ JVBERi0xLjQ=\n\
         World { db, account, folder }
     }
 
+    fn with_uid(conn: &rusqlite::Connection, id: String) -> String {
+        conn.execute("UPDATE mails SET uid = rowid WHERE id = ?1", [&id]).unwrap();
+        id
+    }
+
     fn add_mail(w: &World, subject: &str, date: &str) -> String {
         let conn = w.db.lock_db();
-        seed_mail(
+        let id = seed_mail(
             &conn,
             &SeedMail {
                 account_id: &w.account,
@@ -666,7 +673,8 @@ JVBERi0xLjQ=\n\
                 date,
                 ..Default::default()
             },
-        )
+        );
+        with_uid(&conn, id)
     }
 
     fn set_body(w: &World, id: &str, html: &str, text: &str) {
@@ -862,6 +870,32 @@ JVBERi0xLjQ=\n\
     }
 
     #[tokio::test]
+    async fn imap_mail_without_uid_uses_the_local_copy_without_fetching() {
+        let w = world();
+        let id = add_mail(&w, "Verschoben", "2026-10-21 13:28:44");
+        set_body(&w, &id, "<p>Hallo Anna</p>", "");
+        w.db.lock_db().execute("UPDATE mails SET uid = NULL WHERE id = ?1", [&id]).unwrap();
+        let out = Out::new();
+        let calls = AtomicUsize::new(0);
+        let cancel = AtomicBool::new(false);
+        let summary = run_export(
+            &w.db,
+            &options(vec![w.folder.clone()]),
+            &labels(),
+            &out.0,
+            |_| {
+                calls.fetch_add(1, Ordering::SeqCst);
+                async { Ok::<_, FetchError>(fixture()) }
+            },
+            &cancel,
+            |_| {},
+        )
+        .await;
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        assert_eq!((summary.exported, summary.local_copy), (0, 1));
+    }
+
+    #[tokio::test]
     async fn local_folder_of_an_api_account_still_fetches() {
         assert_eq!(local_folder_fetches("google", "oauth").await, 1);
         assert_eq!(local_folder_fetches("microsoft", "oauth").await, 1);
@@ -880,7 +914,7 @@ JVBERi0xLjQ=\n\
         let folder = seed_folder(&conn, &account, "inbox");
         let ids = (0..mails)
             .map(|i| {
-                seed_mail(
+                let id = seed_mail(
                     &conn,
                     &SeedMail {
                         account_id: &account,
@@ -890,7 +924,8 @@ JVBERi0xLjQ=\n\
                         date: &format!("2026-09-{:02} 10:00:00", i + 1),
                         ..Default::default()
                     },
-                )
+                );
+                with_uid(&conn, id)
             })
             .collect();
         (folder, ids)
