@@ -178,7 +178,7 @@ pub fn classify(input: &MailInput) -> Decision {
         );
     }
     if let Some(kw) = purchase_keyword {
-        if automated || bulk {
+        if (automated || bulk) && promo_keyword.is_none() {
             add("purchases", "heuristic", 0.80, vec![Reason::new("purchase_keyword").with("keyword", kw)]);
         }
     }
@@ -228,6 +228,9 @@ pub fn classify(input: &MailInput) -> Decision {
             if !ROLE_LOCAL_PARTS.contains(&local.as_str())
                 && social_domain.is_none()
                 && notification_domain.is_none()
+                && shop_domain.is_none()
+                && signals.esp.is_none()
+                && !signals.feedback_id
                 && gmail.is_none()
             {
                 add("important", "heuristic", 0.65, vec![Reason::new("personal_mail")]);
@@ -386,5 +389,32 @@ mod tests {
         let d = run("shop@modehaus-lind.example", "Neue Kollektion", r#"{"x-gmail-category":"promotions"}"#, "", 0);
         assert_eq!(d.category.as_deref(), Some("promotions"));
         assert_eq!(d.confidence, 0.85);
+    }
+
+    #[test]
+    fn esp_only_transactional_mail_gets_no_label() {
+        let d = run("team@app.example", "Dein Passwort wurde geändert", r#"{"x-ses-outgoing":"2026.11.01-54.240.8.1"}"#, "", 0);
+        assert_eq!(d.category, None);
+        assert_eq!(codes(&d), ["low_confidence"]);
+    }
+
+    #[test]
+    fn esp_header_with_unsubscribe_is_bulk_sender() {
+        let d = run("news@designweekly.example", "Wochenrückblick Design", r#"{"x-sg-eid":"abc"}"#, "<mailto:u@designweekly.example>", 0);
+        assert_eq!(d.category.as_deref(), Some("newsletters"));
+        assert!(codes(&d).contains(&"bulk_sender"));
+    }
+
+    #[test]
+    fn promo_word_beats_purchase_word_in_bulk() {
+        let d = run("angebote@modehaus-lind.example", "Free shipping on everything", "{}", "<mailto:u@modehaus-lind.example>", 0);
+        assert_eq!(d.category.as_deref(), Some("promotions"));
+    }
+
+    #[test]
+    fn shop_domain_without_bulk_is_not_personal() {
+        let from = format!("anna@{}", SHOP_DOMAINS[0]);
+        let d = run(&from, "Kurze Frage", "{}", "", 0);
+        assert_eq!(d.category, None);
     }
 }

@@ -102,7 +102,7 @@ impl HeaderSignals {
     }
 
     pub fn is_bulk(&self) -> bool {
-        self.list_id || self.unsubscribe || self.precedence_bulk || self.feedback_id || self.esp.is_some()
+        self.list_id || self.unsubscribe || self.precedence_bulk
     }
 }
 
