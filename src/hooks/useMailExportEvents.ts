@@ -4,7 +4,8 @@ import i18next from "i18next";
 import type { TFunction } from "i18next";
 import { useAppStore } from "../stores/appStore";
 import { useDialog } from "../components/ui/DialogProvider";
-import { cancelMailExport, mailExportRunning, openLastExportFolder, quitApp } from "../lib/tauri";
+import { exportNeedsAttention, exportResultMessage, exportResultTitle } from "../lib/mailExport";
+import { cancelMailExport, hideToTray, mailExportRunning, openLastExportFolder, quitApp } from "../lib/tauri";
 import type { ExportProgress, ExportSummary } from "../types";
 
 const QUIT_WAIT_MS = 10_000;
@@ -35,17 +36,24 @@ export async function confirmQuitDuringExport(dialog: QuitDialog, t: TFunction):
   return true;
 }
 
+export async function closeOrHide(showInTray: boolean, dialog: QuitDialog, t: TFunction): Promise<void> {
+  if (showInTray && (await hideToTray().then(() => true, () => false))) return;
+  if (useAppStore.getState().mailExport.running) {
+    const quit = await confirmQuitDuringExport(dialog, t).catch(() => false);
+    if (!quit) return;
+  }
+  await quitApp().catch(() => {});
+}
+
 function showDoneNotice(summary: ExportSummary) {
-  const t = i18next.t.bind(i18next);
-  const parts = [t("mailExport.doneMessage", { exported: summary.exported + summary.localCopy })];
-  if (summary.localCopy > 0) parts.push(t("mailExport.doneLocal", { count: summary.localCopy }));
-  if (summary.failed > 0) parts.push(t("mailExport.doneFailed", { count: summary.failed }));
+  const t = i18next.t.bind(i18next) as TFunction;
   useAppStore.getState().addToast(
-    "success",
-    t(summary.cancelled ? "mailExport.cancelledTitle" : "mailExport.doneTitle"),
-    parts.join(" "),
+    exportNeedsAttention(summary) ? "warning" : "success",
+    exportResultTitle(t, summary),
+    exportResultMessage(t, summary),
     undefined,
     { label: t("mailExport.openFolder"), onClick: () => { void openLastExportFolder(); } },
+    true,
   );
 }
 

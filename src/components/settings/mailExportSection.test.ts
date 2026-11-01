@@ -12,12 +12,15 @@ import { MailExportSection } from "./MailExportSection";
 const startMailExport = vi.fn();
 const listAccounts = vi.fn();
 const listFolders = vi.fn();
+const openLastExportFolder = vi.fn();
 const alert = vi.fn();
+const scrollIntoView = vi.fn();
 
 vi.mock("../../lib/tauri", () => ({
   startMailExport: (...args: unknown[]) => startMailExport(...args),
   listAccounts: () => listAccounts(),
   listFolders: (id: string) => listFolders(id),
+  openLastExportFolder: () => openLastExportFolder(),
 }));
 vi.mock("../ui/DialogProvider", () => ({
   useDialog: () => ({ alert }),
@@ -32,7 +35,8 @@ let host: HTMLDivElement;
 beforeEach(async () => {
   i18n.addResourceBundle("de", "translation", de, true, true);
   await i18n.changeLanguage("de");
-  for (const m of [startMailExport, listAccounts, listFolders, alert]) m.mockReset();
+  for (const m of [startMailExport, listAccounts, listFolders, openLastExportFolder, alert, scrollIntoView]) m.mockReset();
+  HTMLElement.prototype.scrollIntoView = scrollIntoView;
   startMailExport.mockResolvedValue(true);
   alert.mockResolvedValue(undefined);
   listAccounts.mockResolvedValue([
@@ -106,5 +110,60 @@ describe("MailExportSection", () => {
       includeAttachments: true,
     });
     expect(labels.title).toBe(de.mailExport.page.title);
+  });
+
+  it("leaves an unticked account out and lets it be ticked again", async () => {
+    await render();
+    const anna = () => checkbox("anna.weber@studio-halde.example");
+    await act(async () => { anna().click(); });
+    expect(anna().checked).toBe(false);
+    await act(async () => { exportButton().click(); });
+    expect(startMailExport.mock.calls[0][0].folderIds).toEqual(["a2-in", "a2-sent"]);
+    await act(async () => { anna().click(); });
+    expect(anna().checked).toBe(true);
+  });
+
+  it("adds another account to a preselected one", async () => {
+    useAppStore.setState({ mailExportPreselect: "a2" });
+    await render();
+    await act(async () => { checkbox("anna.weber@studio-halde.example").click(); });
+    await act(async () => { exportButton().click(); });
+    expect(startMailExport.mock.calls[0][0].folderIds).toEqual(["a1-in", "a1-sent", "a2-in", "a2-sent"]);
+  });
+
+  it("scrolls into view when opened from the account menu", async () => {
+    await render();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    act(() => root.unmount());
+    root = createRoot(host);
+    useAppStore.setState({ mailExportPreselect: "a2" });
+    await render();
+    expect(scrollIntoView).toHaveBeenCalled();
+  });
+
+  it("disables the button while the export is starting", async () => {
+    let finish: (v: boolean) => void = () => {};
+    startMailExport.mockReturnValue(new Promise<boolean>((r) => { finish = r; }));
+    await render();
+    await act(async () => { exportButton().click(); });
+    expect(exportButton().disabled).toBe(true);
+    await act(async () => { exportButton().click(); });
+    expect(startMailExport).toHaveBeenCalledTimes(1);
+    await act(async () => { finish(true); });
+    expect(exportButton().disabled).toBe(false);
+  });
+
+  it("shows the last result with its counts and an open-folder button", async () => {
+    useAppStore.setState({
+      mailExport: { running: false, progress: null, result: { path: "x", exported: 98, localCopy: 1, failed: 1, cancelled: false } },
+    });
+    await render();
+    const text = host.textContent ?? "";
+    expect(text).toContain(de.mailExport.doneTitle);
+    expect(text).toContain("99");
+    expect(text).toContain(de.mailExport.openFolder);
+    const open = [...host.querySelectorAll("button")].find((b) => b.textContent === de.mailExport.openFolder)!;
+    await act(async () => { open.click(); });
+    expect(openLastExportFolder).toHaveBeenCalled();
   });
 });

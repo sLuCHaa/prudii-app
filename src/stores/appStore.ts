@@ -275,7 +275,7 @@ interface AppState {
   resetTrackersBlocked: () => void;
 
   toasts: ToastData[];
-  addToast: (type: ToastType, title: string, message?: string, duration?: number, action?: ToastAction) => void;
+  addToast: (type: ToastType, title: string, message?: string, duration?: number, action?: ToastAction, sticky?: boolean) => void;
   removeToast: (id: string) => void;
 }
 
@@ -682,9 +682,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   resetTrackersBlocked: () => set({ trackersBlockedCount: 0 }),
 
   toasts: [],
-  addToast: (type, title, message, duration, action) => {
+  addToast: (type, title, message, duration, action, sticky) => {
     const id = `toast-${Date.now()}-${Math.random()}`;
-    const toast: ToastData = { id, type, title, message, duration, action };
+    const toast: ToastData = { id, type, title, message, duration, action, sticky };
     set((state) => ({ toasts: [...state.toasts, toast] }));
   },
   removeToast: (id) => {

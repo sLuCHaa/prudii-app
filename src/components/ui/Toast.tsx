@@ -22,6 +22,7 @@ export interface ToastData {
   message?: string;
   duration?: number;
   action?: ToastAction;
+  sticky?: boolean;
 }
 
 const ICONS = {
@@ -38,15 +39,15 @@ const ICON_BG = {
   info: "bg-accent/20 text-accent",
 };
 
-function useAutoDismiss(id: string, duration: number | undefined, type: ToastType) {
+function useAutoDismiss(id: string, duration: number | undefined, type: ToastType, sticky: boolean) {
   const removeToast = useAppStore((s) => s.removeToast);
   useEffect(() => {
     // Errors stay until user dismisses.
-    if (type === "error") return;
+    if (type === "error" || sticky) return;
     const ms = duration ?? 4000;
     const t = setTimeout(() => removeToast(id), ms);
     return () => clearTimeout(t);
-  }, [id, duration, type, removeToast]);
+  }, [id, duration, type, sticky, removeToast]);
 }
 
 function ToastBody({ toast }: { toast: ToastData }) {
@@ -54,7 +55,7 @@ function ToastBody({ toast }: { toast: ToastData }) {
   const Icon = ICONS[toast.type];
   const iconCls = ICON_BG[toast.type];
   const removeToast = useAppStore((s) => s.removeToast);
-  useAutoDismiss(toast.id, toast.duration, toast.type);
+  useAutoDismiss(toast.id, toast.duration, toast.type, toast.sticky === true);
 
   return (
     <div className="flex items-start gap-3 px-4 py-3">

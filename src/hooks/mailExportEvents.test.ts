@@ -6,13 +6,14 @@ import { createRoot, type Root } from "react-dom/client";
 import i18n from "../lib/i18n";
 import de from "../locales/de.json";
 import { useAppStore } from "../stores/appStore";
-import { useMailExportEvents, confirmQuitDuringExport } from "./useMailExportEvents";
+import { useMailExportEvents, confirmQuitDuringExport, closeOrHide } from "./useMailExportEvents";
 
 const handlers = new Map<string, (event: { payload: unknown }) => void>();
 const cancelMailExport = vi.fn();
 const openLastExportFolder = vi.fn();
 const mailExportRunning = vi.fn();
 const quitApp = vi.fn();
+const hideToTray = vi.fn();
 const danger = vi.fn();
 
 vi.mock("@tauri-apps/api/event", () => ({
@@ -26,6 +27,7 @@ vi.mock("../lib/tauri", () => ({
   openLastExportFolder: () => openLastExportFolder(),
   mailExportRunning: () => mailExportRunning(),
   quitApp: () => quitApp(),
+  hideToTray: () => hideToTray(),
 }));
 vi.mock("../components/ui/DialogProvider", () => ({
   useDialog: () => ({ danger }),
@@ -46,8 +48,10 @@ beforeEach(async () => {
   i18n.addResourceBundle("de", "translation", de, true, true);
   await i18n.changeLanguage("de");
   handlers.clear();
-  for (const m of [cancelMailExport, openLastExportFolder, mailExportRunning, quitApp, danger]) m.mockReset();
+  for (const m of [cancelMailExport, openLastExportFolder, mailExportRunning, quitApp, hideToTray, danger]) m.mockReset();
   cancelMailExport.mockResolvedValue(undefined);
+  quitApp.mockResolvedValue(undefined);
+  hideToTray.mockResolvedValue(undefined);
   mailExportRunning.mockResolvedValue(false);
   danger.mockResolvedValue(true);
   useAppStore.setState({ mailExport: { running: false, progress: null, result: null }, toasts: [] });
@@ -98,10 +102,55 @@ describe("useMailExportEvents", () => {
     expect(toast.message).toBe("5 Mails exportiert.");
   });
 
+  it("keeps the notice until dismissed and warns when mails failed or the export was cancelled", async () => {
+    await mount();
+    const done = (failed: number, cancelled: boolean) => {
+      useAppStore.setState({ toasts: [] });
+      fire("mail-export-done", { path: "x", exported: 5, localCopy: 0, failed, cancelled });
+      return useAppStore.getState().toasts[0];
+    };
+    const clean = done(0, false);
+    expect(clean.type).toBe("success");
+    expect(clean.sticky).toBe(true);
+    expect(clean.action?.label).toBe(de.mailExport.openFolder);
+    expect(done(2, false)).toMatchObject({ type: "warning", sticky: true });
+    expect(done(0, true)).toMatchObject({ type: "warning", sticky: true });
+  });
+
   it("restores the running state after a reload", async () => {
     mailExportRunning.mockResolvedValue(true);
     await mount();
     expect(useAppStore.getState().mailExport.running).toBe(true);
+  });
+});
+
+describe("closeOrHide", () => {
+  const t = ((key: string) => key) as never;
+
+  it("stays open when the quit dialog fails during an export", async () => {
+    useAppStore.setState({ mailExport: { running: true, progress: null, result: null } });
+    danger.mockRejectedValue(new Error("dialog gone"));
+    await closeOrHide(false, { danger }, t);
+    expect(quitApp).not.toHaveBeenCalled();
+  });
+
+  it("asks before quitting during an export and quits right away otherwise", async () => {
+    useAppStore.setState({ mailExport: { running: true, progress: null, result: null } });
+    danger.mockResolvedValue(false);
+    await closeOrHide(false, { danger }, t);
+    expect(quitApp).not.toHaveBeenCalled();
+    useAppStore.setState({ mailExport: { running: false, progress: null, result: null } });
+    await closeOrHide(false, { danger }, t);
+    expect(quitApp).toHaveBeenCalledTimes(1);
+  });
+
+  it("hides to the tray and only quits when hiding fails", async () => {
+    await closeOrHide(true, { danger }, t);
+    expect(hideToTray).toHaveBeenCalled();
+    expect(quitApp).not.toHaveBeenCalled();
+    hideToTray.mockRejectedValue(new Error("no tray"));
+    await closeOrHide(true, { danger }, t);
+    expect(quitApp).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -5,9 +5,8 @@ import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";
 import { useOpenTaskCount } from "../../hooks/useTasks";
 import { GearIcon } from "../icons";
-import { hideToTray, quitApp } from "../../lib/tauri";
 import { useDialog } from "../ui/DialogProvider";
-import { confirmQuitDuringExport } from "../../hooks/useMailExportEvents";
+import { closeOrHide } from "../../hooks/useMailExportEvents";
 import { isMacOS } from "../../lib/platform";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { PrivacyBadge } from "../ui/PrivacyBadge";
@@ -67,18 +66,7 @@ export function TitleBar() {
     // Defer to next event loop tick so the native mouse tracking loop
     // (from data-tauri-drag-region) releases the main thread first.
     // Without this, IPC calls that dispatch to the main thread deadlock on macOS.
-    setTimeout(async () => {
-      try {
-        if (appSettings.show_in_tray) {
-          await hideToTray();
-        } else {
-          if (useAppStore.getState().mailExport.running && !(await confirmQuitDuringExport(dialog, t))) return;
-          await quitApp();
-        }
-      } catch {
-        await quitApp().catch(() => {});
-      }
-    }, 0);
+    setTimeout(() => { void closeOrHide(appSettings.show_in_tray, dialog, t); }, 0);
   };
 
   return (

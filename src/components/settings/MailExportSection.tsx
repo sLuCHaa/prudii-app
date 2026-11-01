@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueries } from "@tanstack/react-query";
 import { ChevronRight, FolderDown } from "lucide-react";
@@ -6,8 +6,14 @@ import { Button } from "../ui/Button";
 import { useDialog } from "../ui/DialogProvider";
 import { useAppStore } from "../../stores/appStore";
 import { useAccounts } from "../../hooks/useAccounts";
-import { listFolders, startMailExport } from "../../lib/tauri";
-import { buildExportLabels, defaultFolderIds } from "../../lib/mailExport";
+import { listFolders, openLastExportFolder, startMailExport } from "../../lib/tauri";
+import {
+  buildExportLabels,
+  defaultFolderIds,
+  exportNeedsAttention,
+  exportResultMessage,
+  exportResultTitle,
+} from "../../lib/mailExport";
 import { SettingsGroup, SettingsBlock } from "./SettingsGroup";
 
 const CHECKBOX = "w-4 h-4 rounded border-border text-accent focus:ring-accent focus:ring-offset-0 bg-bg-secondary";
@@ -16,9 +22,12 @@ export function MailExportSection() {
   const { t, i18n } = useTranslation();
   const dialog = useDialog();
   const running = useAppStore((s) => s.mailExport.running);
+  const result = useAppStore((s) => s.mailExport.result);
   const { data: accounts = [] } = useAccounts();
   const [preselect] = useState(() => useAppStore.getState().mailExportPreselect);
-  const [accountOff, setAccountOff] = useState<Record<string, boolean>>({});
+  const [accountOn, setAccountOn] = useState<Record<string, boolean>>({});
+  const [starting, setStarting] = useState(false);
+  const sectionRef = useRef<HTMLDivElement>(null);
   const [folderOverride, setFolderOverride] = useState<Record<string, boolean>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [html, setHtml] = useState(true);
@@ -26,14 +35,16 @@ export function MailExportSection() {
   const [includeAttachments, setIncludeAttachments] = useState(true);
 
   useEffect(() => {
-    if (preselect) useAppStore.setState({ mailExportPreselect: null });
+    if (!preselect) return;
+    useAppStore.setState({ mailExportPreselect: null });
+    sectionRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
   }, [preselect]);
 
   const folderQueries = useQueries({
     queries: accounts.map((a) => ({ queryKey: ["folders", a.id], queryFn: () => listFolders(a.id) })),
   });
 
-  const isAccountOn = (id: string) => accountOff[id] ?? (preselect ? id === preselect : true);
+  const isAccountOn = (id: string) => accountOn[id] ?? (preselect ? id === preselect : true);
 
   function selectedFolderIds(): string[] {
     const ids: string[] = [];
@@ -54,6 +65,7 @@ export function MailExportSection() {
     const folderIds = selectedFolderIds();
     if (!html && !eml) return showError("mailExport.errors.noFormat");
     if (folderIds.length === 0) return showError("mailExport.errors.noSelection");
+    setStarting(true);
     try {
       await startMailExport(
         { folderIds, html, eml, includeAttachments },
@@ -61,85 +73,107 @@ export function MailExportSection() {
       );
     } catch (err) {
       await showError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setStarting(false);
     }
   }
 
   return (
-    <SettingsGroup title={t("mailExport.title")} icon={<FolderDown className="w-4 h-4" />}>
-      <SettingsBlock description={t("mailExport.description")} className="space-y-3">
-        <div className="space-y-1">
-          {accounts.map((account, i) => {
-            const folders = folderQueries[i]?.data ?? [];
-            const defaults = new Set(defaultFolderIds(folders));
-            const on = isAccountOn(account.id);
-            const open = expanded[account.id] === true;
-            return (
-              <div key={account.id}>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setExpanded((s) => ({ ...s, [account.id]: !open }))}
-                    aria-expanded={open}
-                    className="p-1 rounded-md hover:bg-hover text-text-tertiary"
-                  >
-                    <ChevronRight className={`w-3 h-3 transition-transform duration-200 ${open ? "rotate-90" : ""}`} />
-                  </button>
-                  <label className="flex items-center gap-3 p-2 rounded-lg hover:bg-hover transition-colors cursor-pointer flex-1 min-w-0">
-                    <input
-                      type="checkbox"
-                      checked={on}
-                      onChange={() => setAccountOff((s) => ({ ...s, [account.id]: on }))}
-                      className={CHECKBOX}
-                    />
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: account.color }} />
-                    <span className="text-sm text-text truncate">{account.email}</span>
-                  </label>
-                </div>
-                {open && (
-                  <div className="ml-9 space-y-0.5">
-                    {folders.map((f) => (
-                      <label key={f.id} className="flex items-center gap-3 px-2 py-1 rounded-lg hover:bg-hover transition-colors cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={folderOverride[f.id] ?? defaults.has(f.id)}
-                          disabled={!on}
-                          onChange={(e) => setFolderOverride((s) => ({ ...s, [f.id]: e.target.checked }))}
-                          className={CHECKBOX}
-                        />
-                        <span className="text-sm text-text-secondary truncate">
-                          {t(`folder.types.${f.folder_type}`, { defaultValue: f.name })}
-                        </span>
-                      </label>
-                    ))}
+    <div ref={sectionRef}>
+      <SettingsGroup title={t("mailExport.title")} icon={<FolderDown className="w-4 h-4" />}>
+        <SettingsBlock description={t("mailExport.description")} className="space-y-3">
+          <div className="space-y-1">
+            {accounts.map((account, i) => {
+              const folders = folderQueries[i]?.data ?? [];
+              const defaults = new Set(defaultFolderIds(folders));
+              const on = isAccountOn(account.id);
+              const open = expanded[account.id] === true;
+              return (
+                <div key={account.id}>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setExpanded((s) => ({ ...s, [account.id]: !open }))}
+                      aria-expanded={open}
+                      className="p-1 rounded-md hover:bg-hover text-text-tertiary"
+                    >
+                      <ChevronRight className={`w-3 h-3 transition-transform duration-200 ${open ? "rotate-90" : ""}`} />
+                    </button>
+                    <label className="flex items-center gap-3 p-2 rounded-lg hover:bg-hover transition-colors cursor-pointer flex-1 min-w-0">
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        onChange={() => setAccountOn((s) => ({ ...s, [account.id]: !on }))}
+                        className={CHECKBOX}
+                      />
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: account.color }} />
+                      <span className="text-sm text-text truncate">{account.email}</span>
+                    </label>
                   </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="flex items-center gap-3 p-2 rounded-lg hover:bg-hover transition-colors cursor-pointer">
-            <input type="checkbox" checked={html} onChange={() => setHtml(!html)} className={CHECKBOX} />
-            <span className="text-sm text-text">{t("mailExport.formatHtml")}</span>
-          </label>
-          <label className="flex items-center gap-3 p-2 rounded-lg hover:bg-hover transition-colors cursor-pointer">
-            <input type="checkbox" checked={eml} onChange={() => setEml(!eml)} className={CHECKBOX} />
-            <span className="text-sm text-text">{t("mailExport.formatEml")}</span>
-          </label>
-          <div>
-            <label className="flex items-center gap-3 p-2 rounded-lg hover:bg-hover transition-colors cursor-pointer">
-              <input type="checkbox" checked={includeAttachments} onChange={() => setIncludeAttachments(!includeAttachments)} className={CHECKBOX} />
-              <span className="text-sm text-text">{t("mailExport.attachments")}</span>
-            </label>
-            <p className="ml-9 text-xs text-text-tertiary">{t("mailExport.attachmentsHint")}</p>
+                  {open && (
+                    <div className="ml-9 space-y-0.5">
+                      {folders.map((f) => (
+                        <label key={f.id} className="flex items-center gap-3 px-2 py-1 rounded-lg hover:bg-hover transition-colors cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={folderOverride[f.id] ?? defaults.has(f.id)}
+                            disabled={!on}
+                            onChange={(e) => setFolderOverride((s) => ({ ...s, [f.id]: e.target.checked }))}
+                            className={CHECKBOX}
+                          />
+                          <span className="text-sm text-text-secondary truncate">
+                            {t(`folder.types.${f.folder_type}`, { defaultValue: f.name })}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-        </div>
 
-        <Button variant="primary" size="sm" disabled={running} onClick={() => { void handleExport(); }}>
-          {t("mailExport.exportButton")}
-        </Button>
-      </SettingsBlock>
-    </SettingsGroup>
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-3 p-2 rounded-lg hover:bg-hover transition-colors cursor-pointer">
+              <input type="checkbox" checked={html} onChange={() => setHtml(!html)} className={CHECKBOX} />
+              <span className="text-sm text-text">{t("mailExport.formatHtml")}</span>
+            </label>
+            <label className="flex items-center gap-3 p-2 rounded-lg hover:bg-hover transition-colors cursor-pointer">
+              <input type="checkbox" checked={eml} onChange={() => setEml(!eml)} className={CHECKBOX} />
+              <span className="text-sm text-text">{t("mailExport.formatEml")}</span>
+            </label>
+            <div>
+              <label className="flex items-center gap-3 p-2 rounded-lg hover:bg-hover transition-colors cursor-pointer">
+                <input type="checkbox" checked={includeAttachments} onChange={() => setIncludeAttachments(!includeAttachments)} className={CHECKBOX} />
+                <span className="text-sm text-text">{t("mailExport.attachments")}</span>
+              </label>
+              <p className="ml-9 text-xs text-text-tertiary">{t("mailExport.attachmentsHint")}</p>
+            </div>
+          </div>
+
+          <Button variant="primary" size="sm" disabled={running || starting} onClick={() => { void handleExport(); }}>
+            {t("mailExport.exportButton")}
+          </Button>
+
+          {result && !running && (
+            <div
+              className={`flex items-start justify-between gap-3 rounded-lg border px-3 py-2 ${
+                exportNeedsAttention(result) ? "border-warning/40 bg-warning/10" : "border-border bg-bg-secondary"
+              }`}
+            >
+              <div className="min-w-0">
+                <p className={`text-sm font-medium ${exportNeedsAttention(result) ? "text-warning" : "text-text"}`}>
+                  {exportResultTitle(t, result)}
+                </p>
+                <p className="text-xs text-text-secondary">{exportResultMessage(t, result)}</p>
+              </div>
+              <Button variant="secondary" size="sm" onClick={() => { void openLastExportFolder(); }}>
+                {t("mailExport.openFolder")}
+              </Button>
+            </div>
+          )}
+        </SettingsBlock>
+      </SettingsGroup>
+    </div>
   );
 }

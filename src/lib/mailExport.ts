@@ -1,10 +1,25 @@
 import type { TFunction } from "i18next";
-import type { ExportLabels, Folder, FolderType } from "../types";
+import type { ExportLabels, ExportSummary, Folder, FolderType } from "../types";
 
 const FOLDER_TYPES: FolderType[] = ["inbox", "sent", "drafts", "trash", "spam", "archive"];
 
 export function defaultFolderIds(folders: Folder[]): string[] {
   return folders.filter((f) => f.folder_type !== "trash" && f.folder_type !== "spam").map((f) => f.id);
+}
+
+export function exportNeedsAttention(summary: ExportSummary): boolean {
+  return summary.failed > 0 || summary.cancelled;
+}
+
+export function exportResultTitle(t: TFunction, summary: ExportSummary): string {
+  return t(summary.cancelled ? "mailExport.cancelledTitle" : "mailExport.doneTitle");
+}
+
+export function exportResultMessage(t: TFunction, summary: ExportSummary): string {
+  const parts = [t("mailExport.doneMessage", { exported: summary.exported + summary.localCopy })];
+  if (summary.localCopy > 0) parts.push(t("mailExport.doneLocal", { count: summary.localCopy }));
+  if (summary.failed > 0) parts.push(t("mailExport.doneFailed", { count: summary.failed }));
+  return parts.join(" ");
 }
 
 export function buildExportLabels(t: TFunction, lang: string): ExportLabels {

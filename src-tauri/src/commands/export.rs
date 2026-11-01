@@ -38,7 +38,9 @@ pub async fn start_mail_export(app: AppHandle, options: ExportOptions, labels: E
     use tauri_plugin_dialog::DialogExt;
 
     validate(&options)?;
-    let guard = export::RunGuard::acquire().ok_or_else(|| "mailExport.errors.alreadyRunning".to_string())?;
+    if export::export_in_progress() {
+        return Err("mailExport.errors.alreadyRunning".into());
+    }
 
     let (tx, rx) = std::sync::mpsc::channel();
     app.dialog().file().pick_folder(move |folder| {
@@ -52,6 +54,8 @@ pub async fn start_mail_export(app: AppHandle, options: ExportOptions, labels: E
         None => return Ok(false),
     };
 
+    // Taken after the dialog, so an open folder picker does not count as a running export on quit.
+    let guard = export::RunGuard::acquire().ok_or_else(|| "mailExport.errors.alreadyRunning".to_string())?;
     let out_dir = create_export_dir(&parent, chrono::Local::now())?;
     export::take_cancel();
 
