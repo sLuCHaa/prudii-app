@@ -123,7 +123,7 @@ pub fn parse_raw(raw: &[u8]) -> Option<ParsedMail> {
     })
 }
 
-fn parse_local_date(s: &str) -> Option<DateTime<FixedOffset>> {
+pub(crate) fn parse_local_date(s: &str) -> Option<DateTime<FixedOffset>> {
     if let Ok(d) = DateTime::parse_from_rfc3339(s) {
         return Some(d);
     }
