@@ -15,7 +15,8 @@ import { useTasksForMails, useLinkMailToTask } from "../../hooks/useTasks";
 import { MailTaskChip } from "../tasks/MailTaskChip";
 import { TaskPickerDialog } from "../tasks/TaskPickerDialog";
 import { CreateTaskFromMail } from "../tasks/CreateTaskFromMail";
-import { useCategoryMails } from "../../hooks/useCategories";
+import { CategoryChip } from "../categories/CategoryChip";
+import { useCategoryMails, useSetMailCategory } from "../../hooks/useCategories";
 import { useMails, useFilteredMails, useAllInboxMails, useCombinedFolderMails, useSnoozedMails, useToggleStar, useTogglePin, useToggleMailFlag, useFolders } from "../../hooks/useAccounts";
 import { useTeamSnapshot, useTeamAssignments, useAssignedMails, useAssignMail, useSetAssignmentStatus, useUnassignMail } from "../../hooks/useTeam";
 import { indexAssignments, openAssignedTo } from "../../lib/team";
@@ -923,6 +924,7 @@ function VirtualMailList({
                         >
                           {mail.subject || t("compose.noSubject")}
                         </span>
+                        <CategoryChip mail={mail} />
                         {(mail.is_pinned || mail.is_starred || (mail.flags && mail.flags.length > 0) || mail.has_attachments || taskCounts[mail.id] > 0 || assignments.has(mail.message_id)) && (
                           <span className="flex shrink-0 items-center gap-1.5 text-text-tertiary">
                             {mail.is_pinned && <Pin className="w-3 h-3 text-accent" />}
@@ -1123,6 +1125,8 @@ export function MailList() {
   /** Invalidate folder counts + all combined/inbox queries so every view stays fresh. */
   const invalidateMailQueries = useCallback(() => invalidateMailListQueries(queryClient), [queryClient]);
   const dialog = useDialog();
+  const sortingEnabled = useAppStore((s) => s.appSettings.sorting_enabled);
+  const setMailCategory = useSetMailCategory();
   const [contextMenu, setContextMenu] = useState<{ mail: Mail; x: number; y: number; bulk: boolean } | null>(null);
   const [snoozeMenu, setSnoozeMenu] = useState<{ mail: Mail; x: number; y: number } | null>(null);
   const [inboxZeroFlight, setInboxZeroFlight] = useState(false);
@@ -2222,6 +2226,11 @@ export function MailList() {
           onAddToTask={(m) => setTaskPickerMailId(m.id)}
           onToggleFlag={handleToggleFlag}
           onClearFlags={handleClearFlags}
+          onSetCategory={
+            sortingEnabled
+              ? (m, category) => setMailCategory.mutate({ mailId: m.id, category, rememberSender: false })
+              : undefined
+          }
           selectedFlags={selectedMailObjects.map((m) => m.flags ?? [])}
           onBulkFlag={(flag, action) =>
             applyBulkFlags((flags) =>

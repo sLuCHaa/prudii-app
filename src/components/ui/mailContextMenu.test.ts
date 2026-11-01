@@ -6,10 +6,12 @@ import { createRoot, type Root } from "react-dom/client";
 import i18n from "../../lib/i18n";
 import { MAIL_FLAG_COLORS, type Assignment, type Folder, type Mail, type MailFlag, type TeamMember } from "../../types";
 import { FLAG_ORDER } from "../../lib/mailFlags";
+import { BUILTIN_CATEGORIES } from "../../lib/categories";
 import { MailContextMenu } from "./MailContextMenu";
 
 vi.mock("../../stores/appStore", () => ({
-  useAppStore: (selector: (s: { hasFeature: () => boolean }) => unknown) => selector({ hasFeature: () => true }),
+  useAppStore: (selector: (s: unknown) => unknown) =>
+    selector({ hasFeature: () => true, appSettings: { hidden_categories: [] } }),
 }));
 
 let root: Root;
@@ -99,6 +101,33 @@ function openFlagSubmenu() {
   expect(trigger, "flag submenu trigger missing").toBeTruthy();
   act(() => trigger!.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })));
 }
+
+describe("MailContextMenu category", () => {
+  it("offers every category plus none when onSetCategory is wired", () => {
+    render({ onSetCategory: noop });
+    openSubmenu("categories.menu");
+    for (const id of BUILTIN_CATEGORIES) {
+      expect(item(`categories.names.${id}`), `missing category "${id}"`).toBeTruthy();
+    }
+    expect(item("categories.none")).toBeTruthy();
+  });
+
+  it("passes null for none and the id for a category", () => {
+    const picked: (string | null)[] = [];
+    render({ onSetCategory: (_mail, category) => picked.push(category) });
+    openSubmenu("categories.menu");
+    act(() => item("categories.none")!.click());
+    render({ onSetCategory: (_mail, category) => picked.push(category) });
+    openSubmenu("categories.menu");
+    act(() => item("categories.names.social")!.click());
+    expect(picked).toEqual([null, "social"]);
+  });
+
+  it("has no category entry when the handler is absent", () => {
+    render();
+    expect(item("categories.menu")).toBeUndefined();
+  });
+});
 
 describe("MailContextMenu flags", () => {
   it("offers a flag submenu with every colour when onToggleFlag is wired", () => {

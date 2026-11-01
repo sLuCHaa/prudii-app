@@ -1,4 +1,4 @@
-import { Reply, ReplyAll, Forward, Star, StarOff, Mail as MailIcon, MailOpen, Archive, Trash2, Pin, PinOff, Clock, FolderInput, ClipboardList, ClipboardPlus, CalendarPlus, Flag, FlagOff, Users, UserMinus, CheckCircle2, RotateCcw } from "lucide-react";
+import { Reply, ReplyAll, Forward, Star, StarOff, Mail as MailIcon, MailOpen, Archive, Trash2, Pin, PinOff, Clock, FolderInput, ClipboardList, ClipboardPlus, CalendarPlus, Flag, FlagOff, Users, UserMinus, CheckCircle2, RotateCcw, Tag } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { MAIL_FLAG_COLORS, type Mail, type Folder, type MailFlag, type Assignment, type TeamMember } from "../../types";
 import { useAppStore } from "../../stores/appStore";
@@ -7,6 +7,7 @@ import { ContextMenu } from "./ContextMenu";
 import type { MenuEntry } from "../../lib/menuModel";
 import { FLAG_ORDER, bulkFlagAction, commonFlags } from "../../lib/mailFlags";
 import { SNOOZE_PRESETS, toSnoozeStamp } from "../../lib/snooze";
+import { CATEGORY_COLORS, visibleCategories } from "../../lib/categories";
 import { memberLabel, sortRoster } from "../../lib/team";
 
 export type BulkMailAction = "mark_read" | "mark_unread" | "star" | "unstar" | "archive" | "trash";
@@ -29,6 +30,7 @@ interface MailContextMenuProps {
   onSnooze?: (mail: Mail, until: string) => void;
   onToggleFlag?: (mail: Mail, flag: MailFlag) => void;
   onClearFlags?: (mail: Mail) => void;
+  onSetCategory?: (mail: Mail, category: string | null) => void;
   /** Bulk mode: number of selected mails; menu switches to bulk items when >= 2 and onBulkAction is set. */
   selectedCount?: number;
   onBulkAction?: (action: BulkMailAction) => void;
@@ -73,6 +75,7 @@ export function MailContextMenu({
   onSnooze,
   onToggleFlag,
   onClearFlags,
+  onSetCategory,
   selectedCount,
   onBulkAction,
   selectedFlags,
@@ -92,6 +95,7 @@ export function MailContextMenu({
 }: MailContextMenuProps) {
   const { t } = useTranslation();
   const hasFeature = useAppStore((s) => s.hasFeature);
+  const hiddenCategories = useAppStore((s) => s.appSettings.hidden_categories);
 
   const bulkMode = !!onBulkAction && (selectedCount ?? 0) >= 2;
 
@@ -189,6 +193,25 @@ export function MailContextMenu({
             (flag) => onToggleFlag(mail, flag),
             () => onClearFlags?.(mail),
           ),
+        }]
+      : []),
+    ...(onSetCategory
+      ? [{
+          kind: "item" as const,
+          id: "category",
+          label: t("categories.menu"),
+          icon: <Tag className="w-4 h-4" />,
+          submenu: [
+            ...visibleCategories(hiddenCategories).map((id): MenuEntry => ({
+              kind: "item",
+              id: `category:${id}`,
+              label: t(`categories.names.${id}`),
+              icon: <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[id] }} />,
+              selected: mail.category === id,
+              onSelect: () => onSetCategory(mail, id),
+            })),
+            { kind: "item" as const, id: "category:none", label: t("categories.none"), onSelect: () => onSetCategory(mail, null) },
+          ],
         }]
       : []),
     ...(onTogglePin ? [{ kind: "item" as const, id: "pin", label: mail.is_pinned ? t("mailDetail.unpin") : t("mailDetail.pin"), icon: mail.is_pinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />, onSelect: () => onTogglePin(mail) }] : []),
