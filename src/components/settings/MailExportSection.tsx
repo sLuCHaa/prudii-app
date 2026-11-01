@@ -15,6 +15,7 @@ import {
   exportResultTitle,
 } from "../../lib/mailExport";
 import { SettingsGroup, SettingsBlock } from "./SettingsGroup";
+import { MailExportProgress } from "../layout/MailExportProgress";
 
 const CHECKBOX = "w-4 h-4 rounded border-border text-accent focus:ring-accent focus:ring-offset-0 bg-bg-secondary";
 
@@ -154,6 +155,8 @@ export function MailExportSection() {
           <Button variant="primary" size="sm" disabled={running || starting} onClick={() => { void handleExport(); }}>
             {t("mailExport.exportButton")}
           </Button>
+
+          <MailExportProgress className="rounded-lg border border-border bg-bg-secondary px-3 py-2" />
 
           {result && !running && (
             <div

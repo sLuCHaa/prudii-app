@@ -13,6 +13,7 @@ const startMailExport = vi.fn();
 const listAccounts = vi.fn();
 const listFolders = vi.fn();
 const openLastExportFolder = vi.fn();
+const cancelMailExport = vi.fn();
 const alert = vi.fn();
 const scrollIntoView = vi.fn();
 
@@ -21,6 +22,7 @@ vi.mock("../../lib/tauri", () => ({
   listAccounts: () => listAccounts(),
   listFolders: (id: string) => listFolders(id),
   openLastExportFolder: () => openLastExportFolder(),
+  cancelMailExport: () => cancelMailExport(),
 }));
 vi.mock("../ui/DialogProvider", () => ({
   useDialog: () => ({ alert }),
@@ -35,7 +37,8 @@ let host: HTMLDivElement;
 beforeEach(async () => {
   i18n.addResourceBundle("de", "translation", de, true, true);
   await i18n.changeLanguage("de");
-  for (const m of [startMailExport, listAccounts, listFolders, openLastExportFolder, alert, scrollIntoView]) m.mockReset();
+  for (const m of [startMailExport, listAccounts, listFolders, openLastExportFolder, cancelMailExport, alert, scrollIntoView]) m.mockReset();
+  cancelMailExport.mockResolvedValue(undefined);
   HTMLElement.prototype.scrollIntoView = scrollIntoView;
   startMailExport.mockResolvedValue(true);
   alert.mockResolvedValue(undefined);
@@ -165,5 +168,23 @@ describe("MailExportSection", () => {
     const open = [...host.querySelectorAll("button")].find((b) => b.textContent === de.mailExport.openFolder)!;
     await act(async () => { open.click(); });
     expect(openLastExportFolder).toHaveBeenCalled();
+  });
+
+  it("shows the progress with counts, percent and a cancel button while an export runs", async () => {
+    useAppStore.setState({
+      mailExport: { running: true, progress: { processed: 50, total: 200, localCopy: 0, failed: 0 }, result: null },
+    });
+    await render();
+    expect(host.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow")).toBe("25");
+    expect(host.textContent).toContain("50/200");
+    expect(host.textContent).toMatch(/25\s%/);
+    const cancel = [...host.querySelectorAll("button")].find((b) => b.textContent === de.mailExport.cancel)!;
+    await act(async () => { cancel.click(); });
+    expect(cancelMailExport).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows no progress bar when no export runs", async () => {
+    await render();
+    expect(host.querySelector('[role="progressbar"]')).toBeNull();
   });
 });

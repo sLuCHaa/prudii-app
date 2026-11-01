@@ -1397,6 +1397,7 @@ export function Sidebar() {
         </Scroller>
 
         <div className="p-2 border-t border-border flex flex-col items-center gap-1">
+          <MailExportProgress compact className="mb-1" />
           {canAddAccount && (
             <button
               onClick={() => setShowAccountWizard(true)}
@@ -1470,7 +1471,7 @@ export function Sidebar() {
       </Scroller>
 
       <div className="p-3 border-t border-border">
-        <MailExportProgress />
+        <MailExportProgress className="mb-3" />
         <div className="flex items-center gap-2">
           <div className="flex-1 min-w-0">
             {canAddAccount ? (
