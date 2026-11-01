@@ -208,6 +208,10 @@ fn strip_remote_css(css: &str) -> (String, bool) {
         };
         if css_can_fetch(body) {
             removed = true;
+            // A stray top-level `;` would make the browser drop the next rule.
+            if delimiter == ";" {
+                continue;
+            }
         } else {
             out.push_str(body);
         }
@@ -754,6 +758,13 @@ mod tests {
             assert!(inner.contains(kept), "{kept} -> {inner}");
         }
         assert!(!out.contains(&labels().external_images_note));
+    }
+
+    #[test]
+    fn a_removed_import_does_not_swallow_the_next_rule() {
+        let html = "<style>@import url(//tracker.example/a.css); body{background:#f3efe8}</style><p>Hallo</p>";
+        let inner = frame_body(&render_mail_page(&mail_with_html(html), &ctx(), &labels()));
+        assert!(inner.contains("<style> body{background:#f3efe8}</style>"), "{inner}");
     }
 
     #[test]
