@@ -1442,6 +1442,20 @@
     "title": "Novedades de Prudii {{version}}",
     "subtitle": "Esto es lo que ha cambiado desde tu última actualización.",
     "done": "Entendido",
+    "v1_7_9": {
+      "sorting": {
+        "title": "El correo se ordena solo",
+        "text": "Los correos nuevos se clasifican en categorías como Personal o Boletines, directamente en tu ordenador. Puedes desactivarlo en Configuración → Clasificación."
+      },
+      "why": {
+        "title": "Siempre explicado",
+        "text": "Haz clic en una categoría para ver por qué un correo está ahí. Si no encaja, muévelo desde ahí mismo."
+      },
+      "export": {
+        "title": "Exporta tu correo",
+        "text": "Guarda todos tus correos como páginas legibles en cualquier navegador y como archivos .eml originales, en Configuración → Datos."
+      }
+    },
     "v1_7_4": {
       "look": {
         "title": "Un aspecto más claro y sereno",

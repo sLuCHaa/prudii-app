@@ -1442,6 +1442,20 @@
     "title": "Novidades do Prudii {{version}}",
     "subtitle": "Veja o que mudou desde a sua última atualização.",
     "done": "Entendi",
+    "v1_7_9": {
+      "sorting": {
+        "title": "E-mails que se organizam sozinhos",
+        "text": "Os novos e-mails vão para categorias como Pessoal ou Newsletters, diretamente no seu computador. Desative em Configurações → Classificação."
+      },
+      "why": {
+        "title": "Sempre explicado",
+        "text": "Clique numa categoria para ver por que um e-mail está ali. Se não estiver certo, mova-o ali mesmo."
+      },
+      "export": {
+        "title": "Exporte seus e-mails",
+        "text": "Salve todos os seus e-mails como páginas legíveis em qualquer navegador e como arquivos .eml originais, em Configurações → Dados."
+      }
+    },
     "v1_7_4": {
       "look": {
         "title": "Um visual mais calmo e claro",

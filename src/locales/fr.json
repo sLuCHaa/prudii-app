@@ -1442,6 +1442,20 @@
     "title": "Nouveautés de Prudii {{version}}",
     "subtitle": "Voici ce qui a changé depuis votre dernière mise à jour.",
     "done": "Compris",
+    "v1_7_9": {
+      "sorting": {
+        "title": "Des e-mails qui se trient tout seuls",
+        "text": "Les nouveaux e-mails sont classés dans des catégories comme Personnel ou Newsletters, directement sur votre ordinateur. Vous pouvez le désactiver dans Paramètres → Tri."
+      },
+      "why": {
+        "title": "Toujours expliqué",
+        "text": "Cliquez sur une catégorie pour voir pourquoi un e-mail s'y trouve. Si ce n'est pas la bonne, déplacez-le au même endroit."
+      },
+      "export": {
+        "title": "Exportez vos e-mails",
+        "text": "Enregistrez tous vos e-mails sous forme de pages lisibles dans n'importe quel navigateur et de fichiers .eml d'origine, dans Paramètres → Données."
+      }
+    },
     "v1_7_4": {
       "look": {
         "title": "Un style plus calme et plus clair",

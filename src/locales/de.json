@@ -1442,6 +1442,20 @@
     "title": "Neu in Prudii {{version}}",
     "subtitle": "Das hat sich seit deinem letzten Update getan.",
     "done": "Verstanden",
+    "v1_7_9": {
+      "sorting": {
+        "title": "Mails sortieren sich selbst",
+        "text": "Neue Mails landen in Kategorien wie Persönlich oder Newsletter, direkt auf deinem Computer. Abschalten kannst du das unter Einstellungen → Sortierung."
+      },
+      "why": {
+        "title": "Immer nachvollziehbar",
+        "text": "Ein Klick auf die Kategorie zeigt, warum eine Mail dort gelandet ist. Passt es nicht, verschiebst du sie gleich dort."
+      },
+      "export": {
+        "title": "Mails exportieren",
+        "text": "Sichere alle Mails als lesbare Seiten für den Browser und als .eml-Originale, unter Einstellungen → Daten."
+      }
+    },
     "v1_7_4": {
       "look": {
         "title": "Ruhiger und klarer",

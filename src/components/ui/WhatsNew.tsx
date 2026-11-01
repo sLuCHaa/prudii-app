@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getVersion } from "@tauri-apps/api/app";
-import { CalendarDays, ImagePlus, ListChecks, MailCheck, Rss, Sparkles, Type, type LucideIcon } from "lucide-react";
+import { CalendarDays, FolderDown, ImagePlus, ListChecks, MailCheck, Rss, Sparkles, Tag, Type, type LucideIcon } from "lucide-react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { Button } from "./Button";
 import { useDialog } from "./DialogProvider";
 import { displayVersion, pendingRelease, readSeen, RELEASES, SEEN_KEY, type WhatsNewIcon, type WhatsNewRelease, type WhatsNewTone } from "../../lib/whatsNew";
 
-const ICONS: Record<WhatsNewIcon, LucideIcon> = { calendar: CalendarDays, mail: MailCheck, rss: Rss, tasks: ListChecks, sparkles: Sparkles, image: ImagePlus, type: Type };
+const ICONS: Record<WhatsNewIcon, LucideIcon> = { calendar: CalendarDays, mail: MailCheck, rss: Rss, tasks: ListChecks, sparkles: Sparkles, image: ImagePlus, type: Type, tag: Tag, export: FolderDown };
 
 const TONES: Record<WhatsNewTone, string> = {
   blue: "bg-blue-500/12 text-blue-500",
