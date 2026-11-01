@@ -729,9 +729,12 @@
     "cancel": "Cancel",
     "doneTitle": "Export finished",
     "cancelledTitle": "Export cancelled",
-    "doneMessage": "{{exported}} mails exported.",
-    "doneLocal": "{{count}} from the local copy, not the original.",
-    "doneFailed": "{{count}} could not be exported.",
+    "doneMessage_one": "{{count}} mail exported.",
+    "doneMessage_other": "{{count}} mails exported.",
+    "doneLocal_one": "{{count}} from the local copy, not the original.",
+    "doneLocal_other": "{{count}} from the local copy, not the original.",
+    "doneFailed_one": "{{count}} could not be exported.",
+    "doneFailed_other": "{{count}} could not be exported.",
     "openFolder": "Open folder",
     "quitTitle": "Export in progress",
     "quitMessage": "An export is running – quit anyway? The export will be cancelled.",
@@ -759,7 +762,8 @@
       "mails_one": "{count} mail",
       "mails_other": "{count} mails",
       "emptyFolder": "No mail in this folder",
-      "noResults": "Nothing found"
+      "noResults": "Nothing found",
+      "showMore": "Show more"
     }
   },
   "backup": {

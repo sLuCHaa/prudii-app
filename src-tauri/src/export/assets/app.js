@@ -4,7 +4,6 @@
   var PALETTE = ["#e5684f", "#3aa86b", "#5a73d6", "#9b5bd1", "#d99a2b", "#2b97ab", "#c2557a", "#6b7a8f"];
   var PAGE = 200;
   var NEAR_END = 400;
-  var HINT_CAP = 500;
 
   function colorFor(email) {
     var e = String(email || "").toLowerCase();
@@ -84,8 +83,19 @@
     var fullFmt = safeFormat({ day: "numeric", month: "short", year: "numeric" }, lang);
     var numFmt = new Intl.NumberFormat(lang);
 
-    function count(n, one, other) {
-      return String(n === 1 ? one || "" : other || "").replace("{count}", numFmt.format(n));
+    var plural = (function () {
+      try {
+        return new Intl.PluralRules(lang);
+      } catch (e) {
+        return null;
+      }
+    })();
+    var accountForms = { one: labels.accountsOne, few: labels.accountsFew, many: labels.accountsMany, other: labels.accountsOther };
+    var mailForms = { one: labels.mailsOne, few: labels.mailsFew, many: labels.mailsMany, other: labels.mailsOther };
+
+    function count(n, forms) {
+      var form = plural ? plural.select(n) : n === 1 ? "one" : "other";
+      return String(forms[form] || forms.other || "").replace("{count}", numFmt.format(n));
     }
 
     var total = 0;
@@ -99,8 +109,8 @@
     var created = new Date(data.createdAt);
     var metaParts = [];
     if (!isNaN(created.getTime())) metaParts.push(safeFormat({ dateStyle: "long" }, lang).format(created));
-    metaParts.push(count(accounts.length, labels.accountsOne, labels.accountsOther));
-    metaParts.push(count(total, labels.mailsOne, labels.mailsOther));
+    metaParts.push(count(accounts.length, accountForms));
+    metaParts.push(count(total, mailForms));
     meta.textContent = metaParts.join(" · ");
     if (search && labels.searchPlaceholder) search.placeholder = labels.searchPlaceholder;
 
@@ -217,13 +227,18 @@
       if (!entries || !entries.length) return;
       var box = el("details", "hint");
       box.appendChild(el("summary", null, title + " (" + numFmt.format(entries.length) + ")"));
-      var filled = false;
+      var shown = 0;
+      var more = el("button", "more", labels.showMore || "…");
+      more.type = "button";
+      function fill() {
+        if (more.parentNode) more.parentNode.removeChild(more);
+        var end = Math.min(entries.length, shown + PAGE);
+        for (; shown < end; shown++) box.appendChild(buildRow({ e: entries[shown], where: null }, true));
+        if (shown < entries.length) box.appendChild(more);
+      }
+      more.addEventListener("click", fill);
       box.addEventListener("toggle", function () {
-        if (!box.open || filled) return;
-        filled = true;
-        entries.slice(0, HINT_CAP).forEach(function (e) {
-          box.appendChild(buildRow({ e: e, where: null }, true));
-        });
+        if (box.open && shown === 0) fill();
       });
       hints.appendChild(box);
     }
@@ -248,11 +263,14 @@
           if (keyOf(e).indexOf(q) !== -1) hits.push({ e: e, where: where });
         });
       });
+      (data.failed || []).forEach(function (e) {
+        if (keyOf(e).indexOf(q) !== -1) hits.push({ e: e, where: labels.failedTitle || "" });
+      });
       hits.sort(function (a, b) {
         return (entryTime(b.e) || 0) - (entryTime(a.e) || 0);
       });
       hints.hidden = true;
-      show(hits, true, count(hits.length, labels.mailsOne, labels.mailsOther), labels.noResults);
+      show(hits, true, count(hits.length, mailForms), labels.noResults);
     }
     if (search) search.addEventListener("input", runSearch);
 

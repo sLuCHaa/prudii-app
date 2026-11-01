@@ -728,9 +728,12 @@
     "cancel": "取消",
     "doneTitle": "导出完成",
     "cancelledTitle": "导出已取消",
-    "doneMessage": "已导出 {{exported}} 封邮件。",
-    "doneLocal": "{{count}} 封来自本地副本，并非原件。",
-    "doneFailed": "{{count}} 封无法导出。",
+    "doneMessage_one": "已导出 {{count}} 封邮件。",
+    "doneMessage_other": "已导出 {{count}} 封邮件。",
+    "doneLocal_one": "{{count}} 封来自本地副本，并非原件。",
+    "doneLocal_other": "{{count}} 封来自本地副本，并非原件。",
+    "doneFailed_one": "{{count}} 封无法导出。",
+    "doneFailed_other": "{{count}} 封无法导出。",
     "openFolder": "打开文件夹",
     "quitTitle": "正在导出",
     "quitMessage": "正在导出——仍要退出吗？导出将被取消。",
@@ -758,7 +761,8 @@
       "mails_one": "{count} 封邮件",
       "mails_other": "{count} 封邮件",
       "emptyFolder": "此文件夹中没有邮件",
-      "noResults": "未找到任何内容"
+      "noResults": "未找到任何内容",
+      "showMore": "显示更多"
     }
   },
   "backup": {

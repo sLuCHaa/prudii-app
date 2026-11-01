@@ -729,9 +729,12 @@
     "cancel": "Cancelar",
     "doneTitle": "Exportación finalizada",
     "cancelledTitle": "Exportación cancelada",
-    "doneMessage": "{{exported}} correos exportados.",
-    "doneLocal": "{{count}} de la copia local, no del original.",
-    "doneFailed": "{{count}} no se pudieron exportar.",
+    "doneMessage_one": "{{count}} correo exportado.",
+    "doneMessage_other": "{{count}} correos exportados.",
+    "doneLocal_one": "{{count}} de la copia local, no del original.",
+    "doneLocal_other": "{{count}} de la copia local, no del original.",
+    "doneFailed_one": "{{count}} no se pudo exportar.",
+    "doneFailed_other": "{{count}} no se pudieron exportar.",
     "openFolder": "Abrir carpeta",
     "quitTitle": "Exportación en curso",
     "quitMessage": "Hay una exportación en curso: ¿salir de todos modos? La exportación se cancelará.",
@@ -759,7 +762,8 @@
       "mails_one": "{count} correo",
       "mails_other": "{count} correos",
       "emptyFolder": "No hay correos en esta carpeta",
-      "noResults": "No se encontró nada"
+      "noResults": "No se encontró nada",
+      "showMore": "Mostrar más"
     }
   },
   "backup": {

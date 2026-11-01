@@ -25,11 +25,16 @@ pub struct ExportLabels {
     pub failed_title: String,
     pub incomplete_note: String,
     pub accounts_one: String,
+    pub accounts_few: String,
+    pub accounts_many: String,
     pub accounts_other: String,
     pub mails_one: String,
+    pub mails_few: String,
+    pub mails_many: String,
     pub mails_other: String,
     pub empty_folder: String,
     pub no_results: String,
+    pub show_more: String,
     pub folder_names: HashMap<String, String>,
 }
 

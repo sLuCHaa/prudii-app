@@ -17,11 +17,12 @@ const labels = {
   noResults: "Nothing found.",
   localCopyTitle: "From local copy",
   failedTitle: "Could not be exported",
+  showMore: "Show more",
 };
 
-const indexMarkup = `<header class="bar"><div class="logo">Prudii <span>Export</span></div><div class="meta" id="meta"></div><input class="search" id="search" type="search"></header>
+const indexMarkup = (l: Record<string, string>) => `<header class="bar"><div class="logo">Prudii <span>Export</span></div><div class="meta" id="meta"></div><input class="search" id="search" type="search"></header>
 <div class="layout" id="app"><nav class="side" id="side"></nav><main class="list" id="list"><div id="hints"></div><div id="rows"></div></main></div>
-<script type="application/json" id="prudii-labels">${JSON.stringify(labels)}</script>`;
+<script type="application/json" id="prudii-labels">${JSON.stringify(l)}</script>`;
 
 function entries(count: number, prefix = "") {
   return Array.from({ length: count }, (_, i) => {
@@ -38,8 +39,8 @@ function entries(count: number, prefix = "") {
   });
 }
 
-function load(data: unknown) {
-  document.body.innerHTML = indexMarkup;
+function load(data: unknown, l: Record<string, string> = labels) {
+  document.body.innerHTML = indexMarkup(l);
   (window as unknown as { PRUDII_EXPORT: unknown }).PRUDII_EXPORT = data;
   document.dispatchEvent(new Event("DOMContentLoaded"));
 }
@@ -129,6 +130,61 @@ describe("export app.js index", () => {
     block.dispatchEvent(new Event("toggle"));
     expect(block.querySelectorAll("a.row").length).toBe(0);
     expect(block.querySelectorAll(".row").length).toBe(1);
+  });
+
+  it("pages the failed list instead of cutting it off", () => {
+    const failed = entries(450, "Kaputt ").map((e) => ({ ...e, h: null }));
+    load({ ...base(entries(2)), failed });
+    const block = document.querySelector("#hints details") as HTMLDetailsElement;
+    block.open = true;
+    block.dispatchEvent(new Event("toggle"));
+    const more = () => [...block.querySelectorAll("button")].find((b) => b.textContent === "Show more");
+    expect(block.querySelectorAll(".row").length).toBe(200);
+    more()!.click();
+    expect(block.querySelectorAll(".row").length).toBe(400);
+    more()!.click();
+    expect(block.querySelectorAll(".row").length).toBe(450);
+    expect(more()).toBeUndefined();
+  });
+
+  it("finds failed mails in the search", () => {
+    const failed = [{ s: "Rechnung Studio Halde", f: "Jonas Brandt", e: "jonas.brandt@studio-halde.example", d: "2026-10-01T10:00:00Z", p: "", a: false, h: null }];
+    load({ ...base(entries(5)), failed });
+    const search = document.getElementById("search") as HTMLInputElement;
+    search.value = "rechnung";
+    search.dispatchEvent(new Event("input"));
+    expect(rows().length).toBe(1);
+    expect(rows()[0].textContent).toContain("Could not be exported");
+    expect(rows()[0].tagName).toBe("DIV");
+  });
+
+  it("picks Russian plural forms for the counts", () => {
+    const ru = {
+      ...labels,
+      lang: "ru",
+      accountsOne: "{count} аккаунт",
+      accountsFew: "{count} аккаунта",
+      accountsMany: "{count} аккаунтов",
+      accountsOther: "{count} аккаунта",
+      mailsOne: "{count} письмо",
+      mailsFew: "{count} письма",
+      mailsMany: "{count} писем",
+      mailsOther: "{count} письма",
+    };
+    const data = base(entries(5));
+    data.accounts.push({ name: "Jonas", email: "jonas.brandt@studio-halde.example", folders: [] });
+    load(data, ru);
+    const meta = document.getElementById("meta")!.textContent!;
+    expect(meta).toContain("2 аккаунта");
+    expect(meta).toContain("5 писем");
+    load(base(entries(22)), ru);
+    const search = document.getElementById("search") as HTMLInputElement;
+    search.value = "betreff";
+    search.dispatchEvent(new Event("input"));
+    expect(document.querySelector("#rows .results")!.textContent).toBe("22 письма");
+    search.value = "betreff 21";
+    search.dispatchEvent(new Event("input"));
+    expect(document.querySelector("#rows .results")!.textContent).toBe("1 письмо");
   });
 
   it("uses text content only, never markup from mail data", () => {

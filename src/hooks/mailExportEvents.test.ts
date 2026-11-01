@@ -89,7 +89,7 @@ describe("useMailExportEvents", () => {
     expect(state.mailExport.result).toEqual(summary);
     const toast = state.toasts[0];
     expect(toast.title).toBe(de.mailExport.doneTitle);
-    expect(toast.message).toBe("99 Mails exportiert. 1 aus lokaler Kopie, kein Original. 1 konnten nicht exportiert werden.");
+    expect(toast.message).toBe("99 Mails exportiert. 1 aus lokaler Kopie, kein Original. 1 konnte nicht exportiert werden.");
     toast.action?.onClick();
     expect(openLastExportFolder).toHaveBeenCalled();
   });

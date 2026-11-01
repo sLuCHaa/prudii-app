@@ -310,6 +310,19 @@ a.row:hover {
   border-bottom: 0;
 }
 
+.hint .more {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: none;
+  color: var(--accent-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 /* Mail page */
 
 .mail {

@@ -718,28 +718,31 @@
   },
   "mailExport": {
     "title": "Exportar e-mails",
-    "description": "Guarda os e-mails como ficheiros no teu computador – legíveis no navegador e como originais para importar noutras aplicações.",
+    "description": "Salva os e-mails como arquivos no seu computador – legíveis no navegador e como originais para importar em outros aplicativos.",
     "formatHtml": "Legível (HTML)",
     "formatEml": "Original (.eml)",
-    "attachments": "Guardar anexos como ficheiros",
-    "attachmentsHint": "Os anexos são guardados além do ficheiro .eml.",
+    "attachments": "Salvar anexos como arquivos",
+    "attachmentsHint": "Os anexos são salvos além do arquivo .eml.",
     "exportButton": "Exportar…",
     "menuItem": "Exportar…",
-    "progress": "A exportar e-mails… {{processed}}/{{total}}",
+    "progress": "Exportando e-mails… {{processed}}/{{total}}",
     "cancel": "Cancelar",
     "doneTitle": "Exportação concluída",
     "cancelledTitle": "Exportação cancelada",
-    "doneMessage": "{{exported}} e-mails exportados.",
-    "doneLocal": "{{count}} da cópia local, não do original.",
-    "doneFailed": "{{count}} não puderam ser exportados.",
+    "doneMessage_one": "{{count}} e-mail exportado.",
+    "doneMessage_other": "{{count}} e-mails exportados.",
+    "doneLocal_one": "{{count}} da cópia local, não do original.",
+    "doneLocal_other": "{{count}} da cópia local, não do original.",
+    "doneFailed_one": "{{count}} não pôde ser exportado.",
+    "doneFailed_other": "{{count}} não puderam ser exportados.",
     "openFolder": "Abrir pasta",
-    "quitTitle": "Exportação em curso",
-    "quitMessage": "Há uma exportação em curso – sair mesmo assim? A exportação será cancelada.",
+    "quitTitle": "Exportação em andamento",
+    "quitMessage": "Uma exportação está em andamento – sair mesmo assim? A exportação será cancelada.",
     "quitConfirm": "Sair",
     "errors": {
-      "noSelection": "Seleciona pelo menos uma pasta.",
-      "noFormat": "Seleciona pelo menos um formato.",
-      "alreadyRunning": "Já existe uma exportação em curso."
+      "noSelection": "Selecione pelo menos uma pasta.",
+      "noFormat": "Selecione pelo menos um formato.",
+      "alreadyRunning": "Já existe uma exportação em andamento."
     },
     "page": {
       "title": "Exportação do Prudii",
@@ -749,7 +752,7 @@
       "cc": "cc",
       "noSubject": "(Sem assunto)",
       "attachments": "Anexos",
-      "externalImages": "As imagens externas não foram carregadas durante a exportação, para que abrir o e-mail não avise ninguém de que o leste.",
+      "externalImages": "As imagens externas não foram carregadas durante a exportação, para que abrir o e-mail não avise ninguém de que você o leu.",
       "localCopyNote": "Exportado a partir da cópia local – não é o original do servidor.",
       "localCopyTitle": "Da cópia local, não do original",
       "failedTitle": "Não foi possível exportar",
@@ -759,7 +762,8 @@
       "mails_one": "{count} e-mail",
       "mails_other": "{count} e-mails",
       "emptyFolder": "Sem e-mails nesta pasta",
-      "noResults": "Nada encontrado"
+      "noResults": "Nada encontrado",
+      "showMore": "Mostrar mais"
     }
   },
   "backup": {

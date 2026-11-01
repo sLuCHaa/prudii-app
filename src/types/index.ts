@@ -580,11 +580,16 @@ export interface ExportLabels {
   failedTitle: string;
   incompleteNote: string;
   accountsOne: string;
+  accountsFew: string;
+  accountsMany: string;
   accountsOther: string;
   mailsOne: string;
+  mailsFew: string;
+  mailsMany: string;
   mailsOther: string;
   emptyFolder: string;
   noResults: string;
+  showMore: string;
   folderNames: Record<string, string>;
 }
 
