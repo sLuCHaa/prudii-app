@@ -303,6 +303,19 @@ fn hide_to_tray(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+// Quit paths that bypass the frontend must ask first while a mail export runs.
+fn hold_quit_for_export(app: &tauri::AppHandle) -> bool {
+    if !export::export_in_progress() {
+        return false;
+    }
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+    let _ = app.emit("mail-export-quit-requested", ());
+    true
+}
+
 #[tauri::command]
 fn quit_app(app: tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
@@ -854,6 +867,9 @@ pub fn run() {
                             }
                         }
                         "quit" => {
+                            if hold_quit_for_export(app) {
+                                return;
+                            }
                             if let Some(window) = app.get_webview_window("main") {
                                 if let Some(g) = capture_geometry(&window) {
                                     // Use try_lock() to avoid blocking when a sync task holds
@@ -1261,6 +1277,8 @@ pub fn run() {
                 if show_in_tray {
                     api.prevent_close();
                     let _ = window.hide();
+                } else if hold_quit_for_export(app) {
+                    api.prevent_close();
                 }
                 // If !show_in_tray, allow the default close → app exits
             }
@@ -1277,6 +1295,11 @@ pub fn run() {
                         let _ = window.show();
                         let _ = window.set_focus();
                     }
+                }
+            }
+            if let tauri::RunEvent::ExitRequested { code: None, api, .. } = &event {
+                if hold_quit_for_export(app_handle) {
+                    api.prevent_exit();
                 }
             }
             let _ = (&app_handle, &event);

@@ -26,6 +26,7 @@ import { useDialog } from "../ui/DialogProvider";
 import { ContextMenu } from "../ui/ContextMenu";
 import type { MenuEntry } from "../../lib/menuModel";
 import { SidebarAmbient } from "./SidebarAmbient";
+import { MailExportProgress } from "./MailExportProgress";
 import { Collapse } from "../motion/Collapse";
 import { requestMailSweep, SWEEP_DURATION_MS } from "../motion/sweepMails";
 import { createFolder, deleteFolder, renameFolder, updateFolderColor, moveMail, emptyTrash, emptySpam, prefetchFolder, countFolderMails, countCombinedFolderMails, emptyAllTrash, emptyAllSpam, countSnoozedMails, listScheduledMails, forceResyncAccount, syncFolder } from "../../lib/tauri";
@@ -1469,6 +1470,7 @@ export function Sidebar() {
       </Scroller>
 
       <div className="p-3 border-t border-border">
+        <MailExportProgress />
         <div className="flex items-center gap-2">
           <div className="flex-1 min-w-0">
             {canAddAccount ? (

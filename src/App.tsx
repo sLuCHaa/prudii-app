@@ -32,6 +32,7 @@ import { runCategorization } from "./hooks/useCategories";
 import { useAutoSync } from "./hooks/useAutoSync";
 import { useFocusSync } from "./hooks/useFocusSync";
 import { useConnectivity } from "./hooks/useConnectivity";
+import { useMailExportEvents } from "./hooks/useMailExportEvents";
 import { backfillBodies, bootstrapState, getAppSettings, checkLicenseStartup, getStartupMailto, getStartupCompose, checkSnoozedMails, listComposeAutosaves, deleteComposeAutosave, getSystemAccentColor } from "./lib/tauri";
 import { useTeamNotifier } from "./hooks/useTeam";
 import { isAccentHex, effectiveAccentHex } from "./lib/accents";
@@ -97,6 +98,8 @@ function AppInner() {
   useFocusSync(() => syncAutomatic.mutate());
 
   useConnectivity();
+
+  useMailExportEvents();
 
   useEffect(() => {
     setThemeMode(themeMode);
