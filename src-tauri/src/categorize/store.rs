@@ -57,6 +57,7 @@ pub fn load_correspondents(conn: &Connection) -> HashMap<String, u32> {
 struct Pending {
     id: String,
     account_id: String,
+    from_name: String,
     from_email: String,
     subject: String,
     signal_headers: String,
@@ -102,6 +103,7 @@ fn decide(conn: &Connection, mail: &Pending, correspondents: &HashMap<String, u3
 
     let signals = HeaderSignals::parse(&mail.signal_headers, &mail.list_unsubscribe);
     Ok(classify(&MailInput {
+        from_name: &mail.from_name,
         from_email: &mail.from_email,
         subject: &mail.subject,
         signals: &signals,
@@ -113,7 +115,7 @@ pub fn categorize_batch(conn: &Connection, correspondents: &HashMap<String, u32>
     let pending: Vec<Pending> = conn
         .prepare(
             "SELECT m.id, m.account_id, COALESCE(m.from_email, ''), COALESCE(m.subject, ''), COALESCE(m.signal_headers, ''),
-                    COALESCE(m.list_unsubscribe, ''), m.thread_id
+                    COALESCE(m.list_unsubscribe, ''), m.thread_id, COALESCE(m.from_name, '')
              FROM mails m JOIN folders f ON m.folder_id = f.id
              WHERE f.folder_type = 'inbox' AND m.category IS NULL ORDER BY m.date DESC LIMIT ?1",
         )?
@@ -126,6 +128,7 @@ pub fn categorize_batch(conn: &Connection, correspondents: &HashMap<String, u32>
                 signal_headers: r.get(4)?,
                 list_unsubscribe: r.get(5)?,
                 thread_id: r.get(6)?,
+                from_name: r.get(7)?,
             })
         })?
         .collect::<Result<_, _>>()?;

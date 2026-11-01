@@ -2,6 +2,7 @@ use super::signals::HeaderSignals;
 use super::{Decision, Reason, THRESHOLD};
 
 pub struct MailInput<'a> {
+    pub from_name: &'a str,
     pub from_email: &'a str,
     pub subject: &'a str,
     pub signals: &'a HeaderSignals,
@@ -76,7 +77,9 @@ const AUTOMATED_LOCAL_PARTS: &[&str] = &[
     "alert", "alerts", "mailer-daemon", "postmaster", "bounce", "automated", "system", "notify",
 ];
 
-const AUTOMATED_LOCAL_PREFIXES: &[&str] = &["noreply", "no-reply", "bounce"];
+const AUTOMATED_LOCAL_MARKERS: &[&str] = &["noreply", "no-reply", "donotreply", "do-not-reply"];
+
+const TWO_PART_SUFFIX_SECOND_LEVELS: &[&str] = &["co", "com", "org", "net", "ac", "gov", "or", "ne"];
 
 const ROLE_LOCAL_PARTS: &[&str] = &[
     "info", "support", "service", "hello", "team", "news", "newsletter", "marketing", "billing",
@@ -133,7 +136,51 @@ fn bulk_reasons(signals: &HeaderSignals) -> Vec<Reason> {
 }
 
 fn is_automated_local(local: &str) -> bool {
-    AUTOMATED_LOCAL_PARTS.contains(&local) || AUTOMATED_LOCAL_PREFIXES.iter().any(|p| local.starts_with(p))
+    AUTOMATED_LOCAL_PARTS.contains(&local)
+        || local.starts_with("bounce")
+        || AUTOMATED_LOCAL_MARKERS.iter().any(|m| local.contains(m))
+}
+
+fn fold(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.to_lowercase().chars() {
+        match c {
+            'ä' => out.push_str("ae"),
+            'ö' => out.push_str("oe"),
+            'ü' => out.push_str("ue"),
+            'ß' => out.push_str("ss"),
+            c if c.is_alphanumeric() => out.push(c),
+            _ => out.push(' '),
+        }
+    }
+    out
+}
+
+fn brand_label(domain: &str) -> Option<&str> {
+    let labels: Vec<&str> = domain.split('.').collect();
+    let n = labels.len();
+    if n < 2 {
+        return None;
+    }
+    let two_part_suffix = n >= 3 && labels[n - 1].len() == 2 && TWO_PART_SUFFIX_SECOND_LEVELS.contains(&labels[n - 2]);
+    Some(if two_part_suffix { labels[n - 3] } else { labels[n - 2] })
+}
+
+// A display name naming the sending company, or one that shares nothing with the
+// address, points to a service rather than a person.
+fn looks_like_person(name: &str, local: &str, domain: &str) -> bool {
+    let folded_name = fold(name);
+    let tokens: Vec<&str> = folded_name.split_whitespace().collect();
+    if tokens.is_empty() {
+        return local.split(['.', '_', '-']).filter(|part| part.chars().any(char::is_alphabetic)).count() >= 2;
+    }
+    if brand_label(domain).is_some_and(|brand| tokens.contains(&brand)) {
+        return false;
+    }
+    let folded_local: String = fold(local).split_whitespace().collect();
+    let initials: String = tokens.iter().filter_map(|t| t.chars().next()).collect();
+    tokens.iter().any(|t| t.chars().count() >= 3 && folded_local.contains(t))
+        || (tokens.len() >= 2 && folded_local == initials)
 }
 
 pub fn classify(input: &MailInput) -> Decision {
@@ -213,7 +260,7 @@ pub fn classify(input: &MailInput) -> Decision {
         add("newsletters", "heuristic", 0.70, vec![Reason::new("gmail_forums")]);
     }
 
-    if let Some((local, _)) = &sender {
+    if let Some((local, domain)) = &sender {
         if !bulk && !automated {
             if input.sent_count > 0 {
                 add(
@@ -232,6 +279,7 @@ pub fn classify(input: &MailInput) -> Decision {
                 && signals.esp.is_none()
                 && !signals.feedback_id
                 && gmail.is_none()
+                && looks_like_person(input.from_name, local, domain)
             {
                 add("important", "heuristic", 0.65, vec![Reason::new("personal_mail")]);
             }
@@ -261,8 +309,12 @@ mod tests {
     use super::*;
 
     fn run(from: &str, subject: &str, headers: &str, unsub: &str, sent: u32) -> Decision {
+        run_named("", from, subject, headers, unsub, sent)
+    }
+
+    fn run_named(name: &str, from: &str, subject: &str, headers: &str, unsub: &str, sent: u32) -> Decision {
         let signals = HeaderSignals::parse(headers, unsub);
-        classify(&MailInput { from_email: from, subject, signals: &signals, sent_count: sent })
+        classify(&MailInput { from_name: name, from_email: from, subject, signals: &signals, sent_count: sent })
     }
 
     fn codes(d: &Decision) -> Vec<&str> {
@@ -289,6 +341,58 @@ mod tests {
         assert_eq!(d.category.as_deref(), Some("important"));
         assert_eq!(d.confidence, 0.65);
         assert_eq!(codes(&d), ["personal_mail"]);
+    }
+
+    #[test]
+    fn display_name_matching_the_address_is_personal() {
+        for (name, from) in [
+            ("Weber, Anna", "anna.weber@studio-halde.example"),
+            ("Jörg Köhler", "j.koehler@studio-halde.example"),
+            ("Anna Weber", "aw@studio-halde.example"),
+            ("Jonas Brandt - Studio Halde GmbH", "j.brandt@studiohalde.example"),
+        ] {
+            let d = run_named(name, from, "Kurze Frage zum Angebot", "{}", "", 0);
+            assert_eq!(d.category.as_deref(), Some("important"), "{name} <{from}>");
+            assert_eq!(codes(&d), ["personal_mail"]);
+        }
+    }
+
+    #[test]
+    fn company_in_display_name_is_not_personal() {
+        for (name, from) in [
+            ("Paketdienst Halde Zustellung", "zustellung@halde.example"),
+            ("Halde eBon", "ebon@mailing.halde.example"),
+            ("Halde Team", "notice@email.halde.co.uk"),
+        ] {
+            let d = run_named(name, from, "Dein Paket kommt heute", "{}", "", 0);
+            assert_eq!(d.category, None, "{name} <{from}>");
+        }
+    }
+
+    #[test]
+    fn display_name_unrelated_to_the_address_is_not_personal() {
+        let d = run_named("PAKET-UPDATE", "kundenkonto.app@mail.example", "Zustellung fehlgeschlagen", "{}", "", 0);
+        assert_eq!(d.category, None);
+    }
+
+    #[test]
+    fn single_word_address_without_name_is_not_personal() {
+        let d = run("em@em1.halde.example", "Ihr Konto", "{}", "", 0);
+        assert_eq!(d.category, None);
+    }
+
+    #[test]
+    fn noreply_inside_the_local_part_is_automated() {
+        let d = run_named("Halde Konto-Team", "account-security-noreply@konto.halde.example", "Neue Anmeldung", "{}", "", 0);
+        assert_eq!(d.category.as_deref(), Some("notifications"));
+        assert_eq!(codes(&d), ["noreply_sender"]);
+    }
+
+    #[test]
+    fn correspondent_with_company_name_stays_important() {
+        let d = run_named("Halde Team", "team.halde@studio-halde.example", "Re: Angebot", "{}", "", 3);
+        assert_eq!(d.category.as_deref(), Some("important"));
+        assert_eq!(d.source, "relation");
     }
 
     #[test]
