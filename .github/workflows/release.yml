@@ -54,7 +54,7 @@ jobs:
             echo "Release fuer $TAG existiert bereits (id $id) — wird wiederverwendet."
           else
             cat > notes.md <<'NOTES'
-          Prudii Mail __VERSION__ — privacy-first desktop email client. Install the file for your platform below: Windows (.exe / .msi), macOS (.dmg — Apple Silicon or Intel), Linux (.deb / .rpm / .AppImage). Existing installations update automatically. Release notes below.
+          Prudii Mail __VERSION__ — privacy-first desktop email client. Install the file for your platform below: Windows (.exe / .msi), macOS (.dmg — Apple Silicon or Intel), Linux (.deb / .rpm / .AppImage). Existing installations are notified and update with one click.
           NOTES
             sed -i "s/__VERSION__/${TAG}/" notes.md
             # Die ID kommt aus der Antwort des Anlegens, nicht aus einer zweiten
