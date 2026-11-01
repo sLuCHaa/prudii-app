@@ -911,6 +911,8 @@ function VirtualMailList({
                             ? t("mailList.toRecipient", { name: recipient.name || recipient.email })
                             : mail.from.name || mail.from.email}
                         </span>
+                        {/* Not on the subject line: the hover actions cover its right end. */}
+                        <CategoryChip mail={mail} />
                         <span className="shrink-0 text-xs text-text-tertiary tabular-nums">
                           {formatMailDate(mail.date, appSettings.use_24h_clock)}
                         </span>
@@ -924,7 +926,6 @@ function VirtualMailList({
                         >
                           {mail.subject || t("compose.noSubject")}
                         </span>
-                        <CategoryChip mail={mail} />
                         {(mail.is_pinned || mail.is_starred || (mail.flags && mail.flags.length > 0) || mail.has_attachments || taskCounts[mail.id] > 0 || assignments.has(mail.message_id)) && (
                           <span className="flex shrink-0 items-center gap-1.5 text-text-tertiary">
                             {mail.is_pinned && <Pin className="w-3 h-3 text-accent" />}

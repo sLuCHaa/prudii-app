@@ -79,3 +79,28 @@ describe("appStore — openCategory", () => {
     expect(useAppStore.getState().showAllInboxes).toBe(true);
   });
 });
+
+describe("appStore — settings that remove the open category", () => {
+  it("falls back to the inbox when the open category gets hidden", () => {
+    useAppStore.getState().openCategory("newsletters", "folder2", "acc2");
+    const settings = useAppStore.getState().appSettings;
+    useAppStore.getState().setAppSettings({ ...settings, hidden_categories: ["newsletters"] });
+    expect(useAppStore.getState().activeCategory).toBeNull();
+    expect(useAppStore.getState().selectedFolderId).toBe("folder2");
+  });
+
+  it("falls back to all inboxes when sorting is turned off", () => {
+    useAppStore.getState().openCategory("important", null);
+    const settings = useAppStore.getState().appSettings;
+    useAppStore.getState().setAppSettings({ ...settings, sorting_enabled: false });
+    expect(useAppStore.getState().activeCategory).toBeNull();
+    expect(useAppStore.getState().showAllInboxes).toBe(true);
+  });
+
+  it("keeps the view when a different category gets hidden", () => {
+    useAppStore.getState().openCategory("important", null);
+    const settings = useAppStore.getState().appSettings;
+    useAppStore.getState().setAppSettings({ ...settings, sorting_enabled: true, hidden_categories: ["promotions"] });
+    expect(useAppStore.getState().activeCategory).toBe("important");
+  });
+});

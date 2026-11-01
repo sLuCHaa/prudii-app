@@ -648,7 +648,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     hidden_categories: [],
   },
   appSettingsLoaded: false,
-  setAppSettings: (appSettings) => set({ appSettings, appSettingsLoaded: true }),
+  setAppSettings: (appSettings) => {
+    const category = get().activeCategory;
+    const categoryGone = category !== null && (!appSettings.sorting_enabled || appSettings.hidden_categories.includes(category));
+    set({ appSettings, appSettingsLoaded: true, ...(categoryGone ? { activeCategory: null, selectedMailId: null, selectedMailIndex: -1 } : {}) });
+  },
 
   systemAccentHex: null,
   setSystemAccentHex: (hex) => set({ systemAccentHex: hex }),
