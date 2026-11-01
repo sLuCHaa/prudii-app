@@ -363,30 +363,6 @@ pub struct CreateRuleRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InboxSplit {
-    pub id: String,
-    pub name: String,
-    pub position: i32,
-    pub icon: String,
-    pub conditions: String, // JSON
-    pub is_default: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SplitConditions {
-    #[serde(default)]
-    pub from_domain: Vec<String>,
-    #[serde(default)]
-    pub from_contains: Vec<String>,
-    #[serde(default)]
-    pub subject_contains: Vec<String>,
-    #[serde(default)]
-    pub has_auto_label: Vec<String>,
-    #[serde(default)]
-    pub negate: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AttachmentWithContext {
     pub id: String,
     pub mail_id: String,

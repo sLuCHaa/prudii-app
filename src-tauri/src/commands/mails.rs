@@ -80,7 +80,7 @@ fn dedupe_thread_copies(mails: Vec<Mail>) -> Vec<Mail> {
 /// Deduplicate mails in two passes:
 /// 1. By message_id (same account/folder duplicates)
 /// 2. By subject+date+from (cross-account duplicates, e.g. same email in Gmail + IMAP)
-fn dedup_mails(mails: Vec<Mail>) -> Vec<Mail> {
+pub(crate) fn dedup_mails(mails: Vec<Mail>) -> Vec<Mail> {
     let original_count = mails.len();
 
     // Pass 1: dedup by message_id (within same sync source). Bracket-normalized:
@@ -235,7 +235,7 @@ fn parse_flags(flags_str: &str) -> Vec<String> {
 
 /// Build optional SQL filter clause for folder-level filtering (unread/starred/attachments).
 /// `prefix` is e.g. "m." for joined queries or "" for standalone queries.
-fn filter_clause(filter: &Option<String>, prefix: &str) -> String {
+pub(crate) fn filter_clause(filter: &Option<String>, prefix: &str) -> String {
     match filter.as_deref() {
         Some("unread") => format!(" AND {}is_read = 0", prefix),
         Some("starred") => format!(" AND {}is_starred = 1", prefix),
@@ -3828,172 +3828,6 @@ pub async fn batch_update_mails(
     Ok(())
 }
 
-use crate::models::{InboxSplit, SplitConditions};
-
-#[tauri::command(async)]
-pub fn list_inbox_splits(db: State<'_, Database>) -> Result<Vec<InboxSplit>, String> {
-    let conn = db.lock_db();
-    let mut stmt = conn.prepare(
-        "SELECT id, name, position, icon, conditions, is_default FROM inbox_splits ORDER BY position ASC"
-    ).map_err(|e| e.to_string())?;
-
-    let rows: Vec<InboxSplit> = stmt.query_map([], |row| {
-        Ok(InboxSplit {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            position: row.get(2)?,
-            icon: row.get(3)?,
-            conditions: row.get(4)?,
-            is_default: row.get::<_, i32>(5)? != 0,
-        })
-    }).map_err(|e| e.to_string())?
-    .filter_map(|r| r.ok())
-    .collect();
-
-    Ok(rows)
-}
-
-#[tauri::command(async)]
-pub fn create_inbox_split(
-    db: State<'_, Database>,
-    name: String,
-    icon: String,
-    conditions: String,
-) -> Result<InboxSplit, String> {
-    let id = uuid::Uuid::new_v4().to_string();
-    let conn = db.lock_db();
-
-    let max_pos: i32 = conn.query_row(
-        "SELECT COALESCE(MAX(position), -1) FROM inbox_splits", [], |r| r.get(0)
-    ).unwrap_or(-1);
-
-    conn.execute(
-        "INSERT INTO inbox_splits (id, name, position, icon, conditions, is_default) VALUES (?1, ?2, ?3, ?4, ?5, 0)",
-        rusqlite::params![id, name, max_pos + 1, icon, conditions],
-    ).map_err(|e| format!("Failed to create split: {}", e))?;
-
-    Ok(InboxSplit { id, name, position: max_pos + 1, icon, conditions, is_default: false })
-}
-
-#[tauri::command(async)]
-pub fn update_inbox_split(
-    db: State<'_, Database>,
-    id: String,
-    name: String,
-    icon: String,
-    conditions: String,
-    position: i32,
-) -> Result<(), String> {
-    let conn = db.lock_db();
-    conn.execute(
-        "UPDATE inbox_splits SET name = ?1, icon = ?2, conditions = ?3, position = ?4 WHERE id = ?5",
-        rusqlite::params![name, icon, conditions, position, id],
-    ).map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-#[tauri::command(async)]
-pub fn delete_inbox_split(db: State<'_, Database>, id: String) -> Result<(), String> {
-    let conn = db.lock_db();
-    conn.execute("DELETE FROM inbox_splits WHERE id = ?1 AND is_default = 0", rusqlite::params![id])
-        .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-#[tauri::command(async)]
-pub fn list_split_inbox_mails(
-    db: State<'_, Database>,
-    split_id: String,
-    limit: Option<u32>,
-    offset: Option<u32>,
-    sort: Option<String>,
-) -> Result<Vec<Mail>, String> {
-    let conn = db.lock_db();
-
-    let conditions_json: String = conn.query_row(
-        "SELECT conditions FROM inbox_splits WHERE id = ?1",
-        rusqlite::params![split_id],
-        |row| row.get(0),
-    ).map_err(|e| format!("Split not found: {}", e))?;
-
-    let mut folder_stmt = conn.prepare(
-        "SELECT id FROM folders WHERE folder_type = 'inbox'"
-    ).map_err(|e| e.to_string())?;
-    let inbox_ids: Vec<String> = folder_stmt.query_map([], |row| row.get(0))
-        .map_err(|e| e.to_string())?
-        .filter_map(|r| r.ok())
-        .collect();
-
-    if inbox_ids.is_empty() {
-        return Ok(vec![]);
-    }
-
-    let placeholders: String = inbox_ids.iter().enumerate().map(|(i, _)| format!("?{}", i + 1)).collect::<Vec<_>>().join(",");
-    let lim = limit.unwrap_or(50);
-    let off = offset.unwrap_or(0);
-
-    // For "primary" split with empty conditions: show all inbox mails NOT matching any other split
-    if conditions_json == "{}" || conditions_json.is_empty() {
-        let mut other_stmt = conn.prepare(
-            "SELECT conditions FROM inbox_splits WHERE id != ?1"
-        ).map_err(|e| e.to_string())?;
-        let other_conditions: Vec<String> = other_stmt.query_map(rusqlite::params![split_id], |row| row.get(0))
-            .map_err(|e| e.to_string())?
-            .filter_map(|r| r.ok())
-            .collect();
-
-        let mut where_parts: Vec<String> = vec![format!("folder_id IN ({})", placeholders)];
-        let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = inbox_ids.iter().map(|id| Box::new(id.clone()) as Box<dyn rusqlite::types::ToSql>).collect();
-
-        for cond_json in &other_conditions {
-            if let Ok(cond) = serde_json::from_str::<SplitConditions>(cond_json) {
-                let clause = build_split_where(&cond, &mut params);
-                if !clause.is_empty() {
-                    where_parts.push(format!("NOT ({})", clause));
-                }
-            }
-        }
-
-        let sql = format!(
-            "SELECT {} FROM mails WHERE {} ORDER BY {} LIMIT {} OFFSET {}",
-            mail_columns("", false), where_parts.join(" AND "), crate::db::mail_sort::order_clause(sort.as_deref(), "mails.", false), lim, off
-        );
-
-        let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
-        let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
-        let rows: Vec<Mail> = stmt.query_map(param_refs.as_slice(), map_mail_row)
-            .map_err(|e| e.to_string())?
-            .filter_map(|r| r.ok())
-            .collect();
-        return Ok(rows);
-    }
-
-    // Normal split: apply conditions
-    let conditions: SplitConditions = serde_json::from_str(&conditions_json)
-        .map_err(|e| format!("Invalid conditions: {}", e))?;
-
-    let mut where_parts: Vec<String> = vec![format!("folder_id IN ({})", placeholders)];
-    let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = inbox_ids.iter().map(|id| Box::new(id.clone()) as Box<dyn rusqlite::types::ToSql>).collect();
-
-    let clause = build_split_where(&conditions, &mut params);
-    if !clause.is_empty() {
-        where_parts.push(format!("({})", clause));
-    }
-
-    let sql = format!(
-        "SELECT {} FROM mails WHERE {} ORDER BY {} LIMIT {} OFFSET {}",
-        mail_columns("", false), where_parts.join(" AND "), crate::db::mail_sort::order_clause(sort.as_deref(), "mails.", false), lim, off
-    );
-
-    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
-    let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
-    let rows: Vec<Mail> = stmt.query_map(param_refs.as_slice(), map_mail_row)
-        .map_err(|e| e.to_string())?
-        .filter_map(|r| r.ok())
-        .collect();
-    Ok(rows)
-}
-
 /// Resolves team assignments (keyed by Message-ID) to local mails. Gmail keeps a
 /// copy per label, so the inbox copy wins and each message appears once.
 #[tauri::command(async)]
@@ -4022,39 +3856,6 @@ pub fn list_mails_by_message_ids(db: State<'_, Database>, message_ids: Vec<Strin
     })
 }
 
-fn build_split_where(cond: &SplitConditions, params: &mut Vec<Box<dyn rusqlite::types::ToSql>>) -> String {
-    let mut parts: Vec<String> = Vec::new();
-
-    for domain in &cond.from_domain {
-        let idx = params.len() + 1;
-        params.push(Box::new(format!("%@{}%", domain)));
-        parts.push(format!("from_email LIKE ?{}", idx));
-    }
-
-    for pattern in &cond.from_contains {
-        let idx = params.len() + 1;
-        params.push(Box::new(format!("%{}%", pattern)));
-        parts.push(format!("from_email LIKE ?{}", idx));
-    }
-
-    for keyword in &cond.subject_contains {
-        let idx = params.len() + 1;
-        params.push(Box::new(format!("%{}%", keyword)));
-        parts.push(format!("subject LIKE ?{}", idx));
-    }
-
-    for label in &cond.has_auto_label {
-        let idx = params.len() + 1;
-        params.push(Box::new(format!("%\"{}%", label)));
-        parts.push(format!("auto_labels LIKE ?{}", idx));
-    }
-
-    if parts.is_empty() {
-        return String::new();
-    }
-
-    parts.join(" OR ")
-}
 
 #[tauri::command(async)]
 pub fn search_attachments(
