@@ -8,8 +8,10 @@ use super::{ExportLabels, ExportOptions, ExportProgress, ExportSummary, MailOutc
 use crate::db::Database;
 use chrono::{NaiveDate, NaiveDateTime};
 use futures_util::stream::{self, StreamExt};
+use futures_util::FutureExt;
 use std::collections::HashMap;
 use std::future::Future;
+use std::panic::AssertUnwindSafe;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -248,6 +250,18 @@ fn write_mail(
     Ok(href)
 }
 
+fn failed_entry(row: &MailRow) -> IndexEntry {
+    IndexEntry {
+        s: row.subject.clone(),
+        f: row.from_name.clone(),
+        e: row.from_email.clone(),
+        d: parse_local_date(&row.date).map(|d| d.to_rfc3339()).unwrap_or_default(),
+        p: String::new(),
+        a: row.has_attachments,
+        h: None,
+    }
+}
+
 fn pick(primary: &str, fallback: &str) -> String {
     if primary.trim().is_empty() { fallback.to_string() } else { primary.to_string() }
 }
@@ -398,7 +412,13 @@ where
             let (folder_ref, path_ref, rel_ref) = (folder, folder_path.as_path(), rel_dir.as_str());
             let mut running = stream::iter(jobs)
                 .map(move |(i, row, base)| async move {
-                    (i, process_mail(db, fetch_ref, options, labels, cancel, folder_ref, path_ref, rel_ref, row, base).await)
+                    let fallback = failed_entry(&row);
+                    let work = process_mail(db, fetch_ref, options, labels, cancel, folder_ref, path_ref, rel_ref, row, base);
+                    let result = AssertUnwindSafe(work).catch_unwind().await.unwrap_or_else(|_| {
+                        log::error!("mail export: processing a mail panicked, listing it as failed");
+                        Some(MailResult { outcome: MailOutcome::Failed, entry: fallback })
+                    });
+                    (i, result)
                 })
                 .buffer_unordered(CONCURRENCY);
 
@@ -789,6 +809,37 @@ JVBERi0xLjQ=\n\
         assert!(summary.cancelled);
         assert!(index_data(&out.0).contains("\"cancelled\":true"));
         assert!(out.0.join("index.html").exists());
+    }
+
+    #[tokio::test]
+    async fn a_mail_that_panics_is_listed_as_failed_and_the_rest_continues() {
+        let w = world();
+        let bad = add_mail(&w, "Kaputt", "2026-10-21 13:28:44");
+        add_mail(&w, FIXTURE_SUBJECT, "2026-10-22 08:00:00");
+        let out = Out::new();
+        let cancel = AtomicBool::new(false);
+        let summary = run_export(
+            &w.db,
+            &options(vec![w.folder.clone()]),
+            &labels(),
+            &out.0,
+            move |id| {
+                let hostile = id == bad;
+                async move {
+                    if hostile {
+                        panic!("hostile mail");
+                    }
+                    Ok::<_, String>(fixture())
+                }
+            },
+            &cancel,
+            |_| {},
+        )
+        .await;
+        assert_eq!((summary.exported, summary.failed, summary.cancelled), (1, 1, false));
+        assert!(out.0.join("index.html").exists());
+        let data = index_data(&out.0);
+        assert!(data[data.find("\"failed\":").unwrap()..].contains("Kaputt"));
     }
 
     #[tokio::test]

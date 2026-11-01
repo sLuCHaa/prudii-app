@@ -1,8 +1,11 @@
 use crate::db::Database;
-use crate::export::{self, ExportLabels, ExportOptions};
+use crate::export::{self, ExportLabels, ExportOptions, ExportProgress, ExportSummary};
 use crate::pool::ImapPool;
+use futures_util::FutureExt;
+use std::future::Future;
+use std::panic::AssertUnwindSafe;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager};
 
 static LAST_EXPORT_DIR: Mutex<Option<PathBuf>> = Mutex::new(None);
@@ -54,11 +57,12 @@ pub async fn start_mail_export(app: AppHandle, options: ExportOptions, labels: E
 
     let task_app = app.clone();
     tauri::async_runtime::spawn(async move {
-        let _guard = guard;
         let db = task_app.state::<Database>();
         let fetch_app = task_app.clone();
         let progress_app = task_app.clone();
-        let summary = export::run::run_export(
+        let last = Arc::new(Mutex::new(None));
+        let last_in = Arc::clone(&last);
+        let work = export::run::run_export(
             &db,
             &options,
             &labels,
@@ -73,15 +77,38 @@ pub async fn start_mail_export(app: AppHandle, options: ExportOptions, labels: E
             },
             &export::CANCEL,
             move |progress| {
+                *last_in.lock().unwrap_or_else(|e| e.into_inner()) = Some(progress.clone());
                 let _ = progress_app.emit("mail-export-progress", &progress);
             },
-        )
-        .await;
+        );
+        let summary = run_reporting(work, &out_dir, &last).await;
         *LAST_EXPORT_DIR.lock().unwrap_or_else(|e| e.into_inner()) = Some(out_dir);
+        drop(guard);
         let _ = task_app.emit("mail-export-done", &summary);
     });
 
     Ok(true)
+}
+
+async fn run_reporting<W>(work: W, out_dir: &Path, last: &Mutex<Option<ExportProgress>>) -> ExportSummary
+where
+    W: Future<Output = ExportSummary>,
+{
+    match AssertUnwindSafe(work).catch_unwind().await {
+        Ok(summary) => summary,
+        Err(_) => {
+            log::error!("mail export: the export task panicked");
+            let p = last.lock().unwrap_or_else(|e| e.into_inner()).clone();
+            let (processed, local_copy, failed) = p.map_or((0, 0, 0), |p| (p.processed, p.local_copy, p.failed));
+            ExportSummary {
+                path: out_dir.to_string_lossy().into_owned(),
+                exported: processed.saturating_sub(local_copy + failed),
+                local_copy,
+                failed,
+                cancelled: true,
+            }
+        }
+    }
 }
 
 #[tauri::command]
@@ -116,6 +143,18 @@ mod tests {
         assert!(validate(&base).is_ok());
         assert_eq!(validate(&ExportOptions { folder_ids: vec![], ..base.clone() }).unwrap_err(), "mailExport.errors.noSelection");
         assert_eq!(validate(&ExportOptions { html: false, eml: false, ..base }).unwrap_err(), "mailExport.errors.noFormat");
+    }
+
+    #[tokio::test]
+    async fn a_panicking_export_still_reports_a_summary() {
+        let last = Mutex::new(Some(ExportProgress { processed: 30, total: 100, local_copy: 4, failed: 2 }));
+        let summary = run_reporting(async { panic!("boom") }, Path::new("Prudii-Export"), &last).await;
+        assert_eq!(summary.path, "Prudii-Export");
+        assert_eq!((summary.exported, summary.local_copy, summary.failed, summary.cancelled), (24, 4, 2, true));
+
+        let none = Mutex::new(None);
+        let summary = run_reporting(async { panic!("boom") }, Path::new("Prudii-Export"), &none).await;
+        assert_eq!((summary.exported, summary.local_copy, summary.failed, summary.cancelled), (0, 0, 0, true));
     }
 
     #[test]

@@ -198,6 +198,11 @@ fn strip_remote_css_in_style_tags(html: &str) -> String {
     out
 }
 
+fn strip_prefix_ci<'a>(s: &'a str, prefix: &str) -> Option<&'a str> {
+    let head = s.get(..prefix.len())?;
+    head.eq_ignore_ascii_case(prefix).then(|| &s[prefix.len()..])
+}
+
 fn is_remote(url: &str) -> bool {
     let u = url.trim().to_ascii_lowercase();
     u.starts_with("http:") || u.starts_with("https:") || u.starts_with("//") || u.starts_with("ftp:")
@@ -228,8 +233,8 @@ fn sanitize_body(html: &str, inline_dir: &str, parts: &[ExportPart]) -> (String,
             match (element, attr) {
                 ("img", "src") => {
                     let v = value.trim();
-                    if v.len() >= 4 && v[..4].eq_ignore_ascii_case("cid:") {
-                        let key = percent_decode(&v[4..]).trim().to_lowercase();
+                    if let Some(rest) = strip_prefix_ci(v, "cid:") {
+                        let key = percent_decode(rest).trim().to_lowercase();
                         return cids.get(&key).map(|h| Cow::Owned(h.clone()));
                     }
                     if is_remote(v) {
@@ -543,6 +548,16 @@ mod tests {
     fn cid_images_point_to_local_files() {
         let out = render_mail_page(&mail_with_cid_logo(), &ctx_with_inline_dir("2026-10-21_1528_Angebot"), &labels());
         assert!(out.contains("2026-10-21_1528_Angebot/logo.png") && !out.contains("cid:"));
+    }
+
+    #[test]
+    fn non_ascii_image_paths_do_not_panic() {
+        for src in ["附件.png", "abcä.png", "Schöne-Grüße.jpg"] {
+            let out = render_mail_page(&mail_with_html(&format!(r#"<p>Hallo</p><img src="{src}">"#)), &ctx(), &labels());
+            assert!(srcdoc(&out).contains("Hallo"), "{src}");
+        }
+        let out = render_mail_page(&text_mail("Grüße https://studio-halde.example/ä?x=ü. 附件 https://"), &ctx(), &labels());
+        assert!(out.contains(r#"href="https://studio-halde.example/ä?x=ü""#) && out.contains("附件 https://"));
     }
 
     #[test]
