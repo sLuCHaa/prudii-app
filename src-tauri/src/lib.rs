@@ -22,6 +22,8 @@ pub mod rules;
 pub mod sieve;
 pub mod smtp;
 pub mod system_accent;
+#[cfg(test)]
+mod test_support;
 pub mod task_registry;
 pub mod task_reminders;
 #[cfg(windows)]

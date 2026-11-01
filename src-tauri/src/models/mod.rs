@@ -106,6 +106,8 @@ pub struct Mail {
     pub reply_to: Vec<MailAddress>,
     pub is_pinned: bool,
     pub snoozed_until: Option<String>,
+    #[serde(default)]
+    pub category: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

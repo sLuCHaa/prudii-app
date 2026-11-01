@@ -41,6 +41,7 @@ const outerMail = (over: Partial<Mail> = {}): Mail => ({
   reply_to: [JONAS],
   is_pinned: true,
   snoozed_until: "2026-10-01T00:00:00Z",
+  category: null,
   ...over,
 });
 

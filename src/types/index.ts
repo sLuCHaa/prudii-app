@@ -86,6 +86,7 @@ export interface Mail {
   reply_to: MailAddress[];
   is_pinned: boolean;
   snoozed_until: string | null;
+  category: string | null;
 }
 
 export type MailFlag = "red" | "orange" | "yellow" | "green" | "blue" | "purple" | "gray";

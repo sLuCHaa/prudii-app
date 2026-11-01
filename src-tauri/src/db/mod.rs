@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
-pub(crate) const SCHEMA_VERSION: u32 = 45;
+pub(crate) const SCHEMA_VERSION: u32 = 46;
 
 pub struct Database {
     pub conn: Mutex<Connection>,
@@ -144,16 +144,8 @@ impl Database {
 
         // Reply-To header support (RFC 2822)
         let _ = conn.execute_batch("ALTER TABLE mails ADD COLUMN reply_to_json TEXT DEFAULT '[]';");
-        // Auto-labels column for rule-based mail classification
+        // Kept until the old classifier and backup code stop reading it.
         let _ = conn.execute_batch("ALTER TABLE mails ADD COLUMN auto_labels TEXT DEFAULT '';");
-        let _ = conn.execute_batch(
-            "CREATE INDEX IF NOT EXISTS idx_mails_auto_labels ON mails(auto_labels) WHERE auto_labels != '';"
-        );
-        // classify_unclassified filters on the OPPOSITE predicate — without
-        // this the classifier full-scans the mails table on every sync.
-        let _ = conn.execute_batch(
-            "CREATE INDEX IF NOT EXISTS idx_mails_unclassified ON mails(id) WHERE auto_labels = '' OR auto_labels IS NULL;"
-        );
 
         // v38: bracket-normalized message-id columns for thread lookup.
         // Message-IDs are stored inconsistently (with/without <>) depending on
@@ -712,6 +704,27 @@ impl Database {
             "ALTER TABLE mails ADD COLUMN invite_ics TEXT",
             "ALTER TABLE mails ADD COLUMN invite_partstat TEXT",
             "CREATE INDEX IF NOT EXISTS idx_mails_invites ON mails(account_id) WHERE invite_method = 'REQUEST'",
+        ] {
+            let _ = conn.execute_batch(sql);
+        }
+
+        // Mail categories (schema 46); "duplicate column" on re-runs is expected.
+        // mails.auto_labels stays physically but is no longer used.
+        for sql in [
+            "ALTER TABLE mails ADD COLUMN category TEXT",
+            "ALTER TABLE mails ADD COLUMN category_source TEXT",
+            "ALTER TABLE mails ADD COLUMN category_confidence REAL",
+            "ALTER TABLE mails ADD COLUMN category_reasons TEXT",
+            "ALTER TABLE mails ADD COLUMN signal_headers TEXT",
+            "CREATE TABLE IF NOT EXISTS sender_categories (
+                email TEXT PRIMARY KEY,
+                category TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )",
+            "CREATE INDEX IF NOT EXISTS idx_mails_category ON mails(folder_id, category) WHERE category IS NOT NULL AND category != ''",
+            "CREATE INDEX IF NOT EXISTS idx_mails_category_pending ON mails(folder_id) WHERE category IS NULL",
+            "DROP INDEX IF EXISTS idx_mails_auto_labels",
+            "DROP INDEX IF EXISTS idx_mails_unclassified",
         ] {
             let _ = conn.execute_batch(sql);
         }

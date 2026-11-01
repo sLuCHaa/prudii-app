@@ -253,61 +253,78 @@ pub fn list_mails(db: State<'_, Database>, folder_id: String, limit: Option<u32>
     })
 }
 
+pub(crate) fn mail_columns(prefix: &str, with_body: bool) -> String {
+    let p = prefix;
+    let body = if with_body {
+        format!("{p}body_text, {p}body_html")
+    } else {
+        "'' as body_text, '' as body_html".to_string()
+    };
+    format!(
+        "{p}id, {p}account_id, {p}folder_id, {p}message_id, {p}uid, {p}subject, {p}from_name, {p}from_email, {p}to_json, {p}cc_json, {p}bcc_json, {p}date, {p}snippet, {body}, {p}is_read, {p}is_starred, {p}is_flagged, {p}is_replied, {p}is_forwarded, {p}has_attachments, {p}thread_id, {p}in_reply_to, {p}size_bytes, COALESCE({p}flags, ''), COALESCE({p}list_unsubscribe, ''), COALESCE({p}is_pinned, 0), COALESCE({p}snoozed_until, ''), COALESCE({p}reply_to_json, '[]'), COALESCE({p}category, ''), COALESCE({p}\"references\", '')"
+    )
+}
+
+pub(crate) fn map_mail_row(row: &rusqlite::Row) -> rusqlite::Result<Mail> {
+    let to_json: String = row.get(8)?;
+    let cc_json: String = row.get(9)?;
+    let bcc_json: String = row.get(10)?;
+    let flags_str: String = row.get(24)?;
+    let unsub_str: String = row.get(25)?;
+    let snoozed_str: String = row.get(27)?;
+    let reply_to_json: String = row.get(28)?;
+    let category: String = row.get(29)?;
+
+    Ok(Mail {
+        id: row.get(0)?,
+        account_id: row.get(1)?,
+        folder_id: row.get(2)?,
+        message_id: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
+        uid: row.get(4)?,
+        subject: row.get(5)?,
+        from: MailAddress {
+            name: row.get(6)?,
+            email: row.get(7)?,
+        },
+        to: parse_addresses(&to_json),
+        cc: parse_addresses(&cc_json),
+        bcc: parse_addresses(&bcc_json),
+        date: row.get(11)?,
+        snippet: row.get(12)?,
+        body_text: row.get(13)?,
+        body_html: row.get(14)?,
+        is_read: row.get::<_, i32>(15)? != 0,
+        is_starred: row.get::<_, i32>(16)? != 0,
+        is_flagged: row.get::<_, i32>(17)? != 0,
+        is_replied: row.get::<_, i32>(18)? != 0,
+        is_forwarded: row.get::<_, i32>(19)? != 0,
+        has_attachments: row.get::<_, i32>(20)? != 0,
+        thread_id: row.get(21)?,
+        in_reply_to: row.get(22)?,
+        references: row.get::<_, String>(30).unwrap_or_default(),
+        size_bytes: row.get(23)?,
+        flags: parse_flags(&flags_str),
+        list_unsubscribe: if unsub_str.is_empty() { None } else { Some(unsub_str) },
+        reply_to: parse_addresses(&reply_to_json),
+        is_pinned: row.get::<_, i32>(26)? != 0,
+        snoozed_until: if snoozed_str.is_empty() { None } else { Some(snoozed_str) },
+        category: if category.is_empty() { None } else { Some(category) },
+    })
+}
+
 /// Command body, separated so integration tests can run it against a fixture DB.
 pub fn list_mails_inner(conn: &rusqlite::Connection, folder_id: &str, limit: Option<u32>, offset: Option<u32>, folder_filter: &Option<String>, sort: Option<&str>) -> Result<Vec<Mail>, String> {
     let limit = limit.unwrap_or(500).min(2000);
     let offset = offset.unwrap_or(0);
     let extra = filter_clause(folder_filter, "");
-    let sql = format!("SELECT id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, '' as body_text, '' as body_html, is_read, is_starred, is_flagged, is_replied, is_forwarded, has_attachments, thread_id, in_reply_to, size_bytes, COALESCE(flags, '') as flags, COALESCE(list_unsubscribe, '') as list_unsubscribe, COALESCE(is_pinned, 0) as is_pinned, COALESCE(snoozed_until, '') as snoozed_until, COALESCE(reply_to_json, '[]') as reply_to_json, COALESCE(\"references\", '') FROM mails WHERE folder_id = ?1 AND (snoozed_until IS NULL OR snoozed_until = '' OR snoozed_until <= datetime('now')){} ORDER BY {} LIMIT ?2 OFFSET ?3", extra, crate::db::mail_sort::order_clause(sort, "mails.", true));
+    let cols = mail_columns("", false);
+    let sql = format!("SELECT {cols} FROM mails WHERE folder_id = ?1 AND (snoozed_until IS NULL OR snoozed_until = '' OR snoozed_until <= datetime('now')){} ORDER BY {} LIMIT ?2 OFFSET ?3", extra, crate::db::mail_sort::order_clause(sort, "mails.", true));
     let mut stmt = conn
         .prepare(&sql)
         .map_err(|e| e.to_string())?;
 
     let mails = stmt
-        .query_map(rusqlite::params![folder_id, limit, offset], |row| {
-            let to_json: String = row.get(8)?;
-            let cc_json: String = row.get(9)?;
-            let bcc_json: String = row.get(10)?;
-            let flags_str: String = row.get(24)?;
-            let unsub_str: String = row.get(25)?;
-            let snoozed_str: String = row.get(27)?;
-            let reply_to_json: String = row.get(28)?;
-
-            Ok(Mail {
-                id: row.get(0)?,
-                account_id: row.get(1)?,
-                folder_id: row.get(2)?,
-                message_id: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
-                uid: row.get(4)?,
-                subject: row.get(5)?,
-                from: MailAddress {
-                    name: row.get(6)?,
-                    email: row.get(7)?,
-                },
-                to: parse_addresses(&to_json),
-                cc: parse_addresses(&cc_json),
-                bcc: parse_addresses(&bcc_json),
-                date: row.get(11)?,
-                snippet: row.get(12)?,
-                body_text: row.get(13)?,
-                body_html: row.get(14)?,
-                is_read: row.get::<_, i32>(15)? != 0,
-                is_starred: row.get::<_, i32>(16)? != 0,
-                is_flagged: row.get::<_, i32>(17)? != 0,
-                is_replied: row.get::<_, i32>(18)? != 0,
-                is_forwarded: row.get::<_, i32>(19)? != 0,
-                has_attachments: row.get::<_, i32>(20)? != 0,
-                thread_id: row.get(21)?,
-                in_reply_to: row.get(22)?,
-                references: row.get::<_, String>(29).unwrap_or_default(),
-                size_bytes: row.get(23)?,
-                flags: parse_flags(&flags_str),
-                list_unsubscribe: if unsub_str.is_empty() { None } else { Some(unsub_str) },
-                reply_to: parse_addresses(&reply_to_json),
-                is_pinned: row.get::<_, i32>(26)? != 0,
-                snoozed_until: if snoozed_str.is_empty() { None } else { Some(snoozed_str) },
-            })
-        })
+        .query_map(rusqlite::params![folder_id, limit, offset], map_mail_row)
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
@@ -322,7 +339,8 @@ pub fn list_all_inbox_mails(db: State<'_, Database>, limit: Option<u32>, offset:
     let offset = offset.unwrap_or(0);
     let extra = filter_clause(&folder_filter, "m.");
     let conn = db.lock_db();
-    let sql = format!("SELECT m.id, m.account_id, m.folder_id, m.message_id, m.uid, m.subject, m.from_name, m.from_email, m.to_json, m.cc_json, m.bcc_json, m.date, m.snippet, '' as body_text, '' as body_html, m.is_read, m.is_starred, m.is_flagged, m.is_replied, m.is_forwarded, m.has_attachments, m.thread_id, m.in_reply_to, m.size_bytes, COALESCE(m.flags, '') as flags, COALESCE(m.list_unsubscribe, '') as list_unsubscribe, COALESCE(m.is_pinned, 0) as is_pinned, COALESCE(m.snoozed_until, '') as snoozed_until, COALESCE(m.reply_to_json, '[]') as reply_to_json, COALESCE(m.\"references\", '')
+    let cols = mail_columns("m.", false);
+    let sql = format!("SELECT {cols}
              FROM mails m
              JOIN folders f ON m.folder_id = f.id
              WHERE f.folder_type = 'inbox' AND (m.snoozed_until IS NULL OR m.snoozed_until = '' OR m.snoozed_until <= datetime('now')){}
@@ -333,50 +351,7 @@ pub fn list_all_inbox_mails(db: State<'_, Database>, limit: Option<u32>, offset:
         .map_err(|e| e.to_string())?;
 
     let mails = stmt
-        .query_map(rusqlite::params![limit, offset], |row| {
-            let to_json: String = row.get(8)?;
-            let cc_json: String = row.get(9)?;
-            let bcc_json: String = row.get(10)?;
-            let flags_str: String = row.get(24)?;
-            let unsub_str: String = row.get(25)?;
-            let snoozed_str: String = row.get(27)?;
-            let reply_to_json: String = row.get(28)?;
-
-            Ok(Mail {
-                id: row.get(0)?,
-                account_id: row.get(1)?,
-                folder_id: row.get(2)?,
-                message_id: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
-                uid: row.get(4)?,
-                subject: row.get(5)?,
-                from: MailAddress {
-                    name: row.get(6)?,
-                    email: row.get(7)?,
-                },
-                to: parse_addresses(&to_json),
-                cc: parse_addresses(&cc_json),
-                bcc: parse_addresses(&bcc_json),
-                date: row.get(11)?,
-                snippet: row.get(12)?,
-                body_text: row.get(13)?,
-                body_html: row.get(14)?,
-                is_read: row.get::<_, i32>(15)? != 0,
-                is_starred: row.get::<_, i32>(16)? != 0,
-                is_flagged: row.get::<_, i32>(17)? != 0,
-                is_replied: row.get::<_, i32>(18)? != 0,
-                is_forwarded: row.get::<_, i32>(19)? != 0,
-                has_attachments: row.get::<_, i32>(20)? != 0,
-                thread_id: row.get(21)?,
-                in_reply_to: row.get(22)?,
-                references: row.get::<_, String>(29).unwrap_or_default(),
-                size_bytes: row.get(23)?,
-                flags: parse_flags(&flags_str),
-                list_unsubscribe: if unsub_str.is_empty() { None } else { Some(unsub_str) },
-                reply_to: parse_addresses(&reply_to_json),
-                is_pinned: row.get::<_, i32>(26)? != 0,
-                snoozed_until: if snoozed_str.is_empty() { None } else { Some(snoozed_str) },
-            })
-        })
+        .query_map(rusqlite::params![limit, offset], map_mail_row)
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
@@ -402,57 +377,14 @@ pub fn list_filtered_mails(
     let order = crate::db::mail_sort::order_clause(sort.as_deref(), "mails.", false);
     let conn = db.lock_db();
 
-    const BASE_SELECT: &str = "SELECT id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, '' as body_text, '' as body_html, is_read, is_starred, is_flagged, is_replied, is_forwarded, has_attachments, thread_id, in_reply_to, size_bytes, COALESCE(flags, '') as flags, COALESCE(list_unsubscribe, '') as list_unsubscribe, COALESCE(is_pinned, 0) as is_pinned, COALESCE(snoozed_until, '') as snoozed_until, COALESCE(reply_to_json, '[]') as reply_to_json, COALESCE(\"references\", '') FROM mails";
+    let base_select = format!("SELECT {} FROM mails", mail_columns("", false));
 
-    let row_mapper = |row: &rusqlite::Row| {
-        let to_json: String = row.get(8)?;
-        let cc_json: String = row.get(9)?;
-        let bcc_json: String = row.get(10)?;
-        let flags_str: String = row.get(24)?;
-        let unsub_str: String = row.get(25)?;
-        let snoozed_str: String = row.get(27)?;
-        let reply_to_json: String = row.get(28)?;
-
-        Ok(Mail {
-            id: row.get(0)?,
-            account_id: row.get(1)?,
-            folder_id: row.get(2)?,
-            message_id: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
-            uid: row.get(4)?,
-            subject: row.get(5)?,
-            from: MailAddress {
-                name: row.get(6)?,
-                email: row.get(7)?,
-            },
-            to: parse_addresses(&to_json),
-            cc: parse_addresses(&cc_json),
-            bcc: parse_addresses(&bcc_json),
-            date: row.get(11)?,
-            snippet: row.get(12)?,
-            body_text: row.get(13)?,
-            body_html: row.get(14)?,
-            is_read: row.get::<_, i32>(15)? != 0,
-            is_starred: row.get::<_, i32>(16)? != 0,
-            is_flagged: row.get::<_, i32>(17)? != 0,
-            is_replied: row.get::<_, i32>(18)? != 0,
-            is_forwarded: row.get::<_, i32>(19)? != 0,
-            has_attachments: row.get::<_, i32>(20)? != 0,
-            thread_id: row.get(21)?,
-            in_reply_to: row.get(22)?,
-            references: row.get::<_, String>(29).unwrap_or_default(),
-            size_bytes: row.get(23)?,
-            flags: parse_flags(&flags_str),
-            list_unsubscribe: if unsub_str.is_empty() { None } else { Some(unsub_str) },
-            reply_to: parse_addresses(&reply_to_json),
-            is_pinned: row.get::<_, i32>(26)? != 0,
-            snoozed_until: if snoozed_str.is_empty() { None } else { Some(snoozed_str) },
-        })
-    };
+    let row_mapper = map_mail_row;
 
     // All queries use parameterized placeholders â€” no string interpolation
     let mails = match (filter_type.as_str(), &account_id) {
         ("starred", Some(acc_id)) => {
-            let sql = format!("{}{} ORDER BY {order} LIMIT ?2 OFFSET ?3", BASE_SELECT, starred_where(true, &extra));
+            let sql = format!("{}{} ORDER BY {order} LIMIT ?2 OFFSET ?3", base_select, starred_where(true, &extra));
             let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
             let rows = stmt.query_map(rusqlite::params![acc_id, limit, offset], row_mapper)
                 .map_err(|e| e.to_string())?
@@ -461,7 +393,7 @@ pub fn list_filtered_mails(
             rows
         }
         ("starred", None) => {
-            let sql = format!("{}{} ORDER BY {order} LIMIT ?1 OFFSET ?2", BASE_SELECT, starred_where(false, &extra));
+            let sql = format!("{}{} ORDER BY {order} LIMIT ?1 OFFSET ?2", base_select, starred_where(false, &extra));
             let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
             let rows = stmt.query_map(rusqlite::params![limit, offset], row_mapper)
                 .map_err(|e| e.to_string())?
@@ -470,7 +402,7 @@ pub fn list_filtered_mails(
             rows
         }
         (flag, Some(acc_id)) => {
-            let sql = format!("{} WHERE flags LIKE ?1 ESCAPE '\\' AND account_id = ?2{} ORDER BY {order} LIMIT ?3 OFFSET ?4", BASE_SELECT, extra);
+            let sql = format!("{} WHERE flags LIKE ?1 ESCAPE '\\' AND account_id = ?2{} ORDER BY {order} LIMIT ?3 OFFSET ?4", base_select, extra);
             let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
             // Escape LIKE wildcards in flag value
             let safe_flag = flag.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
@@ -482,7 +414,7 @@ pub fn list_filtered_mails(
             rows
         }
         (flag, None) => {
-            let sql = format!("{} WHERE flags LIKE ?1 ESCAPE '\\'{} ORDER BY {order} LIMIT ?2 OFFSET ?3", BASE_SELECT, extra);
+            let sql = format!("{} WHERE flags LIKE ?1 ESCAPE '\\'{} ORDER BY {order} LIMIT ?2 OFFSET ?3", base_select, extra);
             let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
             let safe_flag = flag.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
             let like_param = format!("%{}%", safe_flag);
@@ -502,52 +434,9 @@ fn get_mail_inner(db: &Database, mail_id: &str) -> Result<Option<Mail>, String> 
     let conn = db.lock_db();
     let result = conn
         .query_row(
-            "SELECT id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, body_text, body_html, is_read, is_starred, is_flagged, is_replied, is_forwarded, has_attachments, thread_id, in_reply_to, size_bytes, COALESCE(flags, '') as flags, COALESCE(list_unsubscribe, '') as list_unsubscribe, COALESCE(is_pinned, 0) as is_pinned, COALESCE(snoozed_until, '') as snoozed_until, COALESCE(reply_to_json, '[]') as reply_to_json, COALESCE(\"references\", '') FROM mails WHERE id = ?1",
+            &format!("SELECT {} FROM mails WHERE id = ?1", mail_columns("", true)),
             rusqlite::params![mail_id],
-            |row| {
-                let to_json: String = row.get(8)?;
-                let cc_json: String = row.get(9)?;
-                let bcc_json: String = row.get(10)?;
-                let flags_str: String = row.get(24)?;
-                let unsub_str: String = row.get(25)?;
-                let snoozed_str: String = row.get(27)?;
-                let reply_to_json: String = row.get(28)?;
-
-                Ok(Mail {
-                    id: row.get(0)?,
-                    account_id: row.get(1)?,
-                    folder_id: row.get(2)?,
-                    message_id: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
-                    uid: row.get(4)?,
-                    subject: row.get(5)?,
-                    from: MailAddress {
-                        name: row.get(6)?,
-                        email: row.get(7)?,
-                    },
-                    to: parse_addresses(&to_json),
-                    cc: parse_addresses(&cc_json),
-                    bcc: parse_addresses(&bcc_json),
-                    date: row.get(11)?,
-                    snippet: row.get(12)?,
-                    body_text: row.get(13)?,
-                    body_html: row.get(14)?,
-                    is_read: row.get::<_, i32>(15)? != 0,
-                    is_starred: row.get::<_, i32>(16)? != 0,
-                    is_flagged: row.get::<_, i32>(17)? != 0,
-                    is_replied: row.get::<_, i32>(18)? != 0,
-                    is_forwarded: row.get::<_, i32>(19)? != 0,
-                    has_attachments: row.get::<_, i32>(20)? != 0,
-                    thread_id: row.get(21)?,
-                    in_reply_to: row.get(22)?,
-                    references: row.get::<_, String>(29).unwrap_or_default(),
-                    size_bytes: row.get(23)?,
-                    flags: parse_flags(&flags_str),
-                    list_unsubscribe: if unsub_str.is_empty() { None } else { Some(unsub_str) },
-                    reply_to: parse_addresses(&reply_to_json),
-                    is_pinned: row.get::<_, i32>(26)? != 0,
-                    snoozed_until: if snoozed_str.is_empty() { None } else { Some(snoozed_str) },
-                })
-            },
+            map_mail_row,
         );
 
     match result {
@@ -1398,62 +1287,19 @@ pub fn list_snoozed_mails(db: State<'_, Database>, account_id: Option<String>) -
         let conn = db.lock_db();
         let (sql, params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = if let Some(ref acc_id) = account_id {
             (
-                "SELECT id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, '' as body_text, '' as body_html, is_read, is_starred, is_flagged, is_replied, is_forwarded, has_attachments, thread_id, in_reply_to, size_bytes, COALESCE(flags, '') as flags, COALESCE(list_unsubscribe, '') as list_unsubscribe, COALESCE(is_pinned, 0) as is_pinned, COALESCE(snoozed_until, '') as snoozed_until, COALESCE(reply_to_json, '[]') as reply_to_json, COALESCE(\"references\", '') FROM mails WHERE snoozed_until != '' AND snoozed_until > datetime('now') AND account_id = ?1 ORDER BY snoozed_until ASC".to_string(),
+                format!("SELECT {} FROM mails WHERE snoozed_until != '' AND snoozed_until > datetime('now') AND account_id = ?1 ORDER BY snoozed_until ASC", mail_columns("", false)),
                 vec![Box::new(acc_id.clone()) as Box<dyn rusqlite::types::ToSql>],
             )
         } else {
             (
-                "SELECT id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, '' as body_text, '' as body_html, is_read, is_starred, is_flagged, is_replied, is_forwarded, has_attachments, thread_id, in_reply_to, size_bytes, COALESCE(flags, '') as flags, COALESCE(list_unsubscribe, '') as list_unsubscribe, COALESCE(is_pinned, 0) as is_pinned, COALESCE(snoozed_until, '') as snoozed_until, COALESCE(reply_to_json, '[]') as reply_to_json, COALESCE(\"references\", '') FROM mails WHERE snoozed_until != '' AND snoozed_until > datetime('now') ORDER BY snoozed_until ASC".to_string(),
+                format!("SELECT {} FROM mails WHERE snoozed_until != '' AND snoozed_until > datetime('now') ORDER BY snoozed_until ASC", mail_columns("", false)),
                 vec![],
             )
         };
         let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
         let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
         let mails = stmt
-            .query_map(param_refs.as_slice(), |row| {
-                let to_json: String = row.get(8)?;
-                let cc_json: String = row.get(9)?;
-                let bcc_json: String = row.get(10)?;
-                let flags_str: String = row.get(24)?;
-                let unsub_str: String = row.get(25)?;
-                let snoozed_str: String = row.get(27)?;
-                let reply_to_json: String = row.get(28)?;
-
-                Ok(Mail {
-                    id: row.get(0)?,
-                    account_id: row.get(1)?,
-                    folder_id: row.get(2)?,
-                    message_id: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
-                    uid: row.get(4)?,
-                    subject: row.get(5)?,
-                    from: MailAddress {
-                        name: row.get(6)?,
-                        email: row.get(7)?,
-                    },
-                    to: parse_addresses(&to_json),
-                    cc: parse_addresses(&cc_json),
-                    bcc: parse_addresses(&bcc_json),
-                    date: row.get(11)?,
-                    snippet: row.get(12)?,
-                    body_text: row.get(13)?,
-                    body_html: row.get(14)?,
-                    is_read: row.get::<_, i32>(15)? != 0,
-                    is_starred: row.get::<_, i32>(16)? != 0,
-                    is_flagged: row.get::<_, i32>(17)? != 0,
-                    is_replied: row.get::<_, i32>(18)? != 0,
-                    is_forwarded: row.get::<_, i32>(19)? != 0,
-                    has_attachments: row.get::<_, i32>(20)? != 0,
-                    thread_id: row.get(21)?,
-                    in_reply_to: row.get(22)?,
-                    references: row.get::<_, String>(29).unwrap_or_default(),
-                    size_bytes: row.get(23)?,
-                    flags: parse_flags(&flags_str),
-                    list_unsubscribe: if unsub_str.is_empty() { None } else { Some(unsub_str) },
-                    reply_to: parse_addresses(&reply_to_json),
-                    is_pinned: row.get::<_, i32>(26)? != 0,
-                    snoozed_until: if snoozed_str.is_empty() { None } else { Some(snoozed_str) },
-                })
-            })
+            .query_map(param_refs.as_slice(), map_mail_row)
             .map_err(|e| e.to_string())?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| e.to_string())?;
@@ -2631,52 +2477,9 @@ pub fn get_thread_mails(db: State<'_, Database>, mail_id: String) -> Result<Vec<
 pub fn get_thread_mails_inner(conn: &rusqlite::Connection, mail_id: &str) -> Result<Vec<Mail>, String> {
     fn query_single_mail(conn: &rusqlite::Connection, mail_id: &str) -> Result<Mail, String> {
         conn.query_row(
-            "SELECT id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, body_text, body_html, is_read, is_starred, is_flagged, is_replied, is_forwarded, has_attachments, thread_id, in_reply_to, size_bytes, COALESCE(flags, '') as flags, COALESCE(list_unsubscribe, '') as list_unsubscribe, COALESCE(is_pinned, 0) as is_pinned, COALESCE(snoozed_until, '') as snoozed_until, COALESCE(reply_to_json, '[]') as reply_to_json, COALESCE(\"references\", '') FROM mails WHERE id = ?1",
+            &format!("SELECT {} FROM mails WHERE id = ?1", mail_columns("", true)),
             rusqlite::params![mail_id],
-            |row| {
-                let to_json: String = row.get(8)?;
-                let cc_json: String = row.get(9)?;
-                let bcc_json: String = row.get(10)?;
-                let flags_str: String = row.get(24)?;
-                let unsub_str: String = row.get(25)?;
-                let snoozed_str: String = row.get(27)?;
-                let reply_to_json: String = row.get(28)?;
-
-                Ok(Mail {
-                    id: row.get(0)?,
-                    account_id: row.get(1)?,
-                    folder_id: row.get(2)?,
-                    message_id: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
-                    uid: row.get(4)?,
-                    subject: row.get(5)?,
-                    from: MailAddress {
-                        name: row.get(6)?,
-                        email: row.get(7)?,
-                    },
-                    to: parse_addresses(&to_json),
-                    cc: parse_addresses(&cc_json),
-                    bcc: parse_addresses(&bcc_json),
-                    date: row.get(11)?,
-                    snippet: row.get(12)?,
-                    body_text: row.get(13)?,
-                    body_html: row.get(14)?,
-                    is_read: row.get::<_, i32>(15)? != 0,
-                    is_starred: row.get::<_, i32>(16)? != 0,
-                    is_flagged: row.get::<_, i32>(17)? != 0,
-                    is_replied: row.get::<_, i32>(18)? != 0,
-                    is_forwarded: row.get::<_, i32>(19)? != 0,
-                    has_attachments: row.get::<_, i32>(20)? != 0,
-                    thread_id: row.get(21)?,
-                    in_reply_to: row.get(22)?,
-                    references: row.get::<_, String>(29).unwrap_or_default(),
-                    size_bytes: row.get(23)?,
-                    flags: parse_flags(&flags_str),
-                    list_unsubscribe: if unsub_str.is_empty() { None } else { Some(unsub_str) },
-                    reply_to: parse_addresses(&reply_to_json),
-                    is_pinned: row.get::<_, i32>(26)? != 0,
-                    snoozed_until: if snoozed_str.is_empty() { None } else { Some(snoozed_str) },
-                })
-            },
+            map_mail_row,
         )
         .map_err(|e| format!("Mail not found: {}", e))
     }
@@ -2795,8 +2598,9 @@ pub fn get_thread_mails_inner(conn: &rusqlite::Connection, mail_id: &str) -> Res
     // dedup_mails/dedupe_thread_copies below do that in Rust over the already
     // small thread set instead.
     let owner_param_idx = related_ids.len() + 1;
+    let cols = mail_columns("m.", true);
     let simple_query = format!(
-        "SELECT m.id, m.account_id, m.folder_id, m.message_id, m.uid, m.subject, m.from_name, m.from_email, m.to_json, m.cc_json, m.bcc_json, m.date, m.snippet, m.body_text, m.body_html, m.is_read, m.is_starred, m.is_flagged, m.is_replied, m.is_forwarded, m.has_attachments, m.thread_id, m.in_reply_to, m.size_bytes, COALESCE(m.flags, '') as flags, COALESCE(m.list_unsubscribe, '') as list_unsubscribe, COALESCE(m.is_pinned, 0) as is_pinned, COALESCE(m.snoozed_until, '') as snoozed_until, COALESCE(m.reply_to_json, '[]') as reply_to_json, COALESCE(m.\"references\", '')
+        "SELECT {cols}
          FROM mails m
          WHERE m.account_id = ?{1}
            AND (m.message_id_norm IN ({0})
@@ -2812,50 +2616,7 @@ pub fn get_thread_mails_inner(conn: &rusqlite::Connection, mail_id: &str) -> Res
     params.push(&account_id);
 
     let mails = stmt
-        .query_map(params.as_slice(), |row| {
-            let to_json: String = row.get(8)?;
-            let cc_json: String = row.get(9)?;
-            let bcc_json: String = row.get(10)?;
-            let flags_str: String = row.get(24)?;
-            let unsub_str: String = row.get(25)?;
-            let snoozed_str: String = row.get(27)?;
-            let reply_to_json: String = row.get(28)?;
-
-            Ok(Mail {
-                id: row.get(0)?,
-                account_id: row.get(1)?,
-                folder_id: row.get(2)?,
-                message_id: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
-                uid: row.get(4)?,
-                subject: row.get(5)?,
-                from: MailAddress {
-                    name: row.get(6)?,
-                    email: row.get(7)?,
-                },
-                to: parse_addresses(&to_json),
-                cc: parse_addresses(&cc_json),
-                bcc: parse_addresses(&bcc_json),
-                date: row.get(11)?,
-                snippet: row.get(12)?,
-                body_text: row.get(13)?,
-                body_html: row.get(14)?,
-                is_read: row.get::<_, i32>(15)? != 0,
-                is_starred: row.get::<_, i32>(16)? != 0,
-                is_flagged: row.get::<_, i32>(17)? != 0,
-                is_replied: row.get::<_, i32>(18)? != 0,
-                is_forwarded: row.get::<_, i32>(19)? != 0,
-                has_attachments: row.get::<_, i32>(20)? != 0,
-                thread_id: row.get(21)?,
-                in_reply_to: row.get(22)?,
-                references: row.get::<_, String>(29).unwrap_or_default(),
-                size_bytes: row.get(23)?,
-                flags: parse_flags(&flags_str),
-                list_unsubscribe: if unsub_str.is_empty() { None } else { Some(unsub_str) },
-                reply_to: parse_addresses(&reply_to_json),
-                is_pinned: row.get::<_, i32>(26)? != 0,
-                snoozed_until: if snoozed_str.is_empty() { None } else { Some(snoozed_str) },
-            })
-        })
+        .query_map(params.as_slice(), map_mail_row)
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
@@ -3191,7 +2952,8 @@ pub fn list_combined_folder_mails(db: State<'_, Database>, folder_type: String, 
     let offset = offset.unwrap_or(0);
     let extra = filter_clause(&folder_filter, "m.");
     let conn = db.lock_db();
-    let sql = format!("SELECT m.id, m.account_id, m.folder_id, m.message_id, m.uid, m.subject, m.from_name, m.from_email, m.to_json, m.cc_json, m.bcc_json, m.date, m.snippet, '' as body_text, '' as body_html, m.is_read, m.is_starred, m.is_flagged, m.is_replied, m.is_forwarded, m.has_attachments, m.thread_id, m.in_reply_to, m.size_bytes, COALESCE(m.flags, '') as flags, COALESCE(m.list_unsubscribe, '') as list_unsubscribe, COALESCE(m.is_pinned, 0) as is_pinned, COALESCE(m.snoozed_until, '') as snoozed_until, COALESCE(m.reply_to_json, '[]') as reply_to_json, COALESCE(m.\"references\", '')
+    let cols = mail_columns("m.", false);
+    let sql = format!("SELECT {cols}
              FROM mails m
              JOIN folders f ON m.folder_id = f.id
              WHERE f.folder_type = ?1 AND (m.snoozed_until IS NULL OR m.snoozed_until = '' OR m.snoozed_until <= datetime('now')){}
@@ -3202,50 +2964,7 @@ pub fn list_combined_folder_mails(db: State<'_, Database>, folder_type: String, 
         .map_err(|e| e.to_string())?;
 
     let mails = stmt
-        .query_map(rusqlite::params![folder_type, limit, offset], |row| {
-            let to_json: String = row.get(8)?;
-            let cc_json: String = row.get(9)?;
-            let bcc_json: String = row.get(10)?;
-            let flags_str: String = row.get(24)?;
-            let unsub_str: String = row.get(25)?;
-            let snoozed_str: String = row.get(27)?;
-            let reply_to_json: String = row.get(28)?;
-
-            Ok(Mail {
-                id: row.get(0)?,
-                account_id: row.get(1)?,
-                folder_id: row.get(2)?,
-                message_id: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
-                uid: row.get(4)?,
-                subject: row.get(5)?,
-                from: MailAddress {
-                    name: row.get(6)?,
-                    email: row.get(7)?,
-                },
-                to: parse_addresses(&to_json),
-                cc: parse_addresses(&cc_json),
-                bcc: parse_addresses(&bcc_json),
-                date: row.get(11)?,
-                snippet: row.get(12)?,
-                body_text: row.get(13)?,
-                body_html: row.get(14)?,
-                is_read: row.get::<_, i32>(15)? != 0,
-                is_starred: row.get::<_, i32>(16)? != 0,
-                is_flagged: row.get::<_, i32>(17)? != 0,
-                is_replied: row.get::<_, i32>(18)? != 0,
-                is_forwarded: row.get::<_, i32>(19)? != 0,
-                has_attachments: row.get::<_, i32>(20)? != 0,
-                thread_id: row.get(21)?,
-                in_reply_to: row.get(22)?,
-                references: row.get::<_, String>(29).unwrap_or_default(),
-                size_bytes: row.get(23)?,
-                flags: parse_flags(&flags_str),
-                list_unsubscribe: if unsub_str.is_empty() { None } else { Some(unsub_str) },
-                reply_to: parse_addresses(&reply_to_json),
-                is_pinned: row.get::<_, i32>(26)? != 0,
-                snoozed_until: if snoozed_str.is_empty() { None } else { Some(snoozed_str) },
-            })
-        })
+        .query_map(rusqlite::params![folder_type, limit, offset], map_mail_row)
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
@@ -4243,7 +3962,7 @@ pub fn list_split_inbox_mails(
 
         let sql = format!(
             "SELECT {} FROM mails WHERE {} ORDER BY {} LIMIT {} OFFSET {}",
-            MAIL_LIST_COLUMNS, where_parts.join(" AND "), crate::db::mail_sort::order_clause(sort.as_deref(), "mails.", false), lim, off
+            mail_columns("", false), where_parts.join(" AND "), crate::db::mail_sort::order_clause(sort.as_deref(), "mails.", false), lim, off
         );
 
         let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
@@ -4269,7 +3988,7 @@ pub fn list_split_inbox_mails(
 
     let sql = format!(
         "SELECT {} FROM mails WHERE {} ORDER BY {} LIMIT {} OFFSET {}",
-        MAIL_LIST_COLUMNS, where_parts.join(" AND "), crate::db::mail_sort::order_clause(sort.as_deref(), "mails.", false), lim, off
+        mail_columns("", false), where_parts.join(" AND "), crate::db::mail_sort::order_clause(sort.as_deref(), "mails.", false), lim, off
     );
 
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
@@ -4279,55 +3998,6 @@ pub fn list_split_inbox_mails(
         .filter_map(|r| r.ok())
         .collect();
     Ok(rows)
-}
-
-// List views never render bodies — shipping them over IPC for a whole page of
-// mails is pure transfer cost (the sibling list_* commands blank them too).
-const MAIL_LIST_COLUMNS: &str = "id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, '' as body_text, '' as body_html, is_read, is_starred, is_flagged, is_replied, is_forwarded, has_attachments, thread_id, in_reply_to, size_bytes, COALESCE(flags, ''), COALESCE(list_unsubscribe, ''), COALESCE(is_pinned, 0), COALESCE(snoozed_until, ''), COALESCE(reply_to_json, '[]'), COALESCE(auto_labels, ''), COALESCE(\"references\", '')";
-
-fn map_mail_row(row: &rusqlite::Row) -> rusqlite::Result<Mail> {
-    let to_json: String = row.get(8)?;
-    let cc_json: String = row.get(9)?;
-    let bcc_json: String = row.get(10)?;
-    let flags_str: String = row.get(24)?;
-    let unsub_str: String = row.get(25)?;
-    let snoozed_str: String = row.get(27)?;
-    let reply_to_json: String = row.get(28)?;
-
-    Ok(Mail {
-        id: row.get(0)?,
-        account_id: row.get(1)?,
-        folder_id: row.get(2)?,
-        message_id: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
-        uid: row.get(4)?,
-        subject: row.get(5)?,
-        from: MailAddress {
-            name: row.get(6)?,
-            email: row.get(7)?,
-        },
-        to: parse_addresses(&to_json),
-        cc: parse_addresses(&cc_json),
-        bcc: parse_addresses(&bcc_json),
-        date: row.get(11)?,
-        snippet: row.get(12)?,
-        body_text: row.get(13)?,
-        body_html: row.get(14)?,
-        is_read: row.get::<_, i32>(15)? != 0,
-        is_starred: row.get::<_, i32>(16)? != 0,
-        is_flagged: row.get::<_, i32>(17)? != 0,
-        is_replied: row.get::<_, i32>(18)? != 0,
-        is_forwarded: row.get::<_, i32>(19)? != 0,
-        has_attachments: row.get::<_, i32>(20)? != 0,
-        thread_id: row.get(21)?,
-        in_reply_to: row.get(22)?,
-        references: row.get::<_, String>(30).unwrap_or_default(),
-        size_bytes: row.get(23)?,
-        flags: parse_flags(&flags_str),
-        list_unsubscribe: if unsub_str.is_empty() { None } else { Some(unsub_str) },
-        reply_to: parse_addresses(&reply_to_json),
-        is_pinned: row.get::<_, i32>(26)? != 0,
-        snoozed_until: if snoozed_str.is_empty() { None } else { Some(snoozed_str) },
-    })
 }
 
 /// Resolves team assignments (keyed by Message-ID) to local mails. Gmail keeps a
@@ -4343,7 +4013,7 @@ pub fn list_mails_by_message_ids(db: State<'_, Database>, message_ids: Vec<Strin
         let placeholders = (1..=ids.len()).map(|i| format!("?{}", i)).collect::<Vec<_>>().join(", ");
         let sql = format!(
             "SELECT {} FROM mails WHERE message_id IN ({}) AND folder_id NOT IN (SELECT id FROM folders WHERE folder_type IN ('trash', 'spam')) ORDER BY (folder_id IN (SELECT id FROM folders WHERE folder_type = 'inbox')) DESC, date DESC",
-            MAIL_LIST_COLUMNS, placeholders
+            mail_columns("", false), placeholders
         );
         let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
         let params: Vec<&dyn rusqlite::types::ToSql> = ids.iter().map(|s| s as &dyn rusqlite::types::ToSql).collect();
@@ -5160,6 +4830,7 @@ mod list_tests {
             reply_to: vec![],
             is_pinned: false,
             snoozed_until: None,
+            category: None,
         }
     }
 
@@ -5308,5 +4979,26 @@ mod compose_preview_tests {
         assert!(!launches_program("Angebot.pdf"));
         assert!(!launches_program("archiv.tar.gz"));
         assert!(!launches_program("ohne-endung"));
+    }
+}
+
+#[cfg(test)]
+mod category_column_tests {
+    use crate::test_support::*;
+
+    #[test]
+    fn mail_rows_carry_category() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        let acc = seed_account(&conn, "anna.weber@studio-halde.example");
+        let inbox = seed_folder(&conn, &acc, "inbox");
+        seed_mail(&conn, &SeedMail { account_id: &acc, folder_id: &inbox, subject: "Wochenrückblick", category: Some("newsletters"), ..Default::default() });
+        seed_mail(&conn, &SeedMail { account_id: &acc, folder_id: &inbox, subject: "Unsicher", category: Some(""), ..Default::default() });
+        seed_mail(&conn, &SeedMail { account_id: &acc, folder_id: &inbox, subject: "Neu", category: None, ..Default::default() });
+        let mails = super::list_mails_inner(&conn, &inbox, None, None, &None, None).unwrap();
+        let by_subject = |s: &str| mails.iter().find(|m| m.subject == s).unwrap().category.clone();
+        assert_eq!(by_subject("Wochenrückblick"), Some("newsletters".to_string()));
+        assert_eq!(by_subject("Unsicher"), None);
+        assert_eq!(by_subject("Neu"), None);
     }
 }
