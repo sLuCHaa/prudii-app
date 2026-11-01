@@ -115,7 +115,7 @@ pub fn categorize_batch(conn: &Connection, correspondents: &HashMap<String, u32>
             "SELECT m.id, m.account_id, COALESCE(m.from_email, ''), COALESCE(m.subject, ''), COALESCE(m.signal_headers, ''),
                     COALESCE(m.list_unsubscribe, ''), m.thread_id
              FROM mails m JOIN folders f ON m.folder_id = f.id
-             WHERE f.folder_type = 'inbox' AND m.category IS NULL LIMIT ?1",
+             WHERE f.folder_type = 'inbox' AND m.category IS NULL ORDER BY m.date DESC LIMIT ?1",
         )?
         .query_map(params![limit as i64], |r| {
             Ok(Pending {
@@ -143,17 +143,33 @@ pub fn categorize_batch(conn: &Connection, correspondents: &HashMap<String, u32>
     Ok(pending.len())
 }
 
+fn has_pending(conn: &Connection) -> bool {
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM mails m JOIN folders f ON m.folder_id = f.id
+         WHERE f.folder_type = 'inbox' AND m.category IS NULL)",
+        [],
+        |r| r.get::<_, bool>(0),
+    )
+    .unwrap_or(true)
+}
+
 pub fn categorize_all_pending(db: &Database) -> usize {
     if RUNNING.swap(true, Ordering::SeqCst) {
         return 0;
     }
     let _guard = RunGuard;
 
-    let correspondents = load_correspondents(&db.lock_db());
+    let correspondents = {
+        let conn = db.lock_db();
+        if !has_pending(&conn) {
+            return 0;
+        }
+        load_correspondents(&conn)
+    };
     let mut total = 0;
     loop {
-        let conn = db.lock_db();
-        match categorize_batch(&conn, &correspondents, BATCH) {
+        let result = categorize_batch(&db.lock_db(), &correspondents, BATCH);
+        match result {
             Ok(0) => break,
             Ok(n) => total += n,
             Err(e) => {
@@ -161,6 +177,7 @@ pub fn categorize_all_pending(db: &Database) -> usize {
                 break;
             }
         }
+        std::thread::sleep(std::time::Duration::from_millis(5));
     }
     total
 }
@@ -219,7 +236,8 @@ pub fn set_mail_category(conn: &Connection, mail_id: &str, category: Option<&str
         changed += tx
             .execute(
                 "UPDATE mails SET category = ?1, category_source = 'sender', category_confidence = 1.0, category_reasons = ?2
-                 WHERE lower(trim(from_email)) = ?3 AND id != ?4 AND COALESCE(category_source, '') != 'user'",
+                 WHERE lower(trim(from_email)) = ?3 AND id != ?4 AND COALESCE(category_source, '') != 'user'
+                   AND folder_id IN (SELECT id FROM folders WHERE folder_type = 'inbox')",
                 params![value, reasons_json(&[Reason::new("sender_rule").with("sender", &sender)]), sender, mail_id],
             )
             .map_err(err)?;
@@ -456,6 +474,29 @@ mod tests {
     }
 
     #[test]
+    fn nothing_pending_returns_zero() {
+        let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        set_running(false);
+        let f = fixture();
+        seed_mail(&f.db.lock_db(), &SeedMail { category: Some(""), ..pending(&f, "info@studio-halde.example") });
+        assert_eq!(categorize_all_pending(&f.db), 0);
+        assert_eq!(categorize_all_pending(&f.db), 0);
+    }
+
+    #[test]
+    fn pending_mails_are_processed_newest_first() {
+        let f = fixture();
+        let conn = f.db.lock_db();
+        let old = seed_mail(&conn, &pending(&f, "info@studio-halde.example"));
+        let new = seed_mail(&conn, &pending(&f, "info@studio-halde.example"));
+        conn.execute("UPDATE mails SET date = '2020-01-01T00:00:00Z' WHERE id = ?1", params![old]).unwrap();
+        conn.execute("UPDATE mails SET date = '2026-01-01T00:00:00Z' WHERE id = ?1", params![new]).unwrap();
+        assert_eq!(categorize_batch(&conn, &HashMap::new(), 1).unwrap(), 1);
+        assert!(row(&conn, &new).0.is_some());
+        assert_eq!(row(&conn, &old).0, None);
+    }
+
+    #[test]
     fn concurrent_call_returns_immediately() {
         let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
         let f = fixture();
@@ -503,6 +544,20 @@ mod tests {
         let next = seed_mail(&conn, &pending(&f, "ANNA.WEBER@studio-halde.example"));
         categorize_batch(&conn, &HashMap::new(), BATCH).unwrap();
         assert_eq!(cat_source(&conn, &next), (Some("purchases".into()), Some("sender".into())));
+    }
+
+    #[test]
+    fn remember_sender_only_relabels_inbox_mails() {
+        let f = fixture();
+        let conn = f.db.lock_db();
+        let archive = seed_folder(&conn, &f.account, "archive");
+        let a = seed_mail(&conn, &pending(&f, "anna.weber@studio-halde.example"));
+        let inbox_other = seed_mail(&conn, &pending(&f, "anna.weber@studio-halde.example"));
+        let archived = seed_mail(&conn, &SeedMail { folder_id: &archive, ..pending(&f, "anna.weber@studio-halde.example") });
+        let changed = set_mail_category(&conn, &a, Some("purchases"), true).unwrap();
+        assert_eq!(changed, 2);
+        assert_eq!(row(&conn, &inbox_other).0.as_deref(), Some("purchases"));
+        assert_eq!(row(&conn, &archived).0, None);
     }
 
     #[test]
