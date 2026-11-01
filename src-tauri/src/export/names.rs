@@ -45,8 +45,28 @@ pub fn attachment_name(raw: Option<&str>, index: usize) -> String {
         .map(str::trim)
         .filter(|s| !s.is_empty());
     match last {
-        Some(name) => safe_segment(name, 50),
+        Some(name) => keep_extension(name, ATTACHMENT_CHARS),
         None => format!("attachment-{}.bin", index),
+    }
+}
+
+const ATTACHMENT_CHARS: usize = 50;
+const EXTENSION_CHARS: usize = 10;
+
+fn keep_extension(name: &str, max_chars: usize) -> String {
+    if name.chars().count() <= max_chars {
+        return safe_segment(name, max_chars);
+    }
+    let split = name.rfind('.').filter(|&i| {
+        let ext = &name[i + 1..];
+        i > 0 && (1..=EXTENSION_CHARS).contains(&ext.chars().count()) && ext.chars().all(char::is_alphanumeric)
+    });
+    match split {
+        Some(i) => {
+            let ext = &name[i..];
+            format!("{}{}", safe_segment(&name[..i], max_chars - ext.chars().count()), ext)
+        }
+        None => safe_segment(name, max_chars),
     }
 }
 
@@ -102,6 +122,19 @@ mod tests {
         assert_eq!(attachment_name(Some("../../evil.exe"), 1), "evil.exe");
         assert_eq!(attachment_name(Some("C:\\x\\plan.pdf"), 1), "plan.pdf");
         assert_eq!(attachment_name(None, 3), "attachment-3.bin");
+    }
+
+    #[test]
+    fn long_attachment_names_keep_their_extension() {
+        assert_eq!(
+            attachment_name(Some("Angebot_Neubau_Waldweg_Studio_Halde_2026-10-21_final.pdf"), 1),
+            "Angebot_Neubau_Waldweg_Studio_Halde_2026-10-21.pdf"
+        );
+        let umlauts = attachment_name(Some(&format!("Grundriss-{}.jpeg", "ü".repeat(60))), 1);
+        assert!(umlauts.ends_with(".jpeg") && umlauts.chars().count() == 50, "{umlauts}");
+        let odd = attachment_name(Some(&format!("{}.not-really-an-extension", "x".repeat(60))), 1);
+        assert_eq!(odd.chars().count(), 50);
+        assert_eq!(attachment_name(Some("Plan.pdf"), 1), "Plan.pdf");
     }
 
     #[test]

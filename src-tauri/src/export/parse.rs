@@ -1,6 +1,7 @@
 use super::names::attachment_name;
 use crate::smtp::attachment::{attachment_part, inline_attachment_part};
 use chrono::{DateTime, FixedOffset, NaiveDateTime, TimeZone, Utc};
+use lettre::address::Envelope;
 use lettre::message::{header::ContentType, Mailbox, MultiPart, SinglePart};
 use lettre::Message;
 use mail_parser::{MessageParser, MimeHeaders, PartType};
@@ -29,6 +30,7 @@ pub struct ParsedMail {
     pub from: Addr,
     pub to: Vec<Addr>,
     pub cc: Vec<Addr>,
+    pub bcc: Vec<Addr>,
     pub date: Option<DateTime<FixedOffset>>,
     pub html: Option<String>,
     pub text: Option<String>,
@@ -42,6 +44,7 @@ pub struct LocalMail {
     pub from_email: String,
     pub to_json: String,
     pub cc_json: String,
+    pub bcc_json: String,
     pub date: String,
     pub body_html: String,
     pub body_text: String,
@@ -116,6 +119,7 @@ pub fn parse_raw(raw: &[u8]) -> Option<ParsedMail> {
         from,
         to: addrs(msg.to()),
         cc: addrs(msg.cc()),
+        bcc: addrs(msg.bcc()),
         date: msg.date().and_then(header_date),
         html,
         text,
@@ -138,6 +142,7 @@ pub fn from_local(row: &LocalMail, attachments: Vec<ExportPart>) -> ParsedMail {
         from: Addr { name: row.from_name.clone(), email: row.from_email.clone() },
         to: serde_json::from_str(&row.to_json).unwrap_or_default(),
         cc: serde_json::from_str(&row.cc_json).unwrap_or_default(),
+        bcc: serde_json::from_str(&row.bcc_json).unwrap_or_default(),
         date: parse_local_date(&row.date),
         html: non_blank(&row.body_html),
         text: non_blank(&row.body_text),
@@ -155,17 +160,29 @@ fn mailbox(a: &Addr) -> Option<Mailbox> {
     Some(Mailbox::new(if a.name.is_empty() { None } else { Some(a.name.clone()) }, email))
 }
 
-pub fn build_eml(mail: &ParsedMail) -> Vec<u8> {
+pub fn build_eml(mail: &ParsedMail) -> Result<Vec<u8>, String> {
     let from = mailbox(&mail.from).unwrap_or_else(|| {
         Mailbox::new(None, "unknown@unknown.invalid".parse().expect("static address"))
     });
-    let mut builder = Message::builder().from(from).subject(mail.subject.clone());
+    let mut builder = Message::builder().from(from.clone()).subject(mail.subject.clone()).keep_bcc();
+    let mut recipients = Vec::new();
     for a in mail.to.iter().filter_map(mailbox) {
+        recipients.push(a.email.clone());
         builder = builder.to(a);
     }
     for a in mail.cc.iter().filter_map(mailbox) {
+        recipients.push(a.email.clone());
         builder = builder.cc(a);
     }
+    for a in mail.bcc.iter().filter_map(mailbox) {
+        recipients.push(a.email.clone());
+        builder = builder.bcc(a);
+    }
+    // The envelope is never used for sending; an explicit one only stops lettre from demanding a To.
+    if recipients.is_empty() {
+        recipients.push(from.email.clone());
+    }
+    builder = builder.envelope(Envelope::new(Some(from.email), recipients).map_err(|e| e.to_string())?);
     if let Some(d) = mail.date {
         if let Ok(secs) = u64::try_from(d.timestamp()) {
             builder = builder.date(std::time::UNIX_EPOCH + std::time::Duration::from_secs(secs));
@@ -199,10 +216,7 @@ pub fn build_eml(mail: &ParsedMail) -> Vec<u8> {
         mixed = mixed.singlepart(attachment_part(&p.filename, &p.mime_type, p.bytes.clone()));
     }
 
-    match builder.multipart(mixed) {
-        Ok(m) => m.formatted(),
-        Err(_) => Vec::new(),
-    }
+    builder.multipart(mixed).map(|m| m.formatted()).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -273,6 +287,7 @@ JVBERi0xLjQ=\n\
             from_email: "anna@studio-halde.example".into(),
             to_json: r#"[{"email":"jonas.brandt@studio-halde.example","name":"Jonas Brandt"}]"#.into(),
             cc_json: "[]".into(),
+            bcc_json: "[]".into(),
             date: "2026-10-21T15:28:44Z".into(),
             body_html: "<p>Dienstag 10 Uhr?</p>".into(),
             body_text: String::new(),
@@ -284,10 +299,33 @@ JVBERi0xLjQ=\n\
             bytes: b"%PDF-1.4".to_vec(),
             is_body_part: false,
         };
-        let back = parse_raw(&build_eml(&from_local(&local, vec![pdf]))).unwrap();
+        let back = parse_raw(&build_eml(&from_local(&local, vec![pdf])).unwrap()).unwrap();
         assert_eq!(back.subject, "Termin");
         assert!(back.html.unwrap().contains("Dienstag 10 Uhr?"));
         assert_eq!(back.parts.iter().filter(|p| !p.is_body_part).count(), 1);
+    }
+
+    #[test]
+    fn rebuilt_eml_without_recipients_round_trips() {
+        let local = LocalMail {
+            subject: "Rundbrief Studio Halde".into(),
+            from_name: "Anna Weber".into(),
+            from_email: "anna@studio-halde.example".into(),
+            to_json: "[]".into(),
+            cc_json: "[]".into(),
+            bcc_json: "[]".into(),
+            date: "2026-10-21T15:28:44Z".into(),
+            body_html: String::new(),
+            body_text: "Hallo zusammen".into(),
+        };
+        let back = parse_raw(&build_eml(&from_local(&local, vec![])).unwrap()).unwrap();
+        assert_eq!(back.subject, "Rundbrief Studio Halde");
+        assert!(back.to.is_empty() && back.text.unwrap().contains("Hallo zusammen"));
+
+        let bcc_only = LocalMail { bcc_json: r#"[{"email":"jonas.brandt@studio-halde.example","name":"Jonas Brandt"}]"#.into(), ..local };
+        let back = parse_raw(&build_eml(&from_local(&bcc_only, vec![])).unwrap()).unwrap();
+        assert!(back.to.is_empty());
+        assert_eq!(back.bcc[0].email, "jonas.brandt@studio-halde.example");
     }
 
     #[test]
@@ -298,6 +336,7 @@ JVBERi0xLjQ=\n\
             from_email: "a@studio-halde.example".into(),
             to_json: "[]".into(),
             cc_json: "[]".into(),
+            bcc_json: "[]".into(),
             date: String::new(),
             body_html: " ".into(),
             body_text: String::new(),

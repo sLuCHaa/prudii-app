@@ -45,6 +45,7 @@ struct MailRow {
     from_email: String,
     to_json: String,
     cc_json: String,
+    bcc_json: String,
     date: String,
     body_html: String,
     body_text: String,
@@ -129,7 +130,7 @@ fn read_chunk(db: &Database, folder_id: &str, after: &Option<(String, String)>) 
         None => (None, None),
     };
     let Ok(mut stmt) = conn.prepare(
-        "SELECT id, subject, from_name, from_email, to_json, cc_json, date, body_html, body_text, has_attachments
+        "SELECT id, subject, from_name, from_email, to_json, cc_json, bcc_json, date, body_html, body_text, has_attachments
          FROM mails
          WHERE folder_id = ?1 AND (?2 IS NULL OR date < ?2 OR (date = ?2 AND id > ?3))
          ORDER BY date DESC, id ASC LIMIT ?4",
@@ -144,10 +145,11 @@ fn read_chunk(db: &Database, folder_id: &str, after: &Option<(String, String)>) 
             from_email: row.get(3)?,
             to_json: row.get(4)?,
             cc_json: row.get(5)?,
-            date: row.get(6)?,
-            body_html: row.get(7)?,
-            body_text: row.get(8)?,
-            has_attachments: row.get::<_, i64>(9)? != 0,
+            bcc_json: row.get(6)?,
+            date: row.get(7)?,
+            body_html: row.get(8)?,
+            body_text: row.get(9)?,
+            has_attachments: row.get::<_, i64>(10)? != 0,
         })
     });
     match rows {
@@ -234,15 +236,11 @@ fn write_mail(
     if opts.eml {
         let bytes = match raw {
             Some(r) => r.to_vec(),
-            None => build_eml(mail),
+            None => build_eml(mail).map_err(|e| format!("rebuilding the .eml failed: {e}"))?,
         };
-        if bytes.is_empty() {
-            log::warn!("mail export: could not rebuild an .eml from the local copy");
-        } else {
-            let name = format!("{base}.eml");
-            write_file(&folder_path.join(&name), &bytes)?;
-            href = Some(format!("{}/{}", rel_dir, url_encode_segment(&name)));
-        }
+        let name = format!("{base}.eml");
+        write_file(&folder_path.join(&name), &bytes)?;
+        href = Some(format!("{}/{}", rel_dir, url_encode_segment(&name)));
     }
 
     if opts.html {
@@ -339,6 +337,7 @@ where
                     from_email: row.from_email.clone(),
                     to_json: row.to_json.clone(),
                     cc_json: row.cc_json.clone(),
+                    bcc_json: row.bcc_json.clone(),
                     date: row.date.clone(),
                     body_html: row.body_html.clone(),
                     body_text: row.body_text.clone(),
@@ -1014,6 +1013,7 @@ JVBERi0xLjQ=\n\
             from: Default::default(),
             to: vec![],
             cc: vec![],
+            bcc: vec![],
             date: None,
             html: Some("<style>p{color:red}</style><p>Hallo&nbsp;<b>Anna</b> &amp; Jonas</p>".into()),
             text: None,
@@ -1027,14 +1027,17 @@ JVBERi0xLjQ=\n\
     }
 
     #[tokio::test]
-    async fn local_copy_the_eml_builder_rejects_still_gets_a_page() {
+    async fn local_copy_without_recipients_gets_a_rebuilt_eml() {
         let w = world();
         let id = add_mail(&w, "Ohne Empfaenger", "2026-10-21 13:28:44");
         set_body(&w, &id, "<p>Hallo</p>", "");
-        let out = Out::new();
-        let summary = run(&w, &options(vec![w.folder.clone()]), &out.0, HashMap::new()).await;
-        assert_eq!(summary.local_copy, 1);
-        assert_eq!(files(&out.0, "html").len(), 1);
-        assert!(files(&out.0, "eml").is_empty());
+        for (html, eml) in [(true, true), (false, true)] {
+            let out = Out::new();
+            let opts = ExportOptions { html, eml, ..options(vec![w.folder.clone()]) };
+            let summary = run(&w, &opts, &out.0, HashMap::new()).await;
+            assert_eq!((summary.local_copy, summary.failed), (1, 0));
+            assert_eq!(files(&out.0, "eml").len(), 1);
+            assert_eq!(files(&out.0, "html").len(), usize::from(html));
+        }
     }
 }

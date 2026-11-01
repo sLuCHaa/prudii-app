@@ -577,6 +577,7 @@ mod tests {
             from: Addr { name: "Jonas Brandt".into(), email: "jonas.brandt@studio-halde.example".into() },
             to: vec![Addr { name: "Anna Weber".into(), email: "anna@studio-halde.example".into() }],
             cc: vec![],
+            bcc: vec![],
             date: None,
             html: None,
             text: None,
