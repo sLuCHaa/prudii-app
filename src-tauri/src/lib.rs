@@ -1,6 +1,7 @@
 pub mod ai;
 pub mod calendar;
 pub mod calendar_reminders;
+pub mod categorize;
 pub mod classify;
 pub mod cleanup_guard;
 pub mod commands;

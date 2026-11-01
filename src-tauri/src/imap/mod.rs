@@ -944,6 +944,16 @@ fn update_folder_counts(
     Ok(())
 }
 
+fn message_signal_headers(msg: &mail_parser::Message) -> String {
+    crate::categorize::signals::signal_headers_json(
+        |name| {
+            msg.header_raw(name.to_string())
+                .map(|v| v.split_whitespace().collect::<Vec<_>>().join(" "))
+        },
+        None,
+    )
+}
+
 /// Header fields extracted from one fetched message, parsed without the DB lock.
 struct ParsedHeader {
     uid: u32,
@@ -961,6 +971,7 @@ struct ParsedHeader {
     thread_id: Option<String>,
     has_attachments: bool,
     list_unsubscribe: String,
+    signal_headers: String,
     references_str: String,
     is_read: bool,
     is_starred: bool,
@@ -1035,7 +1046,7 @@ fn process_header_batch(
         let (
             subject, from_name, from_email, to_json, cc_json, bcc_json, reply_to_json,
             date, message_id, in_reply_to, thread_id, has_attachments, list_unsubscribe,
-            references_str,
+            signal_headers, references_str,
         ) = if let Some(msg) = &parsed {
             let subject = msg.subject().unwrap_or_default().to_string();
             let (from_name, from_email) = extract_first_address(msg.from());
@@ -1079,11 +1090,12 @@ fn process_header_batch(
             let list_unsubscribe = msg.header("List-Unsubscribe")
                 .and_then(|v| v.as_text())
                 .unwrap_or_default().to_string();
+            let signal_headers = message_signal_headers(msg);
 
             (
                 subject, from_name, from_email, to_json, cc_json, bcc_json, reply_to_json,
                 date, message_id, in_reply_to, thread_id, has_attachments, list_unsubscribe,
-                references_str,
+                signal_headers, references_str,
             )
         } else {
             (
@@ -1091,7 +1103,7 @@ fn process_header_batch(
                 "[]".to_string(), "[]".to_string(), "[]".to_string(), "[]".to_string(),
                 mail_date(None, fetched.internal_date),
                 String::new(), None, None, false, String::new(),
-                String::new(),
+                "{}".to_string(), String::new(),
             )
         };
 
@@ -1104,7 +1116,7 @@ fn process_header_batch(
             size: fetched.size,
             subject, from_name, from_email, to_json, cc_json, bcc_json, reply_to_json,
             date, message_id, in_reply_to, thread_id, has_attachments, list_unsubscribe,
-            references_str, is_read, is_starred, is_replied,
+            signal_headers, references_str, is_read, is_starred, is_replied,
         });
     }
 
@@ -1149,13 +1161,13 @@ fn process_header_batch(
         }
 
         let insert_result = tx.execute(
-            "INSERT OR IGNORE INTO mails (id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, body_text, body_html, is_read, is_starred, is_flagged, is_replied, is_forwarded, has_attachments, thread_id, in_reply_to, size_bytes, list_unsubscribe, reply_to_json, \"references\") VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, '', '', '', ?13, ?14, 0, ?15, 0, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
+            "INSERT OR IGNORE INTO mails (id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, body_text, body_html, is_read, is_starred, is_flagged, is_replied, is_forwarded, has_attachments, thread_id, in_reply_to, size_bytes, list_unsubscribe, reply_to_json, \"references\", signal_headers) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, '', '', '', ?13, ?14, 0, ?15, 0, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)",
             rusqlite::params![
                 mail_id, account_id, folder.id, p.message_id, p.uid,
                 p.subject, p.from_name, p.from_email, p.to_json, p.cc_json, p.bcc_json, p.date,
                 p.is_read as i32, p.is_starred as i32, p.is_replied as i32,
                 p.has_attachments as i32, p.thread_id, p.in_reply_to, p.size as i64,
-                p.list_unsubscribe, p.reply_to_json, p.references_str,
+                p.list_unsubscribe, p.reply_to_json, p.references_str, p.signal_headers,
             ],
         );
 
@@ -1240,6 +1252,7 @@ pub fn insert_local_sent_mail(
         .and_then(|v| v.as_text())
         .unwrap_or_default()
         .to_string();
+    let signal_headers = message_signal_headers(&msg);
 
     let body_text = msg.body_text(0).unwrap_or_default().to_string();
     let body_html = msg.body_html(0).unwrap_or_default().to_string();
@@ -1270,13 +1283,13 @@ pub fn insert_local_sent_mail(
     // uid = NULL (claimed by the next sync via Message-ID); is_read = 1 because we
     // authored it. is_starred/is_flagged/is_replied/is_forwarded default to 0.
     conn.execute(
-        "INSERT OR IGNORE INTO mails (id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, body_text, body_html, is_read, is_starred, is_flagged, is_replied, is_forwarded, has_attachments, thread_id, in_reply_to, size_bytes, list_unsubscribe, reply_to_json, \"references\") VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, 1, 0, 0, 0, 0, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
+        "INSERT OR IGNORE INTO mails (id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, body_text, body_html, is_read, is_starred, is_flagged, is_replied, is_forwarded, has_attachments, thread_id, in_reply_to, size_bytes, list_unsubscribe, reply_to_json, \"references\", signal_headers) VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, 1, 0, 0, 0, 0, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
         rusqlite::params![
             mail_id, account_id, folder_id, message_id,
             subject, from_name, from_email, to_json, cc_json, bcc_json, date,
             snippet, body_text, body_html,
             has_attachments as i32, thread_id, in_reply_to, size,
-            list_unsubscribe, reply_to_json, references_str,
+            list_unsubscribe, reply_to_json, references_str, signal_headers,
         ],
     )
     .context("Failed to insert local sent mail")?;
@@ -2351,6 +2364,23 @@ mod header_batch_tests {
         let conn = db.lock_db();
         let date: String = conn.query_row("SELECT date FROM mails WHERE uid = 3", [], |r| r.get(0)).unwrap();
         assert_eq!(date, "2023-10-13T06:15:30Z");
+    }
+
+    #[test]
+    fn bulk_headers_are_stored_as_signal_headers() {
+        let db = fixture("signals");
+        let parser = MessageParser::default();
+        let raw = "From: news@designweekly.example\r\nSubject: Wochenrückblick\r\nMessage-ID: <wr@designweekly.example>\r\nDate: Mon, 05 Jan 2026 10:00:00 +0000\r\nList-Id: <wr.designweekly.example>\r\nPRECEDENCE: Bulk\r\nX-Mailer: Brevo\r\n  Mailer 3\r\n\r\n";
+        let batch = vec![FetchedMail { uid: 9, raw_bytes: raw.as_bytes().to_vec(), flags: Vec::new(), size: raw.len() as u32, internal_date: None }];
+        process_header_batch(&batch, &parser, "acc", &inbox(), &db, &HashSet::new());
+
+        let conn = db.lock_db();
+        let stored: String = conn.query_row("SELECT signal_headers FROM mails WHERE uid = 9", [], |r| r.get(0)).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&stored).unwrap();
+        assert_eq!(v["list-id"], "<wr.designweekly.example>");
+        assert_eq!(v["precedence"], "Bulk");
+        assert_eq!(v["x-mailer"], "Brevo Mailer 3");
+        assert!(v.get("auto-submitted").is_none());
     }
 
     #[test]

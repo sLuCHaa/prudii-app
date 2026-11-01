@@ -534,6 +534,15 @@ fn insert_message_from_graph(
         .and_then(|h| h.iter().find(|hdr| hdr.name.eq_ignore_ascii_case("List-Unsubscribe")))
         .map(|h| h.value.clone()).unwrap_or_default();
 
+    let signal_headers = crate::categorize::signals::signal_headers_json(
+        |name| {
+            msg.internet_message_headers.as_ref()
+                .and_then(|h| h.iter().find(|hdr| hdr.name.eq_ignore_ascii_case(name)))
+                .map(|h| h.value.clone())
+        },
+        None,
+    );
+
     let reply_to_json = msg.internet_message_headers.as_ref()
         .and_then(|h| h.iter().find(|hdr| hdr.name.eq_ignore_ascii_case("Reply-To")))
         .map(|h| {
@@ -596,14 +605,14 @@ fn insert_message_from_graph(
     }
 
     let result = conn.execute(
-        "INSERT OR IGNORE INTO mails (id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, body_text, body_html, is_read, is_starred, has_attachments, thread_id, in_reply_to, \"references\", list_unsubscribe, reply_to_json)
-         VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?6, ?7, ?8, ?9, '[]', ?10, ?11, '', '', ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
+        "INSERT OR IGNORE INTO mails (id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, body_text, body_html, is_read, is_starred, has_attachments, thread_id, in_reply_to, \"references\", list_unsubscribe, reply_to_json, signal_headers)
+         VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?6, ?7, ?8, ?9, '[]', ?10, ?11, '', '', ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
         rusqlite::params![
             mail_id, account_id, folder.id, msg.id,
             subject, from_name, from_email, to_json, cc_json,
             date, snippet, is_read as i32, is_starred as i32,
             has_attachments as i32, thread_id, in_reply_to, internet_msg_id,
-            list_unsubscribe, reply_to_json,
+            list_unsubscribe, reply_to_json, signal_headers,
         ],
     );
 

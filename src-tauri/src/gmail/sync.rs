@@ -562,6 +562,10 @@ fn insert_message_from_metadata(
     let has_attachments = content_type.starts_with("multipart/mixed");
 
     let list_unsubscribe = api::get_header(payload, "List-Unsubscribe").unwrap_or("");
+    let signal_headers = crate::categorize::signals::signal_headers_json(
+        |name| api::get_header(payload, name).map(str::to_string),
+        crate::categorize::signals::gmail_category_from_labels(labels),
+    );
 
     // Parse date — Gmail internalDate is millis since epoch.
     // Format as RFC3339 UTC (with `T` and `Z`) so the frontend's parseISO treats it
@@ -597,14 +601,14 @@ fn insert_message_from_metadata(
     }
 
     let result = conn.execute(
-        "INSERT OR IGNORE INTO mails (id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, body_text, body_html, is_read, is_starred, has_attachments, thread_id, in_reply_to, \"references\", size_bytes, list_unsubscribe, reply_to_json)
-         VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?6, ?7, ?8, ?9, '[]', ?10, ?11, '', '', ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
+        "INSERT OR IGNORE INTO mails (id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, body_text, body_html, is_read, is_starred, has_attachments, thread_id, in_reply_to, \"references\", size_bytes, list_unsubscribe, reply_to_json, signal_headers)
+         VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?6, ?7, ?8, ?9, '[]', ?10, ?11, '', '', ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
         rusqlite::params![
             mail_id, account_id, folder.id, msg.id,
             subject, from_name, from_email, to_json, cc_json,
             date, snippet, is_read as i32, is_starred as i32,
             has_attachments as i32, thread_id, in_reply_to, references,
-            msg.size_estimate, list_unsubscribe, reply_to_json,
+            msg.size_estimate, list_unsubscribe, reply_to_json, signal_headers,
         ],
     );
 
