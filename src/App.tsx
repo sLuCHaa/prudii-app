@@ -46,6 +46,7 @@ import { useTranslation } from "react-i18next";
 import i18next from "i18next";
 import type { BackfillProgress, BackupProgress, Folder, SyncProgress } from "./types";
 import { isMacOS } from "./lib/platform";
+import { MAIL_LIST_QUERY_KEYS, invalidateMailListQueries } from "./lib/mailQueries";
 import { MENU_ACTIONS, resolveGlobalShortcut } from "./lib/shortcuts";
 import type { GlobalAction } from "./lib/shortcuts";
 
@@ -64,7 +65,8 @@ const queryClient = new QueryClient({
 // they next mount instead of all re-hitting the DB at once.
 function refreshMailQueries(accountId: string) {
   queryClient.invalidateQueries({ queryKey: ["folders", accountId], refetchType: "active" });
-  for (const key of ["mails", "filtered-mails", "all-inbox-mails", "combined-folder-mails", "split-inbox-mails"]) {
+  for (const key of MAIL_LIST_QUERY_KEYS) {
+    if (key === "folders") continue;
     queryClient.invalidateQueries({ queryKey: [key], refetchType: "active" });
   }
 }
@@ -239,11 +241,12 @@ function AppInner() {
     const unlisten = listen<BackupProgress>("restore-progress", (event) => {
       if (event.payload.status === "done") {
         queryClient.invalidateQueries({ queryKey: ["accounts"] });
-        queryClient.invalidateQueries({ queryKey: ["mails"] });
-        queryClient.invalidateQueries({ queryKey: ["filtered-mails"] });
-        queryClient.invalidateQueries({ queryKey: ["all-inbox-mails"] });
-        queryClient.invalidateQueries({ queryKey: ["combined-folder-mails"] });
-        queryClient.invalidateQueries({ queryKey: ["split-inbox-mails"] });
+        invalidateMailListQueries(queryClient);
+        getAppSettings()
+          .then((s) => {
+            if (s.sorting_enabled) return runCategorization(queryClient);
+          })
+          .catch(() => {});
       }
     });
     return () => {

@@ -4,7 +4,7 @@ import type { QueryClient } from "@tanstack/react-query";
  * Every query that feeds a mail list, plus the folder counts.
  *
  * A mail leaving a folder changes all of them at once — the folder's own list,
- * the filtered and combined views, the split inbox — and which of them is on
+ * the filtered and combined views, the category views and their counters — and which of them is on
  * screen is not something an action handler should have to know.
  */
 export const MAIL_LIST_QUERY_KEYS = [
@@ -13,7 +13,8 @@ export const MAIL_LIST_QUERY_KEYS = [
   "filtered-mails",
   "all-inbox-mails",
   "combined-folder-mails",
-  "split-inbox-mails",
+  "category-mails",
+  "category-counts",
 ] as const;
 
 /**

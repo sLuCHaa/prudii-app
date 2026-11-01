@@ -2,6 +2,8 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type QueryClie
 import { categorizePendingMails, getMailCategoryInfo, listCategoryCounts, listCategoryMails, setMailCategory } from "../lib/tauri";
 import type { CategoryCount, Mail, MailCategoryInfo } from "../types";
 import type { MailSort } from "../lib/mailSort";
+import i18n from "../lib/i18n";
+import { useAppStore } from "../stores/appStore";
 
 const PAGE_SIZE = 100;
 
@@ -10,6 +12,8 @@ export const CATEGORY_QUERY_KEYS = [
   ["all-inbox-mails"],
   ["filtered-mails"],
   ["combined-folder-mails"],
+  ["snoozed-mails"],
+  ["assigned-mails"],
   ["category-mails"],
   ["category-counts"],
   ["mail-category-info"],
@@ -56,6 +60,9 @@ export function useSetMailCategory() {
     mutationFn: ({ mailId, category, rememberSender }: { mailId: string; category: string | null; rememberSender: boolean }) =>
       setMailCategory(mailId, category, rememberSender),
     onSuccess: () => invalidateCategoryQueries(queryClient),
+    onError: (err) => {
+      useAppStore.getState().addToast("error", i18n.t("errors.generic"), err instanceof Error ? err.message : String(err));
+    },
   });
 }
 

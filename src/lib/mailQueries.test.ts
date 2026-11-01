@@ -23,6 +23,14 @@ describe("invalidateMailListQueries", () => {
     expect(seen).toContain("filtered-mails");
   });
 
+  it("refreshes the category views and counters, not the removed split inbox", () => {
+    const { seen, client } = record();
+    invalidateMailListQueries(client);
+    expect(seen).toContain("category-mails");
+    expect(seen).toContain("category-counts");
+    expect(seen).not.toContain("split-inbox-mails");
+  });
+
   it("covers every list a mail can leave", () => {
     const { seen, client } = record();
     invalidateMailListQueries(client);

@@ -11,6 +11,7 @@ import { useSyncAccount, useSyncAll } from "../../hooks/useSync";
 import { useRemoveAccount } from "../../hooks/useRemoveAccount";
 import { useOpenTaskCount } from "../../hooks/useTasks";
 import { useTeamSnapshot, useTeamAssignments } from "../../hooks/useTeam";
+import { invalidateMailListQueries } from "../../lib/mailQueries";
 import { openAssignedTo } from "../../lib/team";
 import { TeamSection } from "./TeamSection";
 import { CreateTaskFromMail } from "../tasks/CreateTaskFromMail";
@@ -457,10 +458,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
       })
       .catch(async (err) => {
         // Revert by refetching
-        queryClient.invalidateQueries({ queryKey: ["mails"] });
-        queryClient.invalidateQueries({ queryKey: ["filtered-mails"] });
-        queryClient.invalidateQueries({ queryKey: ["all-inbox-mails"] });
-        queryClient.invalidateQueries({ queryKey: ["combined-folder-mails"] });
+        invalidateMailListQueries(queryClient);
         await dialog.alert({
           type: "danger",
           title: t("folder.moveFailed"),
@@ -558,10 +556,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
         await new Promise((r) => setTimeout(r, SWEEP_DURATION_MS));
       }
 
-      queryClient.invalidateQueries({ queryKey: ["mails"] });
-      queryClient.invalidateQueries({ queryKey: ["filtered-mails"] });
-      queryClient.invalidateQueries({ queryKey: ["all-inbox-mails"] });
-      queryClient.invalidateQueries({ queryKey: ["folders", account.id] });
+      invalidateMailListQueries(queryClient);
 
       if (selectedFolderId === folder.id) {
         queryClient.refetchQueries({ queryKey: ["mails", folder.id] });
@@ -861,7 +856,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
                 {t(`folder.types.${folder.folder_type}`, { defaultValue: folder.name })}
               </CardButton>
             )}
-            {folder.folder_type === "inbox" && <CategorySidebarEntries inboxFolderId={folder.id} />}
+            {folder.folder_type === "inbox" && <CategorySidebarEntries inboxFolderId={folder.id} accountId={account.id} />}
             </Fragment>
           ))}
         </div>
@@ -980,11 +975,7 @@ function CombinedFoldersSection({ collapsed }: { collapsed: boolean }) {
         await new Promise((r) => setTimeout(r, SWEEP_DURATION_MS));
       }
 
-      queryClient.invalidateQueries({ queryKey: ["mails"] });
-      queryClient.invalidateQueries({ queryKey: ["filtered-mails"] });
-      queryClient.invalidateQueries({ queryKey: ["all-inbox-mails"] });
-      queryClient.invalidateQueries({ queryKey: ["combined-folder-mails"] });
-      queryClient.invalidateQueries({ queryKey: ["folders"] });
+      invalidateMailListQueries(queryClient);
 
       useAppStore
         .getState()

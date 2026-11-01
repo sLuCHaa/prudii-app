@@ -1563,7 +1563,7 @@ export function ThreadView({ mail }: ThreadViewProps) {
         .then(() => {
           setMails((prev) => prev.map((m) => (m.id === mail.id ? { ...m, is_read: true } : m)));
 
-          queryClient.invalidateQueries({ queryKey: ["folders"] });
+          invalidateMailListQueries(queryClient);
         })
         .catch((err) => addToast("error", t("errors.markRead"), err instanceof Error ? err.message : String(err)));
     }

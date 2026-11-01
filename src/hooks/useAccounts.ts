@@ -3,6 +3,7 @@ import { listAccounts, createAccount, deleteAccount, listFolders, listMails, lis
 import type { CreateAccountRequest, CreateRuleRequest, Mail, MailFlag, MailRule } from "../types";
 import type { MailFilter } from "../stores/appStore";
 import type { MailSort } from "../lib/mailSort";
+import { invalidateMailListQueries } from "../lib/mailQueries";
 
 const PAGE_SIZE = 100;
 
@@ -119,10 +120,7 @@ export function useToggleStar() {
     mutationFn: (mailId: string) => toggleStar(mailId),
     onSuccess: () => {
       // Invalidate all mail queries so starred state is consistent everywhere
-      queryClient.invalidateQueries({ queryKey: ["filtered-mails"] });
-      queryClient.invalidateQueries({ queryKey: ["mails"] });
-      queryClient.invalidateQueries({ queryKey: ["all-inbox-mails"] });
-      queryClient.invalidateQueries({ queryKey: ["combined-folder-mails"] });
+      invalidateMailListQueries(queryClient);
     },
   });
 }
@@ -132,10 +130,7 @@ export function useTogglePin() {
   return useMutation({
     mutationFn: (mailId: string) => togglePin(mailId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["filtered-mails"] });
-      queryClient.invalidateQueries({ queryKey: ["mails"] });
-      queryClient.invalidateQueries({ queryKey: ["all-inbox-mails"] });
-      queryClient.invalidateQueries({ queryKey: ["combined-folder-mails"] });
+      invalidateMailListQueries(queryClient);
     },
   });
 }
@@ -146,10 +141,7 @@ export function useToggleMailFlag() {
     mutationFn: ({ mailId, flag }: { mailId: string; flag: MailFlag }) => toggleMailFlag(mailId, flag),
     onSuccess: () => {
       // Invalidate all mail queries so flag state is consistent everywhere
-      queryClient.invalidateQueries({ queryKey: ["filtered-mails"] });
-      queryClient.invalidateQueries({ queryKey: ["mails"] });
-      queryClient.invalidateQueries({ queryKey: ["all-inbox-mails"] });
-      queryClient.invalidateQueries({ queryKey: ["combined-folder-mails"] });
+      invalidateMailListQueries(queryClient);
     },
   });
 }

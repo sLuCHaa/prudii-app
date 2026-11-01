@@ -5,6 +5,7 @@ import { useAppStore } from "../../stores/appStore";
 import { markAsRead, getMail } from "../../lib/tauri";
 import { MAIL_LINK_BRIDGE, MAIL_LINK_BRIDGE_CSP_HASH, relayBridgeKey, parseBridgeContextMenu, type BridgeContextMenu } from "../../lib/mailLinkBridge";
 import { openMailUrl } from "../../lib/trackingParams";
+import { invalidateMailListQueries } from "../../lib/mailQueries";
 import { MailBodyContextMenu } from "./MailBodyContextMenu";
 import { EmptyState } from "../ui/EmptyState";
 import { DaylightSky, useAtmosphereLine } from "../motion/DaylightSky";
@@ -268,10 +269,7 @@ export function MailDetail() {
   const addToast = useAppStore((s) => s.addToast);
   const queryClient = useQueryClient();
   const invalidateMailQueries = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["folders"] });
-    queryClient.invalidateQueries({ queryKey: ["all-inbox-mails"] });
-    queryClient.invalidateQueries({ queryKey: ["combined-folder-mails"] });
-    queryClient.invalidateQueries({ queryKey: ["split-inbox-mails"] });
+    invalidateMailListQueries(queryClient);
   }, [queryClient]);
   const contentRef = useRef<HTMLDivElement>(null);
   const [fallbackMail, setFallbackMail] = useState<import("../../types").Mail | null>(null);
