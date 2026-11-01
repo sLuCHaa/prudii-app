@@ -28,10 +28,11 @@ import { useAppStore } from "./stores/appStore";
 import { invalidateTaskQueries } from "./hooks/useTasks";
 import { invalidateCalendarQueries } from "./hooks/useCalendar";
 import { useSyncAll, useSyncAutomatic } from "./hooks/useSync";
+import { runCategorization } from "./hooks/useCategories";
 import { useAutoSync } from "./hooks/useAutoSync";
 import { useFocusSync } from "./hooks/useFocusSync";
 import { useConnectivity } from "./hooks/useConnectivity";
-import { backfillBodies, bootstrapState, getAppSettings, checkLicenseStartup, getStartupMailto, getStartupCompose, checkSnoozedMails, classifyUnclassifiedMails, listComposeAutosaves, deleteComposeAutosave, getSystemAccentColor } from "./lib/tauri";
+import { backfillBodies, bootstrapState, getAppSettings, checkLicenseStartup, getStartupMailto, getStartupCompose, checkSnoozedMails, listComposeAutosaves, deleteComposeAutosave, getSystemAccentColor } from "./lib/tauri";
 import { useTeamNotifier } from "./hooks/useTeam";
 import { isAccentHex, effectiveAccentHex } from "./lib/accents";
 import { parseMailSort } from "./lib/mailSort";
@@ -112,6 +113,7 @@ function AppInner() {
   useEffect(() => {
     getAppSettings().then((s) => {
       setAppSettings(s);
+      if (s.sorting_enabled) runCategorization(queryClient).catch(() => {});
       // Theme boots from localStorage (no flash); once the DB value is known
       // it wins, so a backup restore brings the theme back. setThemeMode
       // also re-syncs localStorage.
@@ -189,9 +191,8 @@ function AppInner() {
         queryClient.invalidateQueries({ queryKey: ["accounts"] });
         // Backfill mail bodies in the background for FTS search
         backfillBodies(progress.account_id).catch(() => {});
-        // Classify new mails with header-based heuristics (premium)
-        if (useAppStore.getState().hasFeature("auto_labels")) {
-          classifyUnclassifiedMails().catch(() => {});
+        if (useAppStore.getState().appSettings.sorting_enabled) {
+          runCategorization(queryClient).catch(() => {});
         }
         const newMails = typeof progress.new_mails === "number" ? progress.new_mails : 0;
         if (newMails > 0) {

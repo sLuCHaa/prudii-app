@@ -466,6 +466,7 @@
     "mailtoFailed": "无法更改默认邮件应用",
     "tabs": {
     "calendar": "日历",
+      "sorting": "排序",
       "general": "通用",
       "privacy": "隐私",
       "accounts": "账户",
@@ -1106,18 +1107,58 @@
     "upgradePrompt": "高级功能",
     "upgradeButton": "Premium — 即将推出"
   },
-  "splitInbox": {
-    "title": "分类收件箱",
-    "description": "自动将收到的邮件分类到主要、通知和订阅等标签页。",
-    "premiumDesc": "分类收件箱将在 Premium 中提供——即将推出。",
-    "primary": "主要",
-    "notifications": "通知",
-    "newsletters": "订阅"
-  },
-  "autoLabels": {
-    "title": "自动标签",
-    "description": "根据发件人模式和邮件头自动分类邮件。",
-    "premiumDesc": "自动标签将在 Premium 中提供——即将推出。"
+  "categories": {
+    "names": {
+      "important": "重要",
+      "purchases": "购物与收据",
+      "notifications": "通知",
+      "newsletters": "新闻简报",
+      "promotions": "促销",
+      "social": "社交"
+    },
+    "none": "无",
+    "menu": "分类",
+    "why": "为什么是“{{category}}”？",
+    "whyNone": "为什么没有标签？",
+    "change": "不对？选择其他分类",
+    "rememberSender": "记住来自 {{sender}} 的所有邮件",
+    "reasons": {
+      "user_choice": "由你归入此类",
+      "sender_rule": "你已将来自 {{sender}} 的邮件归入此类",
+      "thread_rule": "你已将此会话归入此类",
+      "sent_to_sender_other": "你给 {{sender}} 写过 {{count}} 封邮件",
+      "personal_mail": "个人邮件，非群发",
+      "social_domain": "发件人是社交网络（{{domain}}）",
+      "gmail_social": "Gmail 将其归为“社交”",
+      "gmail_promotions": "Gmail 将其归为“促销”",
+      "gmail_updates": "Gmail 将其归为“动态”",
+      "gmail_forums": "Gmail 将其归为“论坛”",
+      "noreply_sender": "自动发件人（{{sender}}）",
+      "automated_header": "被标记为自动生成",
+      "notification_domain": "通知服务（{{domain}}）",
+      "mailing_list": "来自邮件列表",
+      "unsubscribe_link": "包含退订链接",
+      "bulk_sender": "通过 {{esp}} 发送",
+      "promo_keyword": "主题中含促销用语（“{{keyword}}”）",
+      "purchase_keyword": "主题中含购买或发票用语（“{{keyword}}”）",
+      "shop_domain": "知名商店或支付服务（{{domain}}）",
+      "low_confidence": "Prudii 把握不够"
+    },
+    "settings": {
+      "title": "排序",
+      "enable": "自动整理邮件",
+      "enableDesc": "Prudii 在你的电脑上将收到的邮件归入各个分类，服务器上不会有任何改动。",
+      "visibleTitle": "分类",
+      "visibleDesc": "隐藏的分类没有标签，侧边栏中也没有对应条目。",
+      "sendersTitle": "已记住的发件人",
+      "sendersEmpty": "还没有已记住的发件人。",
+      "removeSender": "移除",
+      "resetTitle": "重置已学习的内容",
+      "resetDesc": "删除已记住的发件人和你的归类，并重新整理所有邮件。邮件本身保持不变。",
+      "resetButton": "重置",
+      "resetConfirmTitle": "重置已学习的内容？",
+      "resetDone": "整理已重置"
+    }
   },
   "empty": {
     "inbox": "已全部处理",

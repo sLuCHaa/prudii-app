@@ -127,6 +127,34 @@ export interface AppSettings {
   compose_font_size: number; // pt
   mail_sort: string;
   thread_view: ThreadViewMode;
+  sorting_enabled: boolean;
+  hidden_categories: string[];
+}
+
+export interface CategoryReason {
+  code: string;
+  params: Record<string, string>;
+}
+
+export interface MailCategoryInfo {
+  category: string | null;
+  source: string | null;
+  reasons: CategoryReason[];
+  sender: string;
+  sender_rule: string | null;
+}
+
+export interface CategoryCount {
+  folder_id: string;
+  category: string;
+  unread: number;
+  total: number;
+}
+
+export interface SenderRule {
+  email: string;
+  category: string;
+  created_at: string;
 }
 
 export interface OllamaStatus {

@@ -467,6 +467,7 @@
     "mailtoFailed": "Não foi possível alterar o app de e-mail padrão",
     "tabs": {
     "calendar": "Calendário",
+      "sorting": "Classificação",
       "general": "Geral",
       "privacy": "Privacidade",
       "accounts": "Contas",
@@ -1107,18 +1108,59 @@
     "upgradePrompt": "Recurso Premium",
     "upgradeButton": "Premium — em breve"
   },
-  "splitInbox": {
-    "title": "Caixa dividida",
-    "description": "Categorizar automaticamente e-mails recebidos em abas como Principal, Notificações e Newsletters.",
-    "premiumDesc": "A caixa dividida chegará com o Premium — em breve.",
-    "primary": "Principal",
-    "notifications": "Notificações",
-    "newsletters": "Newsletters"
-  },
-  "autoLabels": {
-    "title": "Auto-rótulos",
-    "description": "Classificar automaticamente e-mails por tipo usando padrões de remetente e cabeçalhos.",
-    "premiumDesc": "Os auto-rótulos chegarão com o Premium — em breve."
+  "categories": {
+    "names": {
+      "important": "Importante",
+      "purchases": "Compras e recibos",
+      "notifications": "Notificações",
+      "newsletters": "Newsletters",
+      "promotions": "Promoções",
+      "social": "Social"
+    },
+    "none": "Nenhuma",
+    "menu": "Categoria",
+    "why": "Por que «{{category}}»?",
+    "whyNone": "Por que sem etiqueta?",
+    "change": "Não está certo? Escolha outra categoria",
+    "rememberSender": "Lembrar para todos os e-mails de {{sender}}",
+    "reasons": {
+      "user_choice": "Você classificou assim",
+      "sender_rule": "Você escolheu esta categoria para os e-mails de {{sender}}",
+      "thread_rule": "Você classificou esta conversa assim",
+      "sent_to_sender_one": "Você já escreveu uma vez para {{sender}}",
+      "sent_to_sender_other": "Você escreveu {{count}} vezes para {{sender}}",
+      "personal_mail": "E-mail pessoal, não é envio em massa",
+      "social_domain": "O remetente é uma rede social ({{domain}})",
+      "gmail_social": "O Gmail classifica como Social",
+      "gmail_promotions": "O Gmail classifica como Promoções",
+      "gmail_updates": "O Gmail classifica como Atualizações",
+      "gmail_forums": "O Gmail classifica como Fóruns",
+      "noreply_sender": "Remetente automático ({{sender}})",
+      "automated_header": "Marcado como gerado automaticamente",
+      "notification_domain": "Serviço de notificações ({{domain}})",
+      "mailing_list": "Chega por uma lista de e-mails",
+      "unsubscribe_link": "Contém um link de cancelamento de inscrição",
+      "bulk_sender": "Enviado via {{esp}}",
+      "promo_keyword": "Termo promocional no assunto («{{keyword}}»)",
+      "purchase_keyword": "Termo de compra ou fatura no assunto («{{keyword}}»)",
+      "shop_domain": "Loja ou serviço de pagamento conhecido ({{domain}})",
+      "low_confidence": "O Prudii não tem certeza suficiente"
+    },
+    "settings": {
+      "title": "Classificação",
+      "enable": "Classificar e-mails automaticamente",
+      "enableDesc": "O Prudii classifica os e-mails recebidos em categorias no seu computador. Nada muda no servidor.",
+      "visibleTitle": "Categorias",
+      "visibleDesc": "Categorias ocultas não recebem etiqueta nem entrada na barra lateral.",
+      "sendersTitle": "Remetentes lembrados",
+      "sendersEmpty": "Ainda não há remetentes lembrados.",
+      "removeSender": "Remover",
+      "resetTitle": "Redefinir o que foi aprendido",
+      "resetDesc": "Exclui os remetentes lembrados e suas classificações e classifica todos os e-mails de novo. Os e-mails em si não são alterados.",
+      "resetButton": "Redefinir",
+      "resetConfirmTitle": "Redefinir o que foi aprendido?",
+      "resetDone": "Classificação redefinida"
+    }
   },
   "empty": {
     "inbox": "Tudo em dia",

@@ -473,6 +473,7 @@
     "mailtoFailed": "Не удалось изменить почтовое приложение по умолчанию",
     "tabs": {
     "calendar": "Календарь",
+      "sorting": "Сортировка",
       "general": "Основные",
       "privacy": "Приватность",
       "accounts": "Аккаунты",
@@ -1113,18 +1114,61 @@
     "upgradePrompt": "Премиум-функция",
     "upgradeButton": "Premium — скоро"
   },
-  "splitInbox": {
-    "title": "Разделённый ящик",
-    "description": "Автоматическая сортировка входящей почты по вкладкам: Основные, Уведомления и Рассылки.",
-    "premiumDesc": "Разделённый ящик появится в Premium — скоро.",
-    "primary": "Основные",
-    "notifications": "Уведомления",
-    "newsletters": "Рассылки"
-  },
-  "autoLabels": {
-    "title": "Авто-метки",
-    "description": "Автоматическая классификация писем по типу на основе шаблонов отправителей и заголовков.",
-    "premiumDesc": "Авто-метки появятся в Premium — скоро."
+  "categories": {
+    "names": {
+      "important": "Важное",
+      "purchases": "Покупки и чеки",
+      "notifications": "Уведомления",
+      "newsletters": "Рассылки",
+      "promotions": "Реклама",
+      "social": "Соцсети"
+    },
+    "none": "Нет",
+    "menu": "Категория",
+    "why": "Почему «{{category}}»?",
+    "whyNone": "Почему нет метки?",
+    "change": "Неверно? Выбрать другую категорию",
+    "rememberSender": "Запомнить для всех писем от {{sender}}",
+    "reasons": {
+      "user_choice": "Вы отнесли письмо сюда",
+      "sender_rule": "Вы выбрали эту категорию для писем от {{sender}}",
+      "thread_rule": "Вы отнесли эту переписку сюда",
+      "sent_to_sender_one": "Вы писали {{sender}} {{count}} раз",
+      "sent_to_sender_few": "Вы писали {{sender}} {{count}} раза",
+      "sent_to_sender_many": "Вы писали {{sender}} {{count}} раз",
+      "sent_to_sender_other": "Вы писали {{sender}} {{count}} раза",
+      "personal_mail": "Личное письмо, не массовая рассылка",
+      "social_domain": "Отправитель — социальная сеть ({{domain}})",
+      "gmail_social": "Gmail относит письмо к «Соцсетям»",
+      "gmail_promotions": "Gmail относит письмо к «Рекламе»",
+      "gmail_updates": "Gmail относит письмо к «Уведомлениям»",
+      "gmail_forums": "Gmail относит письмо к «Форумам»",
+      "noreply_sender": "Автоматический отправитель ({{sender}})",
+      "automated_header": "Помечено как созданное автоматически",
+      "notification_domain": "Сервис уведомлений ({{domain}})",
+      "mailing_list": "Пришло через список рассылки",
+      "unsubscribe_link": "Содержит ссылку для отписки",
+      "bulk_sender": "Отправлено через {{esp}}",
+      "promo_keyword": "Рекламное слово в теме («{{keyword}}»)",
+      "purchase_keyword": "Слово о покупке или счёте в теме («{{keyword}}»)",
+      "shop_domain": "Известный магазин или платёжный сервис ({{domain}})",
+      "low_confidence": "Prudii недостаточно уверен"
+    },
+    "settings": {
+      "title": "Сортировка",
+      "enable": "Сортировать письма автоматически",
+      "enableDesc": "Prudii сортирует входящие письма по категориям на вашем компьютере. На сервере ничего не меняется.",
+      "visibleTitle": "Категории",
+      "visibleDesc": "Скрытые категории не получают метку и пункт в боковой панели.",
+      "sendersTitle": "Запомненные отправители",
+      "sendersEmpty": "Запомненных отправителей пока нет.",
+      "removeSender": "Удалить",
+      "resetTitle": "Сбросить обученное",
+      "resetDesc": "Удаляет запомненных отправителей и ваши исправления и заново сортирует все письма. Сами письма не изменяются.",
+      "resetButton": "Сбросить",
+      "resetConfirmTitle": "Сбросить обученное?",
+      "resetDone": "Сортировка сброшена"
+    }
   },
   "empty": {
     "inbox": "Всё прочитано",

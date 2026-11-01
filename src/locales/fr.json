@@ -467,6 +467,7 @@
     "mailtoFailed": "Impossible de changer l'application de messagerie par défaut",
     "tabs": {
     "calendar": "Calendrier",
+      "sorting": "Tri",
       "general": "Général",
       "privacy": "Confidentialité",
       "accounts": "Comptes",
@@ -1107,18 +1108,59 @@
     "upgradePrompt": "Fonctionnalité Premium",
     "upgradeButton": "Premium — bientôt disponible"
   },
-  "splitInbox": {
-    "title": "Boîte divisée",
-    "description": "Catégoriser automatiquement les e-mails entrants dans des onglets comme Principal, Notifications et Newsletters.",
-    "premiumDesc": "La boîte divisée arrivera avec Premium — bientôt.",
-    "primary": "Principal",
-    "notifications": "Notifications",
-    "newsletters": "Newsletters"
-  },
-  "autoLabels": {
-    "title": "Auto-labels",
-    "description": "Classifier automatiquement les e-mails par type en utilisant les modèles d'expéditeur et les en-têtes.",
-    "premiumDesc": "Les auto-labels arriveront avec Premium — bientôt."
+  "categories": {
+    "names": {
+      "important": "Important",
+      "purchases": "Achats et reçus",
+      "notifications": "Notifications",
+      "newsletters": "Newsletters",
+      "promotions": "Promotions",
+      "social": "Social"
+    },
+    "none": "Aucune",
+    "menu": "Catégorie",
+    "why": "Pourquoi « {{category}} » ?",
+    "whyNone": "Pourquoi pas d'étiquette ?",
+    "change": "Ce n'est pas juste ? Choisir une autre catégorie",
+    "rememberSender": "Mémoriser pour tous les mails de {{sender}}",
+    "reasons": {
+      "user_choice": "Classé ainsi par vous",
+      "sender_rule": "Vous avez choisi cette catégorie pour les mails de {{sender}}",
+      "thread_rule": "Vous avez classé cette conversation ainsi",
+      "sent_to_sender_one": "Vous avez déjà écrit une fois à {{sender}}",
+      "sent_to_sender_other": "Vous avez écrit {{count}} fois à {{sender}}",
+      "personal_mail": "Mail personnel, pas un envoi en masse",
+      "social_domain": "L'expéditeur est un réseau social ({{domain}})",
+      "gmail_social": "Gmail le classe dans Social",
+      "gmail_promotions": "Gmail le classe dans Promotions",
+      "gmail_updates": "Gmail le classe dans Notifications",
+      "gmail_forums": "Gmail le classe dans Forums",
+      "noreply_sender": "Expéditeur automatique ({{sender}})",
+      "automated_header": "Marqué comme généré automatiquement",
+      "notification_domain": "Service de notifications ({{domain}})",
+      "mailing_list": "Provient d'une liste de diffusion",
+      "unsubscribe_link": "Contient un lien de désabonnement",
+      "bulk_sender": "Envoyé via {{esp}}",
+      "promo_keyword": "Terme promotionnel dans l'objet (« {{keyword}} »)",
+      "purchase_keyword": "Terme d'achat ou de facture dans l'objet (« {{keyword}} »)",
+      "shop_domain": "Boutique ou service de paiement connu ({{domain}})",
+      "low_confidence": "Prudii n'est pas assez sûr"
+    },
+    "settings": {
+      "title": "Tri",
+      "enable": "Trier les mails automatiquement",
+      "enableDesc": "Prudii classe les mails entrants par catégorie sur votre ordinateur. Rien ne change sur le serveur.",
+      "visibleTitle": "Catégories",
+      "visibleDesc": "Les catégories masquées n'ont ni étiquette ni entrée dans la barre latérale.",
+      "sendersTitle": "Expéditeurs mémorisés",
+      "sendersEmpty": "Aucun expéditeur mémorisé pour l'instant.",
+      "removeSender": "Retirer",
+      "resetTitle": "Réinitialiser l'apprentissage",
+      "resetDesc": "Supprime les expéditeurs mémorisés et vos classements, puis retrie tous les mails. Les mails eux-mêmes restent inchangés.",
+      "resetButton": "Réinitialiser",
+      "resetConfirmTitle": "Réinitialiser l'apprentissage ?",
+      "resetDone": "Tri réinitialisé"
+    }
   },
   "empty": {
     "inbox": "Tout est à jour",

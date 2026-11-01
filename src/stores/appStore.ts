@@ -641,6 +641,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     compose_font_size: 11,
     mail_sort: "date_desc",
     thread_view: "classic",
+    sorting_enabled: true,
+    hidden_categories: [],
   },
   appSettingsLoaded: false,
   setAppSettings: (appSettings) => set({ appSettings, appSettingsLoaded: true }),

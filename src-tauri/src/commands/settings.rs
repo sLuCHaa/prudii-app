@@ -54,6 +54,11 @@ pub fn get_app_settings(db: State<'_, Database>) -> Result<AppSettings, String> 
             compose_font_size: get_u32("compose_font_size", 11),
             mail_sort: get_string("mail_sort", "date_desc"),
             thread_view: get_string("thread_view", "classic"),
+            sorting_enabled: get_bool("sorting_enabled", true),
+            hidden_categories: values
+                .get("hidden_categories")
+                .and_then(|v| serde_json::from_str(v).ok())
+                .unwrap_or_default(),
         })
     })
 }
@@ -154,6 +159,13 @@ pub fn update_app_settings(
         conn.execute(
             "INSERT OR REPLACE INTO app_settings (key, value) VALUES (?1, ?2)",
             rusqlite::params!["thread_view", &settings.thread_view],
+        )
+        .map_err(|e| e.to_string())?;
+
+        set_setting(&conn, "sorting_enabled", settings.sorting_enabled)?;
+        conn.execute(
+            "INSERT OR REPLACE INTO app_settings (key, value) VALUES (?1, ?2)",
+            rusqlite::params!["hidden_categories", serde_json::to_string(&settings.hidden_categories).map_err(|e| e.to_string())?],
         )
         .map_err(|e| e.to_string())?;
 

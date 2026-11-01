@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { BundleImportResult, Calendar, CalendarPatch, CalendarSettings, EditScope, EventDetail, EventInput, EventPatch, EventTimes, ImportResult, InvitationView, Occurrence, RespondInvitationArgs, SubscribeResult } from "../types/calendar";
-import type { Account, AiResponse, Assignment, Attachment, AttachmentWithContext, AppConfig, AppSettings, BackupOptions, BulkSaveResult, ChecklistItem, Contact, ContactDomain, CreateAccountRequest, CreateRuleRequest, CreateTaskInput, EmailTemplate, Folder, InboxSplit, LicenseInfo, Mail, MailRule, OAuthResult, OllamaStatus, RestorePreview, ScheduledMail, SearchResult, SendMailRequest, SieveSupport, Task, TaskAttachment, TaskDetail, TaskStatus, TeamSnapshot, UnsubscribeResult, UpdateTaskPatch, VacationSettings, VacationState } from "../types";
+import type { Account, AiResponse, Assignment, Attachment, AttachmentWithContext, AppConfig, AppSettings, BackupOptions, BulkSaveResult, CategoryCount, ChecklistItem, Contact, ContactDomain, CreateAccountRequest, CreateRuleRequest, CreateTaskInput, EmailTemplate, Folder, InboxSplit, LicenseInfo, Mail, MailCategoryInfo, MailRule, OAuthResult, OllamaStatus, RestorePreview, ScheduledMail, SearchResult, SenderRule, SendMailRequest, SieveSupport, Task, TaskAttachment, TaskDetail, TaskStatus, TeamSnapshot, UnsubscribeResult, UpdateTaskPatch, VacationSettings, VacationState } from "../types";
 import { prefers24HourClock } from "./localeDefaults";
 
 export async function listAccounts(): Promise<Account[]> {
@@ -464,8 +464,36 @@ export async function listSplitInboxMails(splitId: string, limit?: number, offse
   return invoke("list_split_inbox_mails", { splitId, limit: limit ?? null, offset: offset ?? null, sort: sort ?? null });
 }
 
-export async function classifyUnclassifiedMails(): Promise<number> {
-  return invoke("classify_unclassified_mails");
+export async function categorizePendingMails(): Promise<number> {
+  return invoke("categorize_pending_mails");
+}
+
+export async function listCategoryMails(category: string, folderId: string | null, limit?: number, offset?: number, folderFilter?: string, sort?: string): Promise<Mail[]> {
+  return invoke("list_category_mails", { category, folderId, limit: limit ?? null, offset: offset ?? null, folderFilter: folderFilter ?? null, sort: sort ?? null });
+}
+
+export async function listCategoryCounts(): Promise<CategoryCount[]> {
+  return invoke("list_category_counts");
+}
+
+export async function getMailCategoryInfo(mailId: string): Promise<MailCategoryInfo | null> {
+  return invoke("get_mail_category_info", { mailId });
+}
+
+export async function setMailCategory(mailId: string, category: string | null, rememberSender: boolean): Promise<number> {
+  return invoke("set_mail_category", { mailId, category, rememberSender });
+}
+
+export async function listSenderCategories(): Promise<SenderRule[]> {
+  return invoke("list_sender_categories");
+}
+
+export async function deleteSenderCategory(email: string): Promise<void> {
+  return invoke("delete_sender_category", { email });
+}
+
+export async function resetCategories(): Promise<void> {
+  return invoke("reset_categories");
 }
 
 export async function clearAiCache(mailId?: string): Promise<void> {

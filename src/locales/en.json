@@ -467,6 +467,7 @@
     "mailtoFailed": "Could not change default mail app",
     "tabs": {
     "calendar": "Calendar",
+      "sorting": "Sorting",
       "general": "General",
       "privacy": "Privacy",
       "accounts": "Accounts",
@@ -1107,18 +1108,59 @@
     "upgradePrompt": "Premium Feature",
     "upgradeButton": "Premium — coming soon"
   },
-  "splitInbox": {
-    "title": "Split Inbox",
-    "description": "Automatically categorize incoming mail into tabs like Primary, Notifications, and Newsletters.",
-    "premiumDesc": "Split Inbox will be part of Premium — coming soon.",
-    "primary": "Primary",
-    "notifications": "Notifications",
-    "newsletters": "Newsletters"
-  },
-  "autoLabels": {
-    "title": "Auto-Labels",
-    "description": "Automatically classify emails by type using sender patterns and headers.",
-    "premiumDesc": "Auto-Labels will be part of Premium — coming soon."
+  "categories": {
+    "names": {
+      "important": "Important",
+      "purchases": "Purchases",
+      "notifications": "Notifications",
+      "newsletters": "Newsletters",
+      "promotions": "Promotions",
+      "social": "Social"
+    },
+    "none": "None",
+    "menu": "Category",
+    "why": "Why “{{category}}”?",
+    "whyNone": "Why no label?",
+    "change": "Not right? Pick another category",
+    "rememberSender": "Remember for all mails from {{sender}}",
+    "reasons": {
+      "user_choice": "You sorted it here",
+      "sender_rule": "You chose this category for mails from {{sender}}",
+      "thread_rule": "You sorted this conversation here",
+      "sent_to_sender_one": "You've written to {{sender}} once",
+      "sent_to_sender_other": "You've written to {{sender}} {{count}} times",
+      "personal_mail": "Personal mail, not a mass mailing",
+      "social_domain": "Sender is a social network ({{domain}})",
+      "gmail_social": "Gmail files it under Social",
+      "gmail_promotions": "Gmail files it under Promotions",
+      "gmail_updates": "Gmail files it under Updates",
+      "gmail_forums": "Gmail files it under Forums",
+      "noreply_sender": "Automated sender ({{sender}})",
+      "automated_header": "Marked as automatically generated",
+      "notification_domain": "Notification service ({{domain}})",
+      "mailing_list": "Sent via a mailing list",
+      "unsubscribe_link": "Contains an unsubscribe link",
+      "bulk_sender": "Sent via {{esp}}",
+      "promo_keyword": "Promotional wording in the subject (“{{keyword}}”)",
+      "purchase_keyword": "Purchase or invoice wording in the subject (“{{keyword}}”)",
+      "shop_domain": "Known shop or payment service ({{domain}})",
+      "low_confidence": "Prudii isn't sure enough"
+    },
+    "settings": {
+      "title": "Sorting",
+      "enable": "Sort mails automatically",
+      "enableDesc": "Prudii sorts incoming mail into categories on your computer. Nothing changes on the server.",
+      "visibleTitle": "Categories",
+      "visibleDesc": "Hidden categories get no label and no sidebar entry.",
+      "sendersTitle": "Remembered senders",
+      "sendersEmpty": "No remembered senders yet.",
+      "removeSender": "Remove",
+      "resetTitle": "Reset what Prudii learned",
+      "resetDesc": "Deletes remembered senders and your corrections and sorts all mail again. Your mails stay untouched.",
+      "resetButton": "Reset",
+      "resetConfirmTitle": "Reset what Prudii learned?",
+      "resetDone": "Sorting reset"
+    }
   },
   "empty": {
     "inbox": "All caught up",
