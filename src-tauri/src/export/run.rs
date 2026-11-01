@@ -8,6 +8,7 @@ use super::source::FetchError;
 use super::{ExportLabels, ExportOptions, ExportProgress, ExportSummary, MailOutcome};
 use crate::commands::mails::{api_type_of, ApiType};
 use crate::db::Database;
+use rusqlite::types::{Value, ValueRef};
 use chrono::{NaiveDate, NaiveDateTime};
 use futures_util::stream::{self, StreamExt};
 use futures_util::FutureExt;
@@ -38,7 +39,10 @@ struct FolderInfo {
     account_name: String,
 }
 
+type PageKey = (Value, Value);
+
 struct MailRow {
+    key: PageKey,
     id: String,
     subject: String,
     from_name: String,
@@ -123,39 +127,66 @@ fn count_mails(db: &Database, folders: &[FolderInfo]) -> u32 {
         .sum::<i64>() as u32
 }
 
-fn read_chunk(db: &Database, folder_id: &str, after: &Option<(String, String)>) -> Vec<MailRow> {
+// Lossy on purpose: a row whose text fails to decode must still be exported or listed, never skipped.
+fn lossy(row: &rusqlite::Row, i: usize) -> String {
+    match row.get_ref(i) {
+        Ok(ValueRef::Text(b) | ValueRef::Blob(b)) => String::from_utf8_lossy(b).into_owned(),
+        Ok(ValueRef::Integer(n)) => n.to_string(),
+        Ok(ValueRef::Real(f)) => f.to_string(),
+        Ok(ValueRef::Null) | Err(_) => String::new(),
+    }
+}
+
+fn read_chunk(db: &Database, folder_id: &str, after: &Option<PageKey>) -> Vec<MailRow> {
     let conn = db.lock_db();
     let (date, id) = match after {
-        Some((d, i)) => (Some(d.as_str()), Some(i.as_str())),
+        Some((d, i)) => (Some(d), Some(i)),
         None => (None, None),
     };
-    let Ok(mut stmt) = conn.prepare(
+    let mut stmt = match conn.prepare(
         "SELECT id, subject, from_name, from_email, to_json, cc_json, bcc_json, date, body_html, body_text, has_attachments
          FROM mails
          WHERE folder_id = ?1 AND (?2 IS NULL OR date < ?2 OR (date = ?2 AND id > ?3))
          ORDER BY date DESC, id ASC LIMIT ?4",
-    ) else {
-        return Vec::new();
+    ) {
+        Ok(stmt) => stmt,
+        Err(e) => {
+            log::warn!("mail export: reading the mail list failed: {e}");
+            return Vec::new();
+        }
     };
     let rows = stmt.query_map(rusqlite::params![folder_id, date, id, CHUNK], |row| {
         Ok(MailRow {
-            id: row.get(0)?,
-            subject: row.get(1)?,
-            from_name: row.get(2)?,
-            from_email: row.get(3)?,
-            to_json: row.get(4)?,
-            cc_json: row.get(5)?,
-            bcc_json: row.get(6)?,
-            date: row.get(7)?,
-            body_html: row.get(8)?,
-            body_text: row.get(9)?,
-            has_attachments: row.get::<_, i64>(10)? != 0,
+            key: (row.get(7)?, row.get(0)?),
+            id: lossy(row, 0),
+            subject: lossy(row, 1),
+            from_name: lossy(row, 2),
+            from_email: lossy(row, 3),
+            to_json: lossy(row, 4),
+            cc_json: lossy(row, 5),
+            bcc_json: lossy(row, 6),
+            date: lossy(row, 7),
+            body_html: lossy(row, 8),
+            body_text: lossy(row, 9),
+            has_attachments: matches!(row.get_ref(10), Ok(ValueRef::Integer(n)) if n != 0),
         })
     });
+    let mut out = Vec::new();
     match rows {
-        Ok(iter) => iter.flatten().collect(),
-        Err(_) => Vec::new(),
+        Ok(iter) => {
+            for row in iter {
+                match row {
+                    Ok(row) => out.push(row),
+                    Err(e) => {
+                        log::warn!("mail export: reading the mail list failed: {e}");
+                        break;
+                    }
+                }
+            }
+        }
+        Err(e) => log::warn!("mail export: reading the mail list failed: {e}"),
     }
+    out
 }
 
 fn load_local_parts(db: &Database, mail_id: &str) -> Vec<ExportPart> {
@@ -195,8 +226,9 @@ fn preview(mail: &ParsedMail) -> String {
         Some(t) => t.chars().take(PREVIEW_CHARS * 8).collect::<String>(),
         None => {
             let html: String = mail.html.as_deref().unwrap_or_default().chars().take(200_000).collect();
+            // Stripped tags leave nothing behind, so block elements would run together.
             ammonia::Builder::empty()
-                .clean(&html)
+                .clean(&html.replace('<', " <"))
                 .to_string()
                 .replace("&nbsp;", " ")
                 .replace("&lt;", "<")
@@ -416,12 +448,13 @@ where
 
         let mut mail_names = NameSet::new();
         let mut entries: Vec<IndexEntry> = Vec::new();
-        let mut after: Option<(String, String)> = None;
+        let mut after: Option<PageKey> = None;
+        let processed_before = processed;
 
         loop {
             let rows = read_chunk(db, &folder.id, &after);
             let Some(last) = rows.last() else { break };
-            after = Some((last.date.clone(), last.id.clone()));
+            after = Some(last.key.clone());
             if cancel.load(Ordering::SeqCst) {
                 stopped_early = true;
                 break;
@@ -484,6 +517,9 @@ where
             }
         }
 
+        if stopped_early && processed == processed_before {
+            break;
+        }
         let pos = *account_pos.entry(folder.account_id.clone()).or_insert_with(|| {
             accounts.push(IndexAccount { name: folder.account_name.clone(), email: folder.account_email.clone(), folders: Vec::new() });
             accounts.len() - 1
@@ -494,6 +530,9 @@ where
             folder_type: folder.folder_type.clone(),
             mails: entries,
         });
+        if stopped_early {
+            break;
+        }
     }
     emit(processed, local_copy, failed);
 
@@ -1020,10 +1059,54 @@ JVBERi0xLjQ=\n\
             parts: vec![],
         };
         assert_eq!(preview(&mail), "Hallo Anna & Jonas");
+        mail.html = Some("<p>Hallo Anna,</p><p>anbei</p><div>die Pläne</div>".into());
+        assert_eq!(preview(&mail), "Hallo Anna, anbei die Pläne");
         mail.text = Some("Zeile eins\n\n  Zeile   zwei".into());
         assert_eq!(preview(&mail), "Zeile eins Zeile zwei");
         mail.text = Some("x".repeat(500));
         assert_eq!(preview(&mail).chars().count(), 120);
+    }
+
+    #[tokio::test]
+    async fn folders_not_started_before_a_cancel_stay_out_of_the_index() {
+        let w = world();
+        for i in 0..30 {
+            add_mail(&w, &format!("Mail {i}"), &format!("2026-10-{:02} 10:00:00", i + 1));
+        }
+        let archive = seed_folder(&w.db.lock_db(), &w.account, "archive");
+        let out = Out::new();
+        let cancel = AtomicBool::new(false);
+        let summary = run_export(
+            &w.db,
+            &options(vec![w.folder.clone(), archive.clone()]),
+            &labels(),
+            &out.0,
+            |_| async { Ok::<_, FetchError>(fixture()) },
+            &cancel,
+            |p| {
+                if p.processed >= 25 {
+                    cancel.store(true, Ordering::SeqCst);
+                }
+            },
+        )
+        .await;
+        assert!(summary.cancelled);
+        let data = index_data(&out.0);
+        assert!(data.contains(&w.folder) && !data.contains(&archive), "{data}");
+    }
+
+    #[tokio::test]
+    async fn rows_with_broken_text_are_still_listed() {
+        let w = world();
+        let id = add_mail(&w, "x", "2026-10-21 13:28:44");
+        w.db.lock_db()
+            .execute("UPDATE mails SET subject = CAST(X'4772FC' AS TEXT) WHERE id = ?1", rusqlite::params![id])
+            .unwrap();
+        let out = Out::new();
+        let summary = run(&w, &options(vec![w.folder.clone()]), &out.0, HashMap::new()).await;
+        assert_eq!(summary.failed, 1);
+        let data = index_data(&out.0);
+        assert!(data[data.find("\"failed\":").unwrap()..].contains("Gr\u{FFFD}"), "{data}");
     }
 
     #[tokio::test]
