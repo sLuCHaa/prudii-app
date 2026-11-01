@@ -1,4 +1,5 @@
-import { useEffect, useState, useRef } from "react";
+import { Fragment, useEffect, useState, useRef } from "react";
+import { CategorySidebarEntries } from "../categories/CategorySidebarEntries";
 import { createPortal } from "react-dom";
 import { FileText, AlertOctagon, Folder, Plus, ChevronDown, ChevronRight, FolderPlus, Pencil, HardDrive, Cloud, X, Check, Crown, Clock, CalendarClock, PanelLeftClose, PanelLeftOpen, Loader2, AlertCircle, Palette, RefreshCw, RotateCcw, Settings, ClipboardList, UserCheck, CalendarDays } from "lucide-react";
 import { useTodayCount } from "../../hooks/useCalendar";
@@ -330,6 +331,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
   const { t } = useTranslation();
   const accountExpandedStates = useAppStore((s) => s.accountExpandedStates);
   const toggleAccountExpanded = useAppStore((s) => s.toggleAccountExpanded);
+  const activeCategory = useAppStore((s) => s.activeCategory);
   const expanded = accountExpandedStates[account.id] ?? true;
   const [contextMenu, setContextMenu] = useState<{ folder: FolderT; x: number; y: number } | null>(null);
   const [renamingFolder, setRenamingFolder] = useState<FolderT | null>(null);
@@ -796,8 +798,9 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
       <Collapse open={!!(expanded && folders)}>
         <div className="mt-0.5 space-y-0.5 px-px pb-1">
           {(folders ?? []).map((folder) => (
-            renamingFolder?.id === folder.id ? (
-              <div key={folder.id} className="flex items-center gap-1 px-1">
+            <Fragment key={folder.id}>
+            {renamingFolder?.id === folder.id ? (
+              <div className="flex items-center gap-1 px-1">
                 <input
                   type="text"
                   value={renameValue}
@@ -818,9 +821,8 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
               </div>
             ) : (
               <CardButton
-                key={folder.id}
                 ref={(el) => setFolderRef(folder.id, el)}
-                selected={selectedFolderId === folder.id}
+                selected={selectedFolderId === folder.id && !activeCategory}
                 onClick={() => handleFolderOpen(folder)}
                 onContextMenu={(e) => handleFolderContextMenu(e, folder)}
                 onDragOver={(e) => handleDragOver(e, folder)}
@@ -858,7 +860,9 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
               >
                 {t(`folder.types.${folder.folder_type}`, { defaultValue: folder.name })}
               </CardButton>
-            )
+            )}
+            {folder.folder_type === "inbox" && <CategorySidebarEntries inboxFolderId={folder.id} />}
+            </Fragment>
           ))}
         </div>
       </Collapse>
@@ -1076,6 +1080,7 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
   const activeFilter = useAppStore((s) => s.activeFilter);
   const setActiveFilter = useAppStore((s) => s.setActiveFilter);
   const showAllInboxes = useAppStore((s) => s.showAllInboxes);
+  const activeCategory = useAppStore((s) => s.activeCategory);
   const setShowAllInboxes = useAppStore((s) => s.setShowAllInboxes);
   const showSnoozed = useAppStore((s) => s.showSnoozed);
   const setShowSnoozed = useAppStore((s) => s.setShowSnoozed);
@@ -1154,8 +1159,8 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
       id: "all-inboxes",
       label: t("sidebar.allInboxes"),
       icon: <Inbox className="w-4 h-4" />,
-      onClick: () => setShowAllInboxes(!showAllInboxes),
-      isActive: showAllInboxes,
+      onClick: () => setShowAllInboxes(!showAllInboxes || !!activeCategory),
+      isActive: showAllInboxes && !activeCategory,
       show: showAllInboxesView,
     },
     {
@@ -1276,8 +1281,8 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
 
       <div className="mt-0.5 space-y-0.5">
         {views.map((view) => (
+          <Fragment key={view.id}>
           <button
-            key={view.id}
             onClick={view.onClick}
             onDragOver={view.onDragOver}
             onDragLeave={view.onDragLeave}
@@ -1297,6 +1302,8 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
               <UnreadBadge count={view.count} />
             )}
           </button>
+          {view.id === "all-inboxes" && <CategorySidebarEntries inboxFolderId={null} />}
+          </Fragment>
         ))}
 
         {taskFromMailId && (
@@ -1347,7 +1354,7 @@ export function Sidebar() {
       // hijack the open mail via the per-folder selection restore.
       const s = useAppStore.getState();
       const viewActive = s.activeFilter || s.showAllInboxes || s.activeCombinedFolder
-        || s.activeSplitId || s.showSnoozed || s.showScheduled || s.showAttachmentBrowser || s.showTasks || s.showCalendar;
+        || s.activeCategory || s.showSnoozed || s.showScheduled || s.showAttachmentBrowser || s.showTasks || s.showCalendar;
       if (folders.length > 0 && !s.selectedFolderId && !viewActive) {
         setSelectedFolderId(folders[0].id);
       }

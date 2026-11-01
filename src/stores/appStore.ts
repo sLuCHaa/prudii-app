@@ -76,7 +76,7 @@ function storeValue(key: string, value: string) {
 function exclusiveViewReset() {
   return {
     showSnoozed: false, showScheduled: false, showAttachmentBrowser: false, showTasks: false, showAssigned: false,
-    showAllInboxes: false, selectedFolderId: null, activeFilter: null, activeCombinedFolder: null, activeSplitId: null,
+    showAllInboxes: false, selectedFolderId: null, activeFilter: null, activeCombinedFolder: null, activeCategory: null,
     selectedMailId: null, selectedMailIndex: -1, folderFilter: "all" as FolderFilter, selectedMailIds: new Set<string>(),
     multiSelectMode: false, lastSelectedMailId: null,
   };
@@ -113,14 +113,15 @@ interface AppState {
   activeFilter: MailFilter;
   showAllInboxes: boolean;
   activeCombinedFolder: string | null;
-  activeSplitId: string | null;
+  activeCategory: string | null;
   setMails: (mails: Mail[] | ((prev: Mail[]) => Mail[])) => void;
   setSelectedMailId: (id: string | null) => void;
   setSelectedMailIndex: (index: number) => void;
   setActiveFilter: (filter: MailFilter) => void;
   setShowAllInboxes: (show: boolean) => void;
   setActiveCombinedFolder: (folderType: string | null) => void;
-  setActiveSplitId: (splitId: string | null) => void;
+  setActiveCategory: (category: string | null) => void;
+  openCategory: (category: string, inboxFolderId: string | null) => void;
   // Shared by the notification-clicked handler (App.tsx) and LinkedMails — jumps to
   // a specific mail on a specific account, clearing every other exclusive view state.
   openMailById: (accountId: string, mailId: string, folderId?: string | null) => void;
@@ -282,6 +283,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     selectedFolderId,
     selectedMailId: selectedFolderId ? state.folderSelection[selectedFolderId] ?? null : null,
     selectedMailIndex: -1,
+    activeCategory: null,
     showSnoozed: false, showScheduled: false, showAttachmentBrowser: false, showTasks: false, showCalendar: false, showAssigned: false,
     folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null,
   })),
@@ -326,7 +328,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     selectedMailIndex: -1,
     showAllInboxes: false,
     activeCombinedFolder: null,
-    activeSplitId: null,
+    activeCategory: null,
     showSnoozed: false,
     showScheduled: false,
     showAttachmentBrowser: false,
@@ -337,16 +339,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     multiSelectMode: false,
     lastSelectedMailId: null,
   })),
-  setShowAllInboxes: (showAllInboxes) => set({ showAllInboxes, showSnoozed: false, showScheduled: false, showAttachmentBrowser: false, showTasks: false, showCalendar: false, showAssigned: false, selectedFolderId: null, activeFilter: null, activeCombinedFolder: null, activeSplitId: null, selectedMailId: null, selectedMailIndex: -1, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
-  setActiveCombinedFolder: (activeCombinedFolder) => set({ activeCombinedFolder, showAllInboxes: false, showSnoozed: false, showScheduled: false, showAttachmentBrowser: false, showTasks: false, showCalendar: false, showAssigned: false, selectedFolderId: null, activeFilter: null, activeSplitId: null, selectedMailId: null, selectedMailIndex: -1, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
-  activeSplitId: null,
-  setActiveSplitId: (activeSplitId) => set({ activeSplitId, showSnoozed: false, showScheduled: false, showAttachmentBrowser: false, showTasks: false, showCalendar: false, showAssigned: false, selectedMailId: null, selectedMailIndex: -1, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
+  setShowAllInboxes: (showAllInboxes) => set({ showAllInboxes, showSnoozed: false, showScheduled: false, showAttachmentBrowser: false, showTasks: false, showCalendar: false, showAssigned: false, selectedFolderId: null, activeFilter: null, activeCombinedFolder: null, activeCategory: null, selectedMailId: null, selectedMailIndex: -1, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
+  setActiveCombinedFolder: (activeCombinedFolder) => set({ activeCombinedFolder, showAllInboxes: false, showSnoozed: false, showScheduled: false, showAttachmentBrowser: false, showTasks: false, showCalendar: false, showAssigned: false, selectedFolderId: null, activeFilter: null, activeCategory: null, selectedMailId: null, selectedMailIndex: -1, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
+  activeCategory: null,
+  setActiveCategory: (activeCategory) => set({ activeCategory, showSnoozed: false, showScheduled: false, showAttachmentBrowser: false, showTasks: false, showCalendar: false, showAssigned: false, selectedMailId: null, selectedMailIndex: -1, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
+  openCategory: (category, inboxFolderId) => set({ ...(inboxFolderId === null ? { showAllInboxes: true, selectedFolderId: null } : { showAllInboxes: false, selectedFolderId: inboxFolderId }), showSnoozed: false, showScheduled: false, showAttachmentBrowser: false, showTasks: false, showCalendar: false, showAssigned: false, activeFilter: null, activeCombinedFolder: null, activeCategory: category, selectedMailId: null, selectedMailIndex: -1, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
   openMailById: (accountId, mailId, folderId = null) => set({
     selectedAccountId: accountId,
     showAllInboxes: false,
     activeCombinedFolder: null,
     activeFilter: null,
-    activeSplitId: null,
+    activeCategory: null,
     showSnoozed: false,
     showScheduled: false,
     showAttachmentBrowser: false,
@@ -461,18 +464,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   showSnoozed: false,
-  setShowSnoozed: (showSnoozed) => set({ showSnoozed, showScheduled: false, showAttachmentBrowser: false, showTasks: false, showCalendar: false, showAssigned: false, showAllInboxes: false, selectedFolderId: null, activeFilter: null, activeCombinedFolder: null, activeSplitId: null, selectedMailId: null, selectedMailIndex: -1, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
+  setShowSnoozed: (showSnoozed) => set({ showSnoozed, showScheduled: false, showAttachmentBrowser: false, showTasks: false, showCalendar: false, showAssigned: false, showAllInboxes: false, selectedFolderId: null, activeFilter: null, activeCombinedFolder: null, activeCategory: null, selectedMailId: null, selectedMailIndex: -1, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
 
   showScheduled: false,
-  setShowScheduled: (showScheduled) => set({ showScheduled, showSnoozed: false, showAttachmentBrowser: false, showTasks: false, showCalendar: false, showAssigned: false, showAllInboxes: false, selectedFolderId: null, activeFilter: null, activeCombinedFolder: null, activeSplitId: null, selectedMailId: null, selectedMailIndex: -1, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
+  setShowScheduled: (showScheduled) => set({ showScheduled, showSnoozed: false, showAttachmentBrowser: false, showTasks: false, showCalendar: false, showAssigned: false, showAllInboxes: false, selectedFolderId: null, activeFilter: null, activeCombinedFolder: null, activeCategory: null, selectedMailId: null, selectedMailIndex: -1, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
 
   showAttachmentBrowser: false,
-  setShowAttachmentBrowser: (showAttachmentBrowser) => set({ showAttachmentBrowser, showSnoozed: false, showScheduled: false, showTasks: false, showCalendar: false, showAssigned: false, showAllInboxes: false, selectedFolderId: null, activeFilter: null, activeCombinedFolder: null, activeSplitId: null, selectedMailId: null, selectedMailIndex: -1, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
+  setShowAttachmentBrowser: (showAttachmentBrowser) => set({ showAttachmentBrowser, showSnoozed: false, showScheduled: false, showTasks: false, showCalendar: false, showAssigned: false, showAllInboxes: false, selectedFolderId: null, activeFilter: null, activeCombinedFolder: null, activeCategory: null, selectedMailId: null, selectedMailIndex: -1, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
 
   showTasks: false, showCalendar: false,
-  setShowTasks: (showTasks) => set({ showTasks, showCalendar: false, showSnoozed: false, showScheduled: false, showAttachmentBrowser: false, showAssigned: false, showAllInboxes: false, selectedFolderId: null, activeFilter: null, activeCombinedFolder: null, activeSplitId: null, selectedMailId: null, selectedMailIndex: -1, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
+  setShowTasks: (showTasks) => set({ showTasks, showCalendar: false, showSnoozed: false, showScheduled: false, showAttachmentBrowser: false, showAssigned: false, showAllInboxes: false, selectedFolderId: null, activeFilter: null, activeCombinedFolder: null, activeCategory: null, selectedMailId: null, selectedMailIndex: -1, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
   showAssigned: false,
-  setShowAssigned: (showAssigned) => set({ showAssigned, showSnoozed: false, showScheduled: false, showAttachmentBrowser: false, showTasks: false, showCalendar: false, showAllInboxes: false, selectedFolderId: null, activeFilter: null, activeCombinedFolder: null, activeSplitId: null, selectedMailId: null, selectedMailIndex: -1, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
+  setShowAssigned: (showAssigned) => set({ showAssigned, showSnoozed: false, showScheduled: false, showAttachmentBrowser: false, showTasks: false, showCalendar: false, showAllInboxes: false, selectedFolderId: null, activeFilter: null, activeCombinedFolder: null, activeCategory: null, selectedMailId: null, selectedMailIndex: -1, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
   tasksViewMode: getStoredTasksViewMode(),
   setTasksViewMode: (tasksViewMode) => {
     try { localStorage.setItem("prudii-tasks-view-mode", tasksViewMode); } catch { /* private-mode storage may reject writes */ }
@@ -480,7 +483,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   openTaskId: null,
   setOpenTaskId: (openTaskId) => set({ openTaskId }),
-  openTaskById: (id) => set({ openTaskId: id, showTasks: true, showCalendar: false, showSnoozed: false, showScheduled: false, showAttachmentBrowser: false, showAssigned: false, showAllInboxes: false, selectedFolderId: null, activeFilter: null, activeCombinedFolder: null, activeSplitId: null, selectedMailId: null, selectedMailIndex: -1, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
+  openTaskById: (id) => set({ openTaskId: id, showTasks: true, showCalendar: false, showSnoozed: false, showScheduled: false, showAttachmentBrowser: false, showAssigned: false, showAllInboxes: false, selectedFolderId: null, activeFilter: null, activeCombinedFolder: null, activeCategory: null, selectedMailId: null, selectedMailIndex: -1, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
   quickAddFocusRequested: false,
   requestQuickAddFocus: () => set({ quickAddFocusRequested: true }),
   consumeQuickAddFocus: () => set({ quickAddFocusRequested: false }),

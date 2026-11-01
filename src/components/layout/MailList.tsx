@@ -15,7 +15,8 @@ import { useTasksForMails, useLinkMailToTask } from "../../hooks/useTasks";
 import { MailTaskChip } from "../tasks/MailTaskChip";
 import { TaskPickerDialog } from "../tasks/TaskPickerDialog";
 import { CreateTaskFromMail } from "../tasks/CreateTaskFromMail";
-import { useMails, useFilteredMails, useAllInboxMails, useCombinedFolderMails, useSnoozedMails, useSplitInboxMails, useInboxSplits, useToggleStar, useTogglePin, useToggleMailFlag, useFolders } from "../../hooks/useAccounts";
+import { useCategoryMails } from "../../hooks/useCategories";
+import { useMails, useFilteredMails, useAllInboxMails, useCombinedFolderMails, useSnoozedMails, useToggleStar, useTogglePin, useToggleMailFlag, useFolders } from "../../hooks/useAccounts";
 import { useTeamSnapshot, useTeamAssignments, useAssignedMails, useAssignMail, useSetAssignmentStatus, useUnassignMail } from "../../hooks/useTeam";
 import { indexAssignments, openAssignedTo } from "../../lib/team";
 import { AssigneeChip } from "../ui/AssigneeChip";
@@ -1060,8 +1061,7 @@ export function MailList() {
     setShowAllInboxes,
     activeCombinedFolder,
     setActiveCombinedFolder,
-    activeSplitId,
-    setActiveSplitId,
+    activeCategory,
     showSnoozed,
     showScheduled,
     showAssigned,
@@ -1094,8 +1094,7 @@ export function MailList() {
     setShowAllInboxes: s.setShowAllInboxes,
     activeCombinedFolder: s.activeCombinedFolder,
     setActiveCombinedFolder: s.setActiveCombinedFolder,
-    activeSplitId: s.activeSplitId,
-    setActiveSplitId: s.setActiveSplitId,
+    activeCategory: s.activeCategory,
     showSnoozed: s.showSnoozed,
     showScheduled: s.showScheduled,
     showAssigned: s.showAssigned,
@@ -1241,7 +1240,7 @@ export function MailList() {
   const chooseMailSort = useAppStore((s) => s.chooseMailSort);
 
   const folderQuery = useMails(
-    !activeFilter && !showAllInboxes && !activeCombinedFolder ? selectedFolderId : null,
+    !activeFilter && !showAllInboxes && !activeCombinedFolder && !activeCategory ? selectedFolderId : null,
     activeFilterKey,
     mailSort
   );
@@ -1252,7 +1251,7 @@ export function MailList() {
     activeFilterKey,
     mailSort
   );
-  const allInboxQuery = useAllInboxMails(showAllInboxes && !activeSplitId, activeFilterKey, mailSort);
+  const allInboxQuery = useAllInboxMails(showAllInboxes && !activeCategory, activeFilterKey, mailSort);
   const combinedQuery = useCombinedFolderMails(activeCombinedFolder, activeFilterKey, mailSort);
   const snoozedQuery = useSnoozedMails(showSnoozed);
   const accounts = useAppStore((s) => s.accounts);
@@ -1276,11 +1275,9 @@ export function MailList() {
   const setAssignmentStatus = useSetAssignmentStatus();
   const unassignMail = useUnassignMail();
   const accountEmailOf = (accountId: string) => accounts.find((a) => a.id === accountId)?.email ?? "";
-  const splitQuery = useSplitInboxMails(showAllInboxes ? activeSplitId : null, mailSort);
-  const splitsQuery = useInboxSplits();
-  const inboxSplits = splitsQuery.data ?? [];
+  const categoryQuery = useCategoryMails(activeCategory, showAllInboxes ? null : selectedFolderId, activeFilterKey, mailSort);
 
-  const activeQuery = showAssigned ? assignedQuery : showSnoozed ? snoozedQuery : activeCombinedFolder ? combinedQuery : (showAllInboxes && activeSplitId) ? splitQuery : showAllInboxes ? allInboxQuery : activeFilter ? filterQuery : folderQuery;
+  const activeQuery = showAssigned ? assignedQuery : showSnoozed ? snoozedQuery : activeCombinedFolder ? combinedQuery : activeCategory ? categoryQuery : showAllInboxes ? allInboxQuery : activeFilter ? filterQuery : folderQuery;
   const isLoading = activeQuery.isLoading;
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = activeQuery;
 
@@ -1355,6 +1352,7 @@ export function MailList() {
     if (showScheduled) return t("scheduled.scheduled");
     if (showSnoozed) return t("snooze.snoozed");
     if (activeCombinedFolder) return combinedFolderLabels[activeCombinedFolder] || activeCombinedFolder;
+    if (activeCategory) return t(`categories.names.${activeCategory}`);
     if (showAllInboxes) return t("sidebar.allInboxes");
     if (activeFilter) {
       if (activeFilter === "starred") return t("sidebar.starred");
@@ -1365,19 +1363,19 @@ export function MailList() {
       if (selectedFolder) return t(`folder.types.${selectedFolder.folder_type}`, { defaultValue: selectedFolder.name });
     }
     return t("mailList.inbox");
-  }, [activeFilter, showAllInboxes, showSnoozed, showScheduled, showAssigned, activeCombinedFolder, selectedFolderId, folders, t, combinedFolderLabels]);
+  }, [activeFilter, activeCategory, showAllInboxes, showSnoozed, showScheduled, showAssigned, activeCombinedFolder, selectedFolderId, folders, t, combinedFolderLabels]);
 
   // Total count: use folder.total_count for folder view, loaded count otherwise.
   // Fallback to mails.length if total_count is 0 but mails are visible (stale count during sync).
   const totalCount = useMemo(() => {
-    if (!activeFilter && !showAllInboxes && !activeCombinedFolder && selectedFolderId) {
+    if (!activeFilter && !activeCategory && !showAllInboxes && !activeCombinedFolder && selectedFolderId) {
       const folder = folders.find((f) => f.id === selectedFolderId);
       if (folder && folder.total_count > 0) return folder.total_count;
       if (folder && mails.length > 0) return mails.length;
       if (folder) return folder.total_count;
     }
     return mails.length;
-  }, [activeFilter, showAllInboxes, selectedFolderId, folders, mails.length]);
+  }, [activeFilter, activeCategory, showAllInboxes, selectedFolderId, folders, mails.length]);
 
   // Server-side filtering via query params — filteredMails is just mails
   const filteredMails = mails;
@@ -1836,7 +1834,7 @@ export function MailList() {
   // offset carried over and landed the new folder mid-list.
   useEffect(() => {
     listRef.current?.scrollTo({ top: 0 });
-  }, [selectedFolderId, activeFilter, showAllInboxes, activeCombinedFolder, showSnoozed, showAssigned, activeSplitId]);
+  }, [selectedFolderId, activeFilter, showAllInboxes, activeCombinedFolder, showSnoozed, showAssigned, activeCategory]);
 
   // No entrance animation on folder switches (post-paint effects flash).
   const selectAfterRemoval = useCallback((remaining: Mail[], index: number) => {
@@ -2073,35 +2071,6 @@ export function MailList() {
               <MagnifierIcon size={16} strokeWidth={1.5} />
             </button>
           </div>
-        </div>
-      )}
-
-      {showAllInboxes && inboxSplits.length > 0 && useAppStore.getState().hasFeature("split_inbox") && (
-        <div className="px-4 py-1.5 border-b border-border-light flex items-center gap-1 no-select overflow-x-auto scrollbar-thin">
-          <button
-            onClick={() => setActiveSplitId(null)}
-            className={`px-3 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
-              !activeSplitId
-                ? "bg-accent/15 text-accent"
-                : "text-text-tertiary hover:bg-hover hover:text-text-secondary"
-            }`}
-          >
-            {t("mailList.filterAll")}
-          </button>
-          {inboxSplits.map((split) => (
-            <button
-              key={split.id}
-              onClick={() => setActiveSplitId(split.id)}
-              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-                activeSplitId === split.id
-                  ? "bg-accent/15 text-accent"
-                  : "text-text-tertiary hover:bg-hover hover:text-text-secondary"
-              }`}
-            >
-              {split.icon && <span className="text-sm">{split.icon}</span>}
-              {split.name}
-            </button>
-          ))}
         </div>
       )}
 

@@ -1,5 +1,5 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { listAccounts, createAccount, deleteAccount, listFolders, listMails, listFilteredMails, listAllInboxMails, listCombinedFolderMails, listSnoozedMails, listSplitInboxMails, listInboxSplits, listAttachments, toggleStar, togglePin, toggleMailFlag, listRules, createRule, updateRule, deleteRule, applyRulesNow } from "../lib/tauri";
+import { listAccounts, createAccount, deleteAccount, listFolders, listMails, listFilteredMails, listAllInboxMails, listCombinedFolderMails, listSnoozedMails, listAttachments, toggleStar, togglePin, toggleMailFlag, listRules, createRule, updateRule, deleteRule, applyRulesNow } from "../lib/tauri";
 import type { CreateAccountRequest, CreateRuleRequest, Mail, MailFlag, MailRule } from "../types";
 import type { MailFilter } from "../stores/appStore";
 import type { MailSort } from "../lib/mailSort";
@@ -89,25 +89,6 @@ export function useCombinedFolderMails(folderType: string | null, folderFilter: 
     getNextPageParam: (lastPage, allPages) =>
       lastPage.length < PAGE_SIZE ? undefined : allPages.flat().length,
     enabled: !!folderType,
-    staleTime: 0,
-  });
-}
-
-export function useInboxSplits() {
-  return useQuery({
-    queryKey: ["inbox-splits"],
-    queryFn: listInboxSplits,
-  });
-}
-
-export function useSplitInboxMails(splitId: string | null, sort: MailSort) {
-  return useInfiniteQuery<Mail[]>({
-    queryKey: ["split-inbox-mails", splitId, sort],
-    queryFn: ({ pageParam = 0 }) => listSplitInboxMails(splitId!, PAGE_SIZE, pageParam as number, sort),
-    initialPageParam: 0,
-    getNextPageParam: (lastPage, allPages) =>
-      lastPage.length < PAGE_SIZE ? undefined : allPages.flat().length,
-    enabled: !!splitId,
     staleTime: 0,
   });
 }

@@ -392,15 +392,6 @@ export interface Assignment {
   updated: string;
 }
 
-export interface InboxSplit {
-  id: string;
-  name: string;
-  position: number;
-  icon: string;
-  conditions: string;
-  is_default: boolean;
-}
-
 export interface ScheduledMail {
   id: string;
   account_id: string;
