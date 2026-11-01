@@ -104,4 +104,24 @@ describe("CategoryChip", () => {
     });
     expect(popover()).toBeNull();
   });
+
+  it("keeps Enter and Space away from the row", () => {
+    const rowKey = vi.fn();
+    const mail = { id: "m1", category: "newsletters" } as Mail;
+    act(() => root.render(createElement("div", { onKeyDown: rowKey }, createElement(CategoryChip, { mail }))));
+    act(() => {
+      chip()!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    act(() => chip()!.click());
+    act(() => {
+      button("Wichtig").dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
+    });
+    expect(rowKey).not.toHaveBeenCalled();
+  });
+
+  it("focuses the popover when it opens", () => {
+    render("newsletters");
+    act(() => chip()!.click());
+    expect(document.activeElement).toBe(popover());
+  });
 });

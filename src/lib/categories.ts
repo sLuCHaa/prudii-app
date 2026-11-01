@@ -14,6 +14,15 @@ export const CATEGORY_COLORS: Record<CategoryId, string> = {
   social: "#2b97ab",
 };
 
+export const CATEGORY_TEXT_MIX: Record<CategoryId, number> = {
+  important: 65,
+  purchases: 65,
+  notifications: 65,
+  newsletters: 65,
+  promotions: 55,
+  social: 65,
+};
+
 export function isCategoryId(v: string | null | undefined): v is CategoryId {
   return !!v && (BUILTIN_CATEGORIES as readonly string[]).includes(v);
 }

@@ -4,7 +4,7 @@ import { useAppStore } from "../../stores/appStore";
 import { useCategoryCounts } from "../../hooks/useCategories";
 import { CATEGORY_COLORS, visibleCategories } from "../../lib/categories";
 
-export function CategorySidebarEntries({ inboxFolderId }: { inboxFolderId: string | null }) {
+export function CategorySidebarEntries({ inboxFolderId, accountId }: { inboxFolderId: string | null; accountId?: string }) {
   const { t } = useTranslation();
   const sortingEnabled = useAppStore((s) => s.appSettings.sorting_enabled);
   const hidden = useAppStore((s) => s.appSettings.hidden_categories);
@@ -36,7 +36,7 @@ export function CategorySidebarEntries({ inboxFolderId }: { inboxFolderId: strin
         return (
           <button
             key={id}
-            onClick={() => (active ? setActiveCategory(null) : openCategory(id, inboxFolderId))}
+            onClick={() => (active ? setActiveCategory(null) : openCategory(id, inboxFolderId, accountId))}
             className={`flex items-center gap-2.5 w-full pl-9 pr-3 py-1 rounded-md text-sm transition-colors ${
               active ? "folder-active" : "text-text-secondary hover:bg-hover hover:text-text"
             }`}

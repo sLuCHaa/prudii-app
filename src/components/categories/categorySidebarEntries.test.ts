@@ -48,8 +48,8 @@ afterEach(async () => {
   await i18n.changeLanguage("en");
 });
 
-function render(inboxFolderId: string | null) {
-  act(() => root.render(createElement(CategorySidebarEntries, { inboxFolderId })));
+function render(inboxFolderId: string | null, accountId?: string) {
+  act(() => root.render(createElement(CategorySidebarEntries, { inboxFolderId, accountId })));
 }
 
 function rowOf(name: string) {
@@ -70,9 +70,9 @@ describe("CategorySidebarEntries", () => {
   });
 
   it("opens a category on click and clears it when already active", () => {
-    render("f1");
+    render("f1", "a1");
     act(() => rowOf("Wichtig")!.click());
-    expect(openCategory).toHaveBeenCalledWith("important", "f1");
+    expect(openCategory).toHaveBeenCalledWith("important", "f1", "a1");
     state = { ...state, activeCategory: "important", selectedFolderId: "f1" };
     render("f1");
     act(() => rowOf("Wichtig")!.click());

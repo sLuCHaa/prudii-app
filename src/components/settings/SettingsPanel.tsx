@@ -6,6 +6,7 @@ import { Lock } from "../icons";
 import { CalendarSettingsPanel } from "../calendar/CalendarSettings";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { runCategorization } from "../../hooks/useCategories";
 import { useAppStore } from "../../stores/appStore";
 import { useShallow } from "zustand/react/shallow";
 import { useAccounts } from "../../hooks/useAccounts";
@@ -503,6 +504,7 @@ export function SettingsPanel() {
   const { t } = useTranslation();
   const { host: scrollHostRef, viewport: scrollRef } = useScroller<HTMLDivElement>();
   const trapRef = useFocusTrap<HTMLDivElement>(true);
+  const queryClient = useQueryClient();
   // useShallow-scoped: an unselected useAppStore() re-renders the whole
   // settings panel on every store write (sync ticks, toasts, selection).
   const { setShowSettings, setShowAccountWizard, themeMode, chooseThemeMode, settingsAccountId, settingsTargetTab, appSettings, setAppSettings, hasFeature, systemAccentHex } = useAppStore(
@@ -619,8 +621,10 @@ export function SettingsPanel() {
   async function handleSaveAppSettings() {
     try {
       const settingsToSave = { ...localSettings, language: languagePref };
+      const sortingTurnedOn = settingsToSave.sorting_enabled && !appSettings.sorting_enabled;
       await updateAppSettings(settingsToSave);
       setAppSettings(settingsToSave);
+      if (sortingTurnedOn) runCategorization(queryClient).catch(() => {});
       setSettingsSaved(true);
     } catch (err) {
       addToast("error", t("errors.settingsSave"), err instanceof Error ? err.message : String(err));

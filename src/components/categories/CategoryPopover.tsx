@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";
 import { useMailCategoryInfo, useSetMailCategory } from "../../hooks/useCategories";
-import { CATEGORY_COLORS, isCategoryId, reasonText, visibleCategories } from "../../lib/categories";
+import { CATEGORY_COLORS, CATEGORY_TEXT_MIX, isCategoryId, reasonText, visibleCategories } from "../../lib/categories";
 
 const MARGIN = 8;
 
@@ -26,6 +26,10 @@ export function CategoryPopover({ mailId, anchor, onClose }: { mailId: string; a
     if (top + h > window.innerHeight - MARGIN) top = Math.max(MARGIN, anchor.top - h - 4);
     setPos((p) => (p.left === left && p.top === top ? p : { left, top }));
   }, [anchor, info]);
+
+  useEffect(() => {
+    ref.current?.focus();
+  }, []);
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
@@ -52,9 +56,14 @@ export function CategoryPopover({ mailId, anchor, onClose }: { mailId: string; a
     <div
       ref={ref}
       role="dialog"
+      aria-label={t("categories.change")}
+      tabIndex={-1}
       onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        if (e.key !== "Escape") e.stopPropagation();
+      }}
       onContextMenu={(e) => e.stopPropagation()}
-      className="fixed z-[1000] w-72 rounded-lg border border-border bg-surface p-3 shadow-lg text-sm text-text"
+      className="fixed z-[1000] w-72 outline-none rounded-lg border border-border bg-surface p-3 shadow-lg text-sm text-text"
       style={{ left: pos.left, top: pos.top }}
     >
       <div className="font-medium">
@@ -80,7 +89,7 @@ export function CategoryPopover({ mailId, anchor, onClose }: { mailId: string; a
               className="rounded-full px-2 py-0.5 text-[11px]"
               style={{
                 background: `color-mix(in srgb, ${color} ${id === current ? 30 : 12}%, transparent)`,
-                color: `color-mix(in srgb, ${color} 65%, var(--c-text))`,
+                color: `color-mix(in srgb, ${color} ${CATEGORY_TEXT_MIX[id]}%, var(--c-text))`,
                 outline: id === current ? `1.5px solid ${color}` : undefined,
               }}
             >

@@ -121,7 +121,7 @@ interface AppState {
   setShowAllInboxes: (show: boolean) => void;
   setActiveCombinedFolder: (folderType: string | null) => void;
   setActiveCategory: (category: string | null) => void;
-  openCategory: (category: string, inboxFolderId: string | null) => void;
+  openCategory: (category: string, inboxFolderId: string | null, accountId?: string) => void;
   // Shared by the notification-clicked handler (App.tsx) and LinkedMails — jumps to
   // a specific mail on a specific account, clearing every other exclusive view state.
   openMailById: (accountId: string, mailId: string, folderId?: string | null) => void;
@@ -343,7 +343,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setActiveCombinedFolder: (activeCombinedFolder) => set({ activeCombinedFolder, showAllInboxes: false, showSnoozed: false, showScheduled: false, showAttachmentBrowser: false, showTasks: false, showCalendar: false, showAssigned: false, selectedFolderId: null, activeFilter: null, activeCategory: null, selectedMailId: null, selectedMailIndex: -1, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
   activeCategory: null,
   setActiveCategory: (activeCategory) => set({ activeCategory, showSnoozed: false, showScheduled: false, showAttachmentBrowser: false, showTasks: false, showCalendar: false, showAssigned: false, selectedMailId: null, selectedMailIndex: -1, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
-  openCategory: (category, inboxFolderId) => set({ ...(inboxFolderId === null ? { showAllInboxes: true, selectedFolderId: null } : { showAllInboxes: false, selectedFolderId: inboxFolderId }), showSnoozed: false, showScheduled: false, showAttachmentBrowser: false, showTasks: false, showCalendar: false, showAssigned: false, activeFilter: null, activeCombinedFolder: null, activeCategory: category, selectedMailId: null, selectedMailIndex: -1, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
+  openCategory: (category, inboxFolderId, accountId) => set({ ...(accountId ? { selectedAccountId: accountId } : {}), ...(inboxFolderId === null ? { showAllInboxes: true, selectedFolderId: null } : { showAllInboxes: false, selectedFolderId: inboxFolderId }), showSnoozed: false, showScheduled: false, showAttachmentBrowser: false, showTasks: false, showCalendar: false, showAssigned: false, activeFilter: null, activeCombinedFolder: null, activeCategory: category, selectedMailId: null, selectedMailIndex: -1, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),
   openMailById: (accountId, mailId, folderId = null) => set({
     selectedAccountId: accountId,
     showAllInboxes: false,

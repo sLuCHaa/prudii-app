@@ -1638,6 +1638,7 @@ export function MailList() {
       const s = useAppStore.getState();
       const isInboxView =
         (currentFolder?.folder_type === "inbox" || s.showAllInboxes) &&
+        !s.activeCategory &&
         !s.activeFilter &&
         s.folderFilter === "all";
 
@@ -2122,6 +2123,7 @@ export function MailList() {
                 return <EmptyState title={t("team.emptyTitle")} description={t("team.emptyDesc")} atmosphere />;
               }
               const isInboxView = (currentFolder?.folder_type === "inbox" || showAllInboxes)
+                && !activeCategory
                 && !activeFilter
                 && folderFilter === "all";
               if (isInboxView) {
@@ -2131,7 +2133,9 @@ export function MailList() {
               // `default` key for any type without its own string (e.g. custom
               // folders, or any folder_type not covered by the locale files) —
               // otherwise the raw key like "empty.custom" leaks into the UI.
-              const emptyKey = activeFilter === "starred"
+              const emptyKey = activeCategory
+                ? "default"
+                : activeFilter === "starred"
                 ? "starred"
                 : showAllInboxes
                 ? "inbox"
@@ -2227,7 +2231,7 @@ export function MailList() {
           onToggleFlag={handleToggleFlag}
           onClearFlags={handleClearFlags}
           onSetCategory={
-            sortingEnabled
+            sortingEnabled && (showAllInboxes || !!activeCategory || folders.find((f) => f.id === contextMenu.mail.folder_id)?.folder_type === "inbox")
               ? (m, category) => setMailCategory.mutate({ mailId: m.id, category, rememberSender: false })
               : undefined
           }

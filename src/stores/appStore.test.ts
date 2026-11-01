@@ -61,3 +61,21 @@ describe("appStore — choosing a theme", () => {
     expect(useAppStore.getState().appSettings.theme_mode).toBe("light");
   });
 });
+
+describe("appStore — openCategory", () => {
+  it("switches to the account that owns the inbox", () => {
+    useAppStore.setState({ selectedAccountId: "acc1" });
+    useAppStore.getState().openCategory("newsletters", "folder2", "acc2");
+    const state = useAppStore.getState();
+    expect(state.selectedAccountId).toBe("acc2");
+    expect(state.selectedFolderId).toBe("folder2");
+    expect(state.activeCategory).toBe("newsletters");
+  });
+
+  it("keeps the selected account for the all-inboxes scope", () => {
+    useAppStore.setState({ selectedAccountId: "acc1" });
+    useAppStore.getState().openCategory("newsletters", null);
+    expect(useAppStore.getState().selectedAccountId).toBe("acc1");
+    expect(useAppStore.getState().showAllInboxes).toBe(true);
+  });
+});

@@ -93,4 +93,20 @@ describe("SortingSettings", () => {
     expect(resetCategories).toHaveBeenCalledTimes(1);
     expect(addToast).toHaveBeenCalledWith("success", "Sortierung zurückgesetzt");
   });
+
+  it("reports a failed sender removal instead of throwing", async () => {
+    deleteSenderCategory.mockRejectedValueOnce(new Error("disk full"));
+    await render();
+    await act(async () => buttonByText("Entfernen").click());
+    expect(addToast).toHaveBeenCalledWith("error", expect.any(String), "disk full");
+  });
+
+  it("reports a failed reset", async () => {
+    danger.mockResolvedValueOnce(true);
+    resetCategories.mockRejectedValueOnce(new Error("disk full"));
+    await render();
+    await act(async () => buttonByText("Zurücksetzen").click());
+    expect(addToast).toHaveBeenCalledWith("error", expect.any(String), "disk full");
+    expect(addToast).not.toHaveBeenCalledWith("success", expect.anything());
+  });
 });

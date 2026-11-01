@@ -1,7 +1,7 @@
 import { useState, type MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";
-import { CATEGORY_COLORS, shownCategory } from "../../lib/categories";
+import { CATEGORY_COLORS, CATEGORY_TEXT_MIX, shownCategory } from "../../lib/categories";
 import { CategoryPopover } from "./CategoryPopover";
 import type { Mail } from "../../types";
 
@@ -25,10 +25,11 @@ export function CategoryChip({ mail }: { mail: Mail }) {
         type="button"
         onClick={open}
         onDoubleClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
         className="shrink-0 rounded-full px-1.5 text-[10.5px] leading-4 font-medium"
         style={{
           background: `color-mix(in srgb, ${color} 16%, transparent)`,
-          color: `color-mix(in srgb, ${color} 65%, var(--c-text))`,
+          color: `color-mix(in srgb, ${color} ${CATEGORY_TEXT_MIX[id]}%, var(--c-text))`,
         }}
       >
         {t(`categories.names.${id}`)}

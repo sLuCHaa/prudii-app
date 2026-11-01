@@ -43,10 +43,17 @@ export function SortingSettings({ localSettings, updateLocalSetting }: SortingSe
     );
   };
 
+  const reportError = (err: unknown) =>
+    addToast("error", t("errors.generic"), err instanceof Error ? err.message : String(err));
+
   const removeSender = async (email: string) => {
-    await deleteSenderCategory(email);
-    loadSenders();
-    await runCategorization(queryClient);
+    try {
+      await deleteSenderCategory(email);
+      loadSenders();
+      await runCategorization(queryClient);
+    } catch (err) {
+      reportError(err);
+    }
   };
 
   const reset = async () => {
@@ -56,10 +63,14 @@ export function SortingSettings({ localSettings, updateLocalSetting }: SortingSe
       confirmLabel: t("categories.settings.resetButton"),
     });
     if (!ok) return;
-    await resetCategories();
-    loadSenders();
-    await runCategorization(queryClient);
-    addToast("success", t("categories.settings.resetDone"));
+    try {
+      await resetCategories();
+      loadSenders();
+      addToast("success", t("categories.settings.resetDone"));
+      await runCategorization(queryClient);
+    } catch (err) {
+      reportError(err);
+    }
   };
 
   return (
