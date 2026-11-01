@@ -716,6 +716,52 @@
       "premiumDesc": "Les fonctionnalités IA locales arriveront avec Premium — bientôt."
     }
   },
+  "mailExport": {
+    "title": "Exporter les mails",
+    "description": "Enregistre les mails sous forme de fichiers sur ton ordinateur, lisibles dans un navigateur et sous forme d’originaux à importer dans d’autres applications.",
+    "formatHtml": "Lisible (HTML)",
+    "formatEml": "Original (.eml)",
+    "attachments": "Enregistrer les pièces jointes comme fichiers",
+    "attachmentsHint": "Les pièces jointes sont alors enregistrées en plus du fichier .eml.",
+    "exportButton": "Exporter…",
+    "menuItem": "Exporter…",
+    "progress": "Export des mails… {{processed}}/{{total}}",
+    "cancel": "Annuler",
+    "doneTitle": "Export terminé",
+    "cancelledTitle": "Export annulé",
+    "doneMessage": "{{exported}} mails exportés.",
+    "doneLocal": "{{count}} issus de la copie locale, pas de l’original.",
+    "doneFailed": "{{count}} n’ont pas pu être exportés.",
+    "openFolder": "Ouvrir le dossier",
+    "quitTitle": "Export en cours",
+    "quitMessage": "Un export est en cours – quitter quand même ? L’export sera annulé.",
+    "quitConfirm": "Quitter",
+    "errors": {
+      "noSelection": "Sélectionne au moins un dossier.",
+      "noFormat": "Sélectionne au moins un format.",
+      "alreadyRunning": "Un export est déjà en cours."
+    },
+    "page": {
+      "title": "Export Prudii",
+      "search": "Rechercher : expéditeur, objet …",
+      "back": "Retour",
+      "to": "à",
+      "cc": "cc",
+      "noSubject": "(Sans objet)",
+      "attachments": "Pièces jointes",
+      "externalImages": "Les images externes n’ont pas été chargées lors de l’export, afin que l’ouverture du mail ne signale à personne que tu l’as lu.",
+      "localCopyNote": "Exporté depuis la copie locale – pas l’original du serveur.",
+      "localCopyTitle": "Issu de la copie locale, pas de l’original",
+      "failedTitle": "N’a pas pu être exporté",
+      "incomplete": "Incomplet – l’export a été annulé.",
+      "accounts_one": "{count} compte",
+      "accounts_other": "{count} comptes",
+      "mails_one": "{count} mail",
+      "mails_other": "{count} mails",
+      "emptyFolder": "Aucun mail dans ce dossier",
+      "noResults": "Aucun résultat"
+    }
+  },
   "backup": {
     "title": "Sauvegarde et restauration",
     "description": "Exporte tes données sous forme de fichier ZIP ou restaure à partir d'une sauvegarde précédente.",

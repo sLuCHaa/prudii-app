@@ -716,6 +716,52 @@
       "cancel": "Abbrechen"
     }
   },
+  "mailExport": {
+    "title": "Mails exportieren",
+    "description": "Speichert Mails als Dateien auf deinem Computer – lesbar im Browser und als Original zum Importieren in andere Programme.",
+    "formatHtml": "Lesbar (HTML)",
+    "formatEml": "Original (.eml)",
+    "attachments": "Anhänge als Dateien ablegen",
+    "attachmentsHint": "Anhänge liegen dann zusätzlich zur .eml-Datei auf der Festplatte.",
+    "exportButton": "Exportieren…",
+    "menuItem": "Exportieren…",
+    "progress": "Mails exportieren… {{processed}}/{{total}}",
+    "cancel": "Abbrechen",
+    "doneTitle": "Export fertig",
+    "cancelledTitle": "Export abgebrochen",
+    "doneMessage": "{{exported}} Mails exportiert.",
+    "doneLocal": "{{count}} aus lokaler Kopie, kein Original.",
+    "doneFailed": "{{count}} konnten nicht exportiert werden.",
+    "openFolder": "Ordner öffnen",
+    "quitTitle": "Export läuft",
+    "quitMessage": "Export läuft – trotzdem beenden? Der Export wird abgebrochen.",
+    "quitConfirm": "Beenden",
+    "errors": {
+      "noSelection": "Wähle mindestens einen Ordner aus.",
+      "noFormat": "Wähle mindestens ein Format aus.",
+      "alreadyRunning": "Es läuft schon ein Export."
+    },
+    "page": {
+      "title": "Prudii Export",
+      "search": "Suchen: Absender, Betreff …",
+      "back": "Zurück",
+      "to": "an",
+      "cc": "cc",
+      "noSubject": "(Kein Betreff)",
+      "attachments": "Anhänge",
+      "externalImages": "Externe Bilder wurden beim Export nicht geladen, damit das Öffnen niemandem meldet, dass du die Mail liest.",
+      "localCopyNote": "Aus der lokalen Kopie exportiert – kein Original vom Server.",
+      "localCopyTitle": "Aus lokaler Kopie, kein Original",
+      "failedTitle": "Konnte nicht exportiert werden",
+      "incomplete": "Unvollständig – der Export wurde abgebrochen.",
+      "accounts_one": "{count} Konto",
+      "accounts_other": "{count} Konten",
+      "mails_one": "{count} Mail",
+      "mails_other": "{count} Mails",
+      "emptyFolder": "Keine Mails in diesem Ordner",
+      "noResults": "Nichts gefunden"
+    }
+  },
   "backup": {
     "title": "Backup & Wiederherstellen",
     "description": "Exportiere deine Daten als ZIP-Datei oder stelle sie aus einem früheren Backup wieder her.",

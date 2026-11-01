@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { setWindowTheme, updateAppSettings } from "../lib/tauri";
-import type { Account, AppSettings, BackfillProgress, Folder, LicenseInfo, Mail, MailFlag, SendMailRequest, SyncProgress } from "../types";
+import type { Account, AppSettings, BackfillProgress, ExportProgress, ExportSummary, Folder, LicenseInfo, Mail, MailFlag, SendMailRequest, SyncProgress } from "../types";
 import type { ComposeMode } from "../components/compose/ComposeModal";
 import { parseMailtoUrl, type MailtoParams } from "../lib/mailtoParser";
 import type { Update } from "../lib/updater";
@@ -31,6 +31,13 @@ export interface UndoSendState {
 }
 
 type ThemeMode = "light" | "dark" | "system";
+
+export interface MailExportState {
+  running: boolean;
+  progress: ExportProgress | null;
+  result: ExportSummary | null;
+}
+
 export type MailFilter = "starred" | MailFlag | null;
 export type FolderFilter = "all" | "unread" | "starred" | "attachments";
 export type NetworkStatus = "online" | "offline" | "checking";
@@ -210,6 +217,11 @@ interface AppState {
   setSettingsLastTab: (tab: string) => void;
   settingsTargetTab: string | null;
   setSettingsTargetTab: (tab: string | null) => void;
+
+  mailExport: MailExportState;
+  setMailExport: (patch: Partial<MailExportState>) => void;
+  mailExportPreselect: string | null;
+  openMailExport: (accountId: string | null) => void;
 
   searchQuery: string;
   searchOpen: boolean;
@@ -532,6 +544,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   setSettingsLastTab: (settingsLastTab) => set({ settingsLastTab }),
   settingsTargetTab: null,
   setSettingsTargetTab: (settingsTargetTab) => set({ settingsTargetTab }),
+
+  mailExport: { running: false, progress: null, result: null },
+  setMailExport: (patch) => set((state) => ({ mailExport: { ...state.mailExport, ...patch } })),
+  mailExportPreselect: null,
+  openMailExport: (accountId) => set({ showSettings: true, settingsLastTab: "backup", mailExportPreselect: accountId }),
 
   searchQuery: "",
   searchOpen: false,

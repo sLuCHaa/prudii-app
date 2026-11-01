@@ -716,6 +716,52 @@
       "sample": "Así verá el destinatario tu texto."
     }
   },
+  "mailExport": {
+    "title": "Exportar correo",
+    "description": "Guarda el correo como archivos en tu ordenador: legible en el navegador y como originales que puedes importar en otras aplicaciones.",
+    "formatHtml": "Legible (HTML)",
+    "formatEml": "Original (.eml)",
+    "attachments": "Guardar los adjuntos como archivos",
+    "attachmentsHint": "Los adjuntos se guardan además del archivo .eml.",
+    "exportButton": "Exportar…",
+    "menuItem": "Exportar…",
+    "progress": "Exportando correo… {{processed}}/{{total}}",
+    "cancel": "Cancelar",
+    "doneTitle": "Exportación finalizada",
+    "cancelledTitle": "Exportación cancelada",
+    "doneMessage": "{{exported}} correos exportados.",
+    "doneLocal": "{{count}} de la copia local, no del original.",
+    "doneFailed": "{{count}} no se pudieron exportar.",
+    "openFolder": "Abrir carpeta",
+    "quitTitle": "Exportación en curso",
+    "quitMessage": "Hay una exportación en curso: ¿salir de todos modos? La exportación se cancelará.",
+    "quitConfirm": "Salir",
+    "errors": {
+      "noSelection": "Selecciona al menos una carpeta.",
+      "noFormat": "Selecciona al menos un formato.",
+      "alreadyRunning": "Ya hay una exportación en curso."
+    },
+    "page": {
+      "title": "Exportación de Prudii",
+      "search": "Buscar: remitente, asunto …",
+      "back": "Volver",
+      "to": "para",
+      "cc": "cc",
+      "noSubject": "(Sin asunto)",
+      "attachments": "Adjuntos",
+      "externalImages": "Las imágenes externas no se cargaron durante la exportación, para que abrir el correo no avise a nadie de que lo has leído.",
+      "localCopyNote": "Exportado desde la copia local: no es el original del servidor.",
+      "localCopyTitle": "De la copia local, no del original",
+      "failedTitle": "No se pudo exportar",
+      "incomplete": "Incompleto: la exportación se canceló.",
+      "accounts_one": "{count} cuenta",
+      "accounts_other": "{count} cuentas",
+      "mails_one": "{count} correo",
+      "mails_other": "{count} correos",
+      "emptyFolder": "No hay correos en esta carpeta",
+      "noResults": "No se encontró nada"
+    }
+  },
   "backup": {
     "title": "Copia de seguridad y restauración",
     "description": "Exporta tus datos como archivo ZIP o restaura desde una copia de seguridad anterior.",

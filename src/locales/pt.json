@@ -716,6 +716,52 @@
       "premiumDesc": "Recursos de IA local chegarão com o Premium — em breve."
     }
   },
+  "mailExport": {
+    "title": "Exportar e-mails",
+    "description": "Guarda os e-mails como ficheiros no teu computador – legíveis no navegador e como originais para importar noutras aplicações.",
+    "formatHtml": "Legível (HTML)",
+    "formatEml": "Original (.eml)",
+    "attachments": "Guardar anexos como ficheiros",
+    "attachmentsHint": "Os anexos são guardados além do ficheiro .eml.",
+    "exportButton": "Exportar…",
+    "menuItem": "Exportar…",
+    "progress": "A exportar e-mails… {{processed}}/{{total}}",
+    "cancel": "Cancelar",
+    "doneTitle": "Exportação concluída",
+    "cancelledTitle": "Exportação cancelada",
+    "doneMessage": "{{exported}} e-mails exportados.",
+    "doneLocal": "{{count}} da cópia local, não do original.",
+    "doneFailed": "{{count}} não puderam ser exportados.",
+    "openFolder": "Abrir pasta",
+    "quitTitle": "Exportação em curso",
+    "quitMessage": "Há uma exportação em curso – sair mesmo assim? A exportação será cancelada.",
+    "quitConfirm": "Sair",
+    "errors": {
+      "noSelection": "Seleciona pelo menos uma pasta.",
+      "noFormat": "Seleciona pelo menos um formato.",
+      "alreadyRunning": "Já existe uma exportação em curso."
+    },
+    "page": {
+      "title": "Exportação do Prudii",
+      "search": "Pesquisar: remetente, assunto …",
+      "back": "Voltar",
+      "to": "para",
+      "cc": "cc",
+      "noSubject": "(Sem assunto)",
+      "attachments": "Anexos",
+      "externalImages": "As imagens externas não foram carregadas durante a exportação, para que abrir o e-mail não avise ninguém de que o leste.",
+      "localCopyNote": "Exportado a partir da cópia local – não é o original do servidor.",
+      "localCopyTitle": "Da cópia local, não do original",
+      "failedTitle": "Não foi possível exportar",
+      "incomplete": "Incompleto – a exportação foi cancelada.",
+      "accounts_one": "{count} conta",
+      "accounts_other": "{count} contas",
+      "mails_one": "{count} e-mail",
+      "mails_other": "{count} e-mails",
+      "emptyFolder": "Sem e-mails nesta pasta",
+      "noResults": "Nada encontrado"
+    }
+  },
   "backup": {
     "title": "Backup e Restauração",
     "description": "Exporte seus dados como um arquivo ZIP ou restaure de um backup anterior.",

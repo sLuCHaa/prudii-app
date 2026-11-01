@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { BundleImportResult, Calendar, CalendarPatch, CalendarSettings, EditScope, EventDetail, EventInput, EventPatch, EventTimes, ImportResult, InvitationView, Occurrence, RespondInvitationArgs, SubscribeResult } from "../types/calendar";
-import type { Account, AiResponse, Assignment, Attachment, AttachmentWithContext, AppConfig, AppSettings, BackupOptions, BulkSaveResult, CategoryCount, ChecklistItem, Contact, ContactDomain, CreateAccountRequest, CreateRuleRequest, CreateTaskInput, EmailTemplate, Folder, LicenseInfo, Mail, MailCategoryInfo, MailRule, OAuthResult, OllamaStatus, RestorePreview, ScheduledMail, SearchResult, SenderRule, SendMailRequest, SieveSupport, Task, TaskAttachment, TaskDetail, TaskStatus, TeamSnapshot, UnsubscribeResult, UpdateTaskPatch, VacationSettings, VacationState } from "../types";
+import type { Account, AiResponse, Assignment, Attachment, AttachmentWithContext, AppConfig, AppSettings, BackupOptions, BulkSaveResult, CategoryCount, ChecklistItem, Contact, ContactDomain, CreateAccountRequest, CreateRuleRequest, CreateTaskInput, EmailTemplate, ExportLabels, ExportOptions, Folder, LicenseInfo, Mail, MailCategoryInfo, MailRule, OAuthResult, OllamaStatus, RestorePreview, ScheduledMail, SearchResult, SenderRule, SendMailRequest, SieveSupport, Task, TaskAttachment, TaskDetail, TaskStatus, TeamSnapshot, UnsubscribeResult, UpdateTaskPatch, VacationSettings, VacationState } from "../types";
 import { prefers24HourClock } from "./localeDefaults";
 
 export async function listAccounts(): Promise<Account[]> {
@@ -288,6 +288,22 @@ export async function hideToTray(): Promise<void> {
 
 export async function quitApp(): Promise<void> {
   return invoke("quit_app");
+}
+
+export async function startMailExport(options: ExportOptions, labels: ExportLabels): Promise<boolean> {
+  return invoke("start_mail_export", { options, labels });
+}
+
+export async function cancelMailExport(): Promise<void> {
+  return invoke("cancel_mail_export");
+}
+
+export async function openLastExportFolder(): Promise<void> {
+  return invoke("open_last_export_folder");
+}
+
+export async function mailExportRunning(): Promise<boolean> {
+  return invoke("mail_export_running");
 }
 
 export async function listCombinedFolderMails(folderType: string, limit?: number, offset?: number, folderFilter?: string, sort?: string): Promise<Mail[]> {

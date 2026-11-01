@@ -715,6 +715,52 @@
       "premiumDesc": "本地 AI 功能将在 Premium 中提供——即将推出。"
     }
   },
+  "mailExport": {
+    "title": "导出邮件",
+    "description": "将邮件保存为电脑上的文件——可在浏览器中阅读，也可作为原始文件导入其他应用。",
+    "formatHtml": "可阅读 (HTML)",
+    "formatEml": "原始文件 (.eml)",
+    "attachments": "将附件另存为文件",
+    "attachmentsHint": "附件会在 .eml 文件之外另外保存。",
+    "exportButton": "导出…",
+    "menuItem": "导出…",
+    "progress": "正在导出邮件… {{processed}}/{{total}}",
+    "cancel": "取消",
+    "doneTitle": "导出完成",
+    "cancelledTitle": "导出已取消",
+    "doneMessage": "已导出 {{exported}} 封邮件。",
+    "doneLocal": "{{count}} 封来自本地副本，并非原件。",
+    "doneFailed": "{{count}} 封无法导出。",
+    "openFolder": "打开文件夹",
+    "quitTitle": "正在导出",
+    "quitMessage": "正在导出——仍要退出吗？导出将被取消。",
+    "quitConfirm": "退出",
+    "errors": {
+      "noSelection": "请至少选择一个文件夹。",
+      "noFormat": "请至少选择一种格式。",
+      "alreadyRunning": "已有导出正在进行。"
+    },
+    "page": {
+      "title": "Prudii 导出",
+      "search": "搜索：发件人、主题 …",
+      "back": "返回",
+      "to": "收件人",
+      "cc": "抄送",
+      "noSubject": "（无主题）",
+      "attachments": "附件",
+      "externalImages": "导出时未加载外部图片，因此打开邮件不会让任何人知道你已阅读。",
+      "localCopyNote": "从本地副本导出——并非服务器上的原件。",
+      "localCopyTitle": "来自本地副本，并非原件",
+      "failedTitle": "无法导出",
+      "incomplete": "不完整——导出已被取消。",
+      "accounts_one": "{count} 个账户",
+      "accounts_other": "{count} 个账户",
+      "mails_one": "{count} 封邮件",
+      "mails_other": "{count} 封邮件",
+      "emptyFolder": "此文件夹中没有邮件",
+      "noResults": "未找到任何内容"
+    }
+  },
   "backup": {
     "title": "备份与恢复",
     "description": "将数据导出为 ZIP 文件或从先前的备份中恢复。",

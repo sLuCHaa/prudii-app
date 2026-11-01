@@ -16,6 +16,7 @@ import { updateAccountSignature, updateAccountSyncInterval, updateAccountSetting
 import { changeLanguage, getLanguagePreference, type AppLanguage } from "../../lib/i18n";
 import { SignatureEditor } from "./SignatureEditor";
 import { BackupRestore } from "./BackupRestore";
+import { MailExportSection } from "./MailExportSection";
 import { RulesPanel } from "./RulesPanel";
 import { AiSettings } from "./AiSettings";
 import { SortingSettings } from "./SortingSettings";
@@ -1071,7 +1072,10 @@ export function SettingsPanel() {
                 )}
 
                 {activeTab === "backup" && (
-                  <BackupRestore />
+                  <>
+                    <BackupRestore />
+                    <MailExportSection />
+                  </>
                 )}
 
                 {activeTab === "ai" && (

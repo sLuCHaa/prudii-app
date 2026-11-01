@@ -716,6 +716,52 @@
       "premiumDesc": "Local AI features will be part of Premium — coming soon."
     }
   },
+  "mailExport": {
+    "title": "Export mail",
+    "description": "Saves mail as files on your computer – readable in a browser and as originals you can import into other apps.",
+    "formatHtml": "Readable (HTML)",
+    "formatEml": "Original (.eml)",
+    "attachments": "Save attachments as files",
+    "attachmentsHint": "Attachments are then stored in addition to the .eml file.",
+    "exportButton": "Export…",
+    "menuItem": "Export…",
+    "progress": "Exporting mail… {{processed}}/{{total}}",
+    "cancel": "Cancel",
+    "doneTitle": "Export finished",
+    "cancelledTitle": "Export cancelled",
+    "doneMessage": "{{exported}} mails exported.",
+    "doneLocal": "{{count}} from the local copy, not the original.",
+    "doneFailed": "{{count}} could not be exported.",
+    "openFolder": "Open folder",
+    "quitTitle": "Export in progress",
+    "quitMessage": "An export is running – quit anyway? The export will be cancelled.",
+    "quitConfirm": "Quit",
+    "errors": {
+      "noSelection": "Select at least one folder.",
+      "noFormat": "Select at least one format.",
+      "alreadyRunning": "An export is already running."
+    },
+    "page": {
+      "title": "Prudii Export",
+      "search": "Search: sender, subject …",
+      "back": "Back",
+      "to": "to",
+      "cc": "cc",
+      "noSubject": "(No subject)",
+      "attachments": "Attachments",
+      "externalImages": "Remote images were not saved, so opening this mail tells nobody that you read it.",
+      "localCopyNote": "Exported from the local copy – not the original from the server.",
+      "localCopyTitle": "From the local copy, not the original",
+      "failedTitle": "Could not be exported",
+      "incomplete": "Incomplete – the export was cancelled.",
+      "accounts_one": "{count} account",
+      "accounts_other": "{count} accounts",
+      "mails_one": "{count} mail",
+      "mails_other": "{count} mails",
+      "emptyFolder": "No mail in this folder",
+      "noResults": "Nothing found"
+    }
+  },
   "backup": {
     "title": "Backup & Restore",
     "description": "Export your data as a ZIP file or restore from a previous backup.",

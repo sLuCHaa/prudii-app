@@ -557,3 +557,48 @@ export interface VacationState extends VacationSettings {
   source: VacationSource;
   had_addresses: boolean;
 }
+
+export interface ExportOptions {
+  folderIds: string[];
+  html: boolean;
+  eml: boolean;
+  includeAttachments: boolean;
+}
+
+export interface ExportLabels {
+  lang: string;
+  title: string;
+  searchPlaceholder: string;
+  back: string;
+  to: string;
+  cc: string;
+  noSubject: string;
+  attachments: string;
+  externalImagesNote: string;
+  localCopyNote: string;
+  localCopyTitle: string;
+  failedTitle: string;
+  incompleteNote: string;
+  accountsOne: string;
+  accountsOther: string;
+  mailsOne: string;
+  mailsOther: string;
+  emptyFolder: string;
+  noResults: string;
+  folderNames: Record<string, string>;
+}
+
+export interface ExportProgress {
+  processed: number;
+  total: number;
+  localCopy: number;
+  failed: number;
+}
+
+export interface ExportSummary {
+  path: string;
+  exported: number;
+  localCopy: number;
+  failed: number;
+  cancelled: boolean;
+}

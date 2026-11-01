@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState, useRef } from "react";
 import { CategorySidebarEntries } from "../categories/CategorySidebarEntries";
 import { createPortal } from "react-dom";
-import { FileText, AlertOctagon, Folder, Plus, ChevronDown, ChevronRight, FolderPlus, Pencil, HardDrive, Cloud, X, Check, Crown, Clock, CalendarClock, PanelLeftClose, PanelLeftOpen, Loader2, AlertCircle, Palette, RefreshCw, RotateCcw, Settings, ClipboardList, UserCheck, CalendarDays } from "lucide-react";
+import { FileText, AlertOctagon, Folder, Plus, ChevronDown, ChevronRight, FolderPlus, Download, Pencil, HardDrive, Cloud, X, Check, Crown, Clock, CalendarClock, PanelLeftClose, PanelLeftOpen, Loader2, AlertCircle, Palette, RefreshCw, RotateCcw, Settings, ClipboardList, UserCheck, CalendarDays } from "lucide-react";
 import { useTodayCount } from "../../hooks/useCalendar";
 import gsap from "gsap";
 import { prefersReducedMotion } from "../motion/tokens";
@@ -350,6 +350,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
   const syncProgress = useAppStore((s) => s.syncProgress[account.id]);
   const backfillProgress = useAppStore((s) => s.backfillProgress[account.id]);
   const openAccountSettings = useAppStore((s) => s.openAccountSettings);
+  const openMailExport = useAppStore((s) => s.openMailExport);
   const { data: folders } = useFolders(account.id);
   const syncMutation = useSyncAccount();
   const removeAccount = useRemoveAccount();
@@ -725,6 +726,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
               { kind: "separator" },
               { kind: "item", id: "sync", label: t("sidebar.accountMenu.sync"), icon: <RefreshCw className="w-4 h-4" />, onSelect: () => syncMutation.mutate(account.id) },
               { kind: "item", id: "resync", label: t("sidebar.forceResyncTitle"), icon: <RotateCcw className="w-4 h-4" />, onSelect: () => { void handleForceResync(); } },
+              { kind: "item", id: "export", label: t("mailExport.menuItem"), icon: <Download className="w-4 h-4" />, onSelect: () => openMailExport(account.id) },
               { kind: "item", id: "newFolder", label: t("sidebar.newFolder"), icon: <FolderPlus className="w-4 h-4" />, onSelect: () => setShowCreateDialog(true) },
               { kind: "separator" },
               { kind: "item", id: "settings", label: t("sidebar.accountMenu.settings"), icon: <Settings className="w-4 h-4" />, onSelect: () => openAccountSettings(account.id) },
@@ -891,6 +893,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
             { kind: "separator" },
             { kind: "item", id: "sync", label: t("sidebar.accountMenu.sync"), icon: <RefreshCw className="w-4 h-4" />, onSelect: () => syncMutation.mutate(account.id) },
             { kind: "item", id: "resync", label: t("sidebar.forceResyncTitle"), icon: <RotateCcw className="w-4 h-4" />, onSelect: () => { void handleForceResync(); } },
+            { kind: "item", id: "export", label: t("mailExport.menuItem"), icon: <Download className="w-4 h-4" />, onSelect: () => openMailExport(account.id) },
             { kind: "item", id: "newFolder", label: t("sidebar.newFolder"), icon: <FolderPlus className="w-4 h-4" />, onSelect: () => setShowCreateDialog(true) },
             { kind: "separator" },
             { kind: "item", id: "settings", label: t("sidebar.accountMenu.settings"), icon: <Settings className="w-4 h-4" />, onSelect: () => openAccountSettings(account.id) },
