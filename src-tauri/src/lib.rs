@@ -528,6 +528,8 @@ pub fn run() {
                     }),
                 ])
                 .level(log::LevelFilter::Info)
+                // Its "foster parenting not implemented" warning is stale and fires on every table-heavy newsletter.
+                .level_for("html5ever", log::LevelFilter::Error)
                 .max_file_size(5_000_000)
                 .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepOne)
                 .build(),
