@@ -379,6 +379,14 @@ a.row:hover {
   overflow-wrap: anywhere;
 }
 
+.inline-images img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 0 12px;
+  border-radius: 8px;
+}
+
 .mail-body {
   display: block;
   width: 100%;

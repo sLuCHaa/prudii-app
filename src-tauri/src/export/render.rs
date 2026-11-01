@@ -4,12 +4,14 @@ use serde::Serialize;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 pub const STYLE_CSS: &str = include_str!("assets/style.css");
 pub const APP_JS: &str = include_str!("assets/app.js");
 
-pub const CSP: &str = "default-src 'none'; style-src file: 'unsafe-inline'; script-src file:; img-src file: data:; font-src 'none'; connect-src 'none'; frame-src 'self' file:; form-action 'none'; base-uri 'none'";
+// A file: source would also match file://host/…, a UNC path on Windows.
+pub const CSP: &str = "default-src 'none'; style-src file: 'unsafe-inline'; script-src file:; img-src data:; font-src 'none'; connect-src 'none'; frame-src 'self' file:; form-action 'none'; base-uri 'none'";
+const FRAME_CSP: &str = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'";
 pub const PALETTE: [&str; 8] = ["#e5684f", "#3aa86b", "#5a73d6", "#9b5bd1", "#d99a2b", "#2b97ab", "#c2557a", "#6b7a8f"];
 
 const MAX_RECIPIENTS: usize = 20;
@@ -19,7 +21,6 @@ const FRAME_STYLE: &str = "html{color-scheme:light}body{margin:0;background:#fff
 pub struct PageContext {
     pub index_href: String,
     pub folder_anchor: String,
-    pub inline_dir: String,
     pub attachment_links: Vec<(String, Option<String>, u64)>,
     pub from_local_copy: bool,
 }
@@ -155,47 +156,84 @@ fn file_icon(name: &str) -> &'static str {
     }
 }
 
-fn strip_remote_css(css: &str) -> String {
-    let lower = css.to_ascii_lowercase();
+fn css_unescape(css: &str) -> String {
     let mut out = String::with_capacity(css.len());
-    let mut i = 0;
-    while i < css.len() {
-        if lower[i..].starts_with("@import") {
-            i = css[i..].find(';').map_or(css.len(), |e| i + e + 1);
+    let mut chars = css.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
             continue;
         }
-        if lower[i..].starts_with("url(") {
-            if let Some(close) = css[i..].find(')') {
-                let arg = css[i + 4..i + close].trim().trim_matches(|c| c == '"' || c == '\'').trim_start().to_ascii_lowercase();
-                if arg.starts_with("http:") || arg.starts_with("https:") || arg.starts_with("//") || arg.starts_with("ftp:") {
-                    out.push_str("url()");
-                    i += close + 1;
-                    continue;
-                }
-            }
+        let mut hex = String::new();
+        while let Some(h) = chars.peek().copied().filter(|h| h.is_ascii_hexdigit() && hex.len() < 6) {
+            hex.push(h);
+            chars.next();
         }
-        let ch = css[i..].chars().next().unwrap_or(' ');
-        out.push(ch);
-        i += ch.len_utf8();
+        if hex.is_empty() {
+            match chars.next() {
+                Some('\n' | '\r' | '\u{c}') | None => {}
+                Some(other) => out.push(other),
+            }
+            continue;
+        }
+        match chars.peek() {
+            Some('\r') => {
+                chars.next();
+                chars.next_if_eq(&'\n');
+            }
+            Some(' ' | '\t' | '\n' | '\u{c}') => {
+                chars.next();
+            }
+            _ => {}
+        }
+        let decoded = u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32).filter(|c| *c != '\0');
+        out.push(decoded.unwrap_or('\u{FFFD}'));
     }
     out
 }
 
-fn strip_remote_css_in_style_tags(html: &str) -> String {
+// Matched after decoding escapes, so `u\72l(` or `@\69mport` cannot slip through.
+fn css_can_fetch(css: &str) -> bool {
+    let decoded = css_unescape(css).to_ascii_lowercase();
+    ["url(", "image(", "image-set(", "cross-fade(", "src(", "@import"].iter().any(|f| decoded.contains(f))
+}
+
+fn strip_remote_css(css: &str) -> (String, bool) {
+    let mut out = String::with_capacity(css.len());
+    let mut removed = false;
+    for piece in css.split_inclusive([';', '{', '}']) {
+        let (body, delimiter) = match piece.char_indices().last() {
+            Some((i, ';' | '{' | '}')) => piece.split_at(i),
+            _ => (piece, ""),
+        };
+        if css_can_fetch(body) {
+            removed = true;
+        } else {
+            out.push_str(body);
+        }
+        out.push_str(delimiter);
+    }
+    (out, removed)
+}
+
+fn strip_remote_css_in_style_tags(html: &str) -> (String, bool) {
     let lower = html.to_ascii_lowercase();
     let mut out = String::with_capacity(html.len());
+    let mut removed = false;
     let mut i = 0;
     while let Some(open) = lower[i..].find("<style") {
         let open = i + open;
         let Some(gt) = lower[open..].find('>') else { break };
         let content_start = open + gt + 1;
         let content_end = lower[content_start..].find("</style").map_or(html.len(), |e| content_start + e);
+        let (css, r) = strip_remote_css(&html[content_start..content_end]);
+        removed |= r;
         out.push_str(&html[i..content_start]);
-        out.push_str(&strip_remote_css(&html[content_start..content_end]));
+        out.push_str(&css);
         i = content_end;
     }
     out.push_str(&html[i..]);
-    out
+    (out, removed)
 }
 
 fn strip_prefix_ci<'a>(s: &'a str, prefix: &str) -> Option<&'a str> {
@@ -203,53 +241,107 @@ fn strip_prefix_ci<'a>(s: &'a str, prefix: &str) -> Option<&'a str> {
     head.eq_ignore_ascii_case(prefix).then(|| &s[prefix.len()..])
 }
 
-fn is_remote(url: &str) -> bool {
-    let u = url.trim().to_ascii_lowercase();
-    u.starts_with("http:") || u.starts_with("https:") || u.starts_with("//") || u.starts_with("ftp:")
+fn keeps_link(href: &str) -> bool {
+    let v = href.trim();
+    v.starts_with('#') || ["http:", "https:", "mailto:", "tel:"].iter().any(|s| strip_prefix_ci(v, s).is_some())
 }
 
-fn sanitize_body(html: &str, inline_dir: &str, parts: &[ExportPart]) -> (String, bool) {
+fn image_mime(part: &ExportPart) -> Option<String> {
+    let mime = part.mime_type.trim().to_ascii_lowercase();
+    if mime.starts_with("image/") && mime.bytes().all(|b| b.is_ascii_alphanumeric() || b"/+-.".contains(&b)) {
+        return Some(mime);
+    }
+    let ext = part.filename.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase()).unwrap_or_default();
+    let guessed = match ext.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "bmp" => "image/bmp",
+        "svg" => "image/svg+xml",
+        _ => return None,
+    };
+    Some(guessed.to_string())
+}
+
+fn data_uri(part: &ExportPart, mime: &str) -> String {
+    use base64::Engine;
+    format!("data:{};base64,{}", mime, base64::engine::general_purpose::STANDARD.encode(&part.bytes))
+}
+
+fn cid_key(raw: &str) -> String {
+    percent_decode(raw).trim().trim_matches(|c| c == '<' || c == '>').to_lowercase()
+}
+
+struct CleanBody {
+    html: String,
+    removed: bool,
+    used_cids: HashSet<String>,
+}
+
+fn sanitize_body(html: &str, parts: &[ExportPart]) -> CleanBody {
     let cids: HashMap<String, String> = parts
         .iter()
         .filter(|p| p.is_body_part)
-        .filter_map(|p| {
-            let cid = p.content_id.as_deref()?.trim_matches(|c| c == '<' || c == '>').to_lowercase();
-            let href = format!("{}/{}", url_encode_segment(inline_dir), url_encode_segment(&p.filename));
-            Some((cid, href))
-        })
+        .filter_map(|p| Some((cid_key(p.content_id.as_deref()?), data_uri(p, &image_mime(p)?))))
         .collect();
     let removed = Arc::new(AtomicBool::new(false));
     let removed_in = Arc::clone(&removed);
+    let used = Arc::new(Mutex::new(HashSet::new()));
+    let used_in = Arc::clone(&used);
 
     let mut builder = ammonia::Builder::default();
     builder
         .add_tags(["style"])
         .rm_clean_content_tags(["style"])
         .add_generic_attributes(["style", "class", "dir", "align", "valign", "bgcolor", "width", "height"])
-        .url_schemes(HashSet::from(["http", "https", "mailto", "tel", "data", "cid"]))
+        // file and ftp only pass so the filter below can drop them and show the note.
+        .url_schemes(HashSet::from(["http", "https", "mailto", "tel", "data", "cid", "file", "ftp"]))
         .link_rel(Some("noopener noreferrer"))
         .set_tag_attribute_value("a", "target", "_blank")
-        .attribute_filter(move |element, attr, value| {
-            match (element, attr) {
-                ("img", "src") => {
-                    let v = value.trim();
-                    if let Some(rest) = strip_prefix_ci(v, "cid:") {
-                        let key = percent_decode(rest).trim().to_lowercase();
-                        return cids.get(&key).map(|h| Cow::Owned(h.clone()));
-                    }
-                    if is_remote(v) {
-                        removed_in.store(true, Ordering::Relaxed);
-                        return None;
-                    }
-                    Some(Cow::Borrowed(value))
+        .attribute_filter(move |element, attr, value| match (element, attr) {
+            ("img", "src") => {
+                let v = value.trim();
+                if let Some(rest) = strip_prefix_ci(v, "cid:") {
+                    let key = cid_key(rest);
+                    let uri = cids.get(&key)?.clone();
+                    used_in.lock().unwrap_or_else(|e| e.into_inner()).insert(key);
+                    return Some(Cow::Owned(uri));
                 }
-                (_, "style") => Some(Cow::Owned(strip_remote_css(value))),
-                ("a", "href") if value.trim_start().to_ascii_lowercase().starts_with("data:") => None,
-                _ => Some(Cow::Borrowed(value)),
+                if strip_prefix_ci(v, "data:image/").is_some() {
+                    return Some(Cow::Borrowed(value));
+                }
+                removed_in.store(true, Ordering::Relaxed);
+                None
             }
+            (_, "src") => None,
+            (_, "href") => keeps_link(value).then_some(Cow::Borrowed(value)),
+            (_, "style") => {
+                let (css, r) = strip_remote_css(value);
+                if r {
+                    removed_in.store(true, Ordering::Relaxed);
+                }
+                Some(Cow::Owned(css))
+            }
+            _ => Some(Cow::Borrowed(value)),
         });
     let clean = builder.clean(html).to_string();
-    (strip_remote_css_in_style_tags(&clean), removed.load(Ordering::Relaxed))
+    let (html, css_removed) = strip_remote_css_in_style_tags(&clean);
+    let used_cids = std::mem::take(&mut *used.lock().unwrap_or_else(|e| e.into_inner()));
+    CleanBody { html, removed: css_removed || removed.load(Ordering::Relaxed), used_cids }
+}
+
+fn unreferenced_images(parts: &[ExportPart], used_cids: &HashSet<String>) -> String {
+    let mut out = String::new();
+    for p in parts.iter().filter(|p| p.is_body_part) {
+        if p.content_id.as_deref().is_some_and(|c| used_cids.contains(&cid_key(c))) {
+            continue;
+        }
+        if let Some(mime) = image_mime(p) {
+            out.push_str(&format!("<p><img src=\"{}\" alt=\"{}\"></p>", data_uri(p, &mime), esc(&p.filename)));
+        }
+    }
+    out
 }
 
 fn linkify(text: &str) -> String {
@@ -331,14 +423,8 @@ pub fn render_mail_page(mail: &ParsedMail, page: &PageContext, labels: &ExportLa
         esc(&labels.back)
     ));
 
-    let html = mail.html.as_deref().filter(|h| !h.trim().is_empty());
-    let (body_html, removed_remote) = match html {
-        Some(h) => {
-            let (clean, removed) = sanitize_body(h, &page.inline_dir, &mail.parts);
-            (Some(clean), removed)
-        }
-        None => (None, false),
-    };
+    let body = mail.html.as_deref().filter(|h| !h.trim().is_empty()).map(|h| sanitize_body(h, &mail.parts));
+    let removed_remote = body.as_ref().is_some_and(|b| b.removed);
     if page.from_local_copy {
         out.push_str(&format!("<div class=\"note\">{}</div>", esc(&labels.local_copy_note)));
     }
@@ -375,18 +461,29 @@ pub fn render_mail_page(mail: &ParsedMail, page: &PageContext, labels: &ExportLa
     }
     out.push_str("</div>");
 
-    match (body_html, mail.text.as_deref().filter(|t| !t.trim().is_empty())) {
+    match (body, mail.text.as_deref().filter(|t| !t.trim().is_empty())) {
         (Some(clean), _) => {
-            let doc = format!("<!doctype html><html><head><style>{}</style></head><body>{}</body></html>", FRAME_STYLE, clean);
+            let doc = format!(
+                "<!doctype html><html><head><meta http-equiv=\"Content-Security-Policy\" content=\"{}\"><style>{}</style></head><body>{}{}</body></html>",
+                FRAME_CSP,
+                FRAME_STYLE,
+                clean.html,
+                unreferenced_images(&mail.parts, &clean.used_cids)
+            );
             out.push_str(&format!(
                 "<iframe class=\"mail-body\" sandbox=\"allow-same-origin allow-popups allow-popups-to-escape-sandbox\" srcdoc=\"{}\"></iframe>",
                 esc(&doc)
             ));
         }
-        (None, Some(text)) => {
-            out.push_str(&format!("<div class=\"text\" style=\"white-space:pre-wrap\">{}</div>", linkify(text)));
+        (None, text) => {
+            if let Some(text) = text {
+                out.push_str(&format!("<div class=\"text\" style=\"white-space:pre-wrap\">{}</div>", linkify(text)));
+            }
+            let images = unreferenced_images(&mail.parts, &HashSet::new());
+            if !images.is_empty() {
+                out.push_str(&format!("<div class=\"inline-images\">{images}</div>"));
+            }
         }
-        (None, None) => {}
     }
 
     if !page.attachment_links.is_empty() {
@@ -466,14 +563,9 @@ mod tests {
     }
 
     fn ctx() -> PageContext {
-        ctx_with_inline_dir("mail")
-    }
-
-    fn ctx_with_inline_dir(dir: &str) -> PageContext {
         PageContext {
             index_href: "../../index.html".into(),
             folder_anchor: "f1".into(),
-            inline_dir: dir.into(),
             attachment_links: vec![],
             from_local_copy: false,
         }
@@ -510,10 +602,24 @@ mod tests {
             filename: "logo.png".into(),
             mime_type: "image/png".into(),
             content_id: Some("logo@halde".into()),
-            bytes: vec![],
+            bytes: PNG.to_vec(),
             is_body_part: true,
         });
         m
+    }
+
+    const PNG: &[u8] = b"\x89PNG\r\n\x1a\n";
+    const PNG_DATA_URI: &str = "data:image/png;base64,iVBORw0KGgo=";
+    const FRAME_CSP_META: &str = r#"<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'">"#;
+
+    fn inline_image(filename: &str, content_id: Option<&str>) -> ExportPart {
+        ExportPart {
+            filename: filename.into(),
+            mime_type: "image/png".into(),
+            content_id: content_id.map(Into::into),
+            bytes: PNG.to_vec(),
+            is_body_part: true,
+        }
     }
 
     fn after_head(page: &str) -> &str {
@@ -527,27 +633,170 @@ mod tests {
             .replace("&lt;", "<")
             .replace("&gt;", ">")
             .replace("&quot;", "\"")
+            .replace("&#39;", "'")
             .replace("&amp;", "&")
+    }
+
+    fn frame_body(page: &str) -> String {
+        let doc = srcdoc(page);
+        doc[doc.find("<body>").unwrap()..].to_string()
     }
 
     #[test]
     fn page_strips_scripts_handlers_and_remote_images() {
         let html = r#"<p onclick="x()">Hallo</p><script>alert(1)</script><a href="javascript:x()">a</a><img src="https://tracker.example/p.gif"><base href="https://x.example/"><meta http-equiv="refresh" content="0;url=https://x.example">"#;
         let out = render_mail_page(&mail_with_html(html), &ctx(), &labels());
-        let body = after_head(&out);
-        let inner = srcdoc(&out);
+        let doc = after_head(&out);
+        let start = doc.find("srcdoc=\"").unwrap();
+        let body = format!("{}{}", &doc[..start], &doc[start + 8 + doc[start + 8..].find('"').unwrap()..]);
+        let inner = frame_body(&out);
         for bad in ["<script", "onclick", "javascript:", "tracker.example", "<base", "http-equiv", "alert(1)"] {
             assert!(!body.contains(bad), "{bad}");
             assert!(!inner.contains(bad), "{bad}");
         }
         assert!(out.contains(&labels().external_images_note));
-        assert!(out.contains("Content-Security-Policy"));
+        assert_eq!(out.matches("http-equiv=\"Content-Security-Policy\"").count(), 1);
+        assert_eq!(srcdoc(&out).matches("http-equiv").count(), 1);
     }
 
     #[test]
-    fn cid_images_point_to_local_files() {
-        let out = render_mail_page(&mail_with_cid_logo(), &ctx_with_inline_dir("2026-10-21_1528_Angebot"), &labels());
-        assert!(out.contains("2026-10-21_1528_Angebot/logo.png") && !out.contains("cid:"));
+    fn mail_body_frame_carries_its_own_strict_csp() {
+        let out = render_mail_page(&mail_with_html("<p>Hallo</p>"), &ctx(), &labels());
+        assert!(srcdoc(&out).starts_with(FRAME_CSP_META), "{}", srcdoc(&out));
+    }
+
+    #[test]
+    fn page_csp_allows_only_data_images() {
+        let out = render_mail_page(&text_mail("Hallo"), &ctx(), &labels());
+        assert!(out.contains("img-src data:;") && !out.contains("img-src file:"));
+        assert!(out.contains("style-src file: 'unsafe-inline'") && out.contains("script-src file:"));
+    }
+
+    #[test]
+    fn cid_images_are_embedded_as_data_uris() {
+        let out = render_mail_page(&mail_with_cid_logo(), &ctx(), &labels());
+        let inner = frame_body(&out);
+        assert!(inner.contains(&format!(r#"<img src="{PNG_DATA_URI}">"#)), "{inner}");
+        assert!(!out.contains("cid:") && !out.contains("logo.png"));
+        assert!(!out.contains(&labels().external_images_note));
+    }
+
+    #[test]
+    fn probe_inputs_never_reach_a_host() {
+        let images = [
+            r#"<img src="\\tracker.example\share\p.gif">"#,
+            r#"<img src="/\tracker.example/p.gif">"#,
+            r#"<img src="//tracker.example/p.gif">"#,
+            r#"<img src="file://tracker.example/p.gif">"#,
+            r#"<img src="Plan.png">"#,
+            r#"<img src="data:text/html,tracker.example">"#,
+            r#"<p style="background-image:image-set('//tracker.example/p.gif' 1x)">x</p>"#,
+            r#"<style>p{background:url(\\tracker.example\s\p.gif)}</style>"#,
+            r#"<style>@\69mport '\\\\tracker.example\\s\\a.css';</style>"#,
+        ];
+        for probe in images {
+            let out = render_mail_page(&mail_with_html(&format!("<p>Hallo</p>{probe}")), &ctx(), &labels());
+            let inner = frame_body(&out);
+            assert!(!inner.contains("tracker.example") && !inner.contains("Plan.png"), "{probe} -> {inner}");
+            assert!(inner.contains("Hallo"), "{probe}");
+            assert!(out.contains(&labels().external_images_note), "{probe}");
+        }
+        let links = [
+            r#"<a href="\\tracker.example\s">a</a>"#,
+            r#"<a href="/\tracker.example/s">a</a>"#,
+            r#"<a href="//tracker.example/s">a</a>"#,
+            r#"<area href="//tracker.example/s">"#,
+            r#"<a href="Plan.pdf">a</a>"#,
+        ];
+        for probe in links {
+            let inner = frame_body(&render_mail_page(&mail_with_html(&format!("<p>Hallo</p>{probe}")), &ctx(), &labels()));
+            assert!(!inner.contains("tracker.example") && !inner.contains("Plan.pdf"), "{probe} -> {inner}");
+        }
+    }
+
+    #[test]
+    fn css_escapes_and_case_cannot_hide_remote_loads() {
+        let probes = [
+            r#"<style>p{background:u\72l(//tracker.example/a)}</style>"#,
+            r#"<style>p{background:\75 rl(//tracker.example/a)}</style>"#,
+            r#"<style>p{background:\000075rl(//tracker.example/a)}</style>"#,
+            r#"<style>p{background:URL("//tracker.example/a")}</style>"#,
+            r#"<style>p{background:-webkit-image-set("//tracker.example/a" 1x)}</style>"#,
+            r#"<style>@IMPORT "//tracker.example/a.css";</style>"#,
+            r#"<style>@import url(//tracker.example/a.css)</style>"#,
+            r#"<style>p::after{content:"/*" url(//tracker.example/a) "*/"}</style>"#,
+            r#"<style>p{background:url("//tracker.example/a;b{c}")}</style>"#,
+            r#"<p style="background:\75rl(//tracker.example/a)">x</p>"#,
+            r#"<p style="list-style:url(//tracker.example/a);color:red">x</p>"#,
+        ];
+        for probe in probes {
+            let inner = frame_body(&render_mail_page(&mail_with_html(&format!("{probe}<p>Hallo</p>")), &ctx(), &labels()));
+            assert!(!inner.contains("tracker.example"), "{probe} -> {inner}");
+            assert!(inner.contains("Hallo"), "{probe}");
+        }
+    }
+
+    #[test]
+    fn harmless_css_and_links_are_kept() {
+        let html = r##"<style>p{color:#b45f06}h1{font-family:"\5FAE\8F6F\96C5\9ED1"}</style><p style="color:red;margin:0">Hallo</p><a href="https://studio-halde.example/plan">Plan</a><a href="mailto:anna@studio-halde.example">Anna</a><a href="#oben">oben</a><img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=">"##;
+        let out = render_mail_page(&mail_with_html(html), &ctx(), &labels());
+        let inner = frame_body(&out);
+        for kept in [
+            "p{color:#b45f06}",
+            r#"font-family:"\5FAE\8F6F\96C5\9ED1""#,
+            "color:red;margin:0",
+            r#"href="https://studio-halde.example/plan""#,
+            r#"href="mailto:anna@studio-halde.example""#,
+            r##"href="#oben""##,
+            r#"src="data:image/gif;base64,R0lGODlhAQABAAAAACw=""#,
+        ] {
+            assert!(inner.contains(kept), "{kept} -> {inner}");
+        }
+        assert!(!out.contains(&labels().external_images_note));
+    }
+
+    #[test]
+    fn style_text_inside_an_attribute_is_not_treated_as_css() {
+        let html = r#"<p title="<style>">siehe url(https://studio-halde.example/plan)</p>"#;
+        let inner = frame_body(&render_mail_page(&mail_with_html(html), &ctx(), &labels()));
+        assert!(inner.contains("siehe url(https://studio-halde.example/plan)"), "{inner}");
+    }
+
+    #[test]
+    fn inline_images_without_a_reference_are_shown_below_the_body() {
+        let mut html = mail_with_html("<p>Hallo</p>");
+        html.parts = vec![inline_image("foto.png", None), inline_image("logo.png", Some("unbenutzt@halde"))];
+        let inner = frame_body(&render_mail_page(&html, &ctx(), &labels()));
+        assert_eq!(inner.matches(PNG_DATA_URI).count(), 2, "{inner}");
+
+        let mut text = text_mail("Hallo");
+        text.parts = vec![inline_image("foto.png", None)];
+        let out = render_mail_page(&text, &ctx(), &labels());
+        assert!(after_head(&out).contains(&format!(r#"src="{PNG_DATA_URI}""#)), "{out}");
+    }
+
+    #[test]
+    fn apple_style_inline_image_without_content_id_is_kept() {
+        let raw = "From: Jonas Brandt <jonas.brandt@studio-halde.example>\r\n\
+To: Anna Weber <anna@studio-halde.example>\r\n\
+Subject: Foto vom Waldweg\r\n\
+MIME-Version: 1.0\r\n\
+Content-Type: multipart/mixed; boundary=\"b\"\r\n\
+\r\n\
+--b\r\n\
+Content-Type: text/plain; charset=utf-8\r\n\
+\r\n\
+Hallo Anna\r\n\
+--b\r\n\
+Content-Type: image/png; name=\"foto.png\"\r\n\
+Content-Transfer-Encoding: base64\r\n\
+Content-Disposition: inline; filename=\"foto.png\"\r\n\
+\r\n\
+iVBORw0KGgo=\r\n\
+--b--\r\n";
+        let mail = super::super::parse::parse_raw(raw.as_bytes()).unwrap();
+        let out = render_mail_page(&mail, &ctx(), &labels());
+        assert!(out.contains(PNG_DATA_URI), "{out}");
     }
 
     #[test]

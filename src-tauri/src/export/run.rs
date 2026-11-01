@@ -223,23 +223,19 @@ fn write_mail(
         }
         let dir = folder_path.join(base);
         let mut links = Vec::new();
-        for p in &mail.parts {
-            let needed = if p.is_body_part { p.content_id.is_some() } else { opts.include_attachments };
-            if needed {
+        for p in mail.parts.iter().filter(|p| !p.is_body_part) {
+            if opts.include_attachments {
                 std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
                 write_file(&dir.join(&p.filename), &p.bytes)?;
             }
-            if !p.is_body_part {
-                let link = opts
-                    .include_attachments
-                    .then(|| format!("{}/{}", url_encode_segment(base), url_encode_segment(&p.filename)));
-                links.push((p.filename.clone(), link, p.bytes.len() as u64));
-            }
+            let link = opts
+                .include_attachments
+                .then(|| format!("{}/{}", url_encode_segment(base), url_encode_segment(&p.filename)));
+            links.push((p.filename.clone(), link, p.bytes.len() as u64));
         }
         let page = PageContext {
             index_href: "../../index.html".into(),
             folder_anchor: anchor.into(),
-            inline_dir: base.into(),
             attachment_links: links,
             from_local_copy: outcome == MailOutcome::LocalCopy,
         };
@@ -765,27 +761,28 @@ JVBERi0xLjQ=\n\
     }
 
     #[tokio::test]
-    async fn attachments_toggle_keeps_inline_images() {
+    async fn inline_images_are_embedded_and_attachments_follow_the_toggle() {
         let w = world();
         let id = add_mail(&w, FIXTURE_SUBJECT, "2026-10-21 13:28:44");
+        let logo = "data:image/png;base64,iVBORw0KGgo=";
 
         let without = Out::new();
         let opts = ExportOptions { include_attachments: false, ..options(vec![w.folder.clone()]) };
         run(&w, &opts, &without.0, fetch_all(&w, &id)).await;
         let page = files(&without.0, "html").remove(0);
-        let dir = page.with_extension("");
-        assert!(dir.join("logo.png").exists() && !dir.join("Plaene.pdf").exists());
+        assert!(!page.with_extension("").exists());
         let html = std::fs::read_to_string(&page).unwrap();
         assert!(html.contains("Plaene.pdf") && !html.contains("/Plaene.pdf\""));
+        assert!(html.contains(logo) && !html.contains("logo.png"));
 
         let with = Out::new();
         run(&w, &options(vec![w.folder.clone()]), &with.0, fetch_all(&w, &id)).await;
         let page = files(&with.0, "html").remove(0);
         let dir = page.with_extension("");
-        assert!(dir.join("logo.png").exists() && dir.join("Plaene.pdf").exists());
+        assert!(!dir.join("logo.png").exists() && dir.join("Plaene.pdf").exists());
         let html = std::fs::read_to_string(&page).unwrap();
         assert!(html.contains("/Plaene.pdf\""));
-        assert!(html.contains("/logo.png"));
+        assert!(html.contains(logo));
     }
 
     #[tokio::test]
