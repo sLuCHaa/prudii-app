@@ -9,6 +9,7 @@ pub mod contacts;
 pub mod credentials;
 pub mod crypto;
 pub mod db;
+pub mod export;
 pub mod gmail;
 pub mod idle;
 pub mod imap;

@@ -126,7 +126,7 @@ pub(crate) fn dedup_mails(mails: Vec<Mail>) -> Vec<Mail> {
 }
 
 /// API type for an account â€” determines which backend to use.
-enum ApiType {
+pub(crate) enum ApiType {
     Gmail,
     Outlook,
     Imap,
@@ -182,7 +182,7 @@ fn get_internet_id_escaped(db: &Database, mail_id: &str) -> String {
 }
 
 /// Returns (ApiType, provider, auth_type).
-fn get_api_type(db: &Database, account_id: &str) -> (ApiType, String, String) {
+pub(crate) fn get_api_type(db: &Database, account_id: &str) -> (ApiType, String, String) {
     let conn = db.lock_db();
     let result: Result<(String, String), _> = conn.query_row(
         "SELECT provider, auth_type FROM accounts WHERE id = ?1",
@@ -206,7 +206,7 @@ fn get_api_type(db: &Database, account_id: &str) -> (ApiType, String, String) {
 
 /// Get the API message ID (stored in mails.message_id) for a local mail.
 /// Used for both Gmail and Outlook API accounts.
-fn get_api_message_id(db: &Database, mail_id: &str) -> Option<(String, String)> {
+pub(crate) fn get_api_message_id(db: &Database, mail_id: &str) -> Option<(String, String)> {
     let conn = db.lock_db();
     conn.query_row(
         "SELECT message_id, account_id FROM mails WHERE id = ?1",
@@ -1046,82 +1046,24 @@ pub async fn fetch_mail_source(
     // no longer something a person can read anyway.
     const MAX_SOURCE_SIZE: i64 = 25 * 1024 * 1024;
 
-    if let Some((api_msg_id, account_id)) = get_api_message_id(&db, &mail_id) {
-        let (api_type, provider, auth_type) = get_api_type(&db, &account_id);
-        match api_type {
-            ApiType::Gmail => {
-                let credential = credentials::resolve_credential(&account_id, &auth_type, &provider)
-                    .await
-                    .map_err(|e| format!("Credentials: {}", e))?;
-                let client = gmail::api::GmailClient::new(&credential);
-                let msg = client
-                    .get_message(&api_msg_id, "raw")
-                    .await
-                    .map_err(|e| format!("Gmail source fetch: {}", e))?;
-                let raw = msg.raw.ok_or_else(|| "Gmail returned no source".to_string())?;
-                let bytes = gmail::api::decode_base64url(&raw)
-                    .map_err(|e| format!("Gmail source decode: {}", e))?;
-                return Ok(String::from_utf8_lossy(&bytes).into_owned());
+    let size_bytes: Option<i64> = {
+        let conn = db.lock_db();
+        conn.query_row("SELECT size_bytes FROM mails WHERE id = ?1", rusqlite::params![mail_id], |row| row.get(0)).ok().flatten()
+    };
+    let is_imap = match get_api_message_id(&db, &mail_id) {
+        Some((_, account_id)) => matches!(get_api_type(&db, &account_id).0, ApiType::Imap),
+        None => true,
+    };
+    if is_imap {
+        if let Some(size) = size_bytes {
+            if size > MAX_SOURCE_SIZE {
+                return Err(format!("Mail is too large to show as source ({:.1} MB)", size as f64 / 1024.0 / 1024.0));
             }
-            ApiType::Outlook => {
-                let credential = credentials::resolve_credential(&account_id, &auth_type, &provider)
-                    .await
-                    .map_err(|e| format!("Credentials: {}", e))?;
-                let client = outlook::api::OutlookClient::new(&credential);
-                return client
-                    .get_message_raw(&api_msg_id)
-                    .await
-                    .map_err(|e| format!("Outlook source fetch: {}", e));
-            }
-            ApiType::Imap => {}
         }
     }
 
-    let (account_id, folder_path, uid, size_bytes): (String, String, u32, Option<i64>) = {
-        let conn = db.lock_db();
-        conn.query_row(
-            "SELECT m.account_id, f.path, m.uid, m.size_bytes FROM mails m JOIN folders f ON m.folder_id = f.id WHERE m.id = ?1",
-            rusqlite::params![mail_id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get::<_, u32>(2)?, row.get(3)?)),
-        )
-        .map_err(|e| format!("Mail not found: {}", e))?
-    };
-
-    if let Some(size) = size_bytes {
-        if size > MAX_SOURCE_SIZE {
-            return Err(format!("Mail is too large to show as source ({:.1} MB)", size as f64 / 1024.0 / 1024.0));
-        }
-    }
-
-    let (imap_host, imap_port, email, auth_type, provider): (String, i32, String, String, String) = {
-        let conn = db.lock_db();
-        conn.query_row(
-            "SELECT imap_host, imap_port, email, auth_type, provider FROM accounts WHERE id = ?1",
-            rusqlite::params![account_id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
-        )
-        .map_err(|e| format!("Account not found: {}", e))?
-    };
-
-    let credential = credentials::resolve_credential(&account_id, &auth_type, &provider)
-        .await
-        .map_err(|e| format!("Failed to retrieve credentials: {}", e))?;
-
-    let (mut session, _pool_folder) = pool
-        .get_session_with_folder(&account_id, &imap_host, imap_port as u16, &email, &credential, &auth_type)
-        .await
-        .map_err(|e| format!("IMAP connection failed: {}", e))?;
-
-    let skip_examine = session.selected_folder() == Some(folder_path.as_str());
-    let result = imap::fetch_mail_source(&mut session, &folder_path, uid, skip_examine).await;
-
-    match &result {
-        Ok(_) => pool.return_session_in_folder(&account_id, session, folder_path.clone()).await,
-        Err(_) => { let _ = session.logout().await; pool.release(&account_id); }
-    }
-
-    let bytes = result.map_err(|e| format!("Failed to fetch mail source: {}", e))?;
-    Ok(String::from_utf8_lossy(&bytes).into_owned())
+    let raw = crate::export::source::fetch_raw_message(&db, &pool, &mail_id).await?;
+    Ok(crate::export::source::display_source(raw))
 }
 
 #[tauri::command]

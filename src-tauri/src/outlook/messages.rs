@@ -277,7 +277,7 @@ pub async fn fetch_message_body(
     // Graph's JSON lacks the calendar part; a failed MIME fetch keeps what was recorded.
     let invite = if is_event_message(msg.odata_type.as_deref()) || has_ics_attachment {
         match client.get_message_raw(graph_id).await {
-            Ok(raw) => Some(crate::calendar::invite_mail::find_in_mime(raw.as_bytes())),
+            Ok(raw) => Some(crate::calendar::invite_mail::find_in_mime(&raw)),
             Err(e) => {
                 log::warn!("fetch_message_body {}: invitation source unavailable: {}", graph_id, e);
                 None

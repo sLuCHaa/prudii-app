@@ -248,7 +248,7 @@ impl OutlookClient {
     /// Get a single message with full body.
     /// Raw MIME of one message. Graph serves it from /$value as text rather
     /// than JSON, so this cannot reuse get_message.
-    pub async fn get_message_raw(&self, id: &str) -> Result<String> {
+    pub async fn get_message_raw(&self, id: &str) -> Result<Vec<u8>> {
         let url = format!("{}/messages/{}/$value", BASE_URL, id);
 
         let mut attempt = 0u32;
@@ -262,7 +262,7 @@ impl OutlookClient {
 
             let status = resp.status();
             if status.is_success() {
-                return resp.text().await.context("get_message_raw read failed");
+                return resp.bytes().await.map(|b| b.to_vec()).context("get_message_raw read failed");
             }
 
             attempt += 1;
