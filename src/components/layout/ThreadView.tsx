@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, useRef, useCallback, memo, useMemo } from "react";
+import { Fragment, createContext, useContext, useEffect, useLayoutEffect, useState, useRef, useCallback, memo, useMemo } from "react";
 import { Tooltip } from "../ui/Tooltip";
 import { parseISO } from "date-fns";
 import { FileText, Image, Film, Music, File, Loader2, Download, ChevronDown, ChevronRight, ChevronUp, MessageSquare, Copy, Check, Code, Eye, FileCode, FileType, Printer, MailMinus, ImageOff, FileWarning, FolderOpen, ClipboardList, ClipboardPlus, Ellipsis, Archive, Paperclip, Forward, Reply, ReplyAll, StarIcon, TrashIcon } from "../icons";
@@ -360,19 +360,31 @@ const DARK_STYLES = `
   ::-webkit-scrollbar-thumb:hover { background: #52525B; }
 `;
 
+const INLINE_IMAGE_REF = /file:\/\/|cid:|blob:|Attachment\//;
+
+// Lets a frame hold the conversation back until it is measured; returns the release.
+const PendingFrameContext = createContext<(() => () => void) | null>(null);
+
 const HtmlMailFrame = memo(function HtmlMailFrame({ mailId, html, tight = false, allowExternalImages = true, onIframeRef, onTrackersDetected, onLinkClick, onImageClick }: { mailId: string; html: string; tight?: boolean; allowExternalImages?: boolean; onIframeRef?: (el: HTMLIFrameElement | null) => void; onTrackersDetected?: (trackers: TrackerInfo[]) => void; onLinkClick?: (href: string) => void; onImageClick?: (src: string) => void }) {
   const darkMode = useAppStore((s) => s.darkMode);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const { height, refit, fitted } = useMailFrameFit(iframeRef);
+  const pendingFrame = useContext(PendingFrameContext);
+  const { data: attachments, isPending: attachmentsPending } = useAttachments(mailId);
+  // Inline images resolve against the attachment list; rendering before it arrives means a reload that resizes the frame.
+  const awaitsAttachments = attachmentsPending && INLINE_IMAGE_REF.test(html);
+  // Images still loading after the first fit would grow the frame once it is on screen.
+  const [loaded, setLoaded] = useState(false);
+  const settled = fitted && loaded && !awaitsAttachments;
+  useLayoutEffect(() => (settled ? undefined : pendingFrame?.()), [settled, pendingFrame]);
   const [bodyMenu, setBodyMenu] = useState<{ target: BridgeContextMenu; x: number; y: number; seq: number } | null>(null);
   const { t } = useTranslation();
 
   const themeStyles = darkMode ? DARK_STYLES : LIGHT_STYLES;
 
-  const { data: attachments } = useAttachments(mailId);
   const { html: cleanHtml, trackers } = useMemo(() => {
     const res = sanitizeEmailHtml(html, allowExternalImages);
-    if (!/file:\/\/|cid:|blob:|Attachment\//.test(res.html)) return res;
+    if (!INLINE_IMAGE_REF.test(res.html)) return res;
     const d = document.createElement("div");
     d.innerHTML = res.html;
     // Fetch-time rewriting only knows plain cid: references; the rest resolves
@@ -476,11 +488,14 @@ ${BASE_STYLES}${tight ? "\n  body { padding: 4px 0; }" : ""}
     <>
       <iframe
         ref={iframeRef}
-        srcDoc={srcDoc}
+        srcDoc={awaitsAttachments ? undefined : srcDoc}
         sandbox="allow-same-origin allow-scripts"
         // On a color-scheme mismatch Chromium paints an opaque canvas behind the mail.
         style={{ width: "100%", height, border: "none", overflow: "hidden", background: "transparent", colorScheme: darkMode ? "dark" : "light", opacity: fitted ? 1 : 0, transition: "opacity 140ms ease-out" }}
-        onLoad={refit}
+        onLoad={() => {
+          refit();
+          if (iframeRef.current?.contentDocument?.URL === "about:srcdoc") setLoaded(true);
+        }}
         aria-label={t("mailDetail.emailContent")}
       />
       {bodyMenu && (
@@ -1733,6 +1748,18 @@ export function ThreadView({ mail }: ThreadViewProps) {
   const isSingleMail = !loading && threadCount <= 1;
   // The opened mail alone, then the whole thread a few frames later, flashes a different layout (most visibly in chat view).
   const holdThread = useLoadingHold(loading, mail.id, 250);
+  // Until each body frame has its real height, everything below it sits against a placeholder and would jump.
+  const [pendingFrames, setPendingFrames] = useState(0);
+  const pendingFrame = useCallback(() => {
+    setPendingFrames((n) => n + 1);
+    let open = true;
+    return () => {
+      if (!open) return;
+      open = false;
+      setPendingFrames((n) => n - 1);
+    };
+  }, []);
+  const holdFrames = useLoadingHold(pendingFrames > 0, mail.id, 350);
 
   return (
     <div className="relative isolate flex flex-col h-full bg-bg-secondary">
@@ -1864,21 +1891,27 @@ export function ThreadView({ mail }: ThreadViewProps) {
                 stretch across the full pane width. HTML newsletters bring their
                 own (narrower) layout and are unaffected. */}
             {/* Chat bubbles cap their own width; the free space belongs between the sides. */}
-            <div ref={messagesContentRef} className={`mx-auto w-full ${chatView && !isSingleMail ? "max-w-7xl" : "max-w-[840px]"}`}>
+            <div
+              ref={messagesContentRef}
+              className={`mx-auto w-full ${chatView && !isSingleMail ? "max-w-7xl" : "max-w-[840px]"}`}
+              style={holdFrames ? { visibility: "hidden" } : undefined}
+            >
               {!holdThread && (
-                <ThreadMessages
-                  threadMails={threadMails}
-                  isSingleMail={isSingleMail}
-                  selectedMailId={mail.id}
-                  chat={chatView}
-                  isOwn={isOwn}
-                  onCollapse={revealMessageStart}
-                  onReply={handleReply}
-                  onReplyAll={handleReplyAll}
-                  onForward={handleForward}
-                  onLinkClick={handleLinkClick}
-                  onUpdateMail={handleUpdateThreadMail}
-                />
+                <PendingFrameContext.Provider value={pendingFrame}>
+                  <ThreadMessages
+                    threadMails={threadMails}
+                    isSingleMail={isSingleMail}
+                    selectedMailId={mail.id}
+                    chat={chatView}
+                    isOwn={isOwn}
+                    onCollapse={revealMessageStart}
+                    onReply={handleReply}
+                    onReplyAll={handleReplyAll}
+                    onForward={handleForward}
+                    onLinkClick={handleLinkClick}
+                    onUpdateMail={handleUpdateThreadMail}
+                  />
+                </PendingFrameContext.Provider>
               )}
             </div>
           </div>

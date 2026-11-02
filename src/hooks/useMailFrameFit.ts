@@ -43,7 +43,8 @@ export function useMailFrameFit(iframeRef: React.RefObject<HTMLIFrameElement | n
       const iframe = iframeRef.current;
       const doc = iframe?.contentDocument;
       const body = doc?.body;
-      if (!iframe || !doc || !body) return;
+      // A frame still on about:blank (no srcdoc yet) has a quirks-mode body as tall as the frame.
+      if (!iframe || !doc || !body || doc.URL !== "about:srcdoc") return;
 
       // Measure the natural layout, not the one the previous pass scaled.
       body.style.transform = "";
