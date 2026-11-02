@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getVersion } from "@tauri-apps/api/app";
 import { CalendarDays, FolderDown, ImagePlus, ListChecks, MailCheck, Rss, Sparkles, Tag, Type, type IconComponent } from "../icons";
+import { AnimatePresence, motion } from "motion/react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
+import { useModalExit } from "../motion/modalExit";
 import { Button } from "./Button";
 import { useDialog } from "./DialogProvider";
 import { displayVersion, pendingRelease, readSeen, RELEASES, SEEN_KEY, type WhatsNewIcon, type WhatsNewRelease, type WhatsNewTone } from "../../lib/whatsNew";
@@ -59,18 +61,20 @@ export function WhatsNew({ hasAccounts }: { hasAccounts: boolean }) {
     setShown(null);
   }, [shown]);
 
-  return shown && !dialogOpen ? <WhatsNewDialog release={shown.release} onClose={close} /> : null;
+  return <AnimatePresence>{shown && !dialogOpen && <WhatsNewDialog release={shown.release} onClose={close} />}</AnimatePresence>;
 }
 
 function WhatsNewDialog({ release, onClose }: { release: WhatsNewRelease; onClose: () => void }) {
   const { t } = useTranslation();
   const trapRef = useFocusTrap<HTMLDivElement>(true);
+  const modalExit = useModalExit();
 
   // Only the button closes it: a stray click or Escape would use up the one-time window.
   return (
-    <div className="fixed inset-0 modal-backdrop flex items-center justify-center z-100">
-      <div
+    <motion.div exit={modalExit.overlay} className="fixed inset-0 modal-backdrop flex items-center justify-center z-100">
+      <motion.div
         ref={trapRef}
+        exit={modalExit.panel}
         role="dialog"
         aria-modal="true"
         aria-labelledby="whats-new-title"
@@ -111,7 +115,7 @@ function WhatsNewDialog({ release, onClose }: { release: WhatsNewRelease; onClos
             {t("whatsNew.done")}
           </Button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

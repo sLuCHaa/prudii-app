@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "motion/react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
+import { useModalExit } from "../motion/modalExit";
 import { X, Sun, Moon, Monitor, Trash2, ChevronRight, ArrowLeft, Save, RefreshCw, Server, Palette, Clock, FolderOpen, Power, AppWindow, Globe, Bell, Volume2, Image, Settings2, Users, Database, Filter, Info, Sparkles, Mail, Key, FileType, Send, Download, Eye, EyeOff, Plus, PanelLeft, Shield, Type, CalendarDays, Tags, Lock } from "../icons";
 import { CalendarSettingsPanel } from "../calendar/CalendarSettings";
 import { useTranslation } from "react-i18next";
@@ -504,6 +505,7 @@ export function SettingsPanel() {
   const { t } = useTranslation();
   const { host: scrollHostRef, viewport: scrollRef } = useScroller<HTMLDivElement>();
   const trapRef = useFocusTrap<HTMLDivElement>(true);
+  const modalExit = useModalExit();
   const queryClient = useQueryClient();
   // useShallow-scoped: an unselected useAppStore() re-renders the whole
   // settings panel on every store write (sync ticks, toasts, selection).
@@ -664,12 +666,14 @@ export function SettingsPanel() {
   }
 
   return (
-    <div
+    <motion.div
+      exit={modalExit.overlay}
       className="fixed inset-0 modal-backdrop flex items-center justify-center z-50"
       onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}
     >
-      <div
+      <motion.div
         ref={trapRef}
+        exit={modalExit.panel}
         role="dialog"
         aria-modal="true"
         aria-label={t("settings.title")}
@@ -1110,7 +1114,7 @@ export function SettingsPanel() {
             </div>
           </>
         )}
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

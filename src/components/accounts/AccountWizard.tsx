@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { X } from "../icons";
 import { listen } from "@tauri-apps/api/event";
 import { motion } from "motion/react";
+import { useModalExit } from "../motion/modalExit";
 import type { ProviderPreset } from "../../lib/providers";
 import { useCreateAccount } from "../../hooks/useAccounts";
 import { useSyncAccount } from "../../hooks/useSync";
@@ -76,6 +77,7 @@ function StepperHeader({ current }: { current: number }) {
 export function AccountWizard() {
   const setShowAccountWizard = useAppStore((s) => s.setShowAccountWizard);
   const trapRef = useFocusTrap<HTMLDivElement>(true);
+  const modalExit = useModalExit();
   const createAccount = useCreateAccount();
   const syncAccount = useSyncAccount();
   const { data: appConfig } = useAppConfig();
@@ -275,9 +277,10 @@ export function AccountWizard() {
   }, []);
 
   return (
-    <div className="fixed inset-0 modal-backdrop flex items-center justify-center z-50">
-      <div
+    <motion.div exit={modalExit.overlay} className="fixed inset-0 modal-backdrop flex items-center justify-center z-50">
+      <motion.div
         ref={trapRef}
+        exit={modalExit.panel}
         role="dialog"
         aria-modal="true"
         aria-label={t("shortcuts.desc.addAccount")}
@@ -356,7 +359,7 @@ export function AccountWizard() {
             />
           )}
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

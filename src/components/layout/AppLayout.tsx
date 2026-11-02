@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Sidebar } from "./Sidebar";
 import { MailList } from "./MailList";
 import { MailDetail } from "./MailDetail";
@@ -262,8 +262,8 @@ export function AppLayout() {
         )}
       </div>
 
-      {showAccountWizard && <AccountWizard />}
-      {showSettings && <SettingsPanel />}
+      <AnimatePresence>{showAccountWizard && <AccountWizard />}</AnimatePresence>
+      <AnimatePresence>{showSettings && <SettingsPanel />}</AnimatePresence>
       {accounts !== undefined && <WhatsNew hasAccounts={accounts.length > 0} />}
     </>
   );
