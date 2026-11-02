@@ -55,6 +55,7 @@ import { formatFileSize } from "../../lib/fileSize";
 import { useMailFrameFit } from "../../hooks/useMailFrameFit";
 import { useLoadingHold } from "../../hooks/useLoadingHold";
 import { landSubjectFly } from "../motion/subjectFly";
+import { prefersReducedMotion } from "../motion/tokens";
 import { markDocument, searchTerms, splitMatches, termPattern } from "../../lib/searchHighlight";
 import { useOpenCheckedLink } from "../../hooks/useOpenCheckedLink";
 
@@ -1796,6 +1797,57 @@ export function ThreadView({ mail }: ThreadViewProps) {
   useLayoutEffect(() => {
     if (titleRef.current) landSubjectFly(mail.id, titleRef.current);
   }, [mail.id]);
+
+  // Reading down a long mail, the header folds to one line; the gap between the thresholds keeps it from flickering.
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [compactHeader, setCompactHeader] = useState(false);
+  const headerBefore = useRef<{ height: number; title: DOMRect; font: number } | null>(null);
+  useEffect(() => {
+    const scroller = messagesScrollRef.current;
+    if (!scroller) return;
+    let compact = false;
+    // Only the reader's own scrolling folds it; the chat view opening at the newest bubble does not.
+    let byUser = false;
+    const markUser = () => { byUser = true; };
+    const inputs = ["wheel", "keydown", "pointerdown", "touchstart"] as const;
+    inputs.forEach((type) => window.addEventListener(type, markUser, { capture: true, passive: true }));
+    const onScroll = () => {
+      if (!byUser) return;
+      // Folding gives back up to ~50px of scroll; folding later than that keeps it from unfolding at once.
+      const want = compact ? scroller.scrollTop > 4 : scroller.scrollTop > 120;
+      const header = headerRef.current;
+      const title = titleRef.current;
+      if (want === compact || !header || !title) return;
+      headerBefore.current = { height: header.offsetHeight, title: title.getBoundingClientRect(), font: parseFloat(getComputedStyle(title).fontSize) || 16 };
+      compact = want;
+      setCompactHeader(want);
+    };
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      scroller.removeEventListener("scroll", onScroll);
+      inputs.forEach((type) => window.removeEventListener(type, markUser, { capture: true }));
+    };
+  }, [messagesScrollRef]);
+  useLayoutEffect(() => {
+    const before = headerBefore.current;
+    const header = headerRef.current;
+    const title = titleRef.current;
+    const scroller = messagesScrollRef.current;
+    headerBefore.current = null;
+    if (!before || !header || !title || !scroller) return;
+    // The text below must not move when the header changes height above it.
+    scroller.scrollTop += header.offsetHeight - before.height;
+    if (prefersReducedMotion()) return;
+    const now = title.getBoundingClientRect();
+    const font = parseFloat(getComputedStyle(title).fontSize) || before.font;
+    title.animate(
+      [
+        { transform: `translate(${before.title.left - now.left}px, ${before.title.top - now.top}px) scale(${before.font / font})`, transformOrigin: "0 0" },
+        { transform: "none", transformOrigin: "0 0" },
+      ],
+      { duration: 200, easing: "cubic-bezier(0.2, 0, 0, 1)" },
+    );
+  }, [compactHeader]); // eslint-disable-line react-hooks/exhaustive-deps
   // Until each body frame has its real height, everything below it sits against a placeholder and would jump.
   const [pendingFrames, setPendingFrames] = useState(0);
   const pendingFrame = useCallback(() => {
@@ -1824,14 +1876,14 @@ export function ThreadView({ mail }: ThreadViewProps) {
   return (
     <div className="relative isolate flex flex-col h-full bg-bg-secondary">
       <ReadingAmbient />
-      <div className="px-5 py-3 bg-surface border-b border-border">
-        <div className="flex items-start justify-between gap-3">
+      <div ref={headerRef} className={`px-5 ${compactHeader ? "py-1.5" : "py-3"} bg-surface border-b border-border`}>
+        <div className={`flex justify-between gap-3 ${compactHeader ? "items-center" : "items-start"}`}>
           <div className="min-w-0 flex-1">
             {/* Zweizeilig statt einzeilig abgeschnitten: ein langer Betreff
                 endet sonst mitten im Wort, und dies ist die einzige Stelle, an
                 der er ueberhaupt vollstaendig steht. title zeigt ihn ganz. */}
-            <h2 ref={titleRef} title={mail.subject} className="text-base font-semibold text-text leading-snug line-clamp-2 select-text"><MarkedText text={mail.subject} pattern={highlight} /></h2>
-            {!loading && threadCount > 1 && (
+            <h2 ref={titleRef} title={mail.subject} className={`${compactHeader ? "text-sm line-clamp-1" : "text-base line-clamp-2"} font-semibold text-text leading-snug select-text`}><MarkedText text={mail.subject} pattern={highlight} /></h2>
+            {!loading && threadCount > 1 && !compactHeader && (
               <span className="inline-flex items-center gap-1.5 mt-1 text-xs text-text-tertiary">
                 <MessageSquare className="w-3.5 h-3.5" />
                 {t("mailDetail.message", { count: threadCount })}
