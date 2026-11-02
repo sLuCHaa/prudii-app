@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { createPortal } from "react-dom";
 import { Check, ChevronRight } from "../icons";
 import { clampToViewport, isFocusable, moveFocus, submenuPosition, typeaheadIndex, type MenuEntry } from "../../lib/menuModel";
+import { prefersReducedMotion } from "../motion/tokens";
 
 export interface ContextMenuProps {
   entries: MenuEntry[];
@@ -15,6 +16,25 @@ export interface ContextMenuProps {
 }
 
 const TYPEAHEAD_MS = 500;
+const FADE_OUT_MS = 110;
+
+// Callers unmount the menu to close it; a static copy fades out in its place, as native menus do.
+function fadeOutCopy(root: HTMLElement | null) {
+  if (!root || prefersReducedMotion()) return;
+  const copy = root.cloneNode(true) as HTMLElement;
+  if (typeof copy.animate !== "function") return;
+  copy.setAttribute("aria-hidden", "true");
+  copy.style.pointerEvents = "none";
+  copy.querySelectorAll<HTMLElement>("*").forEach((el) => {
+    el.removeAttribute("id");
+    el.removeAttribute("role");
+    el.classList.remove("menu-enter");
+    if (el.getAttribute("tabindex") === "0") el.classList.add("bg-hover");
+  });
+  document.body.appendChild(copy);
+  const done = () => copy.remove();
+  copy.animate([{ opacity: 1 }, { opacity: 0 }], { duration: FADE_OUT_MS, easing: "ease-out" }).finished.then(done, done);
+}
 
 interface SubAnchor {
   left: number;
@@ -191,6 +211,11 @@ export function ContextMenu({ entries, x, y, onClose, variant = "menu", minWidth
   // before this component's effects, so an effect would record the menu itself.
   const previous = useRef<HTMLElement | null>(document.activeElement as HTMLElement | null);
   const rootRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    return () => fadeOutCopy(root);
+  }, []);
 
   useEffect(() => {
     const el = previous.current;
