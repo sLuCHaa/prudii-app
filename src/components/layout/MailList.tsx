@@ -38,6 +38,7 @@ import { ENTRANCE, prefersReducedMotion } from "../motion/tokens";
 import { SWEEP_MAILS_EVENT, SWEEP_TWEEN, type SweepDetail } from "../motion/sweepMails";
 import { playRowShifts, snapshotRows } from "../motion/rowShift";
 import { launchSubjectFly } from "../motion/subjectFly";
+import { flyIntoDropTarget } from "../motion/dropFlight";
 import { keepRowsLeaving } from "../../lib/mailListSync";
 import { moveTargets } from "../../lib/moveTargets";
 import { ContextMenu } from "../ui/ContextMenu";
@@ -1277,6 +1278,7 @@ export function MailList() {
   }, []);
 
   const handleDragEnd = useCallback(() => {
+    flyIntoDropTarget(dragPreviewRef.current);
     if (draggingMail) {
       const itemEl = mailItemRefs.current.get(draggingMail.id);
       if (itemEl) {

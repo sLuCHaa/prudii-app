@@ -5,6 +5,7 @@ import { FileText, AlertOctagon, Folder, Plus, ChevronDown, ChevronRight, Folder
 import { useTodayCount } from "../../hooks/useCalendar";
 import gsap from "gsap";
 import { prefersReducedMotion } from "../motion/tokens";
+import { DROP_FLIGHT_MS, noteDropTarget } from "../motion/dropFlight";
 import { useAppStore, type MailFilter } from "../../stores/appStore";
 import { useAccounts, useFolders, prefetchFolderMails } from "../../hooks/useAccounts";
 import { parseMailSort } from "../../lib/mailSort";
@@ -421,6 +422,8 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
       gsap.to(folderEl, {
         scale: 1.05,
         duration: 0.1,
+        // Pulses as the flying mail arrives, not when the pointer lets go.
+        delay: prefersReducedMotion() ? 0 : (DROP_FLIGHT_MS - 60) / 1000,
         ease: "power2.out",
         onComplete: () => {
           gsap.to(folderEl, {
@@ -447,15 +450,10 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
       });
       return;
     }
+    noteDropTarget(folderEl);
 
-    // Optimistic: remove mail from local list immediately
-    const { mails, setMails, selectedMailId, setSelectedMailId, selectedMailIndex } = useAppStore.getState();
-    const remaining = mails.filter((m) => m.id !== mailId);
-    setMails(remaining);
-    if (selectedMailId === mailId) {
-      const nextIndex = Math.min(selectedMailIndex, remaining.length - 1);
-      setSelectedMailId(remaining.length > 0 ? remaining[nextIndex].id : null);
-    }
+    // The list's shared exit path: the row sweeps out, the rows below glide up, the selection moves on.
+    useAppStore.getState().setPendingRemoveIds([mailId]);
 
     moveMail(mailId, folder.id)
       .then(() => {
