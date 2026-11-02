@@ -528,7 +528,7 @@ function VirtualMailList({
 }: VirtualMailListProps) {
   // Themed overlay scrollbar on the virtualized list (keeps listRef as the
   // scroll viewport, so the virtualizer and onScroll keep working).
-  const { host: listHostRef } = useScroller(listRef);
+  const { host: listHostRef } = useScroller(listRef, { virtualized: true });
 
   const virtualItems = useMemo<ListItem[]>(
     () => buildListItems(filteredMails, dateGroupLabels, showDateGroups),

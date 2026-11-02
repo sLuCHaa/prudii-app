@@ -1,4 +1,4 @@
-import { useEffect, useRef, type RefObject } from "react";
+import { useEffect, useMemo, useRef, type RefObject } from "react";
 import { useOverlayScrollbars } from "overlayscrollbars-react";
 
 /**
@@ -14,27 +14,34 @@ import { useOverlayScrollbars } from "overlayscrollbars-react";
  *
  * Pass an existing ref (e.g. a virtualizer's scroll ref) or let it create one.
  * `immediate` for containers that will hold iframes: setting up moves the scroll
- * element, and a moved iframe reloads.
+ * element, and a moved iframe reloads. `virtualized` for windowed lists: rows
+ * mount and unmount every scrolled frame, and re-measuring on each of those
+ * forced a layout per frame. Only the size container's own style matters there.
  */
 export function useScroller<T extends HTMLElement = HTMLDivElement>(
   externalRef?: RefObject<T | null>,
-  { immediate = false }: { immediate?: boolean } = {},
+  { immediate = false, virtualized = false }: { immediate?: boolean; virtualized?: boolean } = {},
 ): { host: RefObject<HTMLDivElement | null>; viewport: RefObject<T | null> } {
   const host = useRef<HTMLDivElement>(null);
   const internalRef = useRef<T>(null);
   const viewport = externalRef ?? internalRef;
 
-  const [initialize] = useOverlayScrollbars({
-    options: {
+  // Stable identity: the library re-applies changed options on every render, and a scrolling list renders every frame.
+  const options = useMemo(
+    () => ({
       scrollbars: {
         theme: "os-theme-prudii",
-        autoHide: "leave",
+        autoHide: "leave" as const,
         autoHideDelay: 500,
         clickScroll: true,
       },
-    },
-    defer: !immediate,
-  });
+      update: virtualized
+        ? { ignoreMutation: (m: MutationRecord) => !(m.type === "attributes" && (m.target as Element).parentElement === viewport.current) }
+        : {},
+    }),
+    [virtualized, viewport],
+  );
+  const [initialize] = useOverlayScrollbars({ options, defer: !immediate });
 
   useEffect(() => {
     if (host.current && viewport.current) {
