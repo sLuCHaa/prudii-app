@@ -304,6 +304,8 @@ interface AppState {
 }
 
 const initialThemeMode = getStoredThemeMode();
+// Before the first render, so the first frame already has the right theme.
+document.documentElement.classList.toggle("dark", resolveTheme(initialThemeMode));
 
 export const useAppStore = create<AppState>((set, get) => ({
   accounts: [],

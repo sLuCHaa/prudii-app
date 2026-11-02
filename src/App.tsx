@@ -11,7 +11,6 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 const AppLayout = lazy(() =>
   import("./components/layout/AppLayout").then((m) => ({ default: m.AppLayout }))
 );
-import { SplashScreen } from "./components/ui/SplashScreen";
 import { DialogProvider } from "./components/ui/DialogProvider";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary";
 import { UndoToast } from "./components/ui/UndoToast";
@@ -73,15 +72,6 @@ function refreshMailQueries(accountId: string) {
 }
 
 function AppInner() {
-  // Once per launch in production; never in dev (rebuilds relaunch the app).
-  const [showSplash, setShowSplash] = useState(
-    () => !import.meta.env.DEV && !sessionStorage.getItem("splash-shown")
-  );
-  useEffect(() => {
-    sessionStorage.setItem("splash-shown", "1");
-  }, []);
-  const [layoutReady, setLayoutReady] = useState(false);
-  const [splashDone, setSplashDone] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showMotionLab, setShowMotionLab] = useState(false);
   const themeMode = useAppStore((s) => s.themeMode);
@@ -636,21 +626,6 @@ function AppInner() {
       // cache just seeded above, so the store needs no direct write here.
     }).catch(() => { /* boot falls back to the normal 3-hop chain */ });
   }, []);
-
-  // The splash gates on the layout chunk plus a minimum display time.
-  useEffect(() => {
-    import("./components/layout/AppLayout").then(() => setLayoutReady(true));
-  }, []);
-
-  useEffect(() => {
-    if (layoutReady && splashDone) setShowSplash(false);
-  }, [layoutReady, splashDone]);
-
-  if (showSplash) {
-    // Short brand moment only — the real gate is layoutReady. A long fixed
-    // duration here is pure added startup latency on every cold launch.
-    return <SplashScreen onComplete={() => setSplashDone(true)} duration={400} />;
-  }
 
   return (
     <>
