@@ -79,7 +79,7 @@ const THEME_STYLE_ID = "prudii-theme";
 export function HtmlMailFrame({ html, allowExternalImages = true, forceLight = false, editable = false, onIframeRef, onLoad, onEditBaseline, onTrackersDetected, onLinkClick, onImageClick }: { html: string; allowExternalImages?: boolean; /** Render as most recipients see it, ignoring the app's dark mode. */ forceLight?: boolean; /** Edit in place; read `#QUOTE_EDIT_ROOT` back through restoreSanitizedHtml. */ editable?: boolean; onIframeRef?: (el: HTMLIFrameElement | null) => void; onLoad?: () => void; /** The edit root's innerHTML before any edit. */ onEditBaseline?: (html: string) => void; onTrackersDetected?: (trackers: TrackerInfo[]) => void; onLinkClick?: (href: string) => void; onImageClick?: (src: string) => void }) {
   const darkMode = useAppStore((s) => s.darkMode) && !forceLight;
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const { height, refit } = useMailFrameFit(iframeRef);
+  const { height, refit, fitted } = useMailFrameFit(iframeRef);
   const [bodyMenu, setBodyMenu] = useState<{ target: BridgeContextMenu; x: number; y: number; seq: number } | null>(null);
   const { t } = useTranslation();
 
@@ -225,6 +225,9 @@ ${BASE_STYLES}
         style={{
           height: `${height}px`,
           background: darkMode ? "#1D1D20" : "#ffffff",
+          // Hidden until measured, so the mail never shows at the placeholder height or unscaled.
+          opacity: fitted ? 1 : 0,
+          transition: "opacity 140ms ease-out",
         }}
         title={t("mailDetail.emailContent")}
       />

@@ -33,6 +33,7 @@ export function fitScale(available: number, natural: number, minScale = MIN_SCAL
  */
 export function useMailFrameFit(iframeRef: React.RefObject<HTMLIFrameElement | null>) {
   const [height, setHeight] = useState(300);
+  const [fitted, setFitted] = useState(false);
   // The outer observer must react to width only. Re-fitting changes the
   // iframe's height, which would otherwise retrigger it forever.
   const lastWidth = useRef(0);
@@ -67,7 +68,10 @@ export function useMailFrameFit(iframeRef: React.RefObject<HTMLIFrameElement | n
 
       // Read after applying, so the reflow at the wider layout width counts.
       const h = Math.ceil(body.scrollHeight * scale);
-      if (h > 0) setHeight(h);
+      if (h > 0) {
+        setHeight(h);
+        setFitted(true);
+      }
 
       // Images that arrive late change the height; one re-fit each is enough.
       for (const img of Array.from(doc.images)) {
@@ -86,5 +90,24 @@ export function useMailFrameFit(iframeRef: React.RefObject<HTMLIFrameElement | n
     return () => observer.disconnect();
   }, [iframeRef, refit]);
 
-  return { height, refit };
+  // Fit as soon as the srcdoc is parsed; its load event waits for every image.
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      const doc = iframeRef.current?.contentDocument;
+      if (doc?.URL === "about:srcdoc" && doc.readyState !== "loading") refit();
+      else raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    const fallback = setTimeout(() => {
+      cancelAnimationFrame(raf);
+      setFitted(true);
+    }, 600);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(fallback);
+    };
+  }, [iframeRef, refit]);
+
+  return { height, refit, fitted };
 }

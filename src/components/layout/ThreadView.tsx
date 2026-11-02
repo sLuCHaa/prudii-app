@@ -362,7 +362,7 @@ const DARK_STYLES = `
 const HtmlMailFrame = memo(function HtmlMailFrame({ mailId, html, tight = false, allowExternalImages = true, onIframeRef, onTrackersDetected, onLinkClick, onImageClick }: { mailId: string; html: string; tight?: boolean; allowExternalImages?: boolean; onIframeRef?: (el: HTMLIFrameElement | null) => void; onTrackersDetected?: (trackers: TrackerInfo[]) => void; onLinkClick?: (href: string) => void; onImageClick?: (src: string) => void }) {
   const darkMode = useAppStore((s) => s.darkMode);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const { height, refit } = useMailFrameFit(iframeRef);
+  const { height, refit, fitted } = useMailFrameFit(iframeRef);
   const [bodyMenu, setBodyMenu] = useState<{ target: BridgeContextMenu; x: number; y: number; seq: number } | null>(null);
   const { t } = useTranslation();
 
@@ -478,7 +478,7 @@ ${BASE_STYLES}${tight ? "\n  body { padding: 4px 0; }" : ""}
         srcDoc={srcDoc}
         sandbox="allow-same-origin allow-scripts"
         // On a color-scheme mismatch Chromium paints an opaque canvas behind the mail.
-        style={{ width: "100%", height, border: "none", overflow: "hidden", background: "transparent", colorScheme: darkMode ? "dark" : "light" }}
+        style={{ width: "100%", height, border: "none", overflow: "hidden", background: "transparent", colorScheme: darkMode ? "dark" : "light", opacity: fitted ? 1 : 0, transition: "opacity 140ms ease-out" }}
         onLoad={refit}
         aria-label={t("mailDetail.emailContent")}
       />
