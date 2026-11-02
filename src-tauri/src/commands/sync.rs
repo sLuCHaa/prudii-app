@@ -1936,7 +1936,7 @@ pub fn search_mails(
     query: String,
     account_id: Option<String>,
 ) -> Result<Vec<SearchResult>, String> {
-    let conn = db.lock_db();
+    let conn = db.read_db();
     search_mails_inner(&conn, &query, account_id.as_deref())
 }
 

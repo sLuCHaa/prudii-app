@@ -9,6 +9,8 @@ pub(crate) const SCHEMA_VERSION: u32 = 46;
 
 pub struct Database {
     pub conn: Mutex<Connection>,
+    // UI reads; under WAL they run while `conn` is busy writing (e.g. a sync batch).
+    read_conn: Mutex<Connection>,
     pub data_dir: PathBuf,
 }
 
@@ -27,8 +29,13 @@ impl Database {
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=30000;")?;
         mail_sort::register_functions(&conn)?;
 
+        let read_conn = Connection::open(&db_path)?;
+        read_conn.execute_batch("PRAGMA busy_timeout=30000; PRAGMA query_only=ON;")?;
+        mail_sort::register_functions(&read_conn)?;
+
         let db = Self {
             conn: Mutex::new(conn),
+            read_conn: Mutex::new(read_conn),
             data_dir: app_data_dir,
         };
         db.run_migrations()?;
@@ -41,6 +48,15 @@ impl Database {
     pub fn lock_db(&self) -> MutexGuard<'_, Connection> {
         self.conn.lock().unwrap_or_else(|poisoned| {
             log::warn!("Database mutex was poisoned, recovering...");
+            poisoned.into_inner()
+        })
+    }
+
+    /// Read-only connection for UI queries, never blocked by writes on `lock_db`.
+    /// Must not be held while taking `lock_db`, or vice versa.
+    pub fn read_db(&self) -> MutexGuard<'_, Connection> {
+        self.read_conn.lock().unwrap_or_else(|poisoned| {
+            log::warn!("Read connection mutex was poisoned, recovering...");
             poisoned.into_inner()
         })
     }

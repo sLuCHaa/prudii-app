@@ -32,7 +32,7 @@ fn get_folder_api_type(db: &Database, account_id: &str) -> (FolderApiType, Strin
 
 #[tauri::command(async)]
 pub fn list_accounts(db: State<'_, Database>) -> Result<Vec<Account>, String> {
-    let conn = db.lock_db();
+    let conn = db.read_db();
     list_accounts_inner(&conn)
 }
 
@@ -385,7 +385,7 @@ pub fn list_folders(
     db: State<'_, Database>,
     account_id: String,
 ) -> Result<Vec<Folder>, String> {
-    let conn = db.lock_db();
+    let conn = db.read_db();
     list_folders_inner(&conn, &account_id)
 }
 

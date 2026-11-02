@@ -32,7 +32,7 @@ pub fn list_category_mails(
             mail_columns("m.", false),
             crate::db::mail_sort::order_clause(sort.as_deref(), "m.", true),
         );
-        let conn = db.lock_db();
+        let conn = db.read_db();
         let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
         let mails = match &folder_id {
             Some(id) => stmt.query_map(rusqlite::params![category, limit, offset, id], map_mail_row),

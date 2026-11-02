@@ -247,7 +247,7 @@ pub(crate) fn filter_clause(filter: &Option<String>, prefix: &str) -> String {
 #[tauri::command(async)]
 pub fn list_mails(db: State<'_, Database>, folder_id: String, limit: Option<u32>, offset: Option<u32>, folder_filter: Option<String>, sort: Option<String>) -> Result<Vec<Mail>, String> {
     super::catch_panic(|| {
-        let conn = db.lock_db();
+        let conn = db.read_db();
         list_mails_inner(&conn, &folder_id, limit, offset, &folder_filter, sort.as_deref())
     })
 }
@@ -337,7 +337,7 @@ pub fn list_all_inbox_mails(db: State<'_, Database>, limit: Option<u32>, offset:
     let limit = limit.unwrap_or(500).min(2000);
     let offset = offset.unwrap_or(0);
     let extra = filter_clause(&folder_filter, "m.");
-    let conn = db.lock_db();
+    let conn = db.read_db();
     let cols = mail_columns("m.", false);
     let sql = format!("SELECT {cols}
              FROM mails m
@@ -374,7 +374,7 @@ pub fn list_filtered_mails(
     let offset = offset.unwrap_or(0);
     let extra = filter_clause(&folder_filter, "");
     let order = crate::db::mail_sort::order_clause(sort.as_deref(), "mails.", false);
-    let conn = db.lock_db();
+    let conn = db.read_db();
 
     let base_select = format!("SELECT {} FROM mails", mail_columns("", false));
 
@@ -430,7 +430,7 @@ pub fn list_filtered_mails(
 }
 
 fn get_mail_inner(db: &Database, mail_id: &str) -> Result<Option<Mail>, String> {
-    let conn = db.lock_db();
+    let conn = db.read_db();
     let result = conn
         .query_row(
             &format!("SELECT {} FROM mails WHERE id = ?1", mail_columns("", true)),
@@ -458,7 +458,7 @@ pub fn list_attachments(
     mail_id: String,
 ) -> Result<Vec<Attachment>, String> {
     super::catch_panic(|| {
-    let conn = db.lock_db();
+    let conn = db.read_db();
     let mut stmt = conn
         .prepare(
             "SELECT id, mail_id, filename, mime_type, size_bytes, content_id, is_inline, local_path, declared_inline FROM attachments WHERE mail_id = ?1 ORDER BY filename ASC",
@@ -810,7 +810,7 @@ pub async fn fetch_mail_body(
     // Also verify that mails flagged with attachments actually have attachment records;
     // if not, re-fetch to populate them (handles mails cached before attachment fixes).
     let can_use_cache = {
-        let conn = db.lock_db();
+        let conn = db.read_db();
         let has_body: bool = conn.query_row(
             "SELECT (body_html != '' OR body_text != '') FROM mails WHERE id = ?1",
             rusqlite::params![mail_id],
@@ -1225,7 +1225,7 @@ pub fn unsnooze_mail(db: State<'_, Database>, mail_id: String) -> Result<(), Str
 #[tauri::command(async)]
 pub fn list_snoozed_mails(db: State<'_, Database>, account_id: Option<String>) -> Result<Vec<Mail>, String> {
     super::catch_panic(|| {
-        let conn = db.lock_db();
+        let conn = db.read_db();
         let (sql, params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = if let Some(ref acc_id) = account_id {
             (
                 format!("SELECT {} FROM mails WHERE snoozed_until != '' AND snoozed_until > datetime('now') AND account_id = ?1 ORDER BY snoozed_until ASC", mail_columns("", false)),
@@ -2423,7 +2423,7 @@ pub fn thread_link_filter(n: usize, account_param: usize, prefix: &str) -> Strin
 /// Thread detection uses message_id, in_reply_to, and references headers.
 #[tauri::command(async)]
 pub fn get_thread_mails(db: State<'_, Database>, mail_id: String) -> Result<Vec<Mail>, String> {
-    let conn = db.lock_db();
+    let conn = db.read_db();
     get_thread_mails_inner(&conn, &mail_id)
 }
 
@@ -2895,7 +2895,7 @@ pub fn list_combined_folder_mails(db: State<'_, Database>, folder_type: String, 
     let limit = limit.unwrap_or(500).min(2000);
     let offset = offset.unwrap_or(0);
     let extra = filter_clause(&folder_filter, "m.");
-    let conn = db.lock_db();
+    let conn = db.read_db();
     let cols = mail_columns("m.", false);
     let sql = format!("SELECT {cols}
              FROM mails m
@@ -2921,7 +2921,7 @@ pub fn list_combined_folder_mails(db: State<'_, Database>, folder_type: String, 
 #[tauri::command(async)]
 pub fn count_folder_mails(db: State<'_, Database>, folder_id: String) -> Result<u32, String> {
     super::catch_panic(|| {
-        let conn = db.lock_db();
+        let conn = db.read_db();
         let count: u32 = conn
             .query_row(
                 "SELECT COUNT(*) FROM mails WHERE folder_id = ?1",
@@ -2938,7 +2938,7 @@ pub fn count_folder_mails(db: State<'_, Database>, folder_id: String) -> Result<
 #[tauri::command(async)]
 pub fn count_searchable_mails(db: State<'_, Database>, account_id: Option<String>) -> Result<u32, String> {
     super::catch_panic(|| {
-        let conn = db.lock_db();
+        let conn = db.read_db();
         let count: u32 = match account_id {
             Some(aid) => conn.query_row(
                 "SELECT COUNT(*) FROM mails WHERE account_id = ?1",
@@ -2968,7 +2968,7 @@ pub async fn empty_spam(app: tauri::AppHandle, db: State<'_, Database>, account_
 #[tauri::command(async)]
 pub fn count_combined_folder_mails(db: State<'_, Database>, folder_type: String) -> Result<u32, String> {
     super::catch_panic(|| {
-        let conn = db.lock_db();
+        let conn = db.read_db();
         let count: u32 = conn
             .query_row(
                 "SELECT COUNT(*) FROM mails m JOIN folders f ON m.folder_id = f.id WHERE f.folder_type = ?1",
