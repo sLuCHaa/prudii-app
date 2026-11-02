@@ -575,7 +575,28 @@ function VirtualMailList({
     const pending = pendingAnchor.current;
     const stale = pending !== null && virtualItems === pending.stale;
     committedItems.current = virtualItems;
-    if (!pending || stale) return;
+    if (!pending) {
+      // Rows changing under a scrolled list (new mail above, say) must not move what is on screen.
+      const anchor = scrollAnchors.get(viewKey);
+      const el = listRef.current;
+      const index = anchor ? virtualItems.findIndex((item) => listItemKey(item) === anchor.key) : -1;
+      if (!anchor || !el || index < 0) return;
+      const start = rowVirtualizer.getOffsetForIndex(index, "start")?.[0];
+      if (start !== undefined && Math.abs(el.scrollTop - (start + anchor.offset)) > 1) rowVirtualizer.scrollToOffset(start + anchor.offset);
+      // New rows sit at estimated heights until measured a frame later; settle on the real position.
+      let frames = 4;
+      const settle = () => {
+        const row = el.querySelector<HTMLElement>(`[data-row-key="${anchor.key}"]`);
+        if (row) {
+          const drift = row.getBoundingClientRect().top - el.getBoundingClientRect().top + anchor.offset;
+          if (Math.abs(drift) > 0.5) el.scrollTop += drift;
+        }
+        if (--frames > 0) requestAnimationFrame(settle);
+      };
+      requestAnimationFrame(settle);
+      return;
+    }
+    if (stale) return;
     if (virtualItems.length === 0 && Date.now() - pending.at < 1500) return;
     pendingAnchor.current = null;
     const index = virtualItems.findIndex((item) => listItemKey(item) === pending.anchor.key);
@@ -599,7 +620,8 @@ function VirtualMailList({
     else scrollAnchors.delete(viewKey);
   }, [listRef, rowVirtualizer, virtualItems, viewKey]);
 
-  // Scroll selected mail into view when keyboard-navigating (j/k)
+  // Scroll selected mail into view when keyboard-navigating (j/k). Keyed on the mail, not
+  // its index: new mail above shifts the index, and that must not scroll the list.
   useEffect(() => {
     if (selectedMailIndex < 0) return;
     const vIdx = virtualItems.findIndex(
@@ -608,7 +630,7 @@ function VirtualMailList({
     if (vIdx >= 0) {
       rowVirtualizer.scrollToIndex(vIdx, { align: "auto" });
     }
-  }, [selectedMailIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedMailId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fade newly paginated rows in once. virtualItems grows when a next page
   // loads; rows whose virtual index is >= the previous count are "new". Guard
@@ -1372,12 +1394,22 @@ export function MailList() {
   }, [queryData]);
 
 
+  const viewKey = JSON.stringify([selectedFolderId, activeFilter, showAllInboxes, activeCombinedFolder, showSnoozed, showAssigned, activeCategory]);
+  const dataViewRef = useRef<string | null>(null);
+  const shiftFromRef = useRef<{ tops: Map<string, number>; at: number; fadeNew: boolean } | null>(null);
+
   // Keyed on fetchedMails and pendingRemoveIds ONLY: further deps would re-run
   // setMails on every selection change and revert optimistic removals to the
   // stale query data. pendingRemoveIds belongs here because a delete's refetch
   // lands mid-sweep — keepRowsLeaving holds those rows until the tween ends,
   // and clearing the ids re-runs this to apply the settled list.
   useEffect(() => {
+    // Same view: new mail at the top glides the rows down instead of pushing them in one frame.
+    const sameView = dataViewRef.current === viewKey;
+    dataViewRef.current = viewKey;
+    if (sameView && listRef.current && !prefersReducedMotion()) {
+      shiftFromRef.current = { tops: snapshotRows(listRef.current), at: performance.now(), fadeNew: true };
+    }
     setMails(keepRowsLeaving(useAppStore.getState().mails, fetchedMails, pendingRemoveIds));
   }, [fetchedMails, setMails, pendingRemoveIds]);
 
@@ -1900,7 +1932,6 @@ export function MailList() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [filteredMails, selectedMailIndex, selectMail, setSelectedMailId, multiSelectMode, selectedMailIds, clearSelection, selectAllMails, setMails, mails, isSearchActive, searchResultsData, selectedMailId, contextMenu, invalidateMailQueries, handleArchiveSuccess, setPendingRemoveIds, toggleMailSelection, setSelectionSpan, setSelectedMailIndex, rowEstimate]);
 
-  const viewKey = JSON.stringify([selectedFolderId, activeFilter, showAllInboxes, activeCombinedFolder, showSnoozed, showAssigned, activeCategory]);
 
   // No entrance animation on folder switches (post-paint effects flash).
   const selectAfterRemoval = useCallback((remaining: Mail[], index: number) => {
@@ -1914,7 +1945,6 @@ export function MailList() {
     setSelectedMailId(remaining[Math.min(index, remaining.length - 1)].id);
   }, [setSelectedMailId]);
 
-  const shiftFromRef = useRef<Map<string, number> | null>(null);
 
   // The one exit path for rows leaving the list, single or bulk: the same tween
   // the folder-empty sweep uses, staggered so a selection cascades away instead
@@ -1927,7 +1957,7 @@ export function MailList() {
     const settle = (glide: boolean) => {
       const { mails: currentMails, selectedMailIndex: idx, pendingRemoveIds: stillPending } = useAppStore.getState();
       const remaining = currentMails.filter((m) => !removed.has(m.id));
-      if (glide && listRef.current) shiftFromRef.current = snapshotRows(listRef.current);
+      if (glide && listRef.current) shiftFromRef.current = { tops: snapshotRows(listRef.current), at: performance.now(), fadeNew: false };
       selectAfterRemoval(remaining, idx);
       setMails(remaining);
       // A second delete started mid-sweep owns the flag now; clearing it blindly
@@ -1956,9 +1986,10 @@ export function MailList() {
 
   useLayoutEffect(() => {
     const before = shiftFromRef.current;
-    if (!before || !listRef.current) return;
     shiftFromRef.current = null;
-    playRowShifts(listRef.current, before);
+    // A snapshot whose update never changed the list must not animate a later one.
+    if (!before || !listRef.current || performance.now() - before.at > 500) return;
+    playRowShifts(listRef.current, before.tops, before.fadeNew);
   }, [mails]);
 
   if (!selectedFolderId && !activeFilter && !showAllInboxes && !activeCombinedFolder && !showSnoozed && !showScheduled && !showAssigned) {

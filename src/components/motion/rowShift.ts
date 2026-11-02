@@ -39,12 +39,16 @@ export function snapshotRows(list: HTMLElement): Map<string, number> {
   return new Map(rowTops(list).tops.map((r) => [r.key, r.top]));
 }
 
-export function playRowShifts(list: HTMLElement, before: Map<string, number>): void {
+export function playRowShifts(list: HTMLElement, before: Map<string, number>, fadeNew = false): void {
   const { els, tops } = rowTops(list);
   const shifts = rowShifts(before, tops);
   // A shift past a whole viewport is a different list, not a closing gap.
   if (shifts.some((s) => Math.abs(s.delta) > list.clientHeight)) return;
   for (const { key, delta } of shifts) {
     els.get(key)?.animate?.([{ translate: `0 ${delta}px` }, { translate: "0 0" }], { duration: SHIFT_MS, easing: SHIFT_EASE });
+  }
+  if (!fadeNew) return;
+  for (const { key } of tops) {
+    if (!before.has(key)) els.get(key)?.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: SHIFT_MS, easing: SHIFT_EASE });
   }
 }
