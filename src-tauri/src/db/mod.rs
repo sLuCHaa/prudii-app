@@ -86,6 +86,8 @@ impl Database {
         let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_mails_folder_pinned_date ON mails(folder_id, is_pinned DESC, date DESC);");
         // search_attachments/count_attachments filter on is_inline = 0
         let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_attachments_inline ON attachments(is_inline, mail_id);");
+        // Body prefetch and backfill look for mails without a body; without this they read every body in the folder.
+        let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_mails_folder_missing_body ON mails(folder_id, date DESC) WHERE body_text = '' AND uid IS NOT NULL;");
 
         let _ = conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS ai_cache (
