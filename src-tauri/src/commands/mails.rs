@@ -2406,6 +2406,19 @@ pub async fn move_mail(
     Ok(())
 }
 
+/// Account test in every branch: wrapped around the whole OR, SQLite scans the account instead of using the norm indexes.
+pub fn thread_link_filter(n: usize, account_param: usize, prefix: &str) -> String {
+    let ph = (1..=n).map(|i| format!("?{}", i)).collect::<Vec<_>>().join(", ");
+    format!(
+        "({p}account_id = ?{a} AND {p}message_id_norm IN ({ph})) \
+         OR ({p}account_id = ?{a} AND {p}in_reply_to_norm IN ({ph})) \
+         OR ({p}account_id = ?{a} AND {p}thread_id_norm IN ({ph}))",
+        p = prefix,
+        a = account_param,
+        ph = ph
+    )
+}
+
 /// Get all mails in the same thread as the given mail.
 /// Thread detection uses message_id, in_reply_to, and references headers.
 #[tauri::command(async)]
@@ -2481,14 +2494,11 @@ pub fn get_thread_mails_inner(conn: &rusqlite::Connection, mail_id: &str) -> Res
         if frontier.is_empty() || related_ids.len() >= MAX_RELATED {
             break;
         }
-        let ph = (1..=frontier.len()).map(|i| format!("?{}", i)).collect::<Vec<_>>().join(", ");
         let step_sql = format!(
             "SELECT COALESCE(message_id, ''), COALESCE(in_reply_to, ''), COALESCE(thread_id, ''), COALESCE(\"references\", '')
                FROM mails
-              WHERE account_id = ?{1}
-                AND (message_id_norm IN ({0}) OR in_reply_to_norm IN ({0}) OR thread_id_norm IN ({0}))",
-            ph,
-            frontier.len() + 1
+              WHERE {}",
+            thread_link_filter(frontier.len(), frontier.len() + 1, "")
         );
         let mut step = conn.prepare(&step_sql).map_err(|e| e.to_string())?;
         let mut step_params: Vec<&dyn rusqlite::ToSql> =
@@ -2529,26 +2539,19 @@ pub fn get_thread_mails_inner(conn: &rusqlite::Connection, mail_id: &str) -> Res
         frontier = next;
     }
 
-    let placeholders: Vec<String> = related_ids.iter().enumerate().map(|(i, _)| format!("?{}", i + 1)).collect();
-    let placeholder_str = placeholders.join(", ");
-
     // Match message_id, in_reply_to, and thread_id within the same account via
     // the bracket-normalized generated columns (indexed — see db/mod.rs). The
     // old REPLACE()-in-WHERE variant full-scanned the table three times per
     // click, plus a full-account GROUP BY to collapse cross-folder duplicates;
     // dedup_mails/dedupe_thread_copies below do that in Rust over the already
     // small thread set instead.
-    let owner_param_idx = related_ids.len() + 1;
     let cols = mail_columns("m.", true);
     let simple_query = format!(
         "SELECT {cols}
          FROM mails m
-         WHERE m.account_id = ?{1}
-           AND (m.message_id_norm IN ({0})
-            OR m.in_reply_to_norm IN ({0})
-            OR m.thread_id_norm IN ({0}))
+         WHERE {}
          ORDER BY m.date ASC",
-        placeholder_str, owner_param_idx
+        thread_link_filter(related_ids.len(), related_ids.len() + 1, "m.")
     );
 
     let mut stmt = conn.prepare(&simple_query).map_err(|e| e.to_string())?;

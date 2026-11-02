@@ -3,7 +3,7 @@
 // Both run against a real SQLite file created by the production migrations,
 // so index/trigger/generated-column behavior is exercised for real.
 
-use prudii_lib::commands::mails::get_thread_mails_inner;
+use prudii_lib::commands::mails::{get_thread_mails_inner, thread_link_filter};
 use prudii_lib::commands::sync::search_mails_inner;
 use prudii_lib::db::Database;
 
@@ -189,4 +189,22 @@ fn search_ignores_empty_and_garbage_queries() {
     assert!(search_mails_inner(&conn, "", None).unwrap().is_empty());
     // FTS operator characters must not produce SQL errors
     assert!(search_mails_inner(&conn, "\"(*", None).is_ok());
+}
+
+#[test]
+fn thread_lookup_uses_the_norm_indexes() {
+    let db = fixture("plan");
+    let conn = db.lock_db();
+    let sql = format!("EXPLAIN QUERY PLAN SELECT id FROM mails WHERE {}", thread_link_filter(2, 3, ""));
+    let plan: Vec<String> = conn
+        .prepare(&sql)
+        .unwrap()
+        .query_map(rusqlite::params!["a", "b", "acc"], |r| r.get::<_, String>(3))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    let plan = plan.join(" | ");
+    for index in ["idx_mails_msgid_norm", "idx_mails_irt_norm", "idx_mails_tid_norm"] {
+        assert!(plan.contains(&format!("{index} (account_id=? AND")), "{plan}");
+    }
 }
