@@ -80,6 +80,14 @@ export function changeLanguage(lang: AppLanguage) {
   });
 }
 
+/** For a window loaded before the language last changed. */
+export async function applyStoredLanguage(): Promise<void> {
+  const lang = getInitialLanguage();
+  if (lang === i18n.language) return;
+  await ensureLanguageLoaded(lang);
+  await i18n.changeLanguage(lang);
+}
+
 /** Get the currently persisted language preference (may be "system"). */
 export function getLanguagePreference(): AppLanguage {
   const stored = localStorage.getItem(STORAGE_KEY);

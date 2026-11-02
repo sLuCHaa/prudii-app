@@ -22,6 +22,9 @@
     "core:window:allow-is-fullscreen",
     "core:window:allow-set-fullscreen",
     "core:window:allow-set-always-on-top",
+    "core:window:allow-center",
+    "core:window:allow-set-background-color",
+    "core:webview:allow-set-webview-background-color",
     "core:webview:allow-create-webview-window",
     {
       "identifier": "shell:allow-open",

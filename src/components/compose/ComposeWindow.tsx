@@ -12,6 +12,8 @@ import type { ComposeInitData, ComposeMode, ComposeFormHandle } from "./ComposeM
 import { isMacOS } from "../../lib/platform";
 import { isAccentHex, DEFAULT_ACCENT_HEX } from "../../lib/accents";
 import { useWindowsCaptionMaxButton, showSystemMenu } from "../../hooks/useWindowsCaption";
+import { useAppStore } from "../../stores/appStore";
+import { applyStoredLanguage } from "../../lib/i18n";
 
 // Standalone QueryClient for the compose window (needed because ComposeForm
 // internally calls useAccounts() which requires a QueryClientProvider context).
@@ -26,6 +28,9 @@ export function ComposeWindow() {
   useEffect(() => {
     if (!initData) return;
     const { appSettings, darkMode } = initData;
+    // A prepared window may have loaded before the theme or language last changed.
+    useAppStore.setState({ darkMode });
+    applyStoredLanguage().catch(() => {});
     document.documentElement.classList.toggle("dark", darkMode);
     // AppInner does this on mount for the main window; compose windows render without it.
     setWindowTheme(darkMode, appSettings.theme_mode === "system", "--c-bg-secondary").catch(() => {});

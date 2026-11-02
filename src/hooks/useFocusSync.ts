@@ -10,8 +10,11 @@ const OWN_WINDOW_PREFIXES = ["compose-", "backup"];
 // not to another app — writing a mail must not count as being away.
 async function blurredToOwnWindow(): Promise<boolean> {
   try {
-    const windows = await getAllWebviewWindows();
-    return windows.some((w) => OWN_WINDOW_PREFIXES.some((prefix) => w.label.startsWith(prefix)));
+    // Visible only: a prepared compose window waits hidden all the time.
+    for (const w of await getAllWebviewWindows()) {
+      if (OWN_WINDOW_PREFIXES.some((prefix) => w.label.startsWith(prefix)) && (await w.isVisible())) return true;
+    }
+    return false;
   } catch {
     return false;
   }

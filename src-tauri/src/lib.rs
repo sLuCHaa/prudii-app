@@ -1281,6 +1281,13 @@ pub fn run() {
                     let _ = window.hide();
                 } else if hold_quit_for_export(app) {
                     api.prevent_close();
+                } else {
+                    // The prepared compose window never shows; left alone it would keep the process alive.
+                    for (label, w) in app.webview_windows() {
+                        if label.starts_with("compose-") && !w.is_visible().unwrap_or(true) {
+                            let _ = w.destroy();
+                        }
+                    }
                 }
                 // If !show_in_tray, allow the default close → app exits
             }

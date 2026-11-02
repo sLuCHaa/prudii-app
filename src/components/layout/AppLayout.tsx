@@ -16,7 +16,7 @@ import { UpdateBanner } from "../ui/UpdateBanner";
 import { WhatsNew } from "../ui/WhatsNew";
 import { WelcomeScreen } from "../accounts/WelcomeScreen";
 import { useAppStore } from "../../stores/appStore";
-import { openComposeWindow } from "../../lib/composeWindow";
+import { openComposeWindow, scheduleSpareCompose } from "../../lib/composeWindow";
 import { useAccounts } from "../../hooks/useAccounts";
 import { useNativeShell } from "../../hooks/useNativeShell";
 
@@ -51,6 +51,11 @@ export function AppLayout() {
   useNativeShell();
   // First-run: accounts loaded (not undefined) and empty → show welcome screen.
   const noAccounts = accounts !== undefined && accounts.length === 0;
+
+  // Late enough to stay clear of startup work.
+  useEffect(() => {
+    scheduleSpareCompose(4000);
+  }, []);
 
   // ONLY depends on composeOpen — all other values read imperatively from store.
   useEffect(() => {
