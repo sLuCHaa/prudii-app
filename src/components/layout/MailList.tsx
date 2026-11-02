@@ -40,6 +40,7 @@ import { playRowShifts, snapshotRows } from "../motion/rowShift";
 import { keepRowsLeaving } from "../../lib/mailListSync";
 import { moveTargets } from "../../lib/moveTargets";
 import { ContextMenu } from "../ui/ContextMenu";
+import { Tooltip } from "../ui/Tooltip";
 import { SNOOZE_PRESETS, toSnoozeStamp } from "../../lib/snooze";
 
 /** Keeps the snooze menu right-aligned with the button that opens it. */
@@ -962,81 +963,85 @@ function VirtualMailList({
                       className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover/mail:opacity-100 pointer-events-none group-hover/mail:pointer-events-auto"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const preActionVisible = filteredMails.length;
-                          setPendingRemoveIds([mail.id]);
-                          runMailAction(() => archiveMail(mail.id), {
-                            errorKey: "errors.archive",
-                            invalidate: invalidateMailQueries,
-                            onPendingClear: () => setPendingRemoveIds([]),
-                            onSuccess: () => onArchiveSuccess([mail.id], preActionVisible),
-                          });
-                        }}
-                        className="w-7 h-7 rounded-md bg-surface hover:bg-hover border border-border flex items-center justify-center text-text-secondary"
-                        title={t("mailDetail.archive")}
-                        aria-label={t("mailDetail.archive")}
-                      >
-                        <Archive className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const prev = mail.is_starred;
-                          setMails((prev_) =>
-                            prev_.map((m) =>
-                              m.id === mail.id ? { ...m, is_starred: !prev } : m
-                            )
-                          );
-                          toggleStarMutation.mutate(mail.id, {
-                            onError: () =>
-                              setMails((prev_) =>
-                                prev_.map((m) =>
-                                  m.id === mail.id ? { ...m, is_starred: prev } : m
-                                )
-                              ),
-                          });
-                        }}
-                        className="w-7 h-7 rounded-md bg-surface hover:bg-hover border border-border flex items-center justify-center"
-                        title={t("mailDetail.star")}
-                        aria-label={t("mailDetail.star")}
-                      >
-                        <Star weight={mail.is_starred ? "fill" : undefined} className={`w-3.5 h-3.5 ${mail.is_starred ? "text-warning" : "text-text-secondary"}`} />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setPendingRemoveIds([mail.id]);
-                          runMailAction(() => trashMail(mail.id), {
-                            errorKey: "errors.trash",
-                            invalidate: invalidateMailQueries,
-                            onPendingClear: () => setPendingRemoveIds([]),
-                          });
-                        }}
-                        className="w-7 h-7 rounded-md bg-surface hover:bg-hover border border-border flex items-center justify-center text-danger"
-                        title={t("mailDetail.trash")}
-                        aria-label={t("mailDetail.trash")}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        // Kept from the document-level mousedown that ContextMenu closes
-                        // on, so a second click on this button toggles instead of
-                        // dismissing and immediately reopening the menu.
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openSnoozeMenu(e, mail);
-                        }}
-                        className={`w-7 h-7 rounded-md hover:bg-hover border border-border flex items-center justify-center text-text-secondary ${
-                          snoozeMenuMailId === mail.id ? "bg-hover" : "bg-surface"
-                        }`}
-                        title={t("snooze.snooze")}
-                        aria-label={t("snooze.snooze")}
-                      >
-                        <Clock className="w-3.5 h-3.5" />
-                      </button>
+                      <Tooltip label={t("mailDetail.archive")}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const preActionVisible = filteredMails.length;
+                            setPendingRemoveIds([mail.id]);
+                            runMailAction(() => archiveMail(mail.id), {
+                              errorKey: "errors.archive",
+                              invalidate: invalidateMailQueries,
+                              onPendingClear: () => setPendingRemoveIds([]),
+                              onSuccess: () => onArchiveSuccess([mail.id], preActionVisible),
+                            });
+                          }}
+                          className="w-7 h-7 rounded-md bg-surface hover:bg-hover border border-border flex items-center justify-center text-text-secondary"
+                          aria-label={t("mailDetail.archive")}
+                        >
+                          <Archive className="w-3.5 h-3.5" />
+                        </button>
+                      </Tooltip>
+                      <Tooltip label={t("mailDetail.star")}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const prev = mail.is_starred;
+                            setMails((prev_) =>
+                              prev_.map((m) =>
+                                m.id === mail.id ? { ...m, is_starred: !prev } : m
+                              )
+                            );
+                            toggleStarMutation.mutate(mail.id, {
+                              onError: () =>
+                                setMails((prev_) =>
+                                  prev_.map((m) =>
+                                    m.id === mail.id ? { ...m, is_starred: prev } : m
+                                  )
+                                ),
+                            });
+                          }}
+                          className="w-7 h-7 rounded-md bg-surface hover:bg-hover border border-border flex items-center justify-center"
+                          aria-label={t("mailDetail.star")}
+                        >
+                          <Star weight={mail.is_starred ? "fill" : undefined} className={`w-3.5 h-3.5 ${mail.is_starred ? "text-warning" : "text-text-secondary"}`} />
+                        </button>
+                      </Tooltip>
+                      <Tooltip label={t("mailDetail.trash")}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPendingRemoveIds([mail.id]);
+                            runMailAction(() => trashMail(mail.id), {
+                              errorKey: "errors.trash",
+                              invalidate: invalidateMailQueries,
+                              onPendingClear: () => setPendingRemoveIds([]),
+                            });
+                          }}
+                          className="w-7 h-7 rounded-md bg-surface hover:bg-hover border border-border flex items-center justify-center text-danger"
+                          aria-label={t("mailDetail.trash")}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </Tooltip>
+                      <Tooltip label={t("snooze.snooze")}>
+                        <button
+                          // Kept from the document-level mousedown that ContextMenu closes
+                          // on, so a second click on this button toggles instead of
+                          // dismissing and immediately reopening the menu.
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openSnoozeMenu(e, mail);
+                          }}
+                          className={`w-7 h-7 rounded-md hover:bg-hover border border-border flex items-center justify-center text-text-secondary ${
+                            snoozeMenuMailId === mail.id ? "bg-hover" : "bg-surface"
+                          }`}
+                          aria-label={t("snooze.snooze")}
+                        >
+                          <Clock className="w-3.5 h-3.5" />
+                        </button>
+                      </Tooltip>
                     </div>
                   )}
                 </div>
@@ -1953,86 +1958,91 @@ export function MailList() {
             </button>
           </div>
           <div className="flex items-center gap-0.5">
-            <button
-              onClick={() => {
-                const ids = Array.from(selectedMailIds);
-                setMails((prev) => prev.map((m) => selectedMailIds.has(m.id) ? { ...m, is_read: true } : m));
-                clearSelection();
-                runMailAction(() => batchUpdateMails(ids, "mark_read"), {
-                  errorKey: "errors.markAllRead",
-                  invalidate: invalidateMailQueries,
-                });
-              }}
-              className="p-1.5 rounded-control hover:bg-hover transition-colors text-text-secondary hover:text-accent"
-              title={t("mailList.markAllRead")}
-              aria-label={t("mailList.markAllRead")}
-            >
-              <MailOpen className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => {
-                const ids = Array.from(selectedMailIds);
-                setMails((prev) => prev.map((m) => selectedMailIds.has(m.id) ? { ...m, is_read: false } : m));
-                clearSelection();
-                runMailAction(() => batchUpdateMails(ids, "mark_unread"), {
-                  errorKey: "errors.markAllRead",
-                  invalidate: invalidateMailQueries,
-                });
-              }}
-              className="p-1.5 rounded-control hover:bg-hover transition-colors text-text-secondary hover:text-accent"
-              title={t("mailList.markAllUnread")}
-              aria-label={t("mailList.markAllUnread")}
-            >
-              <MailIcon className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => {
-                const ids = Array.from(selectedMailIds);
-                setMails((prev) => prev.map((m) => selectedMailIds.has(m.id) ? { ...m, is_starred: true } : m));
-                clearSelection();
-                runMailAction(() => batchUpdateMails(ids, "star"), {
-                  errorKey: "errors.batchUpdate",
-                  invalidate: invalidateMailQueries,
-                });
-              }}
-              className="p-1.5 rounded-control hover:bg-hover transition-colors text-text-secondary hover:text-warning"
-              title={t("mailDetail.star")}
-              aria-label={t("mailDetail.star")}
-            >
-              <Star className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => {
-                const ids = Array.from(selectedMailIds);
-                setPendingRemoveIds(ids);
-                clearSelection();
-                runMailAction(() => batchUpdateMails(ids, "archive"), {
-                  errorKey: "errors.batchUpdate",
-                  invalidate: invalidateMailQueries,
-                });
-              }}
-              className="p-1.5 rounded-control hover:bg-hover transition-colors text-text-secondary hover:text-accent"
-              title={t("mailDetail.archive")}
-              aria-label={t("mailDetail.archive")}
-            >
-              <Archive className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => {
-                const ids = Array.from(selectedMailIds);
-                setPendingRemoveIds(ids);
-                clearSelection();
-                runMailAction(() => batchUpdateMails(ids, "trash"), {
-                  errorKey: "errors.batchUpdate",
-                  invalidate: invalidateMailQueries,
-                });
-              }}
-              className="p-1.5 rounded-control hover:bg-hover transition-colors text-text-secondary hover:text-danger"
-              title={t("mailDetail.trash")}
-              aria-label={t("mailDetail.trash")}
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+            <Tooltip label={t("mailList.markAllRead")}>
+              <button
+                onClick={() => {
+                  const ids = Array.from(selectedMailIds);
+                  setMails((prev) => prev.map((m) => selectedMailIds.has(m.id) ? { ...m, is_read: true } : m));
+                  clearSelection();
+                  runMailAction(() => batchUpdateMails(ids, "mark_read"), {
+                    errorKey: "errors.markAllRead",
+                    invalidate: invalidateMailQueries,
+                  });
+                }}
+                className="p-1.5 rounded-control hover:bg-hover transition-colors text-text-secondary hover:text-accent"
+                aria-label={t("mailList.markAllRead")}
+              >
+                <MailOpen className="w-4 h-4" />
+              </button>
+            </Tooltip>
+            <Tooltip label={t("mailList.markAllUnread")}>
+              <button
+                onClick={() => {
+                  const ids = Array.from(selectedMailIds);
+                  setMails((prev) => prev.map((m) => selectedMailIds.has(m.id) ? { ...m, is_read: false } : m));
+                  clearSelection();
+                  runMailAction(() => batchUpdateMails(ids, "mark_unread"), {
+                    errorKey: "errors.markAllRead",
+                    invalidate: invalidateMailQueries,
+                  });
+                }}
+                className="p-1.5 rounded-control hover:bg-hover transition-colors text-text-secondary hover:text-accent"
+                aria-label={t("mailList.markAllUnread")}
+              >
+                <MailIcon className="w-4 h-4" />
+              </button>
+            </Tooltip>
+            <Tooltip label={t("mailDetail.star")}>
+              <button
+                onClick={() => {
+                  const ids = Array.from(selectedMailIds);
+                  setMails((prev) => prev.map((m) => selectedMailIds.has(m.id) ? { ...m, is_starred: true } : m));
+                  clearSelection();
+                  runMailAction(() => batchUpdateMails(ids, "star"), {
+                    errorKey: "errors.batchUpdate",
+                    invalidate: invalidateMailQueries,
+                  });
+                }}
+                className="p-1.5 rounded-control hover:bg-hover transition-colors text-text-secondary hover:text-warning"
+                aria-label={t("mailDetail.star")}
+              >
+                <Star className="w-4 h-4" />
+              </button>
+            </Tooltip>
+            <Tooltip label={t("mailDetail.archive")}>
+              <button
+                onClick={() => {
+                  const ids = Array.from(selectedMailIds);
+                  setPendingRemoveIds(ids);
+                  clearSelection();
+                  runMailAction(() => batchUpdateMails(ids, "archive"), {
+                    errorKey: "errors.batchUpdate",
+                    invalidate: invalidateMailQueries,
+                  });
+                }}
+                className="p-1.5 rounded-control hover:bg-hover transition-colors text-text-secondary hover:text-accent"
+                aria-label={t("mailDetail.archive")}
+              >
+                <Archive className="w-4 h-4" />
+              </button>
+            </Tooltip>
+            <Tooltip label={t("mailDetail.trash")}>
+              <button
+                onClick={() => {
+                  const ids = Array.from(selectedMailIds);
+                  setPendingRemoveIds(ids);
+                  clearSelection();
+                  runMailAction(() => batchUpdateMails(ids, "trash"), {
+                    errorKey: "errors.batchUpdate",
+                    invalidate: invalidateMailQueries,
+                  });
+                }}
+                className="p-1.5 rounded-control hover:bg-hover transition-colors text-text-secondary hover:text-danger"
+                aria-label={t("mailDetail.trash")}
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </Tooltip>
           </div>
         </div>
       ) : (
@@ -2056,21 +2066,22 @@ export function MailList() {
                       {viewTitle}
                     </h2>
                     {(activeFilter || showAllInboxes || activeCombinedFolder || showSnoozed || showScheduled || showAssigned) && (
-                      <button
-                        onClick={() => {
-                          setActiveFilter(null);
-                          setShowAllInboxes(false);
-                          setActiveCombinedFolder(null);
-                          if (showSnoozed) useAppStore.getState().setShowSnoozed(false);
-                          if (showScheduled) useAppStore.getState().setShowScheduled(false);
-                          if (showAssigned) useAppStore.getState().setShowAssigned(false);
-                        }}
-                        className="p-0.5 rounded hover:bg-hover transition-colors text-text-tertiary"
-                        title={t("mailList.clear")}
-                        aria-label={t("mailList.clear")}
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
+                      <Tooltip label={t("mailList.clear")}>
+                        <button
+                          onClick={() => {
+                            setActiveFilter(null);
+                            setShowAllInboxes(false);
+                            setActiveCombinedFolder(null);
+                            if (showSnoozed) useAppStore.getState().setShowSnoozed(false);
+                            if (showScheduled) useAppStore.getState().setShowScheduled(false);
+                            if (showAssigned) useAppStore.getState().setShowAssigned(false);
+                          }}
+                          className="p-0.5 rounded hover:bg-hover transition-colors text-text-tertiary"
+                          aria-label={t("mailList.clear")}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </Tooltip>
                     )}
                     <span className="text-xs text-text-tertiary">· {totalCount}</span>
                   </>

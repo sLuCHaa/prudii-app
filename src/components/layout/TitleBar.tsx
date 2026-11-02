@@ -13,6 +13,7 @@ import { NumberTween } from "../motion/NumberTween";
 import { QuickAddPopover } from "../tasks/QuickAdd";
 import { useWindowsCaptionMaxButton, showSystemMenu } from "../../hooks/useWindowsCaption";
 import AppLogo from "../../assets/logo.webp";
+import { Tooltip } from "../ui/Tooltip";
 
 export function TitleBar() {
   const { t } = useTranslation();
@@ -88,53 +89,57 @@ export function TitleBar() {
       <div className="flex h-full">
         <PrivacyBadge />
         {mailViewVisible && (
-          <button
-            onClick={() => setAgendaRailOpen(!agendaRailOpen)}
-            aria-pressed={agendaRailOpen}
-            className={`inline-flex items-center justify-center w-11 h-full hover:bg-hover transition-colors ${agendaRailOpen ? "text-accent" : "text-text-secondary"}`}
-            title={t("calendar.rail.toggle")}
-            aria-label={t("calendar.rail.toggle")}
-          >
-            <PanelRight size={14} strokeWidth={1.5} />
-          </button>
+          <Tooltip label={t("calendar.rail.toggle")} className="h-full">
+            <button
+              onClick={() => setAgendaRailOpen(!agendaRailOpen)}
+              aria-pressed={agendaRailOpen}
+              className={`inline-flex items-center justify-center w-11 h-full hover:bg-hover transition-colors ${agendaRailOpen ? "text-accent" : "text-text-secondary"}`}
+              aria-label={t("calendar.rail.toggle")}
+            >
+              <PanelRight size={14} strokeWidth={1.5} />
+            </button>
+          </Tooltip>
         )}
-        <button
-          onClick={() => setShowCalendar(true)}
-          className="inline-flex items-center justify-center w-11 h-full hover:bg-hover transition-colors text-text-secondary"
-          title={t("calendar.title")}
-          aria-label={t("calendar.title")}
-        >
-          <CalendarDays size={14} strokeWidth={1.5} />
-        </button>
-        <button
-          ref={tasksButtonRef}
-          onClick={(e) => { if (e.shiftKey) openQuickAdd(); else setShowTasks(true); }}
-          onContextMenu={(e) => {
-            // Otherwise this bubbles to the title bar's drag-region onContextMenu and opens the OS window menu.
-            e.preventDefault();
-            e.stopPropagation();
-            openQuickAdd();
-          }}
-          className="relative inline-flex items-center justify-center w-11 h-full hover:bg-hover transition-colors text-text-secondary"
-          title={t("tasks.title")}
-          aria-label={t("tasks.title")}
-        >
-          <ClipboardList size={14} strokeWidth={1.5} />
-          {openTaskCount > 0 && (
-            <span className="absolute top-1.5 right-1.5 min-w-[14px] h-[14px] px-1 rounded-full bg-accent text-white text-[9px] leading-[14px] font-semibold">
-              <NumberTween from={0} to={openTaskCount} duration={400} />
-            </span>
-          )}
-        </button>
+        <Tooltip label={t("calendar.title")} className="h-full">
+          <button
+            onClick={() => setShowCalendar(true)}
+            className="inline-flex items-center justify-center w-11 h-full hover:bg-hover transition-colors text-text-secondary"
+            aria-label={t("calendar.title")}
+          >
+            <CalendarDays size={14} strokeWidth={1.5} />
+          </button>
+        </Tooltip>
+        <Tooltip label={t("tasks.title")} className="h-full">
+          <button
+            ref={tasksButtonRef}
+            onClick={(e) => { if (e.shiftKey) openQuickAdd(); else setShowTasks(true); }}
+            onContextMenu={(e) => {
+              // Otherwise this bubbles to the title bar's drag-region onContextMenu and opens the OS window menu.
+              e.preventDefault();
+              e.stopPropagation();
+              openQuickAdd();
+            }}
+            className="relative inline-flex items-center justify-center w-11 h-full hover:bg-hover transition-colors text-text-secondary"
+            aria-label={t("tasks.title")}
+          >
+            <ClipboardList size={14} strokeWidth={1.5} />
+            {openTaskCount > 0 && (
+              <span className="absolute top-1.5 right-1.5 min-w-[14px] h-[14px] px-1 rounded-full bg-accent text-white text-[9px] leading-[14px] font-semibold">
+                <NumberTween from={0} to={openTaskCount} duration={400} />
+              </span>
+            )}
+          </button>
+        </Tooltip>
         {quickAddAnchor && <QuickAddPopover anchorRect={quickAddAnchor} onClose={() => setQuickAddAnchor(null)} />}
-        <button
-          onClick={() => setShowSettings(true)}
-          className="inline-flex items-center justify-center w-11 h-full hover:bg-hover transition-colors text-text-secondary"
-          title={t("titleBar.settings")}
-          aria-label={t("titleBar.settings")}
-        >
-          <GearIcon size={14} />
-        </button>
+        <Tooltip label={t("titleBar.settings")} className="h-full">
+          <button
+            onClick={() => setShowSettings(true)}
+            className="inline-flex items-center justify-center w-11 h-full hover:bg-hover transition-colors text-text-secondary"
+            aria-label={t("titleBar.settings")}
+          >
+            <GearIcon size={14} />
+          </button>
+        </Tooltip>
         {/* macOS uses the native traffic lights instead (overlay title bar) */}
         {!isMacOS && (
           <>

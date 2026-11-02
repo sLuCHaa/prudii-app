@@ -37,6 +37,7 @@ import { toastError, causeMessage } from "../../lib/errorToast";
 import { inMailPhase, syncFolderLine, syncStatusKey } from "../../lib/syncProgress";
 import { useSyncRun } from "../../hooks/useSyncRun";
 import { isMailDrag, readMailDrag } from "../../lib/mailDrag";
+import { Tooltip } from "../ui/Tooltip";
 
 // Throttles on-demand syncs of Gmail's "All Mail" archive folder (excluded from
 // routine sync) so opening it repeatedly doesn't re-trigger a full folder sync.
@@ -771,13 +772,14 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
             <Loader2 className="w-3 h-3 text-accent animate-spin" />
           </span>
         ) : null}
-        <button
-          onClick={() => setShowCreateDialog(true)}
-          className="p-1 rounded-md hover:bg-hover transition-colors opacity-0 group-hover:opacity-100 shrink-0 text-text-tertiary"
-          title={t("sidebar.newFolder")}
-        >
-          <FolderPlus className="w-3 h-3" />
-        </button>
+        <Tooltip label={t("sidebar.newFolder")} className="shrink-0">
+          <button
+            onClick={() => setShowCreateDialog(true)}
+            className="p-1 rounded-md hover:bg-hover transition-colors opacity-0 group-hover:opacity-100 shrink-0 text-text-tertiary"
+          >
+            <FolderPlus className="w-3 h-3" />
+          </button>
+        </Tooltip>
         <AnimatedSyncButton
           isSyncing={isSyncing}
           onClick={handleSync}
@@ -1398,21 +1400,23 @@ export function Sidebar() {
         <div className="p-2 border-t border-border flex flex-col items-center gap-1">
           <MailExportProgress compact className="mb-1" />
           {canAddAccount && (
-            <button
-              onClick={() => setShowAccountWizard(true)}
-              className="p-1.5 rounded-md hover:bg-hover transition-colors text-text-secondary"
-              title={t("sidebar.addAccount")}
-            >
-              <Plus className="w-4 h-4" />
-            </button>
+            <Tooltip label={t("sidebar.addAccount")}>
+              <button
+                onClick={() => setShowAccountWizard(true)}
+                className="p-1.5 rounded-md hover:bg-hover transition-colors text-text-secondary"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            </Tooltip>
           )}
-          <button
-            onClick={toggleSidebar}
-            className="p-1.5 rounded-md hover:bg-hover transition-colors text-text-tertiary"
-            title={t("sidebar.expandSidebar", { defaultValue: "Expand sidebar" })}
-          >
-            <PanelLeftOpen className="w-4 h-4" />
-          </button>
+          <Tooltip label={t("sidebar.expandSidebar", { defaultValue: "Expand sidebar" })}>
+            <button
+              onClick={toggleSidebar}
+              className="p-1.5 rounded-md hover:bg-hover transition-colors text-text-tertiary"
+            >
+              <PanelLeftOpen className="w-4 h-4" />
+            </button>
+          </Tooltip>
         </div>
       </div>
     );
@@ -1496,13 +1500,14 @@ export function Sidebar() {
               </div>
             )}
           </div>
-          <button
-            onClick={toggleSidebar}
-            className="p-1.5 rounded-md hover:bg-hover transition-colors text-text-tertiary shrink-0"
-            title={t("sidebar.collapseSidebar", { defaultValue: "Collapse sidebar" })}
-          >
-            <PanelLeftClose className="w-4 h-4" />
-          </button>
+          <Tooltip label={t("sidebar.collapseSidebar", { defaultValue: "Collapse sidebar" })} className="shrink-0">
+            <button
+              onClick={toggleSidebar}
+              className="p-1.5 rounded-md hover:bg-hover transition-colors text-text-tertiary shrink-0"
+            >
+              <PanelLeftClose className="w-4 h-4" />
+            </button>
+          </Tooltip>
         </div>
       </div>
     </div>
