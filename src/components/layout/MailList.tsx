@@ -37,6 +37,7 @@ import { InboxZeroFlight } from "../motion/InboxZeroFlight";
 import { ENTRANCE, prefersReducedMotion } from "../motion/tokens";
 import { SWEEP_MAILS_EVENT, SWEEP_TWEEN, type SweepDetail } from "../motion/sweepMails";
 import { playRowShifts, snapshotRows } from "../motion/rowShift";
+import { launchSubjectFly } from "../motion/subjectFly";
 import { keepRowsLeaving } from "../../lib/mailListSync";
 import { moveTargets } from "../../lib/moveTargets";
 import { ContextMenu } from "../ui/ContextMenu";
@@ -998,6 +999,7 @@ function VirtualMailList({
 
                       <div className="mt-0.5 flex items-center gap-2">
                         <span
+                          data-subject
                           className={`flex-1 min-w-0 truncate text-sm ${
                             !mail.is_read ? "text-text" : "text-text-secondary"
                           }`}
@@ -1788,10 +1790,13 @@ export function MailList() {
       } else if (multiSelectMode) {
         toggleMailSelection(mail.id);
       } else {
+        if (e.type === "click" && mail.id !== selectedMailId) {
+          launchSubjectFly(mail.id, (e.currentTarget as HTMLElement).querySelector("[data-subject]"));
+        }
         selectMail(index);
       }
     },
-    [multiSelectMode, toggleMailSelection, selectMailRange, filteredMails, selectMail]
+    [multiSelectMode, toggleMailSelection, selectMailRange, filteredMails, selectMail, selectedMailId]
   );
 
   const isSearchActive = searchOpen && searchQuery.length >= 2;

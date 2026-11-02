@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { motion, useReducedMotion } from "motion/react";
+import { subjectFlyPending } from "../motion/subjectFly";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "../../stores/appStore";
 import { markAsRead, getMail } from "../../lib/tauri";
@@ -317,6 +318,8 @@ export function MailDetail() {
   useEffect(() => {
     if (mail) lastShown.current = { id: mail.id, index: selectedMailIndex };
   }, [mail?.id, selectedMailIndex]);
+  // Opened by a click, the title flies over from the list row; the pane itself only fades.
+  const flying = useMemo(() => subjectFlyPending(mail?.id), [mail?.id]);
 
   if (!mail) {
     return <NoSelectionState />;
@@ -330,7 +333,7 @@ export function MailDetail() {
     <div ref={contentRef} className="flex flex-col h-full">
       <motion.div
         key={mail.id}
-        initial={reduceMotion ? false : { opacity: 0, y: enterFrom * 10 }}
+        initial={reduceMotion ? false : { opacity: 0, y: flying ? 0 : enterFrom * 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.16, ease: "easeOut" }}
         className="flex flex-col h-full min-h-0"
