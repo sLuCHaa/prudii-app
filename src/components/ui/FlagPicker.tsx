@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Flag, Check } from "lucide-react";
+import { Flag, Check } from "../icons";
 import { useTranslation } from "react-i18next";
 import { MAIL_FLAG_COLORS, type MailFlag } from "../../types";
 import { FLAG_ORDER } from "../../lib/mailFlags";

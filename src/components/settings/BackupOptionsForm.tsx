@@ -1,4 +1,4 @@
-import { Settings2, HardDrive, Folder, Mail, Paperclip, ListChecks, CalendarDays, KeyRound } from "lucide-react";
+import { Settings2, HardDrive, Folder, Mail, Paperclip, ListChecks, CalendarDays, KeyRound } from "../icons";
 import { useTranslation } from "react-i18next";
 import type { BackupOptions } from "../../types";
 import type { ValidateBackupOptionsResult } from "../../lib/backupOptions";

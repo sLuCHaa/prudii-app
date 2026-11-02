@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Repeat } from "lucide-react";
+import { Repeat } from "../icons";
 import type { EditScope } from "../../types/calendar";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 

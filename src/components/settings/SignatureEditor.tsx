@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Code, Type, Eye } from "lucide-react";
+import { Code, Type, Eye } from "../icons";
 import { useTranslation } from "react-i18next";
 import { escapeHtml, sanitizeSignatureHtml, sanitizeSignatureHtmlReport } from "../../lib/sanitize";
 import {

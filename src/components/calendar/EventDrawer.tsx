@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { motion, useReducedMotion } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
 import { addDays, differenceInCalendarDays, format } from "date-fns";
-import { AlignLeft, Bell, CalendarDays, Clock, MapPin, Repeat, Trash2, Users, Video, X } from "lucide-react";
+import { AlignLeft, Bell, CalendarDays, Clock, MapPin, Repeat, Trash2, Users, Video, X } from "../icons";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { EditScope, EventDetail, EventEditorTarget, EventPatch, EventTimes, Occurrence } from "../../types/calendar";
 import { listOccurrences } from "../../lib/tauri";

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ImageOff, Eye } from "lucide-react";
-import { Seal as Shield } from "../icons";
+import { ImageOff, Eye, SealCheck as Shield } from "../icons";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";
 

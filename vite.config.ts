@@ -31,6 +31,14 @@ export default defineConfig(async (): Promise<UserConfig> => ({
               minSize: 1,
             },
             {
+              // Phosphor liefert pro Icon alle sechs Gewichte mit; eigener
+              // Chunk, damit das nicht in einem App-Chunk untergeht.
+              name: "icons",
+              test: /node_modules[\\/]@phosphor-icons[\\/]/,
+              priority: 15,
+              minSize: 1,
+            },
+            {
               name: "vendor",
               test: /node_modules[\\/](react|react-dom|@tanstack[\\/]react-query|i18next|react-i18next)[\\/]/,
               priority: 10,

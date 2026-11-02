@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, ChevronLeft, ChevronRight, Download } from "lucide-react";
+import { X, ChevronLeft, ChevronRight, Download } from "../icons";
 import { useTranslation } from "react-i18next";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { formatFileSize } from "../../lib/fileSize";

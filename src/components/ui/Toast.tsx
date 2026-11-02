@@ -4,7 +4,7 @@
 
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, X, AlertCircle, Info } from "lucide-react";
+import { Check, X, AlertCircle, Info } from "../icons";
 import { useAppStore } from "../../stores/appStore";
 import { StackedToast, type StackedToastItem } from "../motion/StackedToast";
 

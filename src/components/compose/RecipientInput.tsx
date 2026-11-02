@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { X } from "lucide-react";
+import { X } from "../icons";
 import { useTranslation } from "react-i18next";
 import { getContactDomains, searchContacts } from "../../lib/tauri";
 import type { Contact } from "../../types";

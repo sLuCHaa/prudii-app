@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Download, AlertTriangle, CheckCircle, Loader2 } from "lucide-react";
+import { Download, AlertTriangle, CheckCircle, Loader2 } from "../icons";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useTranslation } from "react-i18next";

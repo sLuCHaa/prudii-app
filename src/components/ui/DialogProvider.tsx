@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect } from "react";
-import { Info, CheckCircle, Trash2, AlertCircle } from "lucide-react";
+import { Info, CheckCircle, Trash2, AlertCircle } from "../icons";
 import { useTranslation } from "react-i18next";
 import gsap from "gsap";
 import { Button } from "./Button";

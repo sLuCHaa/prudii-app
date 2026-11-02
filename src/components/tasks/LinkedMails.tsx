@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { X } from "lucide-react";
+import { X } from "../icons";
 import type { TaskMailLink } from "../../types";
 import { useTaskLinks } from "../../hooks/useTasks";
 import { useAppStore } from "../../stores/appStore";

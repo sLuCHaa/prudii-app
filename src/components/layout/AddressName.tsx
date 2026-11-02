@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Copy, Pencil } from "lucide-react";
+import { Copy, Pencil } from "../icons";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { Tooltip } from "../ui/Tooltip";
 import { ContextMenu } from "../ui/ContextMenu";

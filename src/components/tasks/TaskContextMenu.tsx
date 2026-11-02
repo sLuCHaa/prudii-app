@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { CheckCircle2, Circle, CircleDashed, PanelRight, Trash2 } from "lucide-react";
+import { CheckCircle2, Circle, CircleDashed, PanelRight, Trash2 } from "../icons";
 import { useTranslation } from "react-i18next";
 import type { Task, TaskStatus } from "../../types";
 import { TASK_STATUSES } from "../../types";

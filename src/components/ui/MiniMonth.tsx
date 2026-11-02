@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { addMonths, format, isBefore, isSameDay, isSameMonth, isToday, startOfDay, startOfMonth } from "date-fns";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "../icons";
 import type { WeekDay } from "../../lib/localeDefaults";
 import { gridKeyTarget, isoDate, monthGrid } from "../../lib/calendar/dates";
 import { dateLocale } from "../../lib/dateUtils";

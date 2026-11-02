@@ -1,4 +1,4 @@
-import { Shield, Eye, Image } from "lucide-react";
+import { Shield, Eye, Image } from "../icons";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "../../stores/appStore";

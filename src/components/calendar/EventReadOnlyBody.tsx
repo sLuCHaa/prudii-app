@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { format } from "date-fns";
-import { AlignLeft, CalendarDays, Clock, Link2, MapPin, Video } from "lucide-react";
+import { AlignLeft, CalendarDays, Clock, Link2, MapPin, Video } from "../icons";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { EventDetail, Occurrence } from "../../types/calendar";
 import { useAppStore } from "../../stores/appStore";

@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { format } from "date-fns";
-import { Check, Forward, Pencil, Quote, RotateCcw, X } from "lucide-react";
+import { Check, Forward, Pencil, Quote, RotateCcw, X } from "../icons";
 import { Button, IconButton } from "../ui/Button";
 import { GradientAvatar } from "../motion/GradientAvatar";
 import { HtmlMailFrame } from "../layout/MailDetail";

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { MessageSquareReply } from "lucide-react";
+import { MessageSquareReply } from "../icons";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";

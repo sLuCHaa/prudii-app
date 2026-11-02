@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { motion, useReducedMotion } from "motion/react";
-import { Send } from "lucide-react";
+import { Send } from "../icons";
 
 // Fan of paper planes taking off — Inbox Zero, the moment the last mail is
 // archived. Same motif as the send pill; classier than confetti. Fire and

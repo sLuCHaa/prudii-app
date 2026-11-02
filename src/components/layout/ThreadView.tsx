@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState, useRef, useCallback, memo, useMemo } from "react";
 import { Tooltip } from "../ui/Tooltip";
 import { parseISO } from "date-fns";
-import { FileText, Image, Film, Music, File, Loader2, Download, ChevronDown, ChevronRight, ChevronUp, MessageSquare, Copy, Check, Code, Eye, FileCode, FileType, Printer, MailMinus, ImageOff, FileWarning, FolderOpen, ClipboardList, ClipboardPlus, Ellipsis } from "lucide-react";
+import { FileText, Image, Film, Music, File, Loader2, Download, ChevronDown, ChevronRight, ChevronUp, MessageSquare, Copy, Check, Code, Eye, FileCode, FileType, Printer, MailMinus, ImageOff, FileWarning, FolderOpen, ClipboardList, ClipboardPlus, Ellipsis, Archive, Paperclip, Forward, Reply, ReplyAll, StarIcon, TrashIcon } from "../icons";
 import { SkeletonText } from "../ui/Skeleton";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -33,7 +33,6 @@ import { openMailUrl } from "../../lib/trackingParams";
 import { ContactAvatar } from "../ui/ContactAvatar";
 import { FlagPicker } from "../ui/FlagPicker";
 import type { MailFlag } from "../../types";
-import { Archive, Attach as Paperclip, Forward, Reply, ReplyAll, StarIcon, TrashIcon } from "../icons";
 import { formatDateTime, formatMailDate } from "../../lib/dateUtils";
 import { sanitizeEmailHtml, escapeHtml, type TrackerInfo } from "../../lib/sanitize";
 import { decodeFileUrl } from "../../lib/outgoingHtml";
@@ -906,7 +905,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
         mail.is_starred ? "text-warning" : "text-text-tertiary"
       }`}
     >
-      <StarIcon size={14} strokeWidth={1.5} color={mail.is_starred ? "var(--c-warning)" : "currentColor"} />
+      <StarIcon size={14} color={mail.is_starred ? "var(--c-warning)" : "currentColor"} />
     </button>
   );
 
@@ -1821,7 +1820,7 @@ export function ThreadView({ mail }: ThreadViewProps) {
                 onClick={handleTrash}
                 className="p-2 rounded-lg hover:bg-hover transition-colors text-text-secondary"
               >
-                <TrashIcon size={20} strokeWidth={2} dangerHover />
+                <TrashIcon size={20} dangerHover />
               </button>
             </Tooltip>
             <div className="w-px h-4 bg-border mx-0.5" />

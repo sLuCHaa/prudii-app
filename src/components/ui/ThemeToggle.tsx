@@ -1,4 +1,4 @@
-import { Moon, Sun, Monitor } from "lucide-react";
+import { Moon, Sun, Monitor } from "../icons";
 import { useAppStore } from "../../stores/appStore";
 
 const MODES = ["light", "dark", "system"] as const;

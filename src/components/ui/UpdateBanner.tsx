@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowUp, Check, ShieldAlert } from "lucide-react";
+import { ArrowUp, Check, ShieldAlert } from "../icons";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";
 import { installUpdate } from "../../lib/updater";

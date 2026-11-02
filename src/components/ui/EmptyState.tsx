@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Inbox, Sprout, Flame, Search } from "lucide-react";
+import { Inbox, Sprout, Flame, Search } from "../icons";
 import gsap from "gsap";
 import { useTranslation } from "react-i18next";
 import { motion } from "motion/react";

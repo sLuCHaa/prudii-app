@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { Search, Download, Check, ArrowUpDown, ArrowUp, ArrowDown, FileText, Image, FileSpreadsheet, File, Loader2, Paperclip, Mail, ChevronDown, Sparkles, X, FolderOpen } from "lucide-react";
+import { Search, Download, Check, ArrowUpDown, ArrowUp, ArrowDown, FileText, Image, FileSpreadsheet, File, Loader2, Paperclip, Mail, ChevronDown, Sparkles, X, FolderOpen } from "../icons";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";
 import { searchAttachments, countAttachments, bulkSaveAttachments, saveAttachment, startAttachmentDrag, aiSearchAttachments } from "../../lib/tauri";

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plane, Info } from "lucide-react";
+import { Plane, Info } from "../icons";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "../../stores/appStore";

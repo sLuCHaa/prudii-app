@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Tags } from "lucide-react";
+import { Tags } from "../icons";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { deleteSenderCategory, listSenderCategories, resetCategories } from "../../lib/tauri";

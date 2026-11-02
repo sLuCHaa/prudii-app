@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Check, X, Send } from "lucide-react";
+import { Check, X, Send } from "../icons";
 import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { useTranslation } from "react-i18next";
 import { emit } from "@tauri-apps/api/event";

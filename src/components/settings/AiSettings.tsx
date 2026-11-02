@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Sparkles, Loader2, CheckCircle, XCircle, ExternalLink, Info } from "lucide-react";
+import { Sparkles, Loader2, CheckCircle, XCircle, ExternalLink, Info } from "../icons";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { checkOllamaStatus } from "../../lib/tauri";

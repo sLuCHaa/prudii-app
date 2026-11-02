@@ -3,7 +3,7 @@ import type { DragEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode } from "
 import { useTranslation } from "react-i18next";
 import { motion, useReducedMotion } from "motion/react";
 import { format, formatDistanceToNowStrict, parseISO } from "date-fns";
-import { CalendarDays, X } from "lucide-react";
+import { CalendarDays, X } from "../icons";
 import type { CreateTaskInput, Task, TaskPriority, TaskStatus, UpdateTaskPatch } from "../../types";
 import { TASK_STATUSES } from "../../types";
 import { useCreateTask, useDeleteTask, useTask, useTaskAttachments, useUpdateTask } from "../../hooks/useTasks";

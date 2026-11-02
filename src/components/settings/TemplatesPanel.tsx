@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Trash2, Edit3, X, Save } from "lucide-react";
+import { Plus, Trash2, Edit3, X, Save } from "../icons";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { listTemplates, createTemplate, updateTemplate, deleteTemplate } from "../../lib/tauri";

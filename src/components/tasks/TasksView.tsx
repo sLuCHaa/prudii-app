@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AnimatePresence } from "motion/react";
-import { ClipboardList, LayoutGrid, List, Plus, Search } from "lucide-react";
+import { ClipboardList, LayoutGrid, List, Plus, Search } from "../icons";
 import { useAppStore } from "../../stores/appStore";
 import { useTasks } from "../../hooks/useTasks";
 import { isDueToday, isOverdue } from "../../lib/tasks";

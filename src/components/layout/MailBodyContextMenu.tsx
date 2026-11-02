@@ -1,4 +1,4 @@
-import { Copy, ExternalLink, Image as ImageIcon } from "lucide-react";
+import { Copy, ExternalLink, Image as ImageIcon } from "../icons";
 import { useTranslation } from "react-i18next";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { ContextMenu } from "../ui/ContextMenu";

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { getVersion } from "@tauri-apps/api/app";
-import { Download, CheckCircle, XCircle, RefreshCw, Loader2, ShieldAlert } from "lucide-react";
+import { Download, CheckCircle, XCircle, RefreshCw, Loader2, ShieldAlert } from "../icons";
 import { Button } from "../ui/Button";
 import { SettingsGroup, SettingsBlock } from "./SettingsGroup";
 import { checkForUpdate, installUpdate, type Update } from "../../lib/updater";

@@ -255,8 +255,8 @@ describe("MailContextMenu team assignment", () => {
   it("marks the current assignee in the submenu", () => {
     render({ teamMembers: MEMBERS, meId: "u1", assignment: assignment("u2"), onAssign: noop });
     openSubmenu("team.assignTo");
-    expect(byText("anna")!.querySelector("svg.lucide-check")).toBeTruthy();
-    expect(byText(`me · ${i18n.t("team.you")}`)!.querySelector("svg.lucide-check")).toBeNull();
+    expect(byText("anna")!.querySelector("svg.pi-check")).toBeTruthy();
+    expect(byText(`me · ${i18n.t("team.you")}`)!.querySelector("svg.pi-check")).toBeNull();
   });
 
   it("offers done and remove only for an assigned mail", () => {

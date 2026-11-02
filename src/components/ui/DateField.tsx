@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { format, isBefore, startOfDay } from "date-fns";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays } from "../icons";
 import { isoDate, parseIsoDate } from "../../lib/calendar/dates";
 import { dateLocale } from "../../lib/dateUtils";
 import { weekStartsOn } from "../../lib/localeDefaults";

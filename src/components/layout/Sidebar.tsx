@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState, useRef } from "react";
 import { CategorySidebarEntries } from "../categories/CategorySidebarEntries";
 import { createPortal } from "react-dom";
-import { FileText, AlertOctagon, Folder, Plus, ChevronDown, ChevronRight, FolderPlus, Download, Pencil, HardDrive, Cloud, X, Check, Crown, Clock, CalendarClock, PanelLeftClose, PanelLeftOpen, Loader2, AlertCircle, Palette, RefreshCw, RotateCcw, Settings, ClipboardList, UserCheck, CalendarDays } from "lucide-react";
+import { FileText, AlertOctagon, Folder, Plus, ChevronDown, ChevronRight, FolderPlus, Download, Pencil, HardDrive, Cloud, X, Check, Crown, Clock, CalendarClock, PanelLeftClose, PanelLeftOpen, Loader2, AlertCircle, Palette, RefreshCw, RotateCcw, Settings, ClipboardList, UserCheck, CalendarDays, Archive, Paperclip, Flag, Inbox, Send, Star, StarIcon, Trash2, TrashIcon } from "../icons";
 import { useTodayCount } from "../../hooks/useCalendar";
 import gsap from "gsap";
 import { prefersReducedMotion } from "../motion/tokens";
@@ -17,7 +17,6 @@ import { TeamSection } from "./TeamSection";
 import { CreateTaskFromMail } from "../tasks/CreateTaskFromMail";
 import { ComposeButton } from "../compose/ComposeButton";
 import { ThemeToggle } from "../ui/ThemeToggle";
-import { Archive, Attach as Paperclip, Flag, Inbox, Send, Star, StarIcon, Trash as Trash2, TrashIcon } from "../icons";
 import { AnimatedSyncButton } from "../ui/AnimatedSyncButton";
 import { Scroller } from "../ui/Scroller";
 import { Button, IconButton } from "../ui/Button";
@@ -128,7 +127,7 @@ const FOLDER_ICONS: Record<FolderType, React.ReactNode> = {
   inbox: <Inbox className="w-4 h-4" />,
   sent: <Send className="w-4 h-4" />,
   drafts: <FileText className="w-4 h-4" />,
-  trash: <TrashIcon size={16} strokeWidth={2} />,
+  trash: <TrashIcon size={16} />,
   spam: <AlertOctagon className="w-4 h-4" />,
   archive: <Archive className="w-4 h-4" />,
   custom: <Folder className="w-4 h-4" />,
@@ -924,7 +923,7 @@ function CombinedFoldersSection({ collapsed }: { collapsed: boolean }) {
     { type: "inbox", label: t("sidebar.allInboxes"), icon: <Inbox className="w-4 h-4" /> },
     { type: "sent", label: t("sidebar.allSent"), icon: <Send className="w-4 h-4" /> },
     { type: "drafts", label: t("sidebar.allDrafts"), icon: <FileText className="w-4 h-4" /> },
-    { type: "trash", label: t("sidebar.allTrash"), icon: <TrashIcon size={16} strokeWidth={2} /> },
+    { type: "trash", label: t("sidebar.allTrash"), icon: <TrashIcon size={16} /> },
     { type: "spam", label: t("sidebar.allSpam"), icon: <AlertOctagon className="w-4 h-4" /> },
     { type: "archive", label: t("sidebar.allArchive"), icon: <Archive className="w-4 h-4" /> },
   ];
@@ -1161,7 +1160,7 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
     {
       id: "starred",
       label: t("sidebar.starred"),
-      icon: <StarIcon size={16} strokeWidth={1.5} color="var(--c-warning)" />,
+      icon: <StarIcon size={16} color="var(--c-warning)" />,
       onClick: () => setActiveFilter(activeFilter === "starred" ? null : "starred"),
       isActive: activeFilter === "starred",
       show: true,

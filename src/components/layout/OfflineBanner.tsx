@@ -1,4 +1,4 @@
-import { WifiOff, RefreshCw, Loader2 } from "lucide-react";
+import { WifiOff, RefreshCw, Loader2 } from "../icons";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";
 import { checkConnectivity } from "../../lib/tauri";

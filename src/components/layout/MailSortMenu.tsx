@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Check } from "lucide-react";
+import { ArrowDown, ArrowUp, Check } from "../icons";
 import { useTranslation } from "react-i18next";
 import { MAIL_SORT_FIELDS, nextSort, sortDirection, sortField, type MailSort, type MailSortField } from "../../lib/mailSort";
 

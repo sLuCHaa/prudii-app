@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { addDays, format, isToday, startOfDay } from "date-fns";
-import { Plus } from "lucide-react";
+import { Plus } from "../icons";
 import type { Occurrence } from "../../types/calendar";
 import type { Task } from "../../types";
 import { useAppStore } from "../../stores/appStore";

@@ -1,7 +1,7 @@
 import { useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { format } from "date-fns";
-import { Clock } from "lucide-react";
+import { Clock } from "../icons";
 import { useAppStore } from "../../stores/appStore";
 import { dateLocale, formatTime } from "../../lib/dateUtils";
 import { parseTimeInput, timeOptions } from "../../lib/timeInput";

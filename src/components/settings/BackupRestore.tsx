@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Download, Upload, HardDrive, AlertTriangle, CheckCircle, Loader2 } from "lucide-react";
+import { Download, Upload, HardDrive, AlertTriangle, CheckCircle, Loader2 } from "../icons";
 import { listen } from "@tauri-apps/api/event";
 import { Button } from "../ui/Button";
 import { createBackup, previewRestore, restoreBackup } from "../../lib/tauri";

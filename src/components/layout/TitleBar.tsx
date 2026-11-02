@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CalendarDays, ClipboardList, Copy, Minus, PanelRight, Square, X } from "lucide-react";
+import { CalendarDays, ClipboardList, Copy, Minus, PanelRight, Square, X, GearIcon } from "../icons";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";
 import { useOpenTaskCount } from "../../hooks/useTasks";
-import { GearIcon } from "../icons";
 import { useDialog } from "../ui/DialogProvider";
 import { closeOrHide } from "../../hooks/useMailExportEvents";
 import { isMacOS } from "../../lib/platform";
@@ -134,7 +133,7 @@ export function TitleBar() {
           title={t("titleBar.settings")}
           aria-label={t("titleBar.settings")}
         >
-          <GearIcon size={14} strokeWidth={1.5} />
+          <GearIcon size={14} />
         </button>
         {/* macOS uses the native traffic lights instead (overlay title bar) */}
         {!isMacOS && (

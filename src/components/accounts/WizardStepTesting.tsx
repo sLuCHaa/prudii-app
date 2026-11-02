@@ -1,4 +1,4 @@
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle } from "../icons";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { SyncProgress } from "../../types";
 import { mapImapError } from "../../lib/imapErrorMap";

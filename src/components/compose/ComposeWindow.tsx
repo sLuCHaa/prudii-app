@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { X, Minus, Square, Copy, Pencil, Reply, ReplyAll, Forward } from "lucide-react";
+import { X, Minus, Square, Copy, Pencil, Reply, ReplyAll, Forward } from "../icons";
 import { emit } from "@tauri-apps/api/event";
 import { getCurrentWindow, currentMonitor } from "@tauri-apps/api/window";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

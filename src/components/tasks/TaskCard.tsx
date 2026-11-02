@@ -1,6 +1,6 @@
 import type { CSSProperties, KeyboardEvent, MouseEvent } from "react";
 import { motion, useReducedMotion } from "motion/react";
-import { Link2, Paperclip } from "lucide-react";
+import { Link2, Paperclip } from "../icons";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { Task, TaskStatus } from "../../types";

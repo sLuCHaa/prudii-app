@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { Check } from "../icons";
 import { useTranslation } from "react-i18next";
 import { GradientAvatar } from "../motion/GradientAvatar";
 import { Tooltip } from "./Tooltip";

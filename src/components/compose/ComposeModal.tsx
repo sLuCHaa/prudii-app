@@ -5,7 +5,7 @@ import { dateLocale } from "../../lib/dateUtils";
 import { PulseDot } from "../motion/PulseDot";
 import { GradientAvatar } from "../motion/GradientAvatar";
 import { SPRING_SNAPPY } from "../motion/tokens";
-import { X, Paperclip, Trash2, Send, File, FileText, Image, Film, Music, FileCode, FileSpreadsheet, Archive, Sparkles, Loader2, FileType, CalendarClock, ChevronDown, Undo2, Check, Eye } from "lucide-react";
+import { X, Paperclip, Trash2, Send, File, FileText, Image, Film, Music, FileCode, FileSpreadsheet, Archive, Sparkles, Loader2, FileType, CalendarClock, ChevronDown, Undo2, Check, Eye } from "../icons";
 import { motion, AnimatePresence } from "motion/react";
 import { EditorContent } from "@tiptap/react";
 import TiptapImage from "@tiptap/extension-image";

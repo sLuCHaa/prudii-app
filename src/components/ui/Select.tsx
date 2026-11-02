@@ -1,5 +1,5 @@
 import { useRef, useState, useId } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown } from "../icons";
 import { ContextMenu } from "./ContextMenu";
 import type { MenuEntry } from "../../lib/menuModel";
 

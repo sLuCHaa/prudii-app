@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { X, Paperclip } from "lucide-react";
+import { X, Paperclip } from "../icons";
 import { motion } from "motion/react";
 import { useTranslation } from "react-i18next";
 import { IconButton } from "../ui/Button";

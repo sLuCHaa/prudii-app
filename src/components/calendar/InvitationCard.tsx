@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { format } from "date-fns";
-import { AlertTriangle, CalendarClock, CalendarX, ChevronDown, MapPin, Repeat, User, Users, Video } from "lucide-react";
+import { AlertTriangle, CalendarClock, CalendarX, ChevronDown, MapPin, Repeat, User, Users, Video } from "../icons";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { InvitationView, InviteAnswer, InviteChanges } from "../../types/calendar";
 import { useAddPublishedEvent, useCalendars, useMailInvitation, useRemoveCancelledEvent, useRespondInvitation } from "../../hooks/useCalendar";

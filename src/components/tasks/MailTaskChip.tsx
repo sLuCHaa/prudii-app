@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { ClipboardList } from "lucide-react";
+import { ClipboardList } from "../icons";
 import type { Task, TaskStatus } from "../../types";
 import { Tooltip } from "../ui/Tooltip";
 import { useAppStore } from "../../stores/appStore";

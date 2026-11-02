@@ -1,8 +1,7 @@
 import { useMemo, useState } from "react";
 import { parseISO } from "date-fns";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Forward, Reply } from "../icons";
 import { useTranslation } from "react-i18next";
-import { Forward, Reply } from "../icons";
 import { Tooltip } from "../ui/Tooltip";
 import { ContactAvatar } from "../ui/ContactAvatar";
 import { AddressName } from "./AddressName";

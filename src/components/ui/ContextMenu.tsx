@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronRight } from "lucide-react";
+import { Check, ChevronRight } from "../icons";
 import { clampToViewport, isFocusable, moveFocus, submenuPosition, typeaheadIndex, type MenuEntry } from "../../lib/menuModel";
 
 export interface ContextMenuProps {

@@ -1,5 +1,5 @@
 import { cloneElement, isValidElement } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2 } from "../icons";
 
 export type ButtonVariant = "primary" | "danger" | "secondary" | "ghost" | "success" | "signal";
 export type ButtonSize = "sm" | "md" | "lg";

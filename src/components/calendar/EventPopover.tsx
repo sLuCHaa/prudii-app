@@ -2,7 +2,7 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { motion, useReducedMotion } from "motion/react";
 import { format } from "date-fns";
-import { AlignLeft, CalendarDays, Link2, MapPin, Pencil, Repeat, Trash2, Video } from "lucide-react";
+import { AlignLeft, CalendarDays, Link2, MapPin, Pencil, Repeat, Trash2, Video } from "../icons";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { ReactNode } from "react";
 import type { Occurrence } from "../../types/calendar";

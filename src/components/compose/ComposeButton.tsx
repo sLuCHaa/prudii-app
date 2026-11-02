@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { Compose as Pencil } from "../icons";
+import { Pencil } from "../icons";
 
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";

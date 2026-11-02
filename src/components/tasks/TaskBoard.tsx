@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2 } from "../icons";
 import {
   DndContext,
   DragOverlay,

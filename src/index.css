@@ -1013,6 +1013,12 @@ html[data-vibrancy].dark .glass-sidebar {
   color: var(--c-accent);
 }
 
+/* Phosphor Duotone zeichnet die Fläche mit 20 %; bei 16 px zerfallen die
+   Formen dann. 28 % hält sie zusammen. Nur App-Icons (.pi), nie SVGs aus Mails. */
+.pi path[opacity="0.2"] {
+  opacity: 0.28;
+}
+
 /* ─── Tactile controls ─── */
 @layer components {
   .tactile-filled {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useEditorState, type Editor } from "@tiptap/react";
-import { Bold, Italic, Strikethrough, RemoveFormatting, List, ListOrdered, Quote, Code, Link2, Undo, Redo, Pencil, ExternalLink, Copy, Unlink, Scissors } from "lucide-react";
+import { Bold, Italic, Strikethrough, RemoveFormatting, List, ListOrdered, Quote, Code, Link2, Undo, Redo, Pencil, ExternalLink, Copy, Unlink, Scissors } from "../icons";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import i18n from "../../lib/i18n";
 import { isMacOS } from "../../lib/platform";

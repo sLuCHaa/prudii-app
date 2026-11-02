@@ -1,4 +1,4 @@
-import { Users, ExternalLink } from "lucide-react";
+import { Users, ExternalLink } from "../icons";
 import { useTranslation } from "react-i18next";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useTeamSnapshot } from "../../hooks/useTeam";

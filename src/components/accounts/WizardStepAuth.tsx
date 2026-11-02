@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Eye, EyeOff, ExternalLink } from "lucide-react";
+import { Eye, EyeOff, ExternalLink } from "../icons";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { motion } from "motion/react";
 import type { ProviderPreset } from "../../lib/providers";

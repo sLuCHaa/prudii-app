@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { format, isToday, startOfDay } from "date-fns";
-import { CalendarDays, Repeat } from "lucide-react";
+import { CalendarDays, Repeat } from "../icons";
 import type { Occurrence } from "../../types/calendar";
 import type { Task } from "../../types";
 import { isoDate, occurrenceRange } from "../../lib/calendar/dates";

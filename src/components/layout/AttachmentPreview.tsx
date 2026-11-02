@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { X, Download, Mail, ChevronLeft, ChevronRight, FileText, Image, FileSpreadsheet, File, Loader2, FolderOpen } from "lucide-react";
+import { X, Download, Mail, ChevronLeft, ChevronRight, FileText, Image, FileSpreadsheet, File, Loader2, FolderOpen } from "../icons";
 import { useTranslation } from "react-i18next";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { getAttachmentPreview } from "../../lib/tauri";

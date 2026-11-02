@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { Paperclip } from "lucide-react";
+import { Paperclip } from "../icons";
 import type { Attachment } from "../../types";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { attachmentPickOrder, defaultPickedAttachmentIds } from "../../lib/tasks";

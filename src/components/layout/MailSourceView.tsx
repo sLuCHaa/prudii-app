@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { Check, ChevronRight, Copy, Loader2 } from "lucide-react";
+import { Check, ChevronRight, Copy, Loader2 } from "../icons";
 import { fetchMailSource } from "../../lib/tauri";
 import { splitMailSource, foldedBytes } from "../../lib/mailSource";
 import { formatFileSize } from "../../lib/fileSize";

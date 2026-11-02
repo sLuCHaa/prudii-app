@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { Search } from "lucide-react";
+import { Search } from "../icons";
 import type { Task } from "../../types";
 import { useTasks } from "../../hooks/useTasks";
 import { useFocusTrap } from "../../hooks/useFocusTrap";

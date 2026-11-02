@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Trash2, ChevronDown } from "lucide-react";
+import { Plus, Trash2, ChevronDown } from "../icons";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";
 import { useAccounts, useRules, useCreateRule, useUpdateRule, useDeleteRule, useFolders, useApplyRulesNow } from "../../hooks/useAccounts";

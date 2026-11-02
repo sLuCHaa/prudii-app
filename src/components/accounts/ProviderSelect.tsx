@@ -1,4 +1,4 @@
-import { Apple, Mail, Settings } from "lucide-react";
+import { Apple, Mail, Settings } from "../icons";
 import { useTranslation } from "react-i18next";
 import { PROVIDER_PRESETS, type ProviderPreset } from "../../lib/providers";
 import { SpringCard } from "../motion/SpringCard";

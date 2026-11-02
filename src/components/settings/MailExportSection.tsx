@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueries } from "@tanstack/react-query";
-import { ChevronRight, FolderDown } from "lucide-react";
+import { ChevronRight, FolderDown } from "../icons";
 import { Button } from "../ui/Button";
 import { useDialog } from "../ui/DialogProvider";
 import { useAppStore } from "../../stores/appStore";

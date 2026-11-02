@@ -1,9 +1,7 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { formatDistanceToNowStrict } from "date-fns";
-import {
-  AlertTriangle, BellOff, Check, Clock, Download, FileUp, Link2, MoreHorizontal, Palette, Pencil, Plus, RefreshCw, Rss, Star, Trash2, Upload,
-} from "lucide-react";
+import { AlertTriangle, BellOff, Check, Clock, Download, FileUp, Link2, MoreHorizontal, Palette, Pencil, Plus, RefreshCw, Rss, Star, Trash2, Upload } from "../icons";
 import type { Calendar } from "../../types/calendar";
 import type { MenuEntry } from "../../lib/menuModel";
 import {

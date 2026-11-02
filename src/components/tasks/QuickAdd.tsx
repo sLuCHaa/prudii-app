@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion, useReducedMotionConfig } from "motion/react";
-import { CalendarClock, Plus } from "lucide-react";
+import { CalendarClock, Plus } from "../icons";
 import type { CreateTaskInput } from "../../types";
 import { useCreateTask } from "../../hooks/useTasks";
 import { useAppStore } from "../../stores/appStore";

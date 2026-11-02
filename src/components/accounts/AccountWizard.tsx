@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { X } from "lucide-react";
+import { X } from "../icons";
 import { listen } from "@tauri-apps/api/event";
 import { motion } from "motion/react";
 import type { ProviderPreset } from "../../lib/providers";

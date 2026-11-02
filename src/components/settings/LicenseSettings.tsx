@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Key, LogOut, Monitor, Crown, Users, ExternalLink, Copy, Check, Shield, AlertTriangle, RefreshCw } from "lucide-react";
+import { Key, LogOut, Monitor, Crown, Users, ExternalLink, Copy, Check, Shield, AlertTriangle, RefreshCw } from "../icons";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { licenseLogin, licenseLogout, getLicenseInfo, verifyLicense, activateLicenseKey, getDeviceId } from "../../lib/tauri";

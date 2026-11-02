@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { Search, Inbox, Send, FileText, Archive, Star, Settings, Trash2, Pencil, FolderOpen, Sun, Moon, Palette, LayoutGrid, Languages, HelpCircle, ClipboardList, CalendarDays, CalendarPlus, PanelRight } from "lucide-react";
+import { Search, Inbox, Send, FileText, Archive, Star, Settings, Trash2, Pencil, FolderOpen, Sun, Moon, Palette, LayoutGrid, Languages, HelpCircle, ClipboardList, CalendarDays, CalendarPlus, PanelRight } from "../icons";
 import { defaultDraftTimes, DEFAULT_SETTINGS } from "../../lib/calendar/format";
 import { motion, AnimatePresence } from "motion/react";
 import { SPRING_BOUNCY } from "../motion/tokens";

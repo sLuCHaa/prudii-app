@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { motion, useReducedMotion } from "motion/react";
-import { GripVertical, Plus } from "lucide-react";
+import { GripVertical, Plus } from "../icons";
 import {
   DndContext,
   PointerSensor,

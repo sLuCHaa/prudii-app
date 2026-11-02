@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useTranslation } from "react-i18next";
-import { Link2, Paperclip } from "lucide-react";
+import { Link2, Paperclip } from "../icons";
 import type { Task, TaskStatus } from "../../types";
 import { TASK_STATUSES } from "../../types";
 import { groupByStatus } from "../../lib/tasks";

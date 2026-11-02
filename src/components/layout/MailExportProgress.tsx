@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Download } from "lucide-react";
+import { Download } from "../icons";
 import { useAppStore } from "../../stores/appStore";
 import { cancelMailExport } from "../../lib/tauri";
 import { GlowRing } from "../motion/GlowRing";

@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { addDays, format } from "date-fns";
-import { Bell, Briefcase, CalendarDays, CalendarRange, Clock } from "lucide-react";
+import { Bell, Briefcase, CalendarDays, CalendarRange, Clock } from "../icons";
 import type { CalendarSettings } from "../../types/calendar";
 import { useCalendars, useCalendarSettings, useUpdateCalendar, useUpdateCalendarSettings } from "../../hooks/useCalendar";
 import { useAppStore } from "../../stores/appStore";

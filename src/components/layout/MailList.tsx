@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useState, useRef, useMemo, DragEvent } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Loader2, X, Mail as MailIcon, MailOpen, Check, Pin, Clock, CalendarClock, FileText, ShieldAlert, Folder } from "lucide-react";
+import { Loader2, X, Mail as MailIcon, MailOpen, Check, Pin, Clock, CalendarClock, FileText, ShieldAlert, Folder, Archive, Paperclip, Inbox, MagnifierIcon, Send, Star, StarIcon, Trash2 } from "../icons";
 import { createPortal } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { FlagDots } from "../ui/FlagPicker";
@@ -30,7 +30,6 @@ import { EmptyState, InboxZeroState, NoSearchResultsState } from "../ui/EmptySta
 import { DaylightSky } from "../motion/DaylightSky";
 import { incrementArchivedToday, recordInboxZeroDay } from "../../lib/achievements";
 import { SearchBar } from "./SearchBar";
-import { Archive, Attach as Paperclip, Inbox, MagnifierIcon, Send, Star, StarIcon, Trash as Trash2 } from "../icons";
 import { MailListSkeleton } from "../ui/MailListSkeleton";
 import { Skeleton } from "../ui/Skeleton";
 import { LoadingCrossfade } from "../motion/LoadingCrossfade";
@@ -992,7 +991,7 @@ function VirtualMailList({
                         title={t("mailDetail.star")}
                         aria-label={t("mailDetail.star")}
                       >
-                        <Star className={`w-3.5 h-3.5 ${mail.is_starred ? "text-warning fill-warning" : "text-text-secondary"}`} />
+                        <Star weight={mail.is_starred ? "fill" : undefined} className={`w-3.5 h-3.5 ${mail.is_starred ? "text-warning" : "text-text-secondary"}`} />
                       </button>
                       <button
                         onClick={(e) => {
@@ -2022,7 +2021,7 @@ export function MailList() {
               <div className="flex items-center gap-2">
                 {isSearchActive ? (
                   <>
-                    <MagnifierIcon size={14} strokeWidth={1.5} className="text-accent" />
+                    <MagnifierIcon size={14} className="text-accent" />
                     <h2 className="text-sm font-semibold text-text">
                       {t("mailList.search")}
                     </h2>
@@ -2074,7 +2073,7 @@ export function MailList() {
               title={t("mailList.search")}
               aria-label={t("mailList.search")}
             >
-              <MagnifierIcon size={16} strokeWidth={1.5} />
+              <MagnifierIcon size={16} />
             </button>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { Reply, ReplyAll, Forward, Star, StarOff, Mail as MailIcon, MailOpen, Archive, Trash2, Pin, PinOff, Clock, FolderInput, ClipboardList, ClipboardPlus, CalendarPlus, Flag, FlagOff, Users, UserMinus, CheckCircle2, RotateCcw, Tag } from "lucide-react";
+import { Reply, ReplyAll, Forward, Star, StarOff, Mail as MailIcon, MailOpen, Archive, Trash2, Pin, PinOff, Clock, FolderInput, ClipboardList, ClipboardPlus, CalendarPlus, Flag, FlagOff, Users, UserMinus, CheckCircle2, RotateCcw, Tag } from "../icons";
 import { useTranslation } from "react-i18next";
 import { MAIL_FLAG_COLORS, type Mail, type Folder, type MailFlag, type Assignment, type TeamMember } from "../../types";
 import { useAppStore } from "../../stores/appStore";

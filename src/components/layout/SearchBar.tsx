@@ -1,6 +1,5 @@
 import { useRef, useEffect, useState } from "react";
-import { X, Loader2 } from "lucide-react";
-import { Search } from "../icons";
+import { X, Loader2, Search } from "../icons";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";
 import { useSearchMails } from "../../hooks/useSync";

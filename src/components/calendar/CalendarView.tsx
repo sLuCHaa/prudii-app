@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { CalendarDays, ChevronLeft, ChevronRight, Plus, Search } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Plus, Search } from "../icons";
 import type { CalendarViewKind, EventEditorTarget, EventTimes, Occurrence } from "../../types/calendar";
 import type { Task } from "../../types";
 import { useAppStore } from "../../stores/appStore";

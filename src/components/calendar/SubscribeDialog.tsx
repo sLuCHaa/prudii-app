@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, Rss } from "lucide-react";
+import { ChevronDown, Rss } from "../icons";
 import type { Calendar } from "../../types/calendar";
 import { getSubscriptionUrl } from "../../lib/tauri";
 import { useCalendars, useSubscribeCalendar, useUpdateSubscriptionUrl } from "../../hooks/useCalendar";

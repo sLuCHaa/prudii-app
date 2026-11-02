@@ -17,6 +17,9 @@ importers:
       '@dnd-kit/utilities':
         specifier: ^3.2.2
         version: 3.2.2(react@19.3.1)
+      '@phosphor-icons/react':
+        specifier: ^2.1.10
+        version: 2.1.10(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@tanstack/react-query':
         specifier: ^5.105.0
         version: 5.105.0(@types/react@19.3.0)(react@19.3.1)
@@ -80,9 +83,6 @@ importers:
       i18next:
         specifier: ^26.5.12
         version: 26.5.12(typescript@7.0.2)
-      lucide-react:
-        specifier: ^1.66.0
-        version: 1.66.0(@types/react@19.3.0)(react@19.3.1)
       motion:
         specifier: ^13.5.1
         version: 13.5.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -407,6 +407,13 @@ packages:
 
   '@oxc-project/types@0.156.0':
     resolution: {integrity: sha512-1Duyg48TdJNdyhEB8Xn1L36bT9Pv6GUtlKjHxOys8xkaF/rQq3XJE+bAurSK/AgIz5mGFsb77cn9Pb20+WCScw==}
+
+  '@phosphor-icons/react@2.1.10':
+    resolution: {integrity: sha512-vt8Tvq8GLjheAZZYa+YG/pW7HDbov8El/MANW8pOAz4eGxrwhnbfrQZq0Cp4q8zBEu8NIhHdnr+r8thnfRSNYA==}
+    engines: {node: '>=10'}
+    peerDependencies:
+      react: '>= 16.8'
+      react-dom: '>= 16.8'
 
   '@rolldown/binding-android-arm-eabi@1.2.16':
     resolution: {integrity: sha512-ia3DwAs0OsMGS7+IConptSiyk9pEXkOx/AbJ2n/lAGxH3QkWQus1t8d7gnAT38FCU2sQu8lUbeR6AiZFv4JxaA==}
@@ -1334,15 +1341,6 @@ packages:
     resolution: {integrity: sha512-U4N8FgzmWxc8k1VH8Kr6lQg18U7Fjvby6wXHVRX/ZZ7IwWbRMgrRbP0Wrb5q5NVinryp4SQampHKdvtecItxUg==}
     engines: {node: 20 || >=22}
 
-  lucide-react@1.66.0:
-    resolution: {integrity: sha512-8zjbi/Us+ETXqfBwmXF/FHrWGIqOdE6zT1yUdRJLQVoptomSkB0zdFWVIM667t9K8djWDaXdkBkqi2qVTuDNiw==}
-    peerDependencies:
-      '@types/react': '*'
-      react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
-    peerDependenciesMeta:
-      '@types/react':
-        optional: true
-
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
 
@@ -1871,6 +1869,11 @@ snapshots:
       '@jridgewell/sourcemap-codec': 1.6.0
 
   '@oxc-project/types@0.156.0': {}
+
+  '@phosphor-icons/react@2.1.10(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
+    dependencies:
+      react: 19.3.1
+      react-dom: 19.3.1(react@19.3.1)
 
   '@rolldown/binding-android-arm-eabi@1.2.16':
     optional: true
@@ -2601,12 +2604,6 @@ snapshots:
   linkifyjs@4.4.0: {}
 
   lru-cache@11.5.3: {}
-
-  lucide-react@1.66.0(@types/react@19.3.0)(react@19.3.1):
-    dependencies:
-      react: 19.3.1
-    optionalDependencies:
-      '@types/react': 19.3.0
 
   magic-string@0.30.21:
     dependencies:

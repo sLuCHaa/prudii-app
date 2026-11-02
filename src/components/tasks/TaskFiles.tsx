@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Loader2, FolderOpen, X, Plus } from "lucide-react";
+import { Loader2, FolderOpen, X, Plus } from "../icons";
 import type { TaskAttachment } from "../../types";
 import type { useTaskAttachments } from "../../hooks/useTasks";
 import { useAppStore } from "../../stores/appStore";

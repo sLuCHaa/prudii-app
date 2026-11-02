@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "motion/react";
-import { X, ExternalLink, Link2, Unlink, AlertTriangle, Type } from "lucide-react";
+import { X, ExternalLink, Link2, Unlink, AlertTriangle, Type } from "../icons";
 import i18n from "../../lib/i18n";
 import { checkLink } from "../../lib/linkChecker";
 import { normalizeLinkInput } from "./linkInput";

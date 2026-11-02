@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { X } from "lucide-react";
+import { X } from "../icons";
 import { useTranslation } from "react-i18next";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { isMacOS } from "../../lib/platform";
