@@ -24,6 +24,9 @@ export function buildListItems(mails: Mail[], labels: Record<string, string>, sh
   return items;
 }
 
+// Measured from the rendered rows: a wrong estimate makes rows above the viewport shift once they are measured.
 export function rowEstimateFor(density: string | null): number {
-  return density === "compact" ? 62 : density === "spacious" ? 82 : 70;
+  return density === "compact" ? 74 : density === "spacious" ? 94 : 82;
 }
+
+export const SEPARATOR_ESTIMATE = 29;

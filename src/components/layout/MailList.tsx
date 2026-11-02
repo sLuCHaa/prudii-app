@@ -47,7 +47,7 @@ import { SNOOZE_PRESETS, toSnoozeStamp } from "../../lib/snooze";
 const SNOOZE_MENU_WIDTH = 176;
 import { formatMailDate } from "../../lib/dateUtils";
 import { absenceMeansMoved, isDateSort, parseMailSort } from "../../lib/mailSort";
-import { buildListItems, rowEstimateFor, type ListItem } from "../../lib/mailListItems";
+import { buildListItems, rowEstimateFor, SEPARATOR_ESTIMATE, type ListItem } from "../../lib/mailListItems";
 import { anchorAt, type ScrollAnchor } from "../../lib/scrollAnchor";
 import { makeIsOutgoing } from "../../lib/outgoing";
 import { MailSortMenu } from "./MailSortMenu";
@@ -545,7 +545,7 @@ function VirtualMailList({
     getScrollElement: () => listRef.current,
     estimateSize: (i) => {
       if (i >= virtualItems.length) return 40;
-      if (virtualItems[i].kind === "separator") return 32;
+      if (virtualItems[i].kind === "separator") return SEPARATOR_ESTIMATE;
       return rowEstimate;
     },
     overscan: 8,

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { buildListItems, rowEstimateFor } from "./mailListItems";
+import { buildListItems, rowEstimateFor, SEPARATOR_ESTIMATE } from "./mailListItems";
 import type { Mail } from "../types";
 
 const mail = (id: string, date: string) => ({ id, date }) as Mail;
@@ -38,9 +38,14 @@ describe("buildListItems", () => {
 });
 
 describe("rowEstimateFor", () => {
-  it("estimates rows with the tile gutter", () => {
-    expect(rowEstimateFor("compact")).toBe(62);
-    expect(rowEstimateFor(null)).toBe(70);
-    expect(rowEstimateFor("spacious")).toBe(82);
+  it("matches the rendered row heights per density", () => {
+    expect(rowEstimateFor("compact")).toBe(74);
+    expect(rowEstimateFor("comfortable")).toBe(82);
+    expect(rowEstimateFor(null)).toBe(82);
+    expect(rowEstimateFor("spacious")).toBe(94);
+  });
+
+  it("matches the rendered date separator height", () => {
+    expect(SEPARATOR_ESTIMATE).toBe(29);
   });
 });
