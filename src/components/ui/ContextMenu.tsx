@@ -25,11 +25,15 @@ function fadeOutCopy(root: HTMLElement | null) {
   if (typeof copy.animate !== "function") return;
   copy.setAttribute("aria-hidden", "true");
   copy.style.pointerEvents = "none";
+  // Items keep exactly the background they showed; the copy has no hover or focus of its own.
+  const items = Array.from(root.querySelectorAll<HTMLElement>("button"));
+  copy.querySelectorAll<HTMLElement>("button").forEach((el, i) => {
+    if (items[i]) el.style.backgroundColor = getComputedStyle(items[i]).backgroundColor;
+  });
   copy.querySelectorAll<HTMLElement>("*").forEach((el) => {
     el.removeAttribute("id");
     el.removeAttribute("role");
     el.classList.remove("menu-enter");
-    if (el.getAttribute("tabindex") === "0") el.classList.add("bg-hover");
   });
   document.body.appendChild(copy);
   const done = () => copy.remove();
