@@ -306,6 +306,18 @@ export function MailDetail() {
     }
   }, [mail?.id]);
 
+  // The next mail rises from below, the previous one drops from above, as the list moved.
+  const selectedMailIndex = useAppStore((s) => s.selectedMailIndex);
+  const lastShown = useRef({ id: null as string | null, index: -1 });
+  const enterFrom = useMemo(() => {
+    const prev = lastShown.current;
+    if (!mail || prev.id === mail.id || prev.index < 0 || selectedMailIndex < 0) return 0;
+    return selectedMailIndex >= prev.index ? 1 : -1;
+  }, [mail?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (mail) lastShown.current = { id: mail.id, index: selectedMailIndex };
+  }, [mail?.id, selectedMailIndex]);
+
   if (!mail) {
     return <NoSelectionState />;
   }
@@ -318,9 +330,9 @@ export function MailDetail() {
     <div ref={contentRef} className="flex flex-col h-full">
       <motion.div
         key={mail.id}
-        initial={reduceMotion ? false : { opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.12, ease: "easeOut" }}
+        initial={reduceMotion ? false : { opacity: 0, y: enterFrom * 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.16, ease: "easeOut" }}
         className="flex flex-col h-full min-h-0"
       >
         <ThreadView mail={mail} />
