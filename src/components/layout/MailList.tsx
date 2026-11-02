@@ -842,7 +842,10 @@ function VirtualMailList({
                         ? "tile-raised"
                         : mailIndex === selectedMailIndex
                         ? "bg-hover"
-                        : "bg-bg hover:bg-hover"
+                        // group-hover statt hover: Die Aktionsleiste ist ein
+                        // Geschwister dieses Elements. Über ihr verlöre die Zeile
+                        // sonst ihr :hover, und der Hintergrund flackert weg.
+                        : "bg-bg group-hover/mail:bg-hover"
                     }`}
                   >
                   {/* Left stripe: gold = starred, blue = unread — fixed colors so the
@@ -946,9 +949,13 @@ function VirtualMailList({
                     </div>
                   </div>
                   </div>
+                  {/* Bewusst ohne Fade: Eine opacity-Transition legt die Leiste in
+                      WebKit auf eine GPU-Ebene, und mit ihr die ganze Zeile (der
+                      Virtualizer positioniert sie per translateY). Der Text wird
+                      dann für die Dauer der Transition unscharf. */}
                   {!multiSelectMode && (
                     <div
-                      className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover/mail:opacity-100 transition-opacity duration-150 pointer-events-none group-hover/mail:pointer-events-auto"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover/mail:opacity-100 pointer-events-none group-hover/mail:pointer-events-auto"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <button

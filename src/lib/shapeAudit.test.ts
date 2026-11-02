@@ -81,8 +81,26 @@ describe("shape audit", () => {
     const src = sourceOf("layout/MailList.tsx");
     expect(src).toContain('"relative flex flex-col h-full bg-bg"');
     expect(src).not.toContain('"bg-surface hover:bg-hover"');
-    expect(src).toContain('"bg-bg hover:bg-hover"');
+    expect(src).toContain('"bg-bg group-hover/mail:bg-hover"');
     expect(src).not.toMatch(/px-4 py-1\.5 bg-surface/);
+  });
+
+  it("keeps the row tint while the pointer rests on the hover actions", () => {
+    // The action strip is a sibling of .mail-row-body; a plain hover: on the
+    // body drops the tint as soon as the pointer reaches the strip (flicker).
+    const src = sourceOf("layout/MailList.tsx");
+    expect(src).not.toContain('"bg-bg hover:bg-hover"');
+    expect(src).toContain("group-hover/mail:pointer-events-auto");
+  });
+
+  it("reveals the row's hover actions without a fade", () => {
+    // An opacity transition promotes the strip, and with it the translateY'd
+    // virtual row, to a GPU layer in WebKit: the row text blurs while it runs.
+    const strip = sourceOf("layout/MailList.tsx")
+      .split("\n")
+      .find((line) => line.includes("group-hover/mail:pointer-events-auto"));
+    expect(strip).toBeDefined();
+    expect(strip).not.toMatch(/transition|duration-/);
   });
 
   it("carries the density class on the mail row body", () => {
