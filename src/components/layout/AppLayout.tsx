@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import { motion, useReducedMotion } from "motion/react";
 import { Sidebar } from "./Sidebar";
 import { MailList } from "./MailList";
 import { MailDetail } from "./MailDetail";
@@ -41,6 +42,8 @@ export function AppLayout() {
   const showAttachmentBrowser = useAppStore((s) => s.showAttachmentBrowser);
   const showTasks = useAppStore((s) => s.showTasks);
   const showCalendar = useAppStore((s) => s.showCalendar);
+  const mainView = showCalendar ? "calendar" : showTasks ? "tasks" : showAttachmentBrowser ? "attachments" : "mail";
+  const reduceMotion = useReducedMotion();
   const [sidebarWidth, setSidebarWidth] = useState(() => loadPanelWidth("sidebar-width", 240, SIDEBAR_MIN, SIDEBAR_MAX));
   const [mailListWidth, setMailListWidth] = useState(() => loadPanelWidth("maillist-width", 320, MAILLIST_MIN, MAILLIST_MAX));
   const [isResizing, setIsResizing] = useState(false);
@@ -213,40 +216,48 @@ export function AppLayout() {
               />
             )}
 
-            {showCalendar ? (
-              <div className="flex-1 min-w-0 bg-bg">
-                <CalendarView />
-              </div>
-            ) : showTasks ? (
-              <div className="flex-1 min-w-0 bg-bg">
-                <TasksView />
-              </div>
-            ) : showAttachmentBrowser ? (
-              <div className="flex-1 min-w-0 bg-bg">
-                <AttachmentBrowser />
-              </div>
-            ) : (
-              <>
-                <div style={{ width: mailListWidth }} className="shrink-0 border-r border-border bg-bg">
-                  <MailList />
-                </div>
-
-                <ResizeHandle onResize={handleMailListResize} onResizeEnd={saveMailListWidth} onReset={resetMailListWidth} />
-
+            <motion.div
+              key={mainView}
+              initial={reduceMotion ? false : { opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.14, ease: "easeOut" }}
+              className="flex flex-1 min-w-0"
+            >
+              {showCalendar ? (
                 <div className="flex-1 min-w-0 bg-bg">
-                  <MailDetail />
+                  <CalendarView />
                 </div>
+              ) : showTasks ? (
+                <div className="flex-1 min-w-0 bg-bg">
+                  <TasksView />
+                </div>
+              ) : showAttachmentBrowser ? (
+                <div className="flex-1 min-w-0 bg-bg">
+                  <AttachmentBrowser />
+                </div>
+              ) : (
+                <>
+                  <div style={{ width: mailListWidth }} className="shrink-0 border-r border-border bg-bg">
+                    <MailList />
+                  </div>
 
-                {agendaRailOpen && (
-                  <>
-                    <ResizeHandle onResize={handleRailResize} onResizeEnd={saveRailWidth} onReset={resetRailWidth} />
-                    <div style={{ width: railWidth }} className="shrink-0 border-l border-border bg-surface">
-                      <AgendaRail />
-                    </div>
-                  </>
-                )}
-              </>
-            )}
+                  <ResizeHandle onResize={handleMailListResize} onResizeEnd={saveMailListWidth} onReset={resetMailListWidth} />
+
+                  <div className="flex-1 min-w-0 bg-bg">
+                    <MailDetail />
+                  </div>
+
+                  {agendaRailOpen && (
+                    <>
+                      <ResizeHandle onResize={handleRailResize} onResizeEnd={saveRailWidth} onReset={resetRailWidth} />
+                      <div style={{ width: railWidth }} className="shrink-0 border-l border-border bg-surface">
+                        <AgendaRail />
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+            </motion.div>
           </div>
         )}
       </div>
