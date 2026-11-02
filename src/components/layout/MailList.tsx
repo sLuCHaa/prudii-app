@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState, useRef, useMemo, DragEvent } from "react";
+import { useEffect, useLayoutEffect, useCallback, useState, useRef, useMemo, DragEvent } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Loader2, X, Mail as MailIcon, MailOpen, Check, Pin, Clock, CalendarClock, FileText, ShieldAlert, Folder, Archive, Paperclip, Inbox, MagnifierIcon, Send, Star, StarIcon, Trash2 } from "../icons";
 import { createPortal } from "react-dom";
@@ -36,6 +36,7 @@ import { LoadingCrossfade } from "../motion/LoadingCrossfade";
 import { InboxZeroFlight } from "../motion/InboxZeroFlight";
 import { ENTRANCE, prefersReducedMotion } from "../motion/tokens";
 import { SWEEP_MAILS_EVENT, SWEEP_TWEEN, type SweepDetail } from "../motion/sweepMails";
+import { playRowShifts, snapshotRows } from "../motion/rowShift";
 import { keepRowsLeaving } from "../../lib/mailListSync";
 import { moveTargets } from "../../lib/moveTargets";
 import { ContextMenu } from "../ui/ContextMenu";
@@ -697,6 +698,7 @@ function VirtualMailList({
                 <div
                   key="__spinner"
                   data-index={vRow.index}
+                  data-row-key="__spinner"
                   ref={rowVirtualizer.measureElement}
                   style={{
                     position: "absolute",
@@ -721,6 +723,7 @@ function VirtualMailList({
                 <div
                   key={item.key}
                   data-index={vRow.index}
+                  data-row-key={item.key}
                   ref={rowVirtualizer.measureElement}
                   style={{
                     position: "absolute",
@@ -748,6 +751,7 @@ function VirtualMailList({
               <div
                 key={mail.id}
                 data-index={vRow.index}
+                data-row-key={mail.id}
                 ref={rowVirtualizer.measureElement}
                 style={{
                   position: "absolute",
@@ -1860,6 +1864,8 @@ export function MailList() {
     setSelectedMailId(remaining[Math.min(index, remaining.length - 1)].id);
   }, [setSelectedMailId]);
 
+  const shiftFromRef = useRef<Map<string, number> | null>(null);
+
   // The one exit path for rows leaving the list, single or bulk: the same tween
   // the folder-empty sweep uses, staggered so a selection cascades away instead
   // of blinking out all at once.
@@ -1868,9 +1874,10 @@ export function MailList() {
     const removeIds = pendingRemoveIds;
     const removed = new Set(removeIds);
 
-    const settle = () => {
+    const settle = (glide: boolean) => {
       const { mails: currentMails, selectedMailIndex: idx, pendingRemoveIds: stillPending } = useAppStore.getState();
       const remaining = currentMails.filter((m) => !removed.has(m.id));
+      if (glide && listRef.current) shiftFromRef.current = snapshotRows(listRef.current);
       selectAfterRemoval(remaining, idx);
       setMails(remaining);
       // A second delete started mid-sweep owns the flag now; clearing it blindly
@@ -1888,14 +1895,21 @@ export function MailList() {
       .filter((el): el is HTMLDivElement => Boolean(el));
 
     if (rows.length === 0 || prefersReducedMotion()) {
-      settle();
+      settle(false);
       return;
     }
     // Fade/slide only — height animation fights the virtualizer's absolute
     // layout. stagger.amount caps the cascade so the total stays inside
     // SWEEP_DURATION_MS however many rows are leaving.
-    gsap.to(rows, { ...SWEEP_TWEEN, stagger: { amount: 0.15 }, onComplete: settle });
+    gsap.to(rows, { ...SWEEP_TWEEN, stagger: { amount: 0.15 }, onComplete: () => settle(true) });
   }, [pendingRemoveIds]);
+
+  useLayoutEffect(() => {
+    const before = shiftFromRef.current;
+    if (!before || !listRef.current) return;
+    shiftFromRef.current = null;
+    playRowShifts(listRef.current, before);
+  }, [mails]);
 
   if (!selectedFolderId && !activeFilter && !showAllInboxes && !activeCombinedFolder && !showSnoozed && !showScheduled && !showAssigned) {
     return (
