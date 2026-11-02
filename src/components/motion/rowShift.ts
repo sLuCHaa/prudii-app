@@ -1,8 +1,9 @@
 // Lets virtualized rows glide into the gap a removal leaves (FLIP). Animates the
 // individual `translate` property, so the virtualizer's own `transform` stays intact.
 
-const SHIFT_MS = 200;
-const SHIFT_EASE = "cubic-bezier(0.2, 0, 0, 1)";
+const SHIFT_MS = 220;
+// A gentle start: opening the next mail often drops a frame right as the glide begins.
+const SHIFT_EASE = "ease-out";
 
 export interface RowTop {
   key: string;
