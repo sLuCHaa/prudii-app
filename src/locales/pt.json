@@ -1442,6 +1442,12 @@
     "title": "Novidades do Prudii {{version}}",
     "subtitle": "Veja o que mudou desde a sua última atualização.",
     "done": "Entendi",
+    "v1_7_10": {
+      "icons": {
+        "title": "Novos ícones, um só estilo",
+        "text": "Todos os ícones têm agora a mesma forma tranquila com um preenchimento suave, na barra de ferramentas, nos menus e na barra lateral."
+      }
+    },
     "v1_7_9": {
       "sorting": {
         "title": "E-mails que se organizam sozinhos",

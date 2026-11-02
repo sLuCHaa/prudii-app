@@ -1442,6 +1442,12 @@
     "title": "Neu in Prudii {{version}}",
     "subtitle": "Das hat sich seit deinem letzten Update getan.",
     "done": "Verstanden",
+    "v1_7_10": {
+      "icons": {
+        "title": "Neue Icons, ein Stil",
+        "text": "Alle Symbole haben jetzt dieselbe ruhige Form mit leichter Fläche, in der Toolbar, in Menüs und in der Seitenleiste."
+      }
+    },
     "v1_7_9": {
       "sorting": {
         "title": "Mails sortieren sich selbst",

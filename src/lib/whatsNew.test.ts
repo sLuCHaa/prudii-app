@@ -85,6 +85,17 @@ describe("RELEASES", () => {
     expect(r?.items[0].icon).toBe("sparkles");
   });
 
+  it("leads 1.7.10 with the new icons and repeats the 1.7.9 highlights", () => {
+    // Only the newest release shows after skipped versions, so 1.7.8 users
+    // would otherwise never hear about sorting and export.
+    const r = RELEASES.find((x) => x.version === "1.7.10");
+    expect(r?.items.map((i) => i.key)).toEqual([
+      "whatsNew.v1_7_10.icons",
+      "whatsNew.v1_7_9.sorting",
+      "whatsNew.v1_7_9.export",
+    ]);
+  });
+
   it("announces the signature right after pasted images in 1.7.3", () => {
     const r = RELEASES.find((x) => x.version === "1.7.3");
     expect(r?.items.map((i) => i.key)).toEqual([
