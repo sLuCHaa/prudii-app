@@ -4,9 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Prudii</title>
+    <script>try{var m=localStorage.getItem("prudii-theme-mode");if(m==="dark"||m==="light")document.documentElement.dataset.boot=m}catch(e){}</script>
     <style>
       html,body{margin:0;background:#F4F4F5}
       @media(prefers-color-scheme:dark){html,body{background:#0C0C0E}}
+      html[data-boot=light],html[data-boot=light] body{background:#F4F4F5}
+      html[data-boot=dark],html[data-boot=dark] body{background:#0C0C0E}
     </style>
   </head>
   <body>

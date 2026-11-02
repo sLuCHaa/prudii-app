@@ -570,9 +570,12 @@ pub fn run() {
             let database = Database::new(app_data_dir.clone()).expect("Failed to initialize database");
 
             // Load + validate saved geometry against the current monitor layout.
-            let saved_geom = {
+            let (saved_geom, theme_mode) = {
                 let conn = database.lock_db();
-                window_geometry::load(&conn)
+                let theme_mode: Option<String> = conn
+                    .query_row("SELECT value FROM app_settings WHERE key = 'theme_mode'", [], |row| row.get(0))
+                    .ok();
+                (window_geometry::load(&conn), theme_mode)
             };
 
             // Self-heal autostart: if "launch on startup" is enabled, re-register it on
@@ -732,7 +735,11 @@ pub fn run() {
             }
 
             // Set window background color + DWM theme BEFORE showing the window
-            let dark = is_system_dark_mode();
+            let dark = match theme_mode.as_deref() {
+                Some("dark") => true,
+                Some("light") => false,
+                _ => is_system_dark_mode(),
+            };
             let bg = if dark {
                 Color(12, 12, 14, 255) // #0c0c0e
             } else {

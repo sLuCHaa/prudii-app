@@ -304,8 +304,10 @@ interface AppState {
 }
 
 const initialThemeMode = getStoredThemeMode();
-// Before the first render, so the first frame already has the right theme.
+// Before the first render, so the first frame already has the right theme. index.html's
+// boot background has done its job by now and must not outlive a later theme switch.
 document.documentElement.classList.toggle("dark", resolveTheme(initialThemeMode));
+delete document.documentElement.dataset.boot;
 
 export const useAppStore = create<AppState>((set, get) => ({
   accounts: [],
