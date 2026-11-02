@@ -94,6 +94,30 @@ function resolveTheme(mode: ThemeMode): boolean {
   return mode === "dark";
 }
 
+let themeApplied = false;
+
+// One crossfade instead of ~200 colour transitions finishing at different times.
+function switchTheme(dark: boolean, apply: () => void) {
+  const root = document.documentElement;
+  const visible = themeApplied && root.classList.contains("dark") !== dark;
+  themeApplied = true;
+  if (!visible) {
+    apply();
+    return;
+  }
+  const run = async () => {
+    root.classList.add("theme-switching");
+    apply();
+    // Lets React commit the store change before transitions come back.
+    await new Promise((r) => setTimeout(r, 0));
+    void root.offsetHeight;
+    root.classList.remove("theme-switching");
+  };
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (typeof document.startViewTransition === "function" && !reduce) document.startViewTransition(run);
+  else void run();
+}
+
 function applyTheme(mode: ThemeMode, dark: boolean) {
   document.documentElement.classList.toggle("dark", dark);
   // followsSystem: in system mode the native appearance must stay unpinned —
@@ -612,8 +636,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   setThemeMode: (mode) => {
     localStorage.setItem("prudii-theme-mode", mode);
     const dark = resolveTheme(mode);
-    applyTheme(mode, dark);
-    set({ themeMode: mode, darkMode: dark });
+    switchTheme(dark, () => {
+      applyTheme(mode, dark);
+      set({ themeMode: mode, darkMode: dark });
+    });
   },
   chooseMailSort: (sort) => {
     const next = { ...get().appSettings, mail_sort: sort };

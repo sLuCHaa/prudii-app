@@ -406,6 +406,19 @@ h3 { font-size: var(--text-base); }
   .modal-panel-enter, .modal-overlay-enter, .menu-enter { animation: none; }
 }
 
+/* Theme switch: everything flips in one step, the view transition does the fade. */
+.theme-switching,
+.theme-switching *,
+.theme-switching *::before,
+.theme-switching *::after {
+  transition: none !important;
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 240ms;
+  animation-timing-function: ease-out;
+}
+
 /* ─── Focus Ring Utility ─── */
 .focus-ring {
   outline: none;
