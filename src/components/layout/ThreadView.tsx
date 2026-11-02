@@ -55,6 +55,7 @@ import { formatFileSize } from "../../lib/fileSize";
 import { useMailFrameFit } from "../../hooks/useMailFrameFit";
 import { useLoadingHold } from "../../hooks/useLoadingHold";
 import { landSubjectFly } from "../motion/subjectFly";
+import { markDocument, searchTerms, splitMatches, termPattern } from "../../lib/searchHighlight";
 import { useOpenCheckedLink } from "../../hooks/useOpenCheckedLink";
 
 function getFileIcon(mimeType: string | null) {
@@ -363,6 +364,33 @@ const DARK_STYLES = `
 
 const INLINE_IMAGE_REF = /file:\/\/|cid:|blob:|Attachment\//;
 
+// Terms of the active search, so a mail opened from the results shows where it matched.
+const SearchHighlightContext = createContext<RegExp | null>(null);
+
+const MARK_STYLES = "mark[data-prudii-hl] { background: rgba(250, 204, 21, 0.45) !important; color: inherit !important; border-radius: 2px; padding: 0 1px; }";
+
+/** Viewport top of the first search hit in a card, inside its text or its mail frames. */
+function firstHitTop(card: Element): number | null {
+  const textHit = card.querySelector("mark[data-prudii-hl]");
+  if (textHit) return textHit.getBoundingClientRect().top;
+  for (const frame of Array.from(card.querySelectorAll("iframe"))) {
+    const hit = frame.contentDocument?.querySelector("mark[data-prudii-hl]");
+    if (hit) return frame.getBoundingClientRect().top + hit.getBoundingClientRect().top;
+  }
+  return null;
+}
+
+function MarkedText({ text, pattern }: { text: string; pattern: RegExp | null }) {
+  if (!pattern) return <>{text}</>;
+  return (
+    <>
+      {splitMatches(text, pattern).map((part, i) =>
+        part.hit ? <mark key={i} data-prudii-hl="" className="bg-warning/40 text-inherit rounded-sm">{part.text}</mark> : <Fragment key={i}>{part.text}</Fragment>,
+      )}
+    </>
+  );
+}
+
 // Lets a frame hold the conversation back until it is measured; returns the release.
 const PendingFrameContext = createContext<(() => () => void) | null>(null);
 
@@ -376,6 +404,16 @@ const HtmlMailFrame = memo(function HtmlMailFrame({ mailId, html, tight = false,
   const awaitsAttachments = attachmentsPending && INLINE_IMAGE_REF.test(html);
   // Images still loading after the first fit would grow the frame once it is on screen.
   const [loaded, setLoaded] = useState(false);
+  const highlight = useContext(SearchHighlightContext);
+  const paintHighlights = useCallback(() => {
+    const doc = iframeRef.current?.contentDocument;
+    if (doc?.URL === "about:srcdoc") markDocument(doc, highlight);
+  }, [highlight]);
+  useEffect(() => {
+    if (!loaded) return;
+    paintHighlights();
+    refit();
+  }, [paintHighlights, loaded, refit]);
   const settled = fitted && loaded && !awaitsAttachments;
   useLayoutEffect(() => (settled ? undefined : pendingFrame?.()), [settled, pendingFrame]);
   const [bodyMenu, setBodyMenu] = useState<{ target: BridgeContextMenu; x: number; y: number; seq: number } | null>(null);
@@ -415,7 +453,7 @@ const HtmlMailFrame = memo(function HtmlMailFrame({ mailId, html, tight = false,
       `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="script-src '${MAIL_LINK_BRIDGE_CSP_HASH}'; object-src 'none';"><style>
 ${BASE_STYLES}${tight ? "\n  body { padding: 4px 0; }" : ""}
-</style></head><body>${cleanHtml}<style>${themeStyles}</style><script>${MAIL_LINK_BRIDGE}</script></body></html>`,
+</style></head><body>${cleanHtml}<style>${themeStyles}${MARK_STYLES}</style><script>${MAIL_LINK_BRIDGE}</script></body></html>`,
     [cleanHtml, themeStyles, tight]
   );
 
@@ -494,6 +532,7 @@ ${BASE_STYLES}${tight ? "\n  body { padding: 4px 0; }" : ""}
         // On a color-scheme mismatch Chromium paints an opaque canvas behind the mail.
         style={{ width: "100%", height, border: "none", overflow: "hidden", background: "transparent", colorScheme: darkMode ? "dark" : "light", opacity: fitted ? 1 : 0, transition: "opacity 140ms ease-out" }}
         onLoad={() => {
+          paintHighlights();
           refit();
           if (iframeRef.current?.contentDocument?.URL === "about:srcdoc") setLoaded(true);
         }}
@@ -555,6 +594,7 @@ interface MessageCardProps {
 
 const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defaultExpanded, chat, own, onCollapse, onReply, onReplyAll, onForward, onIframeRef, onLinkClick, onUpdateMail }: MessageCardProps) {
   const { t } = useTranslation();
+  const highlight = useContext(SearchHighlightContext);
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [showQuoted, setShowQuoted] = useState(false);
@@ -902,7 +942,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
     </>
   ) : (
     <pre className="text-sm text-text-secondary whitespace-pre-wrap font-sans leading-relaxed select-text">
-      {hideQuotes && textWithoutQuotes !== null ? textWithoutQuotes : plainText}
+      <MarkedText text={hideQuotes && textWithoutQuotes !== null ? textWithoutQuotes : plainText} pattern={highlight} />
     </pre>
   );
 
@@ -1548,7 +1588,10 @@ export function ThreadView({ mail }: ThreadViewProps) {
     [folders, accounts],
   );
   const messagesContentRef = useRef<HTMLDivElement>(null);
-  useChatAnchor(messagesScrollRef, messagesContentRef, mail.id, chatView);
+  const searchQuery = useAppStore((s) => (s.searchOpen && s.searchQuery.length >= 2 ? s.searchQuery : ""));
+  const highlight = useMemo(() => termPattern(searchTerms(searchQuery)), [searchQuery]);
+  // Opened from search, the first hit is the anchor rather than the newest bubble.
+  useChatAnchor(messagesScrollRef, messagesContentRef, mail.id, chatView && !highlight);
   const selectedFolderId = useAppStore((s) => s.selectedFolderId);
   const addToast = useAppStore((s) => s.addToast);
   const queryClient = useQueryClient();
@@ -1765,6 +1808,18 @@ export function ThreadView({ mail }: ThreadViewProps) {
     };
   }, []);
   const holdFrames = useLoadingHold(pendingFrames > 0, mail.id, 350);
+  const scrolledToHit = useRef<string | null>(null);
+  useEffect(() => {
+    const scroller = messagesScrollRef.current;
+    const content = messagesContentRef.current;
+    if (!highlight || holdThread || holdFrames || scrolledToHit.current === mail.id || !scroller || !content) return;
+    // The opened mail may match only in its collapsed quote history; then the first visible hit in the thread.
+    const card = content.querySelector(`[data-mail-id="${mail.id}"]`);
+    const top = (card && firstHitTop(card)) ?? firstHitTop(content);
+    if (top === null) return;
+    scrolledToHit.current = mail.id;
+    scroller.scrollTop += top - scroller.getBoundingClientRect().top - scroller.clientHeight / 3;
+  }, [highlight, holdThread, holdFrames, mail.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="relative isolate flex flex-col h-full bg-bg-secondary">
@@ -1775,7 +1830,7 @@ export function ThreadView({ mail }: ThreadViewProps) {
             {/* Zweizeilig statt einzeilig abgeschnitten: ein langer Betreff
                 endet sonst mitten im Wort, und dies ist die einzige Stelle, an
                 der er ueberhaupt vollstaendig steht. title zeigt ihn ganz. */}
-            <h2 ref={titleRef} title={mail.subject} className="text-base font-semibold text-text leading-snug line-clamp-2 select-text">{mail.subject}</h2>
+            <h2 ref={titleRef} title={mail.subject} className="text-base font-semibold text-text leading-snug line-clamp-2 select-text"><MarkedText text={mail.subject} pattern={highlight} /></h2>
             {!loading && threadCount > 1 && (
               <span className="inline-flex items-center gap-1.5 mt-1 text-xs text-text-tertiary">
                 <MessageSquare className="w-3.5 h-3.5" />
@@ -1902,21 +1957,23 @@ export function ThreadView({ mail }: ThreadViewProps) {
               style={holdFrames ? { visibility: "hidden" } : undefined}
             >
               {!holdThread && (
-                <PendingFrameContext.Provider value={pendingFrame}>
-                  <ThreadMessages
-                    threadMails={threadMails}
-                    isSingleMail={isSingleMail}
-                    selectedMailId={mail.id}
-                    chat={chatView}
-                    isOwn={isOwn}
-                    onCollapse={revealMessageStart}
-                    onReply={handleReply}
-                    onReplyAll={handleReplyAll}
-                    onForward={handleForward}
-                    onLinkClick={handleLinkClick}
-                    onUpdateMail={handleUpdateThreadMail}
-                  />
-                </PendingFrameContext.Provider>
+                <SearchHighlightContext.Provider value={highlight}>
+                  <PendingFrameContext.Provider value={pendingFrame}>
+                    <ThreadMessages
+                      threadMails={threadMails}
+                      isSingleMail={isSingleMail}
+                      selectedMailId={mail.id}
+                      chat={chatView}
+                      isOwn={isOwn}
+                      onCollapse={revealMessageStart}
+                      onReply={handleReply}
+                      onReplyAll={handleReplyAll}
+                      onForward={handleForward}
+                      onLinkClick={handleLinkClick}
+                      onUpdateMail={handleUpdateThreadMail}
+                    />
+                  </PendingFrameContext.Provider>
+                </SearchHighlightContext.Provider>
               )}
             </div>
           </div>
