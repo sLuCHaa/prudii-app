@@ -53,6 +53,7 @@ import { useTranslation } from "react-i18next";
 import { ImageLightbox, type ImageLightboxItem } from "./ImageLightbox";
 import { formatFileSize } from "../../lib/fileSize";
 import { useMailFrameFit } from "../../hooks/useMailFrameFit";
+import { useLoadingHold } from "../../hooks/useLoadingHold";
 import { useOpenCheckedLink } from "../../hooks/useOpenCheckedLink";
 
 function getFileIcon(mimeType: string | null) {
@@ -1730,6 +1731,8 @@ export function ThreadView({ mail }: ThreadViewProps) {
   const latestMail = threadMails[0];
   const threadCount = threadMails.length;
   const isSingleMail = !loading && threadCount <= 1;
+  // The opened mail alone, then the whole thread a few frames later, flashes a different layout (most visibly in chat view).
+  const holdThread = useLoadingHold(loading, mail.id, 250);
 
   return (
     <div className="relative isolate flex flex-col h-full bg-bg-secondary">
@@ -1741,7 +1744,7 @@ export function ThreadView({ mail }: ThreadViewProps) {
                 endet sonst mitten im Wort, und dies ist die einzige Stelle, an
                 der er ueberhaupt vollstaendig steht. title zeigt ihn ganz. */}
             <h2 title={mail.subject} className="text-base font-semibold text-text leading-snug line-clamp-2 select-text">{mail.subject}</h2>
-            {!isSingleMail && (
+            {!loading && threadCount > 1 && (
               <span className="inline-flex items-center gap-1.5 mt-1 text-xs text-text-tertiary">
                 <MessageSquare className="w-3.5 h-3.5" />
                 {t("mailDetail.message", { count: threadCount })}
@@ -1862,19 +1865,21 @@ export function ThreadView({ mail }: ThreadViewProps) {
                 own (narrower) layout and are unaffected. */}
             {/* Chat bubbles cap their own width; the free space belongs between the sides. */}
             <div ref={messagesContentRef} className={`mx-auto w-full ${chatView && !isSingleMail ? "max-w-7xl" : "max-w-[840px]"}`}>
-              <ThreadMessages
-                threadMails={threadMails}
-                isSingleMail={isSingleMail}
-                selectedMailId={mail.id}
-                chat={chatView}
-                isOwn={isOwn}
-                onCollapse={revealMessageStart}
-                onReply={handleReply}
-                onReplyAll={handleReplyAll}
-                onForward={handleForward}
-                onLinkClick={handleLinkClick}
-                onUpdateMail={handleUpdateThreadMail}
-              />
+              {!holdThread && (
+                <ThreadMessages
+                  threadMails={threadMails}
+                  isSingleMail={isSingleMail}
+                  selectedMailId={mail.id}
+                  chat={chatView}
+                  isOwn={isOwn}
+                  onCollapse={revealMessageStart}
+                  onReply={handleReply}
+                  onReplyAll={handleReplyAll}
+                  onForward={handleForward}
+                  onLinkClick={handleLinkClick}
+                  onUpdateMail={handleUpdateThreadMail}
+                />
+              )}
             </div>
           </div>
         </div>
