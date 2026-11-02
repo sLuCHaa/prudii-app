@@ -2000,8 +2000,11 @@ export function MailList() {
   }, [mails]);
 
   if (!selectedFolderId && !activeFilter && !showAllInboxes && !activeCombinedFolder && !showSnoozed && !showScheduled && !showAssigned) {
+    // A column of its own: the sky only grows (flex-1) inside one, otherwise it stops at its 320px minimum.
     return (
-      <EmptyState title={t("mailList.selectFolder")} description={t("mailList.selectFolderDesc")} atmosphere />
+      <div className="flex flex-col h-full">
+        <EmptyState title={t("mailList.selectFolder")} description={t("mailList.selectFolderDesc")} atmosphere />
+      </div>
     );
   }
 
