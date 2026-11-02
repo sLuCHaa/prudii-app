@@ -1782,7 +1782,7 @@ export function ThreadView({ mail }: ThreadViewProps) {
           {/* Aktionen teilen sich die Kopfzeile, statt eine eigene zu belegen —
               shrink-0, damit ein langer Betreff sie nie zusammendrueckt. */}
           <div className="flex items-center gap-0.5 shrink-0">
-            <Tooltip label={t("mailDetail.reply")}>
+            <Tooltip label={t("mailDetail.reply")} shortcut="Mod+R">
               <button
                 aria-label={t("mailDetail.reply")}
                 onClick={() => openCompose("reply", mail)}
@@ -1791,7 +1791,7 @@ export function ThreadView({ mail }: ThreadViewProps) {
                 <Reply className="w-5 h-5" />
               </button>
             </Tooltip>
-            <Tooltip label={t("mailDetail.replyAll")}>
+            <Tooltip label={t("mailDetail.replyAll")} shortcut="Mod+Shift+R">
               <button
                 aria-label={t("mailDetail.replyAll")}
                 onClick={() => openCompose("replyAll", mail)}
@@ -1800,7 +1800,7 @@ export function ThreadView({ mail }: ThreadViewProps) {
                 <ReplyAll className="w-5 h-5" />
               </button>
             </Tooltip>
-            <Tooltip label={t("mailDetail.forward")}>
+            <Tooltip label={t("mailDetail.forward")} shortcut="Mod+Shift+F">
               <button
                 aria-label={t("mailDetail.forward")}
                 onClick={() => openCompose("forward", mail)}
@@ -1835,7 +1835,7 @@ export function ThreadView({ mail }: ThreadViewProps) {
                 <Printer className="w-5 h-5" />
               </button>
             </Tooltip>
-            <Tooltip label={t("mailDetail.archiveConversation")}>
+            <Tooltip label={t("mailDetail.archiveConversation")} shortcut="E">
               <button
                 aria-label={t("mailDetail.archiveConversation")}
                 onClick={handleArchive}

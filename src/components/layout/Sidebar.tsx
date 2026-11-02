@@ -1431,7 +1431,7 @@ export function Sidebar() {
               </button>
             </Tooltip>
           )}
-          <Tooltip label={t("sidebar.expandSidebar", { defaultValue: "Expand sidebar" })}>
+          <Tooltip label={t("sidebar.expandSidebar", { defaultValue: "Expand sidebar" })} shortcut="Mod+B">
             <button
               onClick={toggleSidebar}
               className="p-1.5 rounded-md hover:bg-hover transition-colors text-text-tertiary"
@@ -1522,7 +1522,7 @@ export function Sidebar() {
               </div>
             )}
           </div>
-          <Tooltip label={t("sidebar.collapseSidebar", { defaultValue: "Collapse sidebar" })} className="shrink-0">
+          <Tooltip label={t("sidebar.collapseSidebar", { defaultValue: "Collapse sidebar" })} shortcut="Mod+B" className="shrink-0">
             <button
               onClick={toggleSidebar}
               className="p-1.5 rounded-md hover:bg-hover transition-colors text-text-tertiary shrink-0"

@@ -2085,7 +2085,7 @@ export function MailList() {
                 <Star className="w-4 h-4" />
               </button>
             </Tooltip>
-            <Tooltip label={t("mailDetail.archive")}>
+            <Tooltip label={t("mailDetail.archive")} shortcut="E">
               <button
                 onClick={() => {
                   const ids = Array.from(selectedMailIds);
@@ -2102,7 +2102,7 @@ export function MailList() {
                 <Archive className="w-4 h-4" />
               </button>
             </Tooltip>
-            <Tooltip label={t("mailDetail.trash")}>
+            <Tooltip label={t("mailDetail.trash")} shortcut="Del">
               <button
                 onClick={() => {
                   const ids = Array.from(selectedMailIds);

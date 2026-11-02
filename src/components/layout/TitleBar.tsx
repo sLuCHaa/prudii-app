@@ -100,7 +100,7 @@ export function TitleBar() {
             </button>
           </Tooltip>
         )}
-        <Tooltip label={t("calendar.title")} className="h-full">
+        <Tooltip label={t("calendar.title")} shortcut="Mod+Shift+K" className="h-full">
           <button
             onClick={() => setShowCalendar(true)}
             className="inline-flex items-center justify-center w-11 h-full hover:bg-hover transition-colors text-text-secondary"
@@ -109,7 +109,7 @@ export function TitleBar() {
             <CalendarDays size={14} strokeWidth={1.5} />
           </button>
         </Tooltip>
-        <Tooltip label={t("tasks.title")} className="h-full">
+        <Tooltip label={t("tasks.title")} shortcut="Mod+Shift+T" className="h-full">
           <button
             ref={tasksButtonRef}
             onClick={(e) => { if (e.shiftKey) openQuickAdd(); else setShowTasks(true); }}
@@ -131,7 +131,7 @@ export function TitleBar() {
           </button>
         </Tooltip>
         {quickAddAnchor && <QuickAddPopover anchorRect={quickAddAnchor} onClose={() => setQuickAddAnchor(null)} />}
-        <Tooltip label={t("titleBar.settings")} className="h-full">
+        <Tooltip label={t("titleBar.settings")} shortcut="Mod+," className="h-full">
           <button
             onClick={() => setShowSettings(true)}
             className="inline-flex items-center justify-center w-11 h-full hover:bg-hover transition-colors text-text-secondary"

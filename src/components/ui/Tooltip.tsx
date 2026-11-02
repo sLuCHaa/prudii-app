@@ -1,8 +1,12 @@
 import { useRef, useState, useCallback, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
+import { formatShortcut } from "../../lib/shortcuts";
+import { isMacOS } from "../../lib/platform";
 
 interface TooltipProps {
   label: React.ReactNode;
+  /** Keyboard shortcut in ShortcutHelp notation ("Mod+Shift+R", "E"). */
+  shortcut?: string;
   rich?: boolean;
   /** Preferred side; flips when there is no room. */
   side?: "top" | "bottom";
@@ -33,7 +37,7 @@ export function clampCenter(center: number, width: number, viewport: number): nu
  * consistent delay. Wraps its child in an inline-flex span; keep aria-labels
  * on the child for screen readers.
  */
-export function Tooltip({ label, rich, side = "bottom", delayMs = 450, className, children }: TooltipProps) {
+export function Tooltip({ label, shortcut, rich, side = "bottom", delayMs = 450, className, children }: TooltipProps) {
   const wrapRef = useRef<HTMLSpanElement>(null);
   const bubbleRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<number | null>(null);
@@ -95,6 +99,7 @@ export function Tooltip({ label, rich, side = "bottom", delayMs = 450, className
             }}
           >
             {label}
+            {shortcut && <kbd className="tooltip-kbd">{formatShortcut(shortcut, isMacOS)}</kbd>}
           </div>,
           document.body
         )}
