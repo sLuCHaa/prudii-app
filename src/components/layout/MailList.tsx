@@ -48,6 +48,7 @@ const SNOOZE_MENU_WIDTH = 176;
 import { formatMailDate } from "../../lib/dateUtils";
 import { absenceMeansMoved, isDateSort, parseMailSort } from "../../lib/mailSort";
 import { buildListItems, rowEstimateFor, type ListItem } from "../../lib/mailListItems";
+import { anchorAt, type ScrollAnchor } from "../../lib/scrollAnchor";
 import { makeIsOutgoing } from "../../lib/outgoing";
 import { MailSortMenu } from "./MailSortMenu";
 import { runMailAction, toastError, causeMessage } from "../../lib/errorToast";
@@ -445,6 +446,7 @@ function SearchResultsList({ results, isLoading, selectedMailId, setSelectedMail
 
 interface VirtualMailListProps {
   listRef: React.RefObject<HTMLDivElement | null>;
+  viewKey: string;
   filteredMails: Mail[];
   taskCounts: Record<string, number>;
   assignments: Map<string, Assignment>;
@@ -482,8 +484,14 @@ interface VirtualMailListProps {
 
 const SKY_FADE = "linear-gradient(to bottom, transparent, black 72px)";
 
+// Per view, anchored on the top row so mail arriving above it doesn't shift the spot.
+const scrollAnchors = new Map<string, ScrollAnchor>();
+
+const listItemKey = (item: ListItem) => (item.kind === "separator" ? item.key : item.mail.id);
+
 function VirtualMailList({
   listRef,
+  viewKey,
   filteredMails,
   taskCounts,
   assignments,
@@ -552,6 +560,44 @@ function VirtualMailList({
       return item.kind === "separator" ? item.key : item.mail.id;
     },
   });
+
+  // Returning to a view lands where it was left; a view never scrolled starts at the top.
+  const pendingAnchor = useRef<{ anchor: ScrollAnchor; stale: ListItem[] | null; at: number } | null>(null);
+  const committedItems = useRef<ListItem[] | null>(null);
+  useLayoutEffect(() => {
+    const anchor = scrollAnchors.get(viewKey);
+    // Until the new view's rows arrive, the list still holds the previous view's.
+    pendingAnchor.current = anchor ? { anchor, stale: committedItems.current, at: Date.now() } : null;
+    if (!anchor) listRef.current?.scrollTo({ top: 0 });
+  }, [viewKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useLayoutEffect(() => {
+    const pending = pendingAnchor.current;
+    const stale = pending !== null && virtualItems === pending.stale;
+    committedItems.current = virtualItems;
+    if (!pending || stale) return;
+    if (virtualItems.length === 0 && Date.now() - pending.at < 1500) return;
+    pendingAnchor.current = null;
+    const index = virtualItems.findIndex((item) => listItemKey(item) === pending.anchor.key);
+    if (index < 0) {
+      listRef.current?.scrollTo({ top: 0 });
+      return;
+    }
+    const start = rowVirtualizer.getOffsetForIndex(index, "start")?.[0] ?? 0;
+    rowVirtualizer.scrollToOffset(start + pending.anchor.offset);
+  }, [virtualItems]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const rememberScroll = useCallback(() => {
+    const el = listRef.current;
+    if (!el || pendingAnchor.current) return;
+    const anchor = anchorAt(
+      rowVirtualizer.getVirtualItems(),
+      (i) => (i < virtualItems.length ? listItemKey(virtualItems[i]) : null),
+      el.scrollTop,
+    );
+    if (anchor) scrollAnchors.set(viewKey, anchor);
+    else scrollAnchors.delete(viewKey);
+  }, [listRef, rowVirtualizer, virtualItems, viewKey]);
 
   // Scroll selected mail into view when keyboard-navigating (j/k)
   useEffect(() => {
@@ -683,7 +729,10 @@ function VirtualMailList({
         ref={listRef}
         className="flex-1 overflow-y-auto overscroll-contain flex flex-col"
         style={{ contain: "strict" }}
-        onScroll={handleListScroll}
+        onScroll={(e) => {
+          handleListScroll(e);
+          rememberScroll();
+        }}
       >
         <div
           className="shrink-0"
@@ -1851,11 +1900,7 @@ export function MailList() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [filteredMails, selectedMailIndex, selectMail, setSelectedMailId, multiSelectMode, selectedMailIds, clearSelection, selectAllMails, setMails, mails, isSearchActive, searchResultsData, selectedMailId, contextMenu, invalidateMailQueries, handleArchiveSuccess, setPendingRemoveIds, toggleMailSelection, setSelectionSpan, setSelectedMailIndex, rowEstimate]);
 
-  // Each view starts at the top — without this, the previous folder's scroll
-  // offset carried over and landed the new folder mid-list.
-  useEffect(() => {
-    listRef.current?.scrollTo({ top: 0 });
-  }, [selectedFolderId, activeFilter, showAllInboxes, activeCombinedFolder, showSnoozed, showAssigned, activeCategory]);
+  const viewKey = JSON.stringify([selectedFolderId, activeFilter, showAllInboxes, activeCombinedFolder, showSnoozed, showAssigned, activeCategory]);
 
   // No entrance animation on folder switches (post-paint effects flash).
   const selectAfterRemoval = useCallback((remaining: Mail[], index: number) => {
@@ -2184,6 +2229,7 @@ export function MailList() {
           ) : (
             <VirtualMailList
               listRef={listRef}
+              viewKey={viewKey}
               filteredMails={filteredMails}
               taskCounts={taskCounts}
               assignments={assignmentsByMessageId}
