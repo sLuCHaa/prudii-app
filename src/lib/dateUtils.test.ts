@@ -90,3 +90,21 @@ describe("getDateGroup", () => {
     expect(getDateGroup("2026-03-14T10:00:00Z", 1)).toBe("yesterday");
   });
 });
+
+describe("formatMailDate formatter reuse", () => {
+  it("builds each date format once, not once per row", () => {
+    const spy = vi.spyOn(Intl, "DateTimeFormat");
+    for (let i = 1; i <= 40; i++) {
+      formatMailDate(`2026-02-${String((i % 27) + 1).padStart(2, "0")}T10:00:00Z`, true);
+      formatMailDate(`2024-05-${String((i % 27) + 1).padStart(2, "0")}T10:00:00Z`, true);
+    }
+    expect(spy.mock.calls.length).toBeLessThanOrEqual(2);
+    spy.mockRestore();
+  });
+
+  it("follows a language switch", async () => {
+    const before = formatMailDate("2026-02-03T10:00:00Z", true);
+    await i18n.changeLanguage("de");
+    expect(formatMailDate("2026-02-03T10:00:00Z", true)).not.toBe(before);
+  });
+});

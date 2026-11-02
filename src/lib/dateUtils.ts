@@ -29,6 +29,22 @@ export function formatDateTime(date: Date, use24h: boolean): string {
   return format(date, `PPP, ${timeFormat}`, { locale: dateLocale() });
 }
 
+// Building an Intl.DateTimeFormat costs far more than formatting with one; the list formats a date per row per render.
+const listDateFormats = new Map<string, Intl.DateTimeFormat>();
+
+function listDateFormat(kind: "monthDay" | "numeric"): Intl.DateTimeFormat {
+  const key = `${i18n.language}|${kind}`;
+  let formatter = listDateFormats.get(key);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(
+      i18n.language,
+      kind === "monthDay" ? { month: "short", day: "numeric" } : { day: "2-digit", month: "2-digit", year: "2-digit" },
+    );
+    listDateFormats.set(key, formatter);
+  }
+  return formatter;
+}
+
 /**
  * Format date for mail list - shows time for today, "Yesterday" for yesterday, date for older
  */
@@ -38,8 +54,8 @@ export function formatMailDate(dateStr: string, use24h: boolean): string {
     if (isToday(date)) return formatTime(date, use24h);
     if (isYesterday(date)) return i18n.t("dateGroups.yesterday");
     // Intl orders day/month per locale ("Mar 12" vs "12. März")
-    if (isThisYear(date)) return new Intl.DateTimeFormat(i18n.language, { month: "short", day: "numeric" }).format(date);
-    return new Intl.DateTimeFormat(i18n.language, { day: "2-digit", month: "2-digit", year: "2-digit" }).format(date);
+    if (isThisYear(date)) return listDateFormat("monthDay").format(date);
+    return listDateFormat("numeric").format(date);
   } catch {
     return dateStr;
   }
