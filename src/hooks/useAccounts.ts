@@ -1,4 +1,4 @@
-import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { listAccounts, createAccount, deleteAccount, listFolders, listMails, listFilteredMails, listAllInboxMails, listCombinedFolderMails, listSnoozedMails, listAttachments, toggleStar, togglePin, toggleMailFlag, listRules, createRule, updateRule, deleteRule, applyRulesNow } from "../lib/tauri";
 import type { CreateAccountRequest, CreateRuleRequest, Mail, MailFlag, MailRule } from "../types";
 import type { MailFilter } from "../stores/appStore";
@@ -42,16 +42,30 @@ export function useFolders(accountId: string | null) {
   });
 }
 
+function folderMailsQuery(folderId: string | null, filterKey: string | undefined, sort: MailSort) {
+  return {
+    queryKey: ["mails", folderId, filterKey, sort],
+    queryFn: ({ pageParam = 0 }: { pageParam?: unknown }) => listMails(folderId!, PAGE_SIZE, pageParam as number, filterKey, sort),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage: Mail[], allPages: Mail[][]) =>
+      lastPage.length < PAGE_SIZE ? undefined : allPages.flat().length,
+  };
+}
+
 export function useMails(folderId: string | null, folderFilter: string | undefined, sort: MailSort) {
   const filterKey = folderFilter && folderFilter !== "all" ? folderFilter : undefined;
   return useInfiniteQuery<Mail[]>({
-    queryKey: ["mails", folderId, filterKey, sort],
-    queryFn: ({ pageParam = 0 }) => listMails(folderId!, PAGE_SIZE, pageParam as number, filterKey, sort),
-    initialPageParam: 0,
-    getNextPageParam: (lastPage, allPages) =>
-      lastPage.length < PAGE_SIZE ? undefined : allPages.flat().length,
+    ...folderMailsQuery(folderId, filterKey, sort),
     enabled: !!folderId,
     staleTime: 0,
+  });
+}
+
+/** First page of a folder as opening it shows it (filter reset to "all"). */
+export function prefetchFolderMails(queryClient: QueryClient, folderId: string, sort: MailSort) {
+  return queryClient.prefetchInfiniteQuery<Mail[]>({
+    ...folderMailsQuery(folderId, undefined, sort),
+    staleTime: 5_000,
   });
 }
 

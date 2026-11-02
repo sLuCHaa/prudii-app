@@ -6,7 +6,8 @@ import { useTodayCount } from "../../hooks/useCalendar";
 import gsap from "gsap";
 import { prefersReducedMotion } from "../motion/tokens";
 import { useAppStore, type MailFilter } from "../../stores/appStore";
-import { useAccounts, useFolders } from "../../hooks/useAccounts";
+import { useAccounts, useFolders, prefetchFolderMails } from "../../hooks/useAccounts";
+import { parseMailSort } from "../../lib/mailSort";
 import { useSyncAccount, useSyncAll } from "../../hooks/useSync";
 import { useRemoveAccount } from "../../hooks/useRemoveAccount";
 import { useOpenTaskCount } from "../../hooks/useTasks";
@@ -357,8 +358,10 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
   const removeAccount = useRemoveAccount();
   const queryClient = useQueryClient();
   const dialog = useDialog();
+  const warmTimer = useRef(0);
+  useEffect(() => () => window.clearTimeout(warmTimer.current), []);
 
-  const setFolderRef = (id: string, el: HTMLButtonElement | null) => {
+  const setFolderRef =(id: string, el: HTMLButtonElement | null) => {
     if (el) {
       folderRefs.current.set(id, el);
     } else {
@@ -615,7 +618,22 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
     setRenameValue("");
   }
 
+  // A short dwell first, so sweeping the pointer across the list stays free.
+  function warmFolder(folderId: string) {
+    window.clearTimeout(warmTimer.current);
+    if (useAppStore.getState().selectedFolderId === folderId) return;
+    warmTimer.current = window.setTimeout(() => {
+      const sort = parseMailSort(useAppStore.getState().appSettings.mail_sort);
+      prefetchFolderMails(queryClient, folderId, sort).catch(() => {});
+    }, 120);
+  }
+
+  function coolFolder() {
+    window.clearTimeout(warmTimer.current);
+  }
+
   function handleFolderOpen(folder: FolderT) {
+    coolFolder();
     useAppStore.setState({ showAllInboxes: false, activeCombinedFolder: null });
     setSelectedAccountId(account.id);
     setActiveFilter(null);
@@ -681,6 +699,8 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
                 key={folder.id}
                 ref={(el) => setFolderRef(folder.id, el)}
                 onClick={() => handleFolderOpen(folder)}
+                onMouseEnter={() => warmFolder(folder.id)}
+                onMouseLeave={coolFolder}
                 onContextMenu={(e) => handleFolderContextMenu(e, folder)}
                 onDragOver={(e) => handleDragOver(e, folder)}
                 onDragLeave={(e) => handleDragLeave(e, folder)}
@@ -823,6 +843,8 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
                 ref={(el) => setFolderRef(folder.id, el)}
                 selected={selectedFolderId === folder.id && !activeCategory}
                 onClick={() => handleFolderOpen(folder)}
+                onMouseEnter={() => warmFolder(folder.id)}
+                onMouseLeave={coolFolder}
                 onContextMenu={(e) => handleFolderContextMenu(e, folder)}
                 onDragOver={(e) => handleDragOver(e, folder)}
                 onDragLeave={(e) => handleDragLeave(e, folder)}
