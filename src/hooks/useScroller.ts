@@ -13,9 +13,12 @@ import { useOverlayScrollbars } from "overlayscrollbars-react";
  * scroll element's padding — pad an inner element instead.
  *
  * Pass an existing ref (e.g. a virtualizer's scroll ref) or let it create one.
+ * `immediate` for containers that will hold iframes: setting up moves the scroll
+ * element, and a moved iframe reloads.
  */
 export function useScroller<T extends HTMLElement = HTMLDivElement>(
   externalRef?: RefObject<T | null>,
+  { immediate = false }: { immediate?: boolean } = {},
 ): { host: RefObject<HTMLDivElement | null>; viewport: RefObject<T | null> } {
   const host = useRef<HTMLDivElement>(null);
   const internalRef = useRef<T>(null);
@@ -30,7 +33,7 @@ export function useScroller<T extends HTMLElement = HTMLDivElement>(
         clickScroll: true,
       },
     },
-    defer: true,
+    defer: !immediate,
   });
 
   useEffect(() => {

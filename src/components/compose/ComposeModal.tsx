@@ -378,7 +378,7 @@ function SendButton({ onSend, disabled, onPhaseChange }: { onSend: () => Promise
 
 export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(function ComposeForm({ isOpen, onClose, mode, originalMail, initData }, ref) {
   const { t } = useTranslation();
-  const { host: scrollHostRef, viewport: scrollRef } = useScroller<HTMLDivElement>();
+  const { host: scrollHostRef, viewport: scrollRef } = useScroller<HTMLDivElement>(undefined, { immediate: true });
 
   // In separate window mode, use initData; in modal mode, use hooks/store
   const { data: hookAccounts } = useAccounts();

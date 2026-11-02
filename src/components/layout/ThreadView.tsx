@@ -1517,7 +1517,7 @@ interface ThreadViewProps {
 
 export function ThreadView({ mail }: ThreadViewProps) {
   const { t } = useTranslation();
-  const { host: messagesHostRef, viewport: messagesScrollRef } = useScroller<HTMLDivElement>();
+  const { host: messagesHostRef, viewport: messagesScrollRef } = useScroller<HTMLDivElement>(undefined, { immediate: true });
   const scrollToMessage = useCallback((mailId: string) => {
     messagesScrollRef.current
       ?.querySelector(`[data-mail-id="${CSS.escape(mailId)}"]`)
