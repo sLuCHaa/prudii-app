@@ -8,8 +8,10 @@ pub const KINDS: [&str; 3] = ["pixel", "hidden", "tracking_domain"];
 pub(crate) const BULK_SQL: &str = "(COALESCE(m.list_unsubscribe, '') != '' OR m.category IN ('newsletters', 'promotions'))";
 
 // Gmail keeps one row per label; a message counts once, whichever row was shown.
-const SCANNED_SQL: &str = "EXISTS (SELECT 1 FROM mail_tracker_scans s JOIN mails o ON o.id = s.mail_id
-     WHERE s.mail_id = m.id OR (COALESCE(m.message_id, '') != '' AND o.account_id = m.account_id AND o.message_id = m.message_id))";
+// Two EXISTS instead of one OR, so each half can use an index rather than walk every scan.
+const SCANNED_SQL: &str = "(EXISTS (SELECT 1 FROM mail_tracker_scans s WHERE s.mail_id = m.id)
+     OR (COALESCE(m.message_id, '') != '' AND EXISTS (SELECT 1 FROM mails o JOIN mail_tracker_scans s ON s.mail_id = o.id
+         WHERE o.account_id = m.account_id AND o.message_id = m.message_id)))";
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct TrackerHit {
@@ -59,12 +61,16 @@ pub fn record(conn: &Connection, rec: &TrackerRecord, now: DateTime<Utc>) -> rus
     Ok(true)
 }
 
-pub fn unscanned_bodies(conn: &Connection, cutoff: &str, limit: u32) -> rusqlite::Result<Vec<StoredBody>> {
-    conn.prepare(&format!(
+fn unscanned_sql() -> String {
+    format!(
         "SELECT m.id, m.body_html FROM mails m
          WHERE {BULK_SQL} AND m.date >= ?1 AND COALESCE(m.body_html, '') != '' AND NOT {SCANNED_SQL}
          ORDER BY m.date DESC LIMIT ?2"
-    ))?
+    )
+}
+
+pub fn unscanned_bodies(conn: &Connection, cutoff: &str, limit: u32) -> rusqlite::Result<Vec<StoredBody>> {
+    conn.prepare(&unscanned_sql())?
     .query_map(params![cutoff, limit], |r| Ok(StoredBody { mail_id: r.get(0)?, html: r.get(1)? }))?
     .collect()
 }
@@ -381,6 +387,35 @@ mod tests {
         assert_eq!(bulk_mails_missing_body(&conn, &f.account, CUTOFF, 10).unwrap().len(), 1);
         conn.execute("UPDATE mails SET body_html = '<p>da</p>' WHERE id = ?1", [&copy]).unwrap();
         assert!(bulk_mails_missing_body(&conn, &f.account, CUTOFF, 10).unwrap().is_empty());
+    }
+
+    #[test]
+    fn scanned_check_never_walks_the_scan_table() {
+        let f = fx();
+        let conn = f.db.lock_db();
+        let plan: Vec<String> = conn
+            .prepare(&format!("EXPLAIN QUERY PLAN {}", unscanned_sql()))
+            .unwrap()
+            .query_map(params![CUTOFF, 25], |r| r.get::<_, String>(3))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        assert!(!plan.iter().any(|step| step.starts_with("SCAN s")), "{plan:#?}");
+    }
+
+    #[test]
+    fn label_copy_of_a_scanned_message_is_not_listed() {
+        let f = fx();
+        let first = list_mail(&f, "2026-10-10T09:00:00Z", "msg-1", "<p>Hallo</p>");
+        let conn = f.db.lock_db();
+        let label = seed_folder(&conn, &f.account, "custom");
+        let copy = seed_mail(
+            &conn,
+            &SeedMail { account_id: &f.account, folder_id: &label, from_email: "news@halde-shop.example", list_unsubscribe: UNSUB, date: "2026-10-10T09:00:00Z", ..Default::default() },
+        );
+        conn.execute("UPDATE mails SET message_id = 'msg-1', body_html = '<p>Hallo</p>' WHERE id = ?1", [&copy]).unwrap();
+        record(&conn, &TrackerRecord { mail_id: first, hits: vec![] }, now()).unwrap();
+        assert!(unscanned_bodies(&conn, CUTOFF, 10).unwrap().is_empty());
     }
 
     #[test]

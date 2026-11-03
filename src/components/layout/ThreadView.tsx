@@ -452,10 +452,6 @@ const HtmlMailFrame = memo(function HtmlMailFrame({ mailId, html, tight = false,
     if (heldBack) onHeldBack?.(mailId);
   }, [heldBack, mailId, onHeldBack]);
 
-  useEffect(() => {
-    displayTrackerRecorder.add(mailId, trackers, showTrackedImages);
-  }, [mailId, trackers, showTrackedImages]);
-
   // The bridge script is allow-listed by its SHA-256 hash in both this iframe's
   // CSP and the parent CSP (tauri.conf.json) — a `srcdoc` iframe inherits the
   // parent's CSP, and the production build enforces it. The email's own scripts
@@ -779,6 +775,15 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
   useEffect(() => {
     if (cardTrackers) handleTrackersDetected(cardTrackers);
   }, [cardTrackers, handleTrackersDetected]);
+
+  // The frames only see parts (quotes folded, embedded cards); the count must cover the whole stored body.
+  const bodyTrackers = useMemo(
+    () => (displayMail.body_html ? sanitizeEmailHtml(displayMail.body_html).trackers : null),
+    [displayMail.body_html],
+  );
+  useEffect(() => {
+    if (bodyTrackers) displayTrackerRecorder.add(displayMail.id, bodyTrackers, showTrackedImages);
+  }, [displayMail.id, bodyTrackers, showTrackedImages]);
 
   const hasExternalImages = useMemo(() => {
     if (!displayMail.body_html) return false;

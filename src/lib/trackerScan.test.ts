@@ -57,6 +57,17 @@ describe("scanStoredBodies", () => {
     expect(send).toHaveBeenCalledTimes(2);
   });
 
+  it("yields to the interface while sanitizing a batch", async () => {
+    let clock = 0;
+    const pages = [bodies(3), []];
+    const pause = vi.fn(async () => {});
+    await scanStoredBodies(
+      { list: async () => pages.shift() ?? [], detect: () => { clock += 10; return []; }, send: async (r) => r.length, pause, now: () => clock },
+      25,
+    );
+    expect(pause.mock.calls.length).toBeGreaterThanOrEqual(3);
+  });
+
   it("stops when a batch counts nothing new", async () => {
     const list = vi.fn(async () => bodies(2));
     const scanned = await scanStoredBodies({ list, detect: () => [], send: async () => 0, pause: async () => {} }, 25);

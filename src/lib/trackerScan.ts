@@ -51,15 +51,29 @@ interface ScanDeps {
   detect: (html: string) => TrackerInfo[];
   send: (records: TrackerRecord[]) => Promise<number>;
   pause?: () => Promise<void>;
+  now?: () => number;
 }
+
+// Sanitizing a newsletter takes milliseconds; a whole batch in one go would make the window stutter.
+const SLICE_MS = 8;
 
 export async function scanStoredBodies(deps: ScanDeps, batch = 25): Promise<number> {
   const pause = deps.pause ?? (() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
+  const now = deps.now ?? (() => performance.now());
   let scanned = 0;
   for (;;) {
     const bodies = await deps.list(batch);
     if (bodies.length === 0) return scanned;
-    const counted = await deps.send(bodies.map((body) => toRecord(body.mail_id, deps.detect(body.html))));
+    const records: TrackerRecord[] = [];
+    let sliceStart = now();
+    for (const body of bodies) {
+      records.push(toRecord(body.mail_id, deps.detect(body.html)));
+      if (now() - sliceStart > SLICE_MS) {
+        await pause();
+        sliceStart = now();
+      }
+    }
+    const counted = await deps.send(records);
     scanned += bodies.length;
     // Nothing new counted means the backend keeps returning the same mails; stop instead of looping.
     if (counted === 0) return scanned;
