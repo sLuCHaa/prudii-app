@@ -2434,14 +2434,14 @@ pub async fn move_mail(
 }
 
 /// Account test in every branch: wrapped around the whole OR, SQLite scans the account instead of using the norm indexes.
-pub fn thread_link_filter(n: usize, account_param: usize, prefix: &str) -> String {
+pub fn thread_link_filter(n: usize, owner_slot: usize, prefix: &str) -> String {
     let ph = (1..=n).map(|i| format!("?{}", i)).collect::<Vec<_>>().join(", ");
     format!(
         "({p}account_id = ?{a} AND {p}message_id_norm IN ({ph})) \
          OR ({p}account_id = ?{a} AND {p}in_reply_to_norm IN ({ph})) \
          OR ({p}account_id = ?{a} AND {p}thread_id_norm IN ({ph}))",
         p = prefix,
-        a = account_param,
+        a = owner_slot,
         ph = ph
     )
 }

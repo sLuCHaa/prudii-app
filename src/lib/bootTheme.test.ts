@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 const html = readFileSync("index.html", "utf8");
-const script = /<script>([^<]*)<\/script>/.exec(html)?.[1] ?? "";
+const script = new DOMParser().parseFromString(html, "text/html").querySelector("script:not([src])")?.textContent ?? "";
 
 describe("index.html boot theme script", () => {
   it("is allow-listed by its hash in the tauri CSP", () => {

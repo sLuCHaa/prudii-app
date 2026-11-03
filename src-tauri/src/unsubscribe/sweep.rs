@@ -48,7 +48,7 @@ fn load_candidates(conn: &Connection, account_id: &str, mail_ids: &[String]) -> 
     conn.prepare(&sql)
         .and_then(|mut stmt| stmt.query_map(params.as_slice(), candidate)?.collect())
         .unwrap_or_else(|e| {
-            log::warn!("unsubscribe sweep: loading mails for {} failed: {}", account_id, e);
+            log::warn!("unsubscribe sweep: loading mails failed: {}", e);
             Vec::new()
         })
 }

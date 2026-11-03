@@ -71,7 +71,7 @@ pub fn apply_rules_to_mails(account_id: &str, mail_ids: &[String], db: &Database
         .map(|rows| rows.filter_map(|r| r.ok()).collect())
     }) {
         Ok(v) => v,
-        Err(e) => { log::warn!("Rules bulk-load failed for {}: {}", account_id, e); return 0; }
+        Err(e) => { log::warn!("Rules bulk-load failed: {}", e); return 0; }
     };
 
     let is_gmail = is_gmail_account(&conn, account_id);
