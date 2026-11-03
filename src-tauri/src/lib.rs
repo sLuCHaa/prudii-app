@@ -27,6 +27,7 @@ pub mod system_accent;
 mod test_support;
 pub mod task_registry;
 pub mod task_reminders;
+pub mod trackers;
 pub mod unsubscribe;
 #[cfg(windows)]
 pub mod win_badge;

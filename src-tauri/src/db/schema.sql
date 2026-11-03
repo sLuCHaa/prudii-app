@@ -197,3 +197,20 @@ CREATE TABLE IF NOT EXISTS unsubscriptions (
     FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
     UNIQUE(account_id, key_kind, key_value)
 );
+
+-- Blocked trackers per mail, counted once per message; recomputable, so not part of backups.
+CREATE TABLE IF NOT EXISTS mail_tracker_scans (
+    mail_id TEXT PRIMARY KEY,
+    scanned_at TEXT NOT NULL,
+    FOREIGN KEY (mail_id) REFERENCES mails(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS mail_tracker_hits (
+    mail_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    domain TEXT NOT NULL,
+    company TEXT NOT NULL DEFAULT '',
+    count INTEGER NOT NULL,
+    PRIMARY KEY (mail_id, kind, domain),
+    FOREIGN KEY (mail_id) REFERENCES mails(id) ON DELETE CASCADE
+);
