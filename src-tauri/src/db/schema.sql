@@ -177,3 +177,22 @@ CREATE INDEX IF NOT EXISTS idx_mails_message_id ON mails(account_id, message_id)
 CREATE INDEX IF NOT EXISTS idx_attachments_mail ON attachments(mail_id);
 -- idx_mails_pinned and idx_mails_snoozed are created in run_migrations() AFTER
 -- ALTER TABLE adds those columns, to avoid failing on existing DBs.
+
+-- One row per list the user unsubscribed from or blocked; drives the local safety net.
+CREATE TABLE IF NOT EXISTS unsubscriptions (
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    key_kind TEXT NOT NULL,
+    key_value TEXT NOT NULL,
+    display_name TEXT NOT NULL DEFAULT '',
+    blocked INTEGER NOT NULL DEFAULT 0,
+    methods_tried TEXT NOT NULL DEFAULT '[]',
+    web_pending INTEGER NOT NULL DEFAULT 0,
+    requested_at TEXT NOT NULL,
+    last_request_at TEXT NOT NULL,
+    sweep_after TEXT NOT NULL,
+    sorted_count INTEGER NOT NULL DEFAULT 0,
+    last_sorted_at TEXT,
+    FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+    UNIQUE(account_id, key_kind, key_value)
+);
