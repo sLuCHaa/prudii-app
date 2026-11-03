@@ -1141,6 +1141,9 @@
     "period": "Last 30 days",
     "local": "Worked out on this computer. No server sees these numbers.",
     "allAccounts": "All accounts",
+    "account": "Account",
+    "loadFailed": "The inbox check couldn't be loaded.",
+    "reload": "Try again",
     "scanning": "Checking mails for trackers …",
     "tiles": {
       "newsletters": "Newsletters",
@@ -1149,7 +1152,7 @@
       "trackers": "Trackers blocked",
       "trackersText_one": "in {{count}} mail",
       "trackersText_other": "in {{count}} mails",
-      "unsubscribed": "Unsubscribed",
+      "unsubscribed": "Unsubscribed in total",
       "blockedText_one": "{{count}} sender blocked",
       "blockedText_other": "{{count}} senders blocked"
     },

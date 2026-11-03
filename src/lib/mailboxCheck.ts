@@ -17,17 +17,21 @@ export function rowCaption(row: Pick<NewsletterRow, "address">, accountLabel: st
 }
 
 export function initials(name: string): string {
-  const words = name.trim().split("@")[0].split(/[\s._-]+/).filter(Boolean);
+  const isAddress = name.includes("@");
+  const source = isAddress ? name.trim().split("@")[0] : name;
+  const words = source.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
   if (words.length === 0) return "?";
-  if (name.includes("@")) return words[0][0].toUpperCase();
-  return words.slice(0, 2).map((w) => w[0].toUpperCase()).join("");
+  const first = (word: string) => Array.from(word)[0].toLocaleUpperCase();
+  return isAddress ? first(words[0]) : words.slice(0, 2).map(first).join("");
 }
 
 export function checkState(
   overview: NewsletterOverview | undefined,
   report: TrackerReport | undefined,
   scanning: boolean,
-): "loading" | "empty" | "ready" {
+  failed = false,
+): "loading" | "empty" | "ready" | "error" {
+  if (failed) return "error";
   if (!overview || !report) return "loading";
   if (overview.rows.length === 0 && report.scanned_mails === 0 && !scanning) return "empty";
   return "ready";

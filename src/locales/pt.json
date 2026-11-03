@@ -41,7 +41,7 @@
     "checking": "Verificando conexão…"
   },
   "sidebar": {
-    "mailboxCheck": "Revisão da caixa",
+    "mailboxCheck": "Revisão da caixa de entrada",
     "calendar": "Calendário",
     "views": "Visualizações",
     "accounts": "Contas",
@@ -1137,10 +1137,13 @@
     }
   },
   "mailboxCheck": {
-    "title": "Revisão da caixa",
+    "title": "Revisão da caixa de entrada",
     "period": "Últimos 30 dias",
     "local": "Calculado neste computador. Nenhum servidor vê estes números.",
     "allAccounts": "Todas as contas",
+    "account": "Conta",
+    "loadFailed": "Não foi possível carregar a revisão da caixa de entrada.",
+    "reload": "Recarregar",
     "scanning": "Procurando rastreadores nos e-mails …",
     "tiles": {
       "newsletters": "Newsletters",
@@ -1149,7 +1152,7 @@
       "trackers": "Rastreadores bloqueados",
       "trackersText_one": "em {{count}} e-mail",
       "trackersText_other": "em {{count}} e-mails",
-      "unsubscribed": "Inscrições canceladas",
+      "unsubscribed": "Inscrições canceladas no total",
       "blockedText_one": "{{count}} remetente bloqueado",
       "blockedText_other": "{{count}} remetentes bloqueados"
     },
@@ -1181,7 +1184,7 @@
       "footnote": "Detectados por domínios de rastreamento conhecidos e imagens ocultas de 1×1. Os números ficam neste computador."
     },
     "hint": {
-      "title": "Sua revisão da caixa está pronta",
+      "title": "Sua revisão da caixa de entrada está pronta",
       "text": "Veja quais newsletters você quase não lê e quem queria espiar.",
       "open": "Abrir"
     }

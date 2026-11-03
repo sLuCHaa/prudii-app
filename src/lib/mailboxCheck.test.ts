@@ -76,6 +76,9 @@ describe("initials", () => {
     expect(initials("Halde Shop")).toBe("HS");
     expect(initials("news@halde-shop.example")).toBe("N");
     expect(initials("  ")).toBe("?");
+    expect(initials("🎉 Halde Shop")).toBe("HS");
+    expect(initials("[Studio] Halde")).toBe("SH");
+    expect(initials("Ärzte Team")).toBe("ÄT");
   });
 });
 
@@ -86,5 +89,7 @@ describe("checkState", () => {
     expect(checkState(overview(0), report(), true)).toBe("ready");
     expect(checkState(overview(0), report({ scanned_mails: 3 }), false)).toBe("ready");
     expect(checkState(overview(2), report(), false)).toBe("ready");
+    expect(checkState(undefined, undefined, false, true)).toBe("error");
+    expect(checkState(overview(2), report(), false, true)).toBe("error");
   });
 });

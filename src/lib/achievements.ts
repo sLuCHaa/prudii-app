@@ -96,3 +96,12 @@ export function checkMailboxCheckHintOnce(): boolean {
     return false;
   }
 }
+
+/** Someone who already opened the check needs no pointer to it. */
+export function markMailboxCheckSeen(): void {
+  try {
+    localStorage.setItem(KEY_CHECK_HINT, "1");
+  } catch {
+    // Without storage the hint may show once more.
+  }
+}

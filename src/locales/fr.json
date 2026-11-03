@@ -41,7 +41,7 @@
     "checking": "Vérification de la connexion…"
   },
   "sidebar": {
-    "mailboxCheck": "Bilan de la boîte",
+    "mailboxCheck": "Bilan de la boîte mail",
     "calendar": "Calendrier",
     "views": "Vues",
     "accounts": "Comptes",
@@ -1137,10 +1137,13 @@
     }
   },
   "mailboxCheck": {
-    "title": "Bilan de la boîte",
+    "title": "Bilan de la boîte mail",
     "period": "30 derniers jours",
     "local": "Calculé sur cet ordinateur. Aucun serveur ne voit ces chiffres.",
     "allAccounts": "Tous les comptes",
+    "account": "Compte",
+    "loadFailed": "Le bilan de la boîte mail n'a pas pu être chargé.",
+    "reload": "Recharger",
     "scanning": "Recherche de traqueurs dans les messages …",
     "tiles": {
       "newsletters": "Newsletters",
@@ -1149,7 +1152,7 @@
       "trackers": "Traqueurs bloqués",
       "trackersText_one": "dans {{count}} message",
       "trackersText_other": "dans {{count}} messages",
-      "unsubscribed": "Désabonnements",
+      "unsubscribed": "Désabonnements au total",
       "blockedText_one": "{{count}} expéditeur bloqué",
       "blockedText_other": "{{count}} expéditeurs bloqués"
     },
@@ -1181,7 +1184,7 @@
       "footnote": "Détectés grâce aux domaines de suivi connus et aux images 1×1 cachées. Les chiffres restent sur cet ordinateur."
     },
     "hint": {
-      "title": "Votre bilan de la boîte est prêt",
+      "title": "Votre bilan de la boîte mail est prêt",
       "text": "Voyez quelles newsletters vous lisez à peine et qui voulait vous observer.",
       "open": "Ouvrir"
     }

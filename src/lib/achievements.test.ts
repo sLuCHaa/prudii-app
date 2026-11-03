@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { checkMailboxCheckHintOnce } from "./achievements";
+import { checkMailboxCheckHintOnce, markMailboxCheckSeen } from "./achievements";
 
 describe("checkMailboxCheckHintOnce", () => {
   afterEach(() => {
@@ -9,6 +9,11 @@ describe("checkMailboxCheckHintOnce", () => {
 
   it("shows the inbox check hint once", () => {
     expect(checkMailboxCheckHintOnce()).toBe(true);
+    expect(checkMailboxCheckHintOnce()).toBe(false);
+  });
+
+  it("skips the hint once the check was opened", () => {
+    markMailboxCheckSeen();
     expect(checkMailboxCheckHintOnce()).toBe(false);
   });
 

@@ -1140,6 +1140,9 @@
     "period": "最近 30 天",
     "local": "在这台电脑上计算。没有服务器能看到这些数字。",
     "allAccounts": "所有账户",
+    "account": "账户",
+    "loadFailed": "无法加载邮箱检查。",
+    "reload": "重新加载",
     "scanning": "正在检查邮件中的跟踪器 …",
     "tiles": {
       "newsletters": "新闻通讯",
@@ -1148,7 +1151,7 @@
       "trackers": "已拦截的跟踪器",
       "trackersText_one": "在 {{count}} 封邮件中",
       "trackersText_other": "在 {{count}} 封邮件中",
-      "unsubscribed": "已退订",
+      "unsubscribed": "累计退订",
       "blockedText_one": "已屏蔽 {{count}} 个发件人",
       "blockedText_other": "已屏蔽 {{count}} 个发件人"
     },

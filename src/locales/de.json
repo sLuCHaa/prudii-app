@@ -1141,6 +1141,9 @@
     "period": "Letzte 30 Tage",
     "local": "Auf diesem Rechner ausgewertet. Kein Server sieht diese Zahlen.",
     "allAccounts": "Alle Konten",
+    "account": "Konto",
+    "loadFailed": "Der Postfach-Check ließ sich nicht laden.",
+    "reload": "Erneut laden",
     "scanning": "Prüfe Mails auf Tracker …",
     "tiles": {
       "newsletters": "Newsletter",
@@ -1149,7 +1152,7 @@
       "trackers": "Tracker blockiert",
       "trackersText_one": "in {{count}} Mail",
       "trackersText_other": "in {{count}} Mails",
-      "unsubscribed": "Abgemeldet",
+      "unsubscribed": "Abgemeldet insgesamt",
       "blockedText_one": "{{count}} Absender blockiert",
       "blockedText_other": "{{count}} Absender blockiert"
     },

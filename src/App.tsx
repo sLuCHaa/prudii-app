@@ -199,14 +199,16 @@ function AppInner() {
             "success",
             i18next.t("sync.doneNew", { count: newMails }),
           );
-          if (newMails >= 100 && checkFirstHundredOnce()) {
+          const celebrated = newMails >= 100 && checkFirstHundredOnce();
+          if (celebrated) {
             useAppStore.getState().addToast(
               "success",
               i18next.t("achievements.firstHundredTitle"),
               i18next.t("achievements.firstHundredDesc"),
             );
           }
-          if (checkMailboxCheckHintOnce()) {
+          // One celebration per sync; the hint waits for the next one.
+          if (!celebrated && checkMailboxCheckHintOnce()) {
             useAppStore.getState().addToast(
               "info",
               i18next.t("mailboxCheck.hint.title"),

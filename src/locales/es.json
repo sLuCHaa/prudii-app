@@ -1141,6 +1141,9 @@
     "period": "Últimos 30 días",
     "local": "Calculado en este equipo. Ningún servidor ve estas cifras.",
     "allAccounts": "Todas las cuentas",
+    "account": "Cuenta",
+    "loadFailed": "No se pudo cargar la revisión del buzón.",
+    "reload": "Volver a cargar",
     "scanning": "Buscando rastreadores en los correos …",
     "tiles": {
       "newsletters": "Boletines",
@@ -1149,7 +1152,7 @@
       "trackers": "Rastreadores bloqueados",
       "trackersText_one": "en {{count}} correo",
       "trackersText_other": "en {{count}} correos",
-      "unsubscribed": "Bajas",
+      "unsubscribed": "Bajas en total",
       "blockedText_one": "{{count}} remitente bloqueado",
       "blockedText_other": "{{count}} remitentes bloqueados"
     },
