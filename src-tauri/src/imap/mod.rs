@@ -877,7 +877,8 @@ pub async fn sync_mails(
     }
 
     if !all_new_mail_ids.is_empty() {
-        crate::rules::apply_rules_to_mails(account_id, &all_new_mail_ids, db);
+        let remaining = crate::unsubscribe::sweep::sweep_new_mails(account_id, &all_new_mail_ids, db);
+        crate::rules::apply_rules_to_mails(account_id, &remaining, db);
     }
 
     let local_count_after: u32 = {

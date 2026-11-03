@@ -74,16 +74,7 @@ pub fn apply_rules_to_mails(account_id: &str, mail_ids: &[String], db: &Database
         Err(e) => { log::warn!("Rules bulk-load failed for {}: {}", account_id, e); return 0; }
     };
 
-    let is_gmail = {
-        let provider: String = conn
-            .query_row(
-                "SELECT provider FROM accounts WHERE id = ?1",
-                rusqlite::params![account_id],
-                |row| row.get(0),
-            )
-            .unwrap_or_default();
-        provider == "google"
-    };
+    let is_gmail = is_gmail_account(&conn, account_id);
 
     let mut applied_count = 0u32;
     let tx = conn.unchecked_transaction();
@@ -213,25 +204,9 @@ fn apply_actions(
         }
     }
 
-    if rule.action_trash == Some(true) {
-        if let Some((trash_id, trash_path)) = folder_of_type(conn, account_id, "trash") {
-            if let Err(e) = conn.execute(
-                "UPDATE mails SET folder_id = ?1 WHERE id = ?2",
-                rusqlite::params![trash_id, mail_id],
-            ) {
-                log::warn!("rule {}: failed to trash mail {}: {}", rule.id, mail_id, e);
-            } else {
-                let payload = serde_json::json!({
-                    "api_id": mail.message_id,
-                    "message_id": mail.message_id,
-                    "source_folder": mail.source_folder_path,
-                    "dest_folder": trash_path,
-                    "is_gmail": is_gmail,
-                }).to_string();
-                enqueue_op(conn, account_id, mail_id, "trash", &payload);
-            }
-            return; // Don't apply move/archive after trash
-        }
+    if rule.action_trash == Some(true) && folder_of_type(conn, account_id, "trash").is_some() {
+        trash_mail(conn, account_id, mail_id, &mail.message_id, &mail.source_folder_path, is_gmail);
+        return; // Don't apply move/archive after trash
     }
 
     if rule.action_archive == Some(true) {
@@ -305,6 +280,38 @@ fn enqueue_op(conn: &rusqlite::Connection, account_id: &str, mail_id: &str, op_t
     ) {
         log::warn!("rule enqueue {} for mail {} failed: {}", op_type, mail_id, e);
     }
+}
+
+pub(crate) fn is_gmail_account(conn: &rusqlite::Connection, account_id: &str) -> bool {
+    conn.query_row("SELECT provider FROM accounts WHERE id = ?1", rusqlite::params![account_id], |row| row.get::<_, String>(0))
+        .map(|p| p == "google")
+        .unwrap_or(false)
+}
+
+/// Move a mail to the account's trash locally and queue the server move, like a manual delete.
+pub(crate) fn trash_mail(
+    conn: &rusqlite::Connection,
+    account_id: &str,
+    mail_id: &str,
+    message_id: &str,
+    source_folder_path: &str,
+    is_gmail: bool,
+) -> bool {
+    let Some((trash_id, trash_path)) = folder_of_type(conn, account_id, "trash") else { return false };
+    if let Err(e) = conn.execute("UPDATE mails SET folder_id = ?1 WHERE id = ?2", rusqlite::params![trash_id, mail_id]) {
+        log::warn!("failed to trash mail {}: {}", mail_id, e);
+        return false;
+    }
+    let payload = serde_json::json!({
+        "api_id": message_id,
+        "message_id": message_id,
+        "source_folder": source_folder_path,
+        "dest_folder": trash_path,
+        "is_gmail": is_gmail,
+    })
+    .to_string();
+    enqueue_op(conn, account_id, mail_id, "trash", &payload);
+    true
 }
 
 /// Look up the (id, path) of the account's folder of the given type.

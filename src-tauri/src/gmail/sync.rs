@@ -507,7 +507,8 @@ pub async fn initial_sync_folder(
         }
         drop(conn);
         if !newly_inserted.is_empty() {
-            crate::rules::apply_rules_to_mails(account_id, &newly_inserted, db);
+            let remaining = crate::unsubscribe::sweep::sweep_new_mails(account_id, &newly_inserted, db);
+            crate::rules::apply_rules_to_mails(account_id, &remaining, db);
         }
     }
 

@@ -111,6 +111,41 @@ fn decide(conn: &Connection, mail: &Pending, correspondents: &HashMap<String, u3
     }))
 }
 
+const PROTECTED: &[&str] = &["important", "purchases"];
+
+/// Cleanup runs right after sync, before sorting has labelled new mail, so it decides afresh.
+pub(crate) fn protected_from_cleanup(conn: &Connection, mail_id: &str, correspondents: &HashMap<String, u32>) -> bool {
+    let row = conn.query_row(
+        "SELECT id, account_id, COALESCE(from_email, ''), COALESCE(subject, ''), COALESCE(signal_headers, ''),
+                COALESCE(list_unsubscribe, ''), thread_id, COALESCE(from_name, ''), category
+         FROM mails WHERE id = ?1",
+        params![mail_id],
+        |r| {
+            Ok((
+                Pending {
+                    id: r.get(0)?,
+                    account_id: r.get(1)?,
+                    from_email: r.get(2)?,
+                    subject: r.get(3)?,
+                    signal_headers: r.get(4)?,
+                    list_unsubscribe: r.get(5)?,
+                    thread_id: r.get(6)?,
+                    from_name: r.get(7)?,
+                },
+                r.get::<_, Option<String>>(8)?,
+            ))
+        },
+    );
+    let Ok((mail, stored)) = row else { return true };
+    if stored.as_deref().is_some_and(|c| PROTECTED.contains(&c)) {
+        return true;
+    }
+    match decide(conn, &mail, correspondents) {
+        Ok(d) => d.category.as_deref().is_some_and(|c| PROTECTED.contains(&c)),
+        Err(_) => true,
+    }
+}
+
 pub fn categorize_batch(conn: &Connection, correspondents: &HashMap<String, u32>, limit: usize) -> rusqlite::Result<usize> {
     let pending: Vec<Pending> = conn
         .prepare(

@@ -243,7 +243,8 @@ pub async fn initial_sync_folder(
         }
         drop(conn);
         if !newly_inserted.is_empty() {
-            crate::rules::apply_rules_to_mails(account_id, &newly_inserted, db);
+            let remaining = crate::unsubscribe::sweep::sweep_new_mails(account_id, &newly_inserted, db);
+            crate::rules::apply_rules_to_mails(account_id, &remaining, db);
         }
     }
 
@@ -476,7 +477,8 @@ pub async fn incremental_sync_folder(
     }
 
     if !new_mail_ids.is_empty() {
-        crate::rules::apply_rules_to_mails(account_id, &new_mail_ids, db);
+        let remaining = crate::unsubscribe::sweep::sweep_new_mails(account_id, &new_mail_ids, db);
+        crate::rules::apply_rules_to_mails(account_id, &remaining, db);
     }
 
     if let Some(dl) = new_delta_link {
