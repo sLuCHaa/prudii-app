@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { escapeHtml, plainTextParagraph, restoreSanitizedHtml, sanitizeEmailHtml, sanitizeSignatureBlockHtml, sanitizeSignatureHtml, sanitizeSignatureHtmlReport, showLocalImages } from "./sanitize";
+import { escapeHtml, plainTextParagraph, restoreSanitizedHtml, sanitizeEmailHtml, sanitizeSignatureBlockHtml, sanitizeSignatureHtml, sanitizeSignatureHtmlReport, showLocalImages, trackerCompany } from "./sanitize";
+import trackerDomains from "./trackerDomains.json";
 import { DESIGNED_SIGNATURE } from "./signatureFixture";
 
 function parse(html: string): HTMLElement {
@@ -304,5 +305,21 @@ describe("sanitizeSignatureBlockHtml layout attributes", () => {
     expect(out).toContain('start="3"');
     expect(out).toContain('type="a"');
     expect(out).toContain("noshade");
+  });
+});
+
+describe("trackerCompany", () => {
+  it("names the company behind a tracker domain and its subdomains", () => {
+    expect(trackerCompany("list-manage.com")).toBe("Mailchimp");
+    expect(trackerCompany("us5.list-manage.com")).toBe("Mailchimp");
+  });
+
+  it("knows no company for prefix hits and unknown domains", () => {
+    expect(trackerCompany("open.halde-shop.example")).toBeNull();
+    expect(trackerCompany("halde-shop.example")).toBeNull();
+  });
+
+  it("every known domain has a company", () => {
+    expect(Object.entries(trackerDomains).filter(([, company]) => !company.trim())).toEqual([]);
   });
 });

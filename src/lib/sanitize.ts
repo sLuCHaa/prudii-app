@@ -1,4 +1,5 @@
 import DOMPurify from "dompurify";
+import trackerDomains from "./trackerDomains.json";
 
 // Escape plain text for safe embedding in HTML (prevents XSS in subject, names, etc.)
 export function escapeHtml(text: string): string {
@@ -76,24 +77,7 @@ export interface SanitizeResult {
   heldBack: boolean;
 }
 
-const KNOWN_TRACKER_DOMAINS = new Set([
-  // Email platforms
-  "sendgrid.net", "mailchimp.com", "list-manage.com", "mailgun.org",
-  "amazonses.com", "postmarkapp.com", "sparkpostmail.com", "constantcontact.com",
-  "brevo.com", "hubspot.com", "campaign-archive.com", "mailtrack.io",
-  "yesware.com", "bananatag.com", "cirrusinsight.com", "boomeranggmail.com",
-  "streak.com", "mixmax.com", "superhuman.com", "getnotify.com", "sendergen.com",
-  "mandrillapp.com", "exacttarget.com", "sailthru.com", "returnpath.net",
-  "litmus.com", "emailtracking.com", "cmail19.com", "cmail20.com",
-  "createsend1.com", "createsend2.com", "mcsv.net", "mcdlv.net",
-  "klclick.com", "klaviyo.com", "dripemail2.com", "convertkit-mail.com",
-  "activecampaign.com", "aweber.com", "getresponse.com", "infusionsoft.com",
-  "keap-link.com", "ctctcdn.com", "emltrk.com", "sendinblue.com",
-  "mailjet.com", "mailerlite.com", "benchmarkemail.com",
-  // Analytics
-  "google-analytics.com", "doubleclick.net", "facebook.com", "linkedin.com",
-  "bat.bing.com", "analytics.twitter.com", "px.ads.linkedin.com",
-]);
+const KNOWN_TRACKER_DOMAINS = new Set(Object.keys(trackerDomains));
 
 const TRACKING_PREFIXES = [
   "pixel.", "track.", "open.", "trk.", "click.", "beacon.",
@@ -108,13 +92,24 @@ function getDomain(src: string): string {
   }
 }
 
-function isTrackerDomain(domain: string): boolean {
-  if (KNOWN_TRACKER_DOMAINS.has(domain)) return true;
+function knownTrackerDomain(domain: string): string | null {
+  if (KNOWN_TRACKER_DOMAINS.has(domain)) return domain;
   // Check parent domains (e.g. x.sendgrid.net → sendgrid.net)
   const parts = domain.split(".");
   for (let i = 1; i < parts.length - 1; i++) {
-    if (KNOWN_TRACKER_DOMAINS.has(parts.slice(i).join("."))) return true;
+    const parent = parts.slice(i).join(".");
+    if (KNOWN_TRACKER_DOMAINS.has(parent)) return parent;
   }
+  return null;
+}
+
+export function trackerCompany(domain: string): string | null {
+  const known = knownTrackerDomain(domain);
+  return known ? (trackerDomains as Record<string, string>)[known] : null;
+}
+
+function isTrackerDomain(domain: string): boolean {
+  if (knownTrackerDomain(domain)) return true;
   for (const prefix of TRACKING_PREFIXES) {
     if (domain.startsWith(prefix)) return true;
   }
