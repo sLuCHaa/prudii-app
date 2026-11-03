@@ -955,7 +955,7 @@ function VirtualMailList({
                               : "border-2 border-border-light hover:border-accent"
                           }`}
                         >
-                          {isSelected && <Check className="w-3.5 h-3.5" />}
+                          {isSelected && <Check className="w-4 h-4" strokeWidth={3} />}
                         </div>
                       </div>
                     ) : (
@@ -2025,7 +2025,7 @@ export function MailList() {
               className="w-5 h-5 rounded border-2 flex items-center justify-center transition-colors border-accent bg-accent text-white"
             >
               {selectedMailIds.size === filteredMails.length ? (
-                <Check className="w-3 h-3" />
+                <Check className="w-3.5 h-3.5" strokeWidth={3} />
               ) : (
                 <span className="w-2 h-0.5 bg-white rounded" />
               )}
