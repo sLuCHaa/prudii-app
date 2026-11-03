@@ -20,6 +20,7 @@ pub mod sync;
 pub mod tasks;
 pub mod team;
 pub mod templates;
+pub mod unsubscribe;
 
 /// Wraps a command body in catch_unwind to prevent panics from crashing the app.
 /// Sync Tauri commands run inside the WebView2 callback context on Windows;
