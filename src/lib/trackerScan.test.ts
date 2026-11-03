@@ -35,6 +35,17 @@ describe("createTrackerRecorder", () => {
     expect(send.mock.calls[0][0].map((r) => r.mail_id)).toEqual(["a", "b"]);
   });
 
+  it("sends a mail again after a failed send", async () => {
+    const send = vi.fn(async (_records: TrackerRecord[]) => 1).mockRejectedValueOnce(new Error("busy"));
+    const recorder = createTrackerRecorder(send, 2000);
+    recorder.add("a", [pixel], false);
+    await recorder.flush();
+    recorder.add("a", [pixel], false);
+    await recorder.flush();
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send.mock.calls[1][0].map((r) => r.mail_id)).toEqual(["a"]);
+  });
+
   it("skips a mail shown with its tracked images", async () => {
     const send = vi.fn(async (_records: TrackerRecord[]) => 0);
     const recorder = createTrackerRecorder(send, 2000);

@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 pub const KINDS: [&str; 3] = ["pixel", "hidden", "tracking_domain"];
 
@@ -41,32 +42,49 @@ pub fn stamp(t: DateTime<Utc>) -> String {
 
 /// Returns false when the message was already counted or the mail is gone.
 pub fn record(conn: &Connection, rec: &TrackerRecord, now: DateTime<Utc>) -> rusqlite::Result<bool> {
-    let fresh: bool = conn.query_row(
-        &format!("SELECT NOT {SCANNED_SQL} FROM mails m WHERE m.id = ?1"),
-        params![rec.mail_id],
-        |r| r.get(0),
-    )
-    .unwrap_or(false);
+    let tx = conn.unchecked_transaction()?;
+    let fresh = insert_record(&tx, rec, now)?;
+    tx.commit()?;
+    Ok(fresh)
+}
+
+/// One transaction for a whole batch from the frontend; returns how many messages were counted for the first time.
+pub fn record_batch(conn: &Connection, recs: &[TrackerRecord], now: DateTime<Utc>) -> rusqlite::Result<u32> {
+    let tx = conn.unchecked_transaction()?;
+    let mut counted = 0;
+    for rec in recs {
+        if insert_record(&tx, rec, now)? {
+            counted += 1;
+        }
+    }
+    tx.commit()?;
+    Ok(counted)
+}
+
+fn insert_record(conn: &Connection, rec: &TrackerRecord, now: DateTime<Utc>) -> rusqlite::Result<bool> {
+    let fresh: bool = conn
+        .query_row(&format!("SELECT NOT {SCANNED_SQL} FROM mails m WHERE m.id = ?1"), params![rec.mail_id], |r| r.get(0))
+        .optional()?
+        .unwrap_or(false);
     if !fresh {
         return Ok(false);
     }
-    let tx = conn.unchecked_transaction()?;
-    tx.execute("INSERT INTO mail_tracker_scans (mail_id, scanned_at) VALUES (?1, ?2)", params![rec.mail_id, stamp(now)])?;
+    conn.execute("INSERT INTO mail_tracker_scans (mail_id, scanned_at) VALUES (?1, ?2)", params![rec.mail_id, stamp(now)])?;
     for hit in rec.hits.iter().filter(|h| KINDS.contains(&h.kind.as_str()) && h.count > 0 && !h.domain.trim().is_empty()) {
-        tx.execute(
+        conn.execute(
             "INSERT INTO mail_tracker_hits (mail_id, kind, domain, company, count) VALUES (?1, ?2, ?3, ?4, ?5)
              ON CONFLICT(mail_id, kind, domain) DO UPDATE SET count = count + excluded.count",
             params![rec.mail_id, hit.kind, hit.domain.trim().to_lowercase(), hit.company.as_deref().unwrap_or("").trim(), hit.count],
         )?;
     }
-    tx.commit()?;
     Ok(true)
 }
 
 fn unscanned_sql() -> String {
     format!(
         "SELECT m.id, m.body_html FROM mails m
-         WHERE {BULK_SQL} AND m.date >= ?1 AND COALESCE(m.body_html, '') != '' AND NOT {SCANNED_SQL}
+         WHERE {BULK_SQL} AND m.date >= ?1 AND m.date GLOB '[0-9][0-9][0-9][0-9]-*'
+           AND COALESCE(m.body_html, '') != '' AND NOT {SCANNED_SQL}
          ORDER BY m.date DESC LIMIT ?2"
     )
 }
@@ -144,7 +162,6 @@ pub fn report(conn: &Connection, cutoff: &str, account_id: Option<&str>, days: u
 
     let mut by_kind = KindCounts::default();
     let mut total = 0;
-    let other_count;
     let mut mails = std::collections::HashSet::new();
     let mut companies: std::collections::HashMap<(String, bool), u32> = std::collections::HashMap::new();
     // address -> (count, mail ids, newest date with a name, that name)
@@ -174,7 +191,7 @@ pub fn report(conn: &Connection, cutoff: &str, account_id: Option<&str>, days: u
     let companies = top(named, |c| c.count, |c| c.name.as_str());
     let mut other_domains = top(unnamed, |c| c.count, |c| c.name.as_str());
     other_domains.truncate(OTHER_DOMAINS);
-    other_count = total - companies.iter().map(|c| c.count).sum::<u32>();
+    let other_count = total - companies.iter().map(|c| c.count).sum::<u32>();
     let senders = top(
         senders
             .into_iter()
@@ -192,8 +209,9 @@ pub fn report(conn: &Connection, cutoff: &str, account_id: Option<&str>, days: u
 }
 
 /// One row per message: a Gmail label copy whose twin already has a body needs no download.
-pub fn bulk_mails_missing_body(conn: &Connection, account_id: &str, cutoff: &str, limit: u32) -> rusqlite::Result<Vec<String>> {
-    conn.prepare(&format!(
+/// `skip` holds mails a fetch already tried that came back without text or HTML.
+pub fn bulk_mails_missing_body(conn: &Connection, account_id: &str, cutoff: &str, limit: u32, skip: &HashSet<String>) -> rusqlite::Result<Vec<String>> {
+    let ids: Vec<String> = conn.prepare(&format!(
         "SELECT MIN(m.id), MAX(m.date) AS newest FROM mails m
          WHERE m.account_id = ?1 AND {BULK_SQL} AND m.date >= ?2 AND m.date GLOB '[0-9][0-9][0-9][0-9]-*'
            AND COALESCE(m.body_html, '') = '' AND COALESCE(m.body_text, '') = ''
@@ -202,8 +220,9 @@ pub fn bulk_mails_missing_body(conn: &Connection, account_id: &str, cutoff: &str
          GROUP BY COALESCE(NULLIF(m.message_id, ''), m.id)
          ORDER BY newest DESC LIMIT ?3"
     ))?
-    .query_map(params![account_id, cutoff, limit], |r| r.get(0))?
-    .collect()
+    .query_map(params![account_id, cutoff, limit + skip.len() as u32], |r| r.get(0))?
+    .collect::<rusqlite::Result<_>>()?;
+    Ok(ids.into_iter().filter(|id| !skip.contains(id)).take(limit as usize).collect())
 }
 
 #[cfg(test)]
@@ -406,8 +425,9 @@ mod tests {
         let other = seed_account(&conn, "anna.weber@studio-halde.example");
         let other_inbox = seed_folder(&conn, &other, "inbox");
         seed_mail(&conn, &SeedMail { account_id: &other, folder_id: &other_inbox, from_email: "news@halde-shop.example", list_unsubscribe: UNSUB, date: "2026-10-17T09:00:00Z", ..Default::default() });
-        assert_eq!(bulk_mails_missing_body(&conn, &f.account, CUTOFF, 2).unwrap(), vec![newest, middle]);
-        assert_eq!(bulk_mails_missing_body(&conn, &f.account, CUTOFF, 10).unwrap().len(), 3);
+        let none = std::collections::HashSet::new();
+        assert_eq!(bulk_mails_missing_body(&conn, &f.account, CUTOFF, 2, &none).unwrap(), vec![newest, middle]);
+        assert_eq!(bulk_mails_missing_body(&conn, &f.account, CUTOFF, 10, &none).unwrap().len(), 3);
     }
 
     #[test]
@@ -418,9 +438,10 @@ mod tests {
         let label = seed_folder(&conn, &f.account, "custom");
         let copy = seed_mail(&conn, &SeedMail { account_id: &f.account, folder_id: &label, from_email: "news@halde-shop.example", list_unsubscribe: UNSUB, date: "2026-10-15T09:00:00Z", ..Default::default() });
         conn.execute("UPDATE mails SET message_id = 'msg-1' WHERE id = ?1", [&copy]).unwrap();
-        assert_eq!(bulk_mails_missing_body(&conn, &f.account, CUTOFF, 10).unwrap().len(), 1);
+        let none = std::collections::HashSet::new();
+        assert_eq!(bulk_mails_missing_body(&conn, &f.account, CUTOFF, 10, &none).unwrap().len(), 1);
         conn.execute("UPDATE mails SET body_html = '<p>da</p>' WHERE id = ?1", [&copy]).unwrap();
-        assert!(bulk_mails_missing_body(&conn, &f.account, CUTOFF, 10).unwrap().is_empty());
+        assert!(bulk_mails_missing_body(&conn, &f.account, CUTOFF, 10, &none).unwrap().is_empty());
     }
 
     #[test]
@@ -477,6 +498,45 @@ mod tests {
         let r = report(&f.db.lock_db(), CUTOFF, None, 30).unwrap();
         let domains: Vec<(&str, u32)> = r.other_domains.iter().map(|d| (d.name.as_str(), d.count)).collect();
         assert_eq!(domains, vec![("open.halde-shop.example", 7), ("trk.laden-halde.example", 2)]);
+    }
+
+    #[test]
+    fn record_reports_db_errors() {
+        let f = fx();
+        let id = list_mail(&f, "2026-10-10T09:00:00Z", "msg-1", "<p>Hallo</p>");
+        let conn = f.db.lock_db();
+        conn.execute_batch("DROP TABLE mail_tracker_hits; DROP TABLE mail_tracker_scans;").unwrap();
+        assert!(record(&conn, &TrackerRecord { mail_id: id, hits: vec![] }, now()).is_err());
+    }
+
+    #[test]
+    fn undated_mail_is_not_listed_for_scanning() {
+        let f = fx();
+        list_mail(&f, "kaputt", "msg-1", "<p>Hallo</p>");
+        assert!(unscanned_bodies(&f.db.lock_db(), CUTOFF, 10).unwrap().is_empty());
+    }
+
+    #[test]
+    fn record_batch_counts_each_message_once() {
+        let f = fx();
+        let a = list_mail(&f, "2026-10-10T09:00:00Z", "msg-a", "<p>a</p>");
+        let b = list_mail(&f, "2026-10-11T09:00:00Z", "msg-b", "<p>b</p>");
+        let recs = vec![
+            TrackerRecord { mail_id: a.clone(), hits: vec![] },
+            TrackerRecord { mail_id: a, hits: vec![] },
+            TrackerRecord { mail_id: b, hits: vec![hit("pixel", "open.halde-shop.example", None, 1)] },
+        ];
+        assert_eq!(record_batch(&f.db.lock_db(), &recs, now()).unwrap(), 2);
+        assert_eq!(count(&f, "mail_tracker_scans"), 2);
+    }
+
+    #[test]
+    fn bulk_selection_skips_mails_known_to_have_no_body() {
+        let f = fx();
+        let empty = list_mail(&f, "2026-10-15T09:00:00Z", "n1", "");
+        let other = list_mail(&f, "2026-10-14T09:00:00Z", "n2", "");
+        let skip: std::collections::HashSet<String> = [empty].into_iter().collect();
+        assert_eq!(bulk_mails_missing_body(&f.db.lock_db(), &f.account, CUTOFF, 10, &skip).unwrap(), vec![other]);
     }
 
     #[test]

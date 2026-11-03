@@ -11,6 +11,7 @@ pub async fn fetch_message_body(
     gmail_id: &str,
     mail_id: &str,
     db: &Database,
+    with_attachments: bool,
 ) -> Result<()> {
     let msg = client.get_message(gmail_id, "full").await?;
 
@@ -82,7 +83,7 @@ pub async fn fetch_message_body(
     }
 
     let mut invites: Vec<InviteCandidate> = Vec::new();
-    for c in &calendars {
+    for c in calendars.iter().filter(|_| with_attachments) {
         let bytes = match (&c.data, &c.attachment_id) {
             (Some(data), _) => api::decode_base64url(data).ok(),
             (None, Some(id)) => client.get_attachment(gmail_id, id).await.ok(),
@@ -97,7 +98,7 @@ pub async fn fetch_message_body(
     // The dedup mechanism polls for non-empty body_text/body_html to detect completion,
     // so the body update must happen last to prevent premature cache hits while
     // attachments are still being downloaded.
-    if !attachments.is_empty() {
+    if with_attachments && !attachments.is_empty() {
         let data_dir = db.data_dir.clone();
         let attach_dir = data_dir.join("attachments").join(mail_id);
         tokio::fs::create_dir_all(&attach_dir).await?;
@@ -190,15 +191,18 @@ pub async fn fetch_message_body(
         }
     }
 
-    crate::calendar::invite_store::store_invite(db, mail_id, choose(invites).as_ref());
+    if with_attachments {
+        crate::calendar::invite_store::store_invite(db, mail_id, choose(invites).as_ref());
+    }
+    let attachments_pending = !with_attachments && (!attachments.is_empty() || !calendars.is_empty());
 
     // Write body LAST — this is what the dedup mechanism polls for, so it must happen
     // after all attachments are saved to ensure they're available when the UI queries them.
     {
         let conn = db.lock_db();
         conn.execute(
-            "UPDATE mails SET body_text = ?1, body_html = ?2, snippet = ?3, has_attachments = ?4 WHERE id = ?5",
-            rusqlite::params![body_text, body_html, snippet, has_attachments as i32, mail_id],
+            "UPDATE mails SET body_text = ?1, body_html = ?2, snippet = ?3, has_attachments = ?4, attachments_pending = ?6 WHERE id = ?5",
+            rusqlite::params![body_text, body_html, snippet, has_attachments as i32, mail_id, attachments_pending as i32],
         )?;
     }
 

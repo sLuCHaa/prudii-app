@@ -1,11 +1,19 @@
 use crate::db::Database;
-use crate::pool::ImapPool;
 use crate::trackers::store::{self, StoredBody, TrackerRecord, TrackerReport, BODY_LIMIT_PER_ACCOUNT, DEFAULT_DAYS};
 use chrono::{Duration, Utc};
+use std::collections::HashSet;
+use std::future::Future;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{LazyLock, Mutex};
 use tauri::{Manager, State};
 
 static FETCHING: AtomicBool = AtomicBool::new(false);
+// Mails that came back without text or HTML; asking again every time the check opens would only cost bandwidth.
+static WITHOUT_BODY: LazyLock<Mutex<HashSet<String>>> = LazyLock::new(|| Mutex::new(HashSet::new()));
+
+pub(crate) const MAX_DAYS: u32 = 365;
+// Several failures in a row mean offline or a lapsed token; one failure is just that mail.
+const GIVE_UP_AFTER: u32 = 3;
 
 struct FetchClaim;
 
@@ -16,20 +24,47 @@ impl Drop for FetchClaim {
 }
 
 fn cutoff(days: u32) -> String {
-    store::stamp(Utc::now() - Duration::days(days as i64))
+    store::stamp(Utc::now() - Duration::days(days.clamp(1, MAX_DAYS) as i64))
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct FetchOutcome {
+    pub loaded: u32,
+    pub without_body: Vec<String>,
+}
+
+pub(crate) async fn fetch_each<F, Fut>(ids: &[String], mut fetch: F) -> FetchOutcome
+where
+    F: FnMut(String) -> Fut,
+    Fut: Future<Output = Result<bool, String>>,
+{
+    let mut outcome = FetchOutcome::default();
+    let mut failures_in_a_row = 0;
+    for id in ids {
+        match fetch(id.clone()).await {
+            Ok(true) => {
+                outcome.loaded += 1;
+                failures_in_a_row = 0;
+            }
+            Ok(false) => {
+                outcome.without_body.push(id.clone());
+                failures_in_a_row = 0;
+            }
+            Err(e) => {
+                log::warn!("tracker body fetch failed for one mail: {e}");
+                failures_in_a_row += 1;
+                if failures_in_a_row >= GIVE_UP_AFTER {
+                    break;
+                }
+            }
+        }
+    }
+    outcome
 }
 
 #[tauri::command(async)]
 pub fn record_mail_trackers(db: State<'_, Database>, records: Vec<TrackerRecord>) -> Result<u32, String> {
-    let conn = db.lock_db();
-    let now = Utc::now();
-    let mut counted = 0;
-    for rec in &records {
-        if store::record(&conn, rec, now).map_err(|e| e.to_string())? {
-            counted += 1;
-        }
-    }
-    Ok(counted)
+    store::record_batch(&db.lock_db(), &records, Utc::now()).map_err(|e| e.to_string())
 }
 
 #[tauri::command(async)]
@@ -52,6 +87,7 @@ pub async fn fetch_bulk_bodies(app: tauri::AppHandle) -> Result<u32, String> {
     let _claim = FetchClaim;
     let db = app.state::<Database>();
     let cutoff = cutoff(DEFAULT_DAYS);
+    let skip = WITHOUT_BODY.lock().unwrap_or_else(|e| e.into_inner()).clone();
     let plan: Vec<Vec<String>> = {
         let conn = db.read_db();
         let accounts: Vec<String> = conn
@@ -60,22 +96,55 @@ pub async fn fetch_bulk_bodies(app: tauri::AppHandle) -> Result<u32, String> {
             .map_err(|e| e.to_string())?;
         accounts
             .iter()
-            .map(|account| store::bulk_mails_missing_body(&conn, account, &cutoff, BODY_LIMIT_PER_ACCOUNT).unwrap_or_default())
+            .map(|account| store::bulk_mails_missing_body(&conn, account, &cutoff, BODY_LIMIT_PER_ACCOUNT, &skip).unwrap_or_default())
             .collect()
     };
     let mut loaded = 0;
     for ids in plan {
-        for (i, id) in ids.iter().enumerate() {
-            match crate::commands::mails::fetch_mail_body(app.state::<Database>(), app.state::<ImapPool>(), id.clone()).await {
-                Ok(_) => loaded += 1,
-                // A first failure usually means offline or a lapsed token; the rest of the account would fail the same way.
-                Err(e) if i == 0 => {
-                    log::warn!("tracker body fetch stopped for an account: {e}");
-                    break;
-                }
-                Err(e) => log::warn!("tracker body fetch failed for one mail: {e}"),
-            }
-        }
+        let db: &Database = &db;
+        let outcome = fetch_each(&ids, |id| async move { crate::commands::mails::fetch_body_for_scan(db, &id).await }).await;
+        loaded += outcome.loaded;
+        WITHOUT_BODY.lock().unwrap_or_else(|e| e.into_inner()).extend(outcome.without_body);
     }
     Ok(loaded)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    #[test]
+    fn report_window_is_bounded() {
+        assert_eq!(cutoff(u32::MAX), cutoff(MAX_DAYS));
+        assert_eq!(cutoff(0), cutoff(1));
+    }
+
+    #[tokio::test]
+    async fn gives_up_after_three_failures_in_a_row() {
+        let ids: Vec<String> = (0..10).map(|i| format!("m{i}")).collect();
+        let calls = Mutex::new(0);
+        let outcome = fetch_each(&ids, |_| {
+            *calls.lock().unwrap() += 1;
+            async { Err::<bool, String>("offline".into()) }
+        })
+        .await;
+        assert_eq!(*calls.lock().unwrap(), 3);
+        assert_eq!(outcome.loaded, 0);
+    }
+
+    #[tokio::test]
+    async fn one_bad_mail_does_not_stop_the_account() {
+        let ids: Vec<String> = ["ok1", "gone", "ok2", "empty"].iter().map(|s| s.to_string()).collect();
+        let outcome = fetch_each(&ids, |id| async move {
+            match id.as_str() {
+                "gone" => Err("404".to_string()),
+                "empty" => Ok(false),
+                _ => Ok(true),
+            }
+        })
+        .await;
+        assert_eq!(outcome.loaded, 2);
+        assert_eq!(outcome.without_body, vec!["empty".to_string()]);
+    }
 }

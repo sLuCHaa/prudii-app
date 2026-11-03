@@ -797,6 +797,66 @@ pub async fn save_attachment(
 }
 
 /// Fetch a single mail's body from IMAP on demand.
+/// Mails flagged with attachments must have their records, and a body loaded only for the
+/// tracker count still needs its attachments before it can be shown.
+pub(crate) fn body_cache_usable(conn: &rusqlite::Connection, mail_id: &str) -> bool {
+    let row: Option<(bool, bool, bool)> = conn
+        .query_row(
+            "SELECT (body_html != '' OR body_text != ''), has_attachments != 0, COALESCE(attachments_pending, 0) != 0 FROM mails WHERE id = ?1",
+            rusqlite::params![mail_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .ok();
+    let Some((has_body, has_att_flag, pending)) = row else { return false };
+    if !has_body || pending {
+        return false;
+    }
+    if !has_att_flag {
+        return true;
+    }
+    conn.query_row("SELECT COUNT(*) FROM attachments WHERE mail_id = ?1", rusqlite::params![mail_id], |row| row.get::<_, i64>(0))
+        .map(|n| n > 0)
+        .unwrap_or(false)
+}
+
+/// Text and HTML only, for counting trackers; attachments follow when the user opens the mail.
+/// Returns whether the mail now has a body.
+pub(crate) async fn fetch_body_for_scan(db: &Database, mail_id: &str) -> Result<bool, String> {
+    let has_body = |db: &Database| {
+        db.read_db()
+            .query_row("SELECT (body_html != '' OR body_text != '') FROM mails WHERE id = ?1", rusqlite::params![mail_id], |row| row.get::<_, bool>(0))
+            .unwrap_or(false)
+    };
+    if has_body(db) {
+        return Ok(true);
+    }
+    {
+        let mut fetching = FETCHING_BODIES.lock().unwrap_or_else(|e| e.into_inner());
+        if !fetching.insert(mail_id.to_string()) {
+            return Ok(true);
+        }
+    }
+    let result = async {
+        let (api_msg_id, account_id) = get_api_message_id(db, mail_id).ok_or("Mail not found")?;
+        let (api_type, provider, auth_type) = get_api_type(db, &account_id);
+        let credential = credentials::resolve_credential(&account_id, &auth_type, &provider)
+            .await
+            .map_err(|e| format!("Credentials: {}", e))?;
+        match api_type {
+            ApiType::Gmail => gmail::messages::fetch_message_body(&gmail::api::GmailClient::new(&credential), &api_msg_id, mail_id, db, false)
+                .await
+                .map_err(|e| format!("Gmail body fetch: {}", e)),
+            ApiType::Outlook => outlook::messages::fetch_message_body(&outlook::api::OutlookClient::new(&credential), &api_msg_id, mail_id, db, false)
+                .await
+                .map_err(|e| format!("Outlook body fetch: {}", e)),
+            ApiType::Imap => Err("IMAP bodies come from the search backfill".to_string()),
+        }
+    }
+    .await;
+    FETCHING_BODIES.lock().unwrap_or_else(|e| e.into_inner()).remove(mail_id);
+    result.map(|_| has_body(db))
+}
+
 /// Called when the user opens a mail whose body hasn't been downloaded yet.
 #[tauri::command]
 pub async fn fetch_mail_body(
@@ -809,35 +869,7 @@ pub async fn fetch_mail_body(
     // Check if body is already cached in DB â€” skip fetch if so.
     // Also verify that mails flagged with attachments actually have attachment records;
     // if not, re-fetch to populate them (handles mails cached before attachment fixes).
-    let can_use_cache = {
-        let conn = db.read_db();
-        let has_body: bool = conn.query_row(
-            "SELECT (body_html != '' OR body_text != '') FROM mails WHERE id = ?1",
-            rusqlite::params![mail_id],
-            |row| row.get::<_, bool>(0),
-        ).unwrap_or(false);
-
-        if !has_body {
-            false
-        } else {
-            let has_att_flag: bool = conn.query_row(
-                "SELECT has_attachments FROM mails WHERE id = ?1",
-                rusqlite::params![mail_id],
-                |row| row.get::<_, i32>(0).map(|v| v != 0),
-            ).unwrap_or(false);
-
-            if has_att_flag {
-                let att_count: i64 = conn.query_row(
-                    "SELECT COUNT(*) FROM attachments WHERE mail_id = ?1",
-                    rusqlite::params![mail_id],
-                    |row| row.get(0),
-                ).unwrap_or(0);
-                att_count > 0
-            } else {
-                true // no attachments expected, cache is valid
-            }
-        }
-    };
+    let can_use_cache = body_cache_usable(&db.read_db(), &mail_id);
     if can_use_cache {
         log::info!("fetch_mail_body: cache HIT for {} ({:?})", mail_id, t_start.elapsed());
         return get_mail_inner(&db, &mail_id)?
@@ -912,7 +944,7 @@ pub async fn fetch_mail_body(
                         .await
                         .map_err(|e| format!("Credentials: {}", e))?;
                     let client = gmail::api::GmailClient::new(&credential);
-                    gmail::messages::fetch_message_body(&client, api_msg_id, &mail_id, &db)
+                    gmail::messages::fetch_message_body(&client, api_msg_id, &mail_id, &db, true)
                         .await
                         .map_err(|e| format!("Gmail body fetch: {}", e))?;
                     log::info!("fetch_mail_body: Gmail API fetch took {:?} for {}", t_start.elapsed(), mail_id);
@@ -930,7 +962,7 @@ pub async fn fetch_mail_body(
                         .await
                         .map_err(|e| format!("Credentials: {}", e))?;
                     let client = outlook::api::OutlookClient::new(&credential);
-                    outlook::messages::fetch_message_body(&client, api_msg_id, &mail_id, &db)
+                    outlook::messages::fetch_message_body(&client, api_msg_id, &mail_id, &db, true)
                         .await
                         .map_err(|e| format!("Outlook body fetch: {}", e))?;
                     log::info!("fetch_mail_body: Outlook API fetch took {:?} for {}", t_start.elapsed(), mail_id);
@@ -4652,5 +4684,25 @@ mod category_column_tests {
         assert_eq!(by_subject("Wochenrückblick"), Some("newsletters".to_string()));
         assert_eq!(by_subject("Unsicher"), None);
         assert_eq!(by_subject("Neu"), None);
+    }
+}
+
+#[cfg(test)]
+mod body_cache_tests {
+    use super::*;
+    use crate::test_support::{seed_account, seed_folder, seed_mail, temp_db, SeedMail};
+
+    #[test]
+    fn pending_attachments_force_a_full_fetch() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        let account = seed_account(&conn, "me@studio-halde.example");
+        let inbox = seed_folder(&conn, &account, "inbox");
+        let id = seed_mail(&conn, &SeedMail { account_id: &account, folder_id: &inbox, from_email: "news@halde-shop.example", ..Default::default() });
+        assert!(!body_cache_usable(&conn, &id));
+        conn.execute("UPDATE mails SET body_html = '<p>Hallo</p>' WHERE id = ?1", [&id]).unwrap();
+        assert!(body_cache_usable(&conn, &id));
+        conn.execute("UPDATE mails SET attachments_pending = 1 WHERE id = ?1", [&id]).unwrap();
+        assert!(!body_cache_usable(&conn, &id));
     }
 }
