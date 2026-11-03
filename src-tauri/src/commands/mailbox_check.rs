@@ -1,5 +1,5 @@
 use crate::categorize::signals::HeaderSignals;
-use crate::commands::unsubscribe::{can_retry, list_status, Offer};
+use crate::commands::unsubscribe::{can_retry, list_status, retry_left, Offer};
 use crate::db::Database;
 use crate::trackers::store::{stamp, DEFAULT_DAYS};
 use crate::unsubscribe::key::{list_key, sender_key, KeyKind, ListKey, MailFacts};
@@ -54,7 +54,14 @@ struct Group {
     newest_date: String,
     address: String,
     // The newest mail that can be unsubscribed from keeps a list's action stable when its latest copy lacks the header.
-    newest_unsub: Option<(String, String)>,
+    newest_unsub: Option<Sample>,
+}
+
+struct Sample {
+    date: String,
+    id: String,
+    signal_headers: String,
+    list_unsubscribe: String,
 }
 
 fn row_key(account: &str, key: &ListKey) -> String {
@@ -133,8 +140,13 @@ pub(crate) fn newsletter_overview(
             group.newest_id = c.id.clone();
             group.address = c.from_email.to_lowercase();
         }
-        if !c.list_unsubscribe.trim().is_empty() && group.newest_unsub.as_ref().is_none_or(|(date, _)| c.date > *date) {
-            group.newest_unsub = Some((c.date.clone(), c.id.clone()));
+        if !c.list_unsubscribe.trim().is_empty() && group.newest_unsub.as_ref().is_none_or(|s| c.date > s.date) {
+            group.newest_unsub = Some(Sample {
+                date: c.date.clone(),
+                id: c.id.clone(),
+                signal_headers: c.signal_headers.clone(),
+                list_unsubscribe: c.list_unsubscribe.clone(),
+            });
         }
         group.mail_ids.push(c.id);
     }
@@ -151,7 +163,7 @@ pub(crate) fn newsletter_overview(
     let mut mails = 0;
     let mut rows = Vec::with_capacity(groups.len());
     for (row_key, (account, group)) in &groups {
-        let sample = group.newest_unsub.as_ref().map(|(_, id)| id.clone()).unwrap_or_else(|| group.newest_id.clone());
+        let sample = group.newest_unsub.as_ref().map(|s| s.id.clone()).unwrap_or_else(|| group.newest_id.clone());
         let status = list_status(conn, &sample, now)?;
         let count = group.messages.len() as u32;
         mails += count;
@@ -167,7 +179,10 @@ pub(crate) fn newsletter_overview(
             sample_mail_id: sample,
             // Every row is list mail, so a list without a usable header can still be kept out.
             offer: if status.offer == Offer::None { Offer::Block } else { status.offer },
-            subscription: unsub_store::find(conn, account, &group.key).map_err(|e| e.to_string())?.map(|sub| view(&sub)),
+            subscription: unsub_store::find(conn, account, &group.key).map_err(|e| e.to_string())?.map(|sub| match &group.newest_unsub {
+                Some(s) => unsub_store::view(&sub, now, retry_left(&sub, &s.signal_headers, &s.list_unsubscribe, now)),
+                None => view(&sub),
+            }),
         });
     }
 
@@ -384,6 +399,21 @@ mod tests {
         let o = overview(&f, None, true);
         assert_eq!(o.rows.len(), 1);
         assert_eq!(o.rows[0].offer, Offer::Block);
+    }
+
+    #[test]
+    fn still_sending_row_offers_retry_from_its_sample() {
+        let f = fx();
+        let one_click = r#"{"list-id":"<wr.halde-shop.example>","list-unsubscribe-post":"List-Unsubscribe=One-Click"}"#;
+        put(&f, M { headers: one_click, unsub: "<https://news.halde-shop.example/u>, <mailto:unsub@halde-shop.example>", ..base(&f, "a") });
+        let key = ListKey { kind: KeyKind::ListId, value: "wr.halde-shop.example".into() };
+        let conn = f.db.lock_db();
+        let sub = insert_request(&conn, &f.account, &key, "Wochenrückblick", "one_click", false, at("2026-10-01T08:00:00Z")).unwrap();
+        crate::unsubscribe::store::record_sorted(&conn, &sub.id, at("2026-10-08T08:00:00Z")).unwrap();
+        drop(conn);
+        let view = overview(&f, None, true).rows[0].subscription.clone().unwrap();
+        assert_eq!(view.status, "still_sending");
+        assert!(view.can_retry);
     }
 
     #[test]

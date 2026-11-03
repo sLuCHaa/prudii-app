@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 pub const KINDS: [&str; 3] = ["pixel", "hidden", "tracking_domain"];
 
 /// Same idea of a newsletter as the unsubscribe safety net, plus what sorting labelled as one.
-pub(crate) const BULK_SQL: &str = "(COALESCE(m.list_unsubscribe, '') != '' OR m.category IN ('newsletters', 'promotions'))";
+pub(crate) const BULK_SQL: &str = "(COALESCE(m.list_unsubscribe, '') != '' OR m.category IN ('newsletters', 'promotions')
+     OR m.signal_headers LIKE '%\"list-id\"%' OR m.signal_headers LIKE '%\"precedence\":\"bulk\"%'
+     OR m.signal_headers LIKE '%\"precedence\":\"list\"%')";
 
 // Gmail keeps one row per label; a message counts once, whichever row was shown.
 // Two EXISTS instead of one OR, so each half can use an index rather than walk every scan.
@@ -78,6 +80,7 @@ pub fn unscanned_bodies(conn: &Connection, cutoff: &str, limit: u32) -> rusqlite
 pub const DEFAULT_DAYS: u32 = 30;
 pub const BODY_LIMIT_PER_ACCOUNT: u32 = 500;
 const TOP: usize = 10;
+const OTHER_DOMAINS: usize = 5;
 
 #[derive(Debug, Default, Serialize)]
 pub struct KindCounts {
@@ -110,6 +113,7 @@ pub struct TrackerReport {
     pub other_count: u32,
     pub by_kind: KindCounts,
     pub companies: Vec<CompanyCount>,
+    pub other_domains: Vec<CompanyCount>,
     pub senders: Vec<SenderCount>,
 }
 
@@ -165,11 +169,11 @@ pub fn report(conn: &Connection, cutoff: &str, account_id: Option<&str>, days: u
     }
 
     // Only named companies compete for the list; everything not shown is summed up, so the bars add up to the total.
-    let companies = top(
-        companies.into_iter().filter(|((_, known), _)| *known).map(|((name, known), count)| CompanyCount { name, known, count }).collect(),
-        |c| c.count,
-        |c| c.name.as_str(),
-    );
+    let (named, unnamed): (Vec<_>, Vec<_>) =
+        companies.into_iter().map(|((name, known), count)| CompanyCount { name, known, count }).partition(|c| c.known);
+    let companies = top(named, |c| c.count, |c| c.name.as_str());
+    let mut other_domains = top(unnamed, |c| c.count, |c| c.name.as_str());
+    other_domains.truncate(OTHER_DOMAINS);
     other_count = total - companies.iter().map(|c| c.count).sum::<u32>();
     let senders = top(
         senders
@@ -184,7 +188,7 @@ pub fn report(conn: &Connection, cutoff: &str, account_id: Option<&str>, days: u
         |s| s.count,
         |s| s.address.as_str(),
     );
-    Ok(TrackerReport { days, scanned_mails, mails_with_trackers: mails.len() as u32, total, other_count, by_kind, companies, senders })
+    Ok(TrackerReport { days, scanned_mails, mails_with_trackers: mails.len() as u32, total, other_count, by_kind, companies, other_domains, senders })
 }
 
 /// One row per message: a Gmail label copy whose twin already has a body needs no download.
@@ -446,6 +450,33 @@ mod tests {
         conn.execute("UPDATE mails SET message_id = 'msg-1', body_html = '<p>Hallo</p>' WHERE id = ?1", [&copy]).unwrap();
         record(&conn, &TrackerRecord { mail_id: first, hits: vec![] }, now()).unwrap();
         assert!(unscanned_bodies(&conn, CUTOFF, 10).unwrap().is_empty());
+    }
+
+    #[test]
+    fn list_id_only_mail_is_scanned_too() {
+        let f = fx();
+        let conn = f.db.lock_db();
+        let id = seed_mail(
+            &conn,
+            &SeedMail { account_id: &f.account, folder_id: &f.inbox, from_email: "forum@studio-halde.example", signal_headers: r#"{"list-id":"<forum.studio-halde.example>"}"#, date: "2026-10-10T09:00:00Z", ..Default::default() },
+        );
+        conn.execute("UPDATE mails SET body_html = '<p>Forum</p>' WHERE id = ?1", [&id]).unwrap();
+        let ids: Vec<String> = unscanned_bodies(&conn, CUTOFF, 10).unwrap().into_iter().map(|b| b.mail_id).collect();
+        assert_eq!(ids, vec![id]);
+    }
+
+    #[test]
+    fn report_lists_the_domains_behind_other_trackers() {
+        let f = fx();
+        let account = f.account.clone();
+        scanned(&f, &account, "news@halde-shop.example", "", "2026-10-10T09:00:00Z", "a", vec![
+            hit("pixel", "open.halde-shop.example", None, 7),
+            hit("pixel", "trk.laden-halde.example", None, 2),
+            hit("tracking_domain", "list-manage.com", Some("Mailchimp"), 3),
+        ]);
+        let r = report(&f.db.lock_db(), CUTOFF, None, 30).unwrap();
+        let domains: Vec<(&str, u32)> = r.other_domains.iter().map(|d| (d.name.as_str(), d.count)).collect();
+        assert_eq!(domains, vec![("open.halde-shop.example", 7), ("trk.laden-halde.example", 2)]);
     }
 
     #[test]

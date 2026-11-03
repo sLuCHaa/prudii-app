@@ -159,6 +159,12 @@ fn untried(plan: Vec<Method>, tried: &[String]) -> Vec<Method> {
     plan.into_iter().filter(|m| !tried.iter().any(|t| t == m.kind())).collect()
 }
 
+/// The overview already holds each list's newest mail, so it skips the account-wide search in `can_retry`.
+pub(crate) fn retry_left(sub: &Unsubscription, signal_headers: &str, list_unsubscribe: &str, now: DateTime<Utc>) -> bool {
+    store::status(sub, now) == "still_sending"
+        && !untried(plan_methods(&parse_targets(list_unsubscribe), one_click_offered(signal_headers, list_unsubscribe)), &sub.methods_tried).is_empty()
+}
+
 pub(crate) fn can_retry(conn: &Connection, sub: &Unsubscription, now: DateTime<Utc>) -> bool {
     store::status(sub, now) == "still_sending" && !untried(plan_for(conn, &sub.account_id, &sub.key), &sub.methods_tried).is_empty()
 }
