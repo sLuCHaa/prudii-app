@@ -69,6 +69,113 @@ pub fn unscanned_bodies(conn: &Connection, cutoff: &str, limit: u32) -> rusqlite
     .collect()
 }
 
+pub const DEFAULT_DAYS: u32 = 30;
+const TOP: usize = 10;
+
+#[derive(Debug, Default, Serialize)]
+pub struct KindCounts {
+    pub pixel: u32,
+    pub hidden: u32,
+    pub tracking_domain: u32,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CompanyCount {
+    pub name: String,
+    pub known: bool,
+    pub count: u32,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SenderCount {
+    pub name: String,
+    pub address: String,
+    pub count: u32,
+    pub mails: u32,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TrackerReport {
+    pub days: u32,
+    pub scanned_mails: u32,
+    pub mails_with_trackers: u32,
+    pub total: u32,
+    pub by_kind: KindCounts,
+    pub companies: Vec<CompanyCount>,
+    pub senders: Vec<SenderCount>,
+}
+
+// A broken date would sort after any digit and land in every window.
+const WINDOW_SQL: &str = "m.date >= ?1 AND m.date GLOB '[0-9][0-9][0-9][0-9]-*' AND (?2 IS NULL OR m.account_id = ?2)";
+
+fn top<T>(mut items: Vec<T>, count: impl Fn(&T) -> u32, name: impl Fn(&T) -> &str) -> Vec<T> {
+    items.sort_by(|a, b| count(b).cmp(&count(a)).then_with(|| name(a).cmp(name(b))));
+    items.truncate(TOP);
+    items
+}
+
+pub fn report(conn: &Connection, cutoff: &str, account_id: Option<&str>, days: u32) -> rusqlite::Result<TrackerReport> {
+    let scanned_mails: u32 = conn.query_row(
+        &format!("SELECT COUNT(*) FROM mail_tracker_scans s JOIN mails m ON m.id = s.mail_id WHERE {WINDOW_SQL}"),
+        params![cutoff, account_id],
+        |r| r.get(0),
+    )?;
+    let rows: Vec<(String, String, String, u32, String, String, String, String)> = conn
+        .prepare(&format!(
+            "SELECT h.kind, h.domain, h.company, h.count, m.id, lower(COALESCE(m.from_email, '')), COALESCE(m.from_name, ''), m.date
+             FROM mail_tracker_hits h JOIN mails m ON m.id = h.mail_id WHERE {WINDOW_SQL}"
+        ))?
+        .query_map(params![cutoff, account_id], |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?))
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+
+    let mut by_kind = KindCounts::default();
+    let mut total = 0;
+    let mut mails = std::collections::HashSet::new();
+    let mut companies: std::collections::HashMap<(String, bool), u32> = std::collections::HashMap::new();
+    // address -> (count, mail ids, newest date with a name, that name)
+    let mut senders: std::collections::HashMap<String, (u32, std::collections::HashSet<String>, String, String)> = std::collections::HashMap::new();
+    for (kind, domain, company, count, mail_id, address, name, date) in rows {
+        total += count;
+        match kind.as_str() {
+            "pixel" => by_kind.pixel += count,
+            "hidden" => by_kind.hidden += count,
+            _ => by_kind.tracking_domain += count,
+        }
+        mails.insert(mail_id.clone());
+        let key = if company.is_empty() { (domain, false) } else { (company, true) };
+        *companies.entry(key).or_default() += count;
+        let entry = senders.entry(address).or_default();
+        entry.0 += count;
+        entry.1.insert(mail_id);
+        if !name.trim().is_empty() && date > entry.2 {
+            entry.2 = date;
+            entry.3 = name;
+        }
+    }
+
+    let companies = top(
+        companies.into_iter().map(|((name, known), count)| CompanyCount { name, known, count }).collect(),
+        |c| c.count,
+        |c| c.name.as_str(),
+    );
+    let senders = top(
+        senders
+            .into_iter()
+            .map(|(address, (count, ids, _, name))| SenderCount {
+                name: if name.is_empty() { address.clone() } else { name },
+                address,
+                count,
+                mails: ids.len() as u32,
+            })
+            .collect(),
+        |s| s.count,
+        |s| s.address.as_str(),
+    );
+    Ok(TrackerReport { days, scanned_mails, mails_with_trackers: mails.len() as u32, total, by_kind, companies, senders })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -173,6 +280,61 @@ mod tests {
         f.db.lock_db().execute("DELETE FROM mails WHERE id = ?1", [&id]).unwrap();
         assert_eq!(count(&f, "mail_tracker_hits"), 0);
         assert_eq!(count(&f, "mail_tracker_scans"), 0);
+    }
+
+    fn scanned(f: &Fx, account: &str, from: &str, name: &str, date: &str, msg: &str, hits: Vec<TrackerHit>) {
+        let conn = f.db.lock_db();
+        let folder: String = conn.query_row("SELECT id FROM folders WHERE account_id = ?1 LIMIT 1", [account], |r| r.get(0)).unwrap();
+        let id = seed_mail(&conn, &SeedMail { account_id: account, folder_id: &folder, from_email: from, list_unsubscribe: UNSUB, date, ..Default::default() });
+        conn.execute("UPDATE mails SET message_id = ?1, from_name = ?2 WHERE id = ?3", [msg, name, &id]).unwrap();
+        assert!(record(&conn, &TrackerRecord { mail_id: id, hits }, now()).unwrap());
+    }
+
+    #[test]
+    fn report_sums_kinds_companies_and_senders() {
+        let f = fx();
+        let account = f.account.clone();
+        scanned(&f, &account, "news@halde-shop.example", "Halde Shop", "2026-10-10T09:00:00Z", "a",
+            vec![hit("tracking_domain", "list-manage.com", Some("Mailchimp"), 3), hit("pixel", "open.halde-shop.example", None, 1)]);
+        scanned(&f, &account, "News@Halde-Shop.example", "Halde Shop", "2026-10-12T09:00:00Z", "b",
+            vec![hit("tracking_domain", "mcsv.net", Some("Mailchimp"), 1)]);
+        scanned(&f, &account, "anna.weber@studio-halde.example", "Anna Weber", "2026-10-13T09:00:00Z", "c", vec![]);
+        let r = report(&f.db.lock_db(), CUTOFF, None, 30).unwrap();
+        assert_eq!((r.total, r.scanned_mails, r.mails_with_trackers), (5, 3, 2));
+        assert_eq!((r.by_kind.tracking_domain, r.by_kind.pixel, r.by_kind.hidden), (4, 1, 0));
+        assert_eq!((r.companies[0].name.as_str(), r.companies[0].known, r.companies[0].count), ("Mailchimp", true, 4));
+        assert_eq!((r.companies[1].name.as_str(), r.companies[1].known, r.companies[1].count), ("open.halde-shop.example", false, 1));
+        assert_eq!(r.senders.len(), 1);
+        assert_eq!((r.senders[0].name.as_str(), r.senders[0].address.as_str()), ("Halde Shop", "news@halde-shop.example"));
+        assert_eq!((r.senders[0].count, r.senders[0].mails), (5, 2));
+    }
+
+    #[test]
+    fn report_counts_only_the_window() {
+        let f = fx();
+        let account = f.account.clone();
+        scanned(&f, &account, "news@halde-shop.example", "", "2026-09-20T09:00:00Z", "old", vec![hit("pixel", "open.halde-shop.example", None, 1)]);
+        scanned(&f, &account, "news@halde-shop.example", "", "kaputt", "broken", vec![hit("pixel", "open.halde-shop.example", None, 1)]);
+        scanned(&f, &account, "news@halde-shop.example", "", "2026-10-10T09:00:00Z", "new", vec![hit("pixel", "open.halde-shop.example", None, 2)]);
+        let r = report(&f.db.lock_db(), CUTOFF, None, 30).unwrap();
+        assert_eq!((r.total, r.scanned_mails), (2, 1));
+        assert_eq!(r.senders[0].name, "news@halde-shop.example");
+    }
+
+    #[test]
+    fn report_filters_by_account() {
+        let f = fx();
+        let account = f.account.clone();
+        let other = {
+            let conn = f.db.lock_db();
+            let other = seed_account(&conn, "anna.weber@studio-halde.example");
+            seed_folder(&conn, &other, "inbox");
+            other
+        };
+        scanned(&f, &account, "news@halde-shop.example", "", "2026-10-10T09:00:00Z", "a", vec![hit("pixel", "open.halde-shop.example", None, 1)]);
+        scanned(&f, &other, "news@halde-shop.example", "", "2026-10-10T09:00:00Z", "b", vec![hit("pixel", "open.halde-shop.example", None, 4)]);
+        assert_eq!(report(&f.db.lock_db(), CUTOFF, Some(&other), 30).unwrap().total, 4);
+        assert_eq!(report(&f.db.lock_db(), CUTOFF, None, 30).unwrap().total, 5);
     }
 
     #[test]
