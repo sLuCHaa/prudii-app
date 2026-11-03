@@ -33,7 +33,6 @@ impl Method {
 
 const DEFAULT_TEXT: &str = "unsubscribe";
 
-/// Reads the `<…>` entries of an RFC 2369 List-Unsubscribe header.
 pub fn parse_targets(header: &str) -> Targets {
     let mut targets = Targets::default();
     for entry in header.split('<').skip(1).filter_map(|rest| rest.split_once('>').map(|(inner, _)| inner)) {

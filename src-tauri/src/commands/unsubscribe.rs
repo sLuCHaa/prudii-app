@@ -427,7 +427,6 @@ mod tests {
     #[tokio::test]
     async fn nothing_sent_creates_no_entry() {
         let f = fx();
-        // A web link always works as the last way, so only a mailto-only header can fail completely.
         let id = mail(&f, LIST, "<mailto:unsub@halde-shop.example>", "2026-09-01T09:00:00Z");
         let t = fake(down(), down());
         assert_eq!(perform_unsubscribe(&f.db, &t, &id, false, t0()).await.unwrap_err(), "unsubscribe.errors.failed");

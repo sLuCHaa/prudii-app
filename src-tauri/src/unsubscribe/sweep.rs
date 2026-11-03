@@ -53,7 +53,7 @@ fn load_candidates(conn: &Connection, account_id: &str, mail_ids: &[String]) -> 
         })
 }
 
-/// Moves new mail from lists past their grace period to the trash; returns the ids left for the rules.
+/// Returns only the ids it left alone, so a rule never pulls a swept mail back out of the trash.
 pub fn sweep_new_mails(account_id: &str, mail_ids: &[String], db: &Database) -> Vec<String> {
     if mail_ids.is_empty() {
         return Vec::new();
@@ -75,14 +75,16 @@ pub fn sweep_new_mails(account_id: &str, mail_ids: &[String], db: &Database) -> 
         if date <= sub.sweep_after || mail.folder_type == "trash" {
             continue;
         }
+        // The mail's own date decides whether it came after a retry; a forged future date is capped.
+        let seen_at = date.min(now);
         let known = correspondents.get_or_insert_with(|| load_correspondents(&conn));
         if protected_from_cleanup(&conn, &mail.id, known) {
-            let _ = store::record_seen(&conn, &sub.id, now);
+            let _ = store::record_seen(&conn, &sub.id, seen_at);
             continue;
         }
         // Moving spam would only shuffle it between two junk folders; the hit still counts.
         if mail.folder_type == "spam" || crate::rules::trash_mail(&conn, account_id, &mail.id, &mail.message_id, &mail.folder_path, is_gmail) {
-            let _ = store::record_sorted(&conn, &sub.id, now);
+            let _ = store::record_sorted(&conn, &sub.id, seen_at);
             if mail.folder_type != "spam" {
                 swept.insert(mail.id);
             }
@@ -94,7 +96,6 @@ pub fn sweep_new_mails(account_id: &str, mail_ids: &[String], db: &Database) -> 
     mail_ids.iter().filter(|id| !swept.contains(*id)).cloned().collect()
 }
 
-/// Earlier mail of the list, regardless of date; spared categories stay where they are.
 pub(crate) fn trash_existing(conn: &Connection, sub: &Unsubscription, correspondents: &HashMap<String, u32>) -> u32 {
     // SQL narrows the scan; `matches` below stays the authority.
     let narrow = match sub.key.kind {
@@ -135,8 +136,12 @@ mod tests {
     const UNSUB: &str = "<https://news.halde-shop.example/u>";
     const AFTER: &str = "2026-10-10T09:00:00Z";
 
+    fn at(s: &str) -> DateTime<Utc> {
+        DateTime::parse_from_rfc3339(s).unwrap().with_timezone(&Utc)
+    }
+
     fn t0() -> DateTime<Utc> {
-        DateTime::parse_from_rfc3339("2026-10-01T08:00:00Z").unwrap().with_timezone(&Utc)
+        at("2026-10-01T08:00:00Z")
     }
 
     fn list_key() -> ListKey {
@@ -278,9 +283,36 @@ mod tests {
         let other = seed_account(&conn, "anna.weber@studio-halde.example");
         let other_inbox = seed_folder(&conn, &other, "inbox");
         seed_folder(&conn, &other, "trash");
+        let elsewhere = ListKey { kind: KeyKind::ListId, value: "forum.studio-halde.example".into() };
+        insert_request(&conn, &other, &elsewhere, "Forum", "mailto", false, t0()).unwrap();
         let mail = seed_mail(&conn, &SeedMail { account_id: &other, folder_id: &other_inbox, ..list_mail(&f, AFTER) });
         drop(conn);
         assert_eq!(sweep_new_mails(&other, &[mail.clone()], &f.db), vec![mail]);
+    }
+
+    #[test]
+    fn foreign_mail_id_is_ignored() {
+        let f = fx();
+        unsubscribe(&f);
+        let conn = f.db.lock_db();
+        let other = seed_account(&conn, "anna.weber@studio-halde.example");
+        let other_inbox = seed_folder(&conn, &other, "inbox");
+        let mail = seed_mail(&conn, &SeedMail { account_id: &other, folder_id: &other_inbox, ..list_mail(&f, AFTER) });
+        drop(conn);
+        sweep_new_mails(&f.account, &[mail.clone()], &f.db);
+        assert_eq!(folder(&f.db.lock_db(), &mail), other_inbox);
+    }
+
+    #[test]
+    fn late_synced_mail_from_before_retry_does_not_mark_sending() {
+        let f = fx();
+        let sub = unsubscribe(&f);
+        crate::unsubscribe::store::record_retry(&f.db.lock_db(), &sub, "mailto", false, at("2026-10-06T08:00:00Z")).unwrap();
+        let mail = seed_mail(&f.db.lock_db(), &list_mail(&f, "2026-10-05T09:00:00Z"));
+        sweep_new_mails(&f.account, &[mail], &f.db);
+        let sub = get(&f.db.lock_db(), &sub).unwrap().unwrap();
+        assert_eq!(sub.sorted_count, 1);
+        assert_eq!(crate::unsubscribe::store::status(&sub, at("2026-10-10T08:00:00Z")), "quiet");
     }
 
     #[test]
