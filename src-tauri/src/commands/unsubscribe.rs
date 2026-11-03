@@ -270,13 +270,17 @@ pub(crate) async fn perform_retry<T: Transport>(db: &Database, transport: &T, id
     Ok(UnsubscribeOutcome { subscription: store::view(&sub, now, false), web_url, trashed: 0 })
 }
 
-fn transport(app: tauri::AppHandle) -> AppTransport {
-    AppTransport { app, client: http_client() }
+fn transport(app: tauri::AppHandle) -> Result<AppTransport, String> {
+    let client = http_client().map_err(|e| {
+        log::error!("unsubscribe http client: {e}");
+        ERR_FAILED.to_string()
+    })?;
+    Ok(AppTransport { app, client })
 }
 
 #[tauri::command]
 pub async fn unsubscribe_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id: String, trash_existing: bool) -> Result<UnsubscribeOutcome, String> {
-    perform_unsubscribe(&db, &transport(app), &mail_id, trash_existing, Utc::now()).await
+    perform_unsubscribe(&db, &transport(app)?, &mail_id, trash_existing, Utc::now()).await
 }
 
 #[tauri::command(async)]
@@ -296,7 +300,7 @@ pub fn allow_list_again(db: State<'_, Database>, id: String) -> Result<(), Strin
 
 #[tauri::command]
 pub async fn retry_unsubscribe(app: tauri::AppHandle, db: State<'_, Database>, id: String) -> Result<UnsubscribeOutcome, String> {
-    perform_retry(&db, &transport(app), &id, Utc::now()).await
+    perform_retry(&db, &transport(app)?, &id, Utc::now()).await
 }
 
 #[cfg(test)]

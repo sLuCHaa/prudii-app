@@ -56,7 +56,29 @@ pub fn seed_mail(conn: &Connection, m: &SeedMail) -> String {
     id
 }
 
-/// Serves one canned response per connection, in order, and records each request head.
+fn read_request(stream: &mut std::net::TcpStream) -> Vec<u8> {
+    let mut data = Vec::new();
+    let mut buf = [0u8; 8192];
+    loop {
+        let n = std::io::Read::read(stream, &mut buf).unwrap_or(0);
+        if n == 0 {
+            return data;
+        }
+        data.extend_from_slice(&buf[..n]);
+        let Some(end) = data.windows(4).position(|w| w == b"\r\n\r\n") else { continue };
+        let head = String::from_utf8_lossy(&data[..end]).to_ascii_lowercase();
+        let length = head
+            .lines()
+            .find_map(|l| l.strip_prefix("content-length:"))
+            .and_then(|v| v.trim().parse::<usize>().ok())
+            .unwrap_or(0);
+        if data.len() >= end + 4 + length {
+            return data;
+        }
+    }
+}
+
+/// Serves one canned response per connection, in order, and records each request.
 pub fn serve_http(responses: Vec<String>) -> (String, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let base = format!("http://{}", listener.local_addr().unwrap());
@@ -65,9 +87,8 @@ pub fn serve_http(responses: Vec<String>) -> (String, std::sync::Arc<std::sync::
     std::thread::spawn(move || {
         for response in responses {
             let Ok((mut stream, _)) = listener.accept() else { return };
-            let mut buf = [0u8; 8192];
-            let n = std::io::Read::read(&mut stream, &mut buf).unwrap_or(0);
-            log.lock().unwrap().push(String::from_utf8_lossy(&buf[..n]).to_ascii_lowercase());
+            let request = read_request(&mut stream);
+            log.lock().unwrap().push(String::from_utf8_lossy(&request).to_ascii_lowercase());
             let _ = std::io::Write::write_all(&mut stream, response.as_bytes());
         }
     });
