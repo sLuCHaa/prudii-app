@@ -1114,6 +1114,8 @@
     "confirmBlock": "Blockieren",
     "allowAgain": "Wieder zulassen",
     "retry": "Nochmal versuchen",
+    "allowAgainTitle": "„{{name}}“ wieder zulassen?",
+    "allowAgainMessage": "Neue Mails dieser Liste landen dann wieder ganz normal in deinem Postfach.",
     "movedToTrash_one": "{{count}} Mail in den Papierkorb verschoben",
     "movedToTrash_other": "{{count}} Mails in den Papierkorb verschoben",
     "status": {
@@ -1123,6 +1125,7 @@
       "quiet_other": "Abgemeldet, seit {{count}} Tagen Ruhe",
       "stillSending_one": "Schickt trotzdem – {{count}} Mail aussortiert",
       "stillSending_other": "Schickt trotzdem – {{count}} Mails aussortiert",
+      "stillSendingSpared": "Schickt trotzdem – Prudii lässt wichtige Mails durch",
       "blocked_one": "Blockiert – {{count}} Mail aussortiert",
       "blocked_other": "Blockiert – {{count}} Mails aussortiert"
     },

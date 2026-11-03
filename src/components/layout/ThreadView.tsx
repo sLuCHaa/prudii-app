@@ -1801,6 +1801,14 @@ export function ThreadView({ mail }: ThreadViewProps) {
   }, [unsubscribeMode, mail.id, applyUnsubscribeOutcome, showUnsubscribeError]);
 
   const handleListAction = useCallback(async (action: "retry" | "allow", id: string) => {
+    if (action === "allow") {
+      const confirmed = await dialog.confirm({
+        title: t("unsubscribe.allowAgainTitle", { name: listStatus?.subscription?.display_name ?? "" }),
+        message: t("unsubscribe.allowAgainMessage"),
+        confirmLabel: t("unsubscribe.allowAgain"),
+      });
+      if (!confirmed) return;
+    }
     setUnsubscribeBusy(true);
     try {
       if (action === "allow") {
@@ -1814,7 +1822,7 @@ export function ThreadView({ mail }: ThreadViewProps) {
     } finally {
       setUnsubscribeBusy(false);
     }
-  }, [queryClient, applyUnsubscribeOutcome, showUnsubscribeError]);
+  }, [dialog, t, listStatus, queryClient, applyUnsubscribeOutcome, showUnsubscribeError]);
 
   const threadMailIdsKey = useMemo(
     () => threadMails.map((m) => m.id).join(","),
@@ -2053,7 +2061,7 @@ export function ThreadView({ mail }: ThreadViewProps) {
             {unsubscribeMode && (
               <UnsubscribeDialog
                 mode={unsubscribeMode}
-                name={mail.from.name || mail.from.email}
+                name={listStatus?.name || mail.from.name || mail.from.email}
                 address={mail.from.email}
                 onConfirm={handleUnsubscribeConfirm}
                 onCancel={() => setUnsubscribeMode(null)}

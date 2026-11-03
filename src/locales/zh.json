@@ -1113,6 +1113,8 @@
     "confirmBlock": "屏蔽",
     "allowAgain": "重新允许",
     "retry": "再试一次",
+    "allowAgainTitle": "重新允许“{{name}}”？",
+    "allowAgainMessage": "此列表的新邮件将再次正常进入你的收件箱。",
     "movedToTrash_one": "已将 {{count}} 封邮件移到废纸篓",
     "movedToTrash_other": "已将 {{count}} 封邮件移到废纸篓",
     "status": {
@@ -1122,6 +1124,7 @@
       "quiet_other": "已退订，已安静 {{count}} 天",
       "stillSending_one": "仍在发送，已清理 {{count}} 封邮件",
       "stillSending_other": "仍在发送，已清理 {{count}} 封邮件",
+      "stillSendingSpared": "仍在发送，Prudii 会放行重要邮件",
       "blocked_one": "已屏蔽，已清理 {{count}} 封邮件",
       "blocked_other": "已屏蔽，已清理 {{count}} 封邮件"
     },

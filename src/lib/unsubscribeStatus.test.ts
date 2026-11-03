@@ -27,6 +27,10 @@ describe("statusLabel", () => {
       key: "unsubscribe.status.stillSending",
       options: { count: 4 },
     });
+    expect(statusLabel({ ...base, status: "still_sending", sorted_count: 0 }, formatDate)).toEqual({
+      key: "unsubscribe.status.stillSendingSpared",
+      options: {},
+    });
     expect(statusLabel({ ...base, status: "blocked", sorted_count: 2 }, formatDate)).toEqual({
       key: "unsubscribe.status.blocked",
       options: { count: 2 },

@@ -201,6 +201,7 @@ export interface Unsubscription {
 
 export interface ListStatus {
   offer: ListOffer;
+  name: string;
   subscription: Unsubscription | null;
 }
 

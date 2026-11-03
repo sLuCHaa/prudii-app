@@ -1114,6 +1114,8 @@
     "confirmBlock": "Block",
     "allowAgain": "Allow again",
     "retry": "Try again",
+    "allowAgainTitle": "Allow “{{name}}” again?",
+    "allowAgainMessage": "New mail from this list will land in your inbox as usual again.",
     "movedToTrash_one": "Moved {{count}} mail to the trash",
     "movedToTrash_other": "Moved {{count}} mails to the trash",
     "status": {
@@ -1123,6 +1125,7 @@
       "quiet_other": "Unsubscribed, quiet for {{count}} days",
       "stillSending_one": "Still sending – {{count}} mail sorted out",
       "stillSending_other": "Still sending – {{count}} mails sorted out",
+      "stillSendingSpared": "Still sending – Prudii lets important mail through",
       "blocked_one": "Blocked – {{count}} mail sorted out",
       "blocked_other": "Blocked – {{count}} mails sorted out"
     },

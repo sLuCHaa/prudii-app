@@ -1114,6 +1114,8 @@
     "confirmBlock": "Bloquear",
     "allowAgain": "Permitir de novo",
     "retry": "Tentar de novo",
+    "allowAgainTitle": "Permitir “{{name}}” de novo?",
+    "allowAgainMessage": "Os novos e-mails desta lista voltarão a chegar normalmente à sua caixa de entrada.",
     "movedToTrash_one": "{{count}} e-mail movido para a lixeira",
     "movedToTrash_other": "{{count}} e-mails movidos para a lixeira",
     "status": {
@@ -1123,6 +1125,7 @@
       "quiet_other": "Inscrição cancelada, nada há {{count}} dias",
       "stillSending_one": "Ainda envia – {{count}} e-mail separado",
       "stillSending_other": "Ainda envia – {{count}} e-mails separados",
+      "stillSendingSpared": "Ainda envia – o Prudii deixa passar os e-mails importantes",
       "blocked_one": "Bloqueado – {{count}} e-mail separado",
       "blocked_other": "Bloqueado – {{count}} e-mails separados"
     },

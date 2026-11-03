@@ -184,6 +184,8 @@ function AppInner() {
         useAppStore.getState().setSyncProgress(progress.account_id, progress);
         refreshMailQueries(progress.account_id);
         queryClient.invalidateQueries({ queryKey: ["accounts"] });
+        // A sync may have sorted out list mail, which changes the status in the reading pane.
+        queryClient.invalidateQueries({ queryKey: ["list-status"] });
         // Backfill mail bodies in the background for FTS search
         backfillBodies(progress.account_id).catch(() => {});
         if (useAppStore.getState().appSettings.sorting_enabled) {

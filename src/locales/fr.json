@@ -1114,6 +1114,8 @@
     "confirmBlock": "Bloquer",
     "allowAgain": "Autoriser à nouveau",
     "retry": "Réessayer",
+    "allowAgainTitle": "Autoriser à nouveau « {{name}} » ?",
+    "allowAgainMessage": "Les nouveaux messages de cette liste arriveront de nouveau normalement dans votre boîte de réception.",
     "movedToTrash_one": "{{count}} message mis à la corbeille",
     "movedToTrash_other": "{{count}} messages mis à la corbeille",
     "status": {
@@ -1123,6 +1125,7 @@
       "quiet_other": "Désabonné, plus rien depuis {{count}} jours",
       "stillSending_one": "Envoie encore – {{count}} message écarté",
       "stillSending_other": "Envoie encore – {{count}} messages écartés",
+      "stillSendingSpared": "Envoie encore – Prudii laisse passer les messages importants",
       "blocked_one": "Bloqué – {{count}} message écarté",
       "blocked_other": "Bloqué – {{count}} messages écartés"
     },

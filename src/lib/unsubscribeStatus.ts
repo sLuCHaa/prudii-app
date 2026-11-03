@@ -12,7 +12,9 @@ export function statusLabel(
     case "quiet":
       return { key: "unsubscribe.status.quiet", options: { count: sub.quiet_days } };
     case "still_sending":
-      return { key: "unsubscribe.status.stillSending", options: { count: sub.sorted_count } };
+      return sub.sorted_count > 0
+        ? { key: "unsubscribe.status.stillSending", options: { count: sub.sorted_count } }
+        : { key: "unsubscribe.status.stillSendingSpared", options: {} };
     case "blocked":
       return { key: "unsubscribe.status.blocked", options: { count: sub.sorted_count } };
   }
