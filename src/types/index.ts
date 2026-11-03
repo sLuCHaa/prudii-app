@@ -186,6 +186,33 @@ export interface AiRepliesEvent {
   error: string | null;
 }
 
+export interface TrackerHit {
+  kind: "pixel" | "hidden" | "tracking_domain";
+  domain: string;
+  company: string | null;
+  count: number;
+}
+
+export interface TrackerRecord {
+  mail_id: string;
+  hits: TrackerHit[];
+}
+
+export interface StoredBody {
+  mail_id: string;
+  html: string;
+}
+
+export interface TrackerReport {
+  days: number;
+  scanned_mails: number;
+  mails_with_trackers: number;
+  total: number;
+  by_kind: { pixel: number; hidden: number; tracking_domain: number };
+  companies: Array<{ name: string; known: boolean; count: number }>;
+  senders: Array<{ name: string; address: string; count: number; mails: number }>;
+}
+
 export type ListOffer = "unsubscribe" | "block" | "none";
 
 export interface Unsubscription {

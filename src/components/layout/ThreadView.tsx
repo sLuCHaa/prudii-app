@@ -14,6 +14,7 @@ import { resolveInlineImages, removeUnresolvableImages, listedAttachments } from
 import { findMissingParts, stripMmlTags } from "../../lib/missingParts";
 import { invalidateMailListQueries } from "../../lib/mailQueries";
 import { ListStatusChip } from "./ListStatusChip";
+import { displayTrackerRecorder } from "../../lib/trackerScan";
 import { UnsubscribeDialog } from "./UnsubscribeDialog";
 import { useAttachments, useToggleStar, useToggleMailFlag } from "../../hooks/useAccounts";
 import { useScroller } from "../../hooks/useScroller";
@@ -450,6 +451,10 @@ const HtmlMailFrame = memo(function HtmlMailFrame({ mailId, html, tight = false,
   useEffect(() => {
     if (heldBack) onHeldBack?.(mailId);
   }, [heldBack, mailId, onHeldBack]);
+
+  useEffect(() => {
+    displayTrackerRecorder.add(mailId, trackers, showTrackedImages);
+  }, [mailId, trackers, showTrackedImages]);
 
   // The bridge script is allow-listed by its SHA-256 hash in both this iframe's
   // CSP and the parent CSP (tauri.conf.json) — a `srcdoc` iframe inherits the

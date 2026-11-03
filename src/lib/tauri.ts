@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { BundleImportResult, Calendar, CalendarPatch, CalendarSettings, EditScope, EventDetail, EventInput, EventPatch, EventTimes, ImportResult, InvitationView, Occurrence, RespondInvitationArgs, SubscribeResult } from "../types/calendar";
-import type { Account, AiResponse, Assignment, Attachment, AttachmentWithContext, AppConfig, AppSettings, BackupOptions, BulkSaveResult, CategoryCount, ChecklistItem, Contact, ContactDomain, CreateAccountRequest, CreateRuleRequest, CreateTaskInput, EmailTemplate, ExportLabels, ExportOptions, Folder, LicenseInfo, ListStatus, Mail, MailCategoryInfo, MailRule, OAuthResult, OllamaStatus, RestorePreview, ScheduledMail, SearchResult, SenderRule, SendMailRequest, SieveSupport, Task, TaskAttachment, TaskDetail, TaskStatus, TeamSnapshot, UnsubscribeOutcome, UpdateTaskPatch, VacationSettings, VacationState } from "../types";
+import type { Account, AiResponse, Assignment, Attachment, AttachmentWithContext, AppConfig, AppSettings, BackupOptions, BulkSaveResult, CategoryCount, ChecklistItem, Contact, ContactDomain, CreateAccountRequest, CreateRuleRequest, CreateTaskInput, EmailTemplate, ExportLabels, ExportOptions, Folder, LicenseInfo, ListStatus, Mail, MailCategoryInfo, MailRule, OAuthResult, OllamaStatus, RestorePreview, ScheduledMail, SearchResult, SenderRule, SendMailRequest, SieveSupport, Task, TaskAttachment, TaskDetail, StoredBody, TaskStatus, TeamSnapshot, TrackerRecord, TrackerReport, UnsubscribeOutcome, UpdateTaskPatch, VacationSettings, VacationState } from "../types";
 import { prefers24HourClock } from "./localeDefaults";
 
 export async function listAccounts(): Promise<Account[]> {
@@ -380,6 +380,22 @@ export async function applyRulesNow(accountId: string): Promise<number> {
 
 export async function unsubscribeMail(mailId: string, trashExisting: boolean): Promise<UnsubscribeOutcome> {
   return invoke("unsubscribe_mail", { mailId, trashExisting });
+}
+
+export async function recordMailTrackers(records: TrackerRecord[]): Promise<number> {
+  return invoke("record_mail_trackers", { records });
+}
+
+export async function listUnscannedBodies(limit: number): Promise<StoredBody[]> {
+  return invoke("list_unscanned_bodies", { limit });
+}
+
+export async function getTrackerReport(accountId?: string, days?: number): Promise<TrackerReport> {
+  return invoke("get_tracker_report", { accountId: accountId ?? null, days: days ?? null });
+}
+
+export async function fetchBulkBodies(): Promise<number> {
+  return invoke("fetch_bulk_bodies");
 }
 
 export async function blockSender(mailId: string, trashExisting: boolean): Promise<UnsubscribeOutcome> {
