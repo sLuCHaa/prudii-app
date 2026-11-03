@@ -2,7 +2,7 @@ use crate::categorize::signals::HeaderSignals;
 use crate::categorize::store::load_correspondents;
 use crate::db::Database;
 use crate::unsubscribe::header::{parse_targets, plan_methods, Method};
-use crate::unsubscribe::key::{list_id_value, list_key, sender_key, KeyKind, ListKey, MailFacts};
+use crate::unsubscribe::key::{list_id_name, list_id_value, list_key, sender_key, KeyKind, ListKey, MailFacts};
 use crate::unsubscribe::send::{http_client, mailto_message, AppTransport, Failure, Transport};
 use crate::unsubscribe::store::{self, Unsubscription, UnsubscriptionView};
 use crate::unsubscribe::sweep::trash_existing;
@@ -26,6 +26,7 @@ pub enum Offer {
 #[derive(Serialize)]
 pub struct ListStatus {
     pub offer: Offer,
+    pub name: String,
     pub subscription: Option<UnsubscriptionView>,
 }
 
@@ -51,27 +52,42 @@ impl MailRow {
         MailFacts { from_email: &self.from_email, signal_headers: &self.signal_headers, list_unsubscribe: &self.list_unsubscribe }
     }
 
-    fn display_name(&self) -> &str {
+    fn sender_name(&self) -> &str {
         if self.from_name.trim().is_empty() { &self.from_email } else { &self.from_name }
     }
 
-    fn offer(&self) -> (Offer, Option<ListKey>) {
-        let sender = sender_key(&self.from_email);
-        if self.folder_type == "spam" {
-            return match sender {
-                Some(key) => (Offer::Block, Some(key)),
-                None => (Offer::None, None),
-            };
-        }
-        if !self.list_unsubscribe.trim().is_empty() {
+    fn list_name(&self) -> String {
+        list_id_name(&self.signal_headers).unwrap_or_else(|| self.sender_name().to_string())
+    }
+
+    fn offer(&self, conn: &Connection) -> (Offer, Option<ListKey>) {
+        let has_header = !self.list_unsubscribe.trim().is_empty();
+        if has_header && may_contact(conn, self) && !plan_methods(&parse_targets(&self.list_unsubscribe), true).is_empty() {
             if let Some(key) = list_key(&self.facts()) {
                 return (Offer::Unsubscribe, Some(key));
             }
         }
-        match (self.category.as_deref(), sender) {
-            (Some("newsletters" | "promotions"), Some(key)) => (Offer::Block, Some(key)),
+        let blockable = has_header || self.folder_type == "spam" || matches!(self.category.as_deref(), Some("newsletters" | "promotions"));
+        match sender_key(&self.from_email) {
+            Some(key) if blockable => (Offer::Block, Some(key)),
             _ => (Offer::None, None),
         }
+    }
+}
+
+/// Trash hides where a mail came from; only a copy kept outside spam and trash shows the list is real.
+fn may_contact(conn: &Connection, mail: &MailRow) -> bool {
+    match mail.folder_type.as_str() {
+        "spam" => false,
+        "trash" => conn
+            .query_row(
+                "SELECT 1 FROM mails m JOIN folders f ON m.folder_id = f.id
+                 WHERE m.account_id = ?1 AND m.list_unsubscribe = ?2 AND f.folder_type NOT IN ('spam', 'trash') LIMIT 1",
+                params![mail.account_id, mail.list_unsubscribe],
+                |_| Ok(()),
+            )
+            .is_ok(),
+        _ => true,
     }
 }
 
@@ -149,14 +165,15 @@ fn can_retry(conn: &Connection, sub: &Unsubscription, now: DateTime<Utc>) -> boo
 
 pub(crate) fn list_status(conn: &Connection, mail_id: &str, now: DateTime<Utc>) -> Result<ListStatus, String> {
     let mail = load_mail(conn, mail_id)?;
-    let (offer, key) = mail.offer();
+    let (offer, key) = mail.offer(conn);
+    let name = if offer == Offer::Unsubscribe { mail.list_name() } else { mail.sender_name().to_string() };
     let subscription = match key {
         Some(key) => store::find(conn, &mail.account_id, &key)
             .map_err(|e| e.to_string())?
             .map(|sub| store::view(&sub, now, can_retry(conn, &sub, now))),
         None => None,
     };
-    Ok(ListStatus { offer, subscription })
+    Ok(ListStatus { offer, name, subscription })
 }
 
 /// The first way that goes out wins; a web page counts because the user finishes it there.
@@ -198,7 +215,7 @@ pub(crate) async fn perform_unsubscribe<T: Transport>(
     let (mail, key, plan) = {
         let conn = db.lock_db();
         let mail = load_mail(&conn, mail_id)?;
-        if mail.folder_type == "spam" {
+        if !may_contact(&conn, &mail) {
             return Err(ERR_SPAM.into());
         }
         let key = list_key(&mail.facts()).filter(|_| !mail.list_unsubscribe.trim().is_empty()).ok_or(ERR_NO_TARGET)?;
@@ -214,7 +231,7 @@ pub(crate) async fn perform_unsubscribe<T: Transport>(
     }
     let (method, web_url) = run_plan(transport, &mail.account_id, &plan).await?;
     let conn = db.lock_db();
-    let sub = match store::insert_request(&conn, &mail.account_id, &key, mail.display_name(), method, web_url.is_some(), now) {
+    let sub = match store::insert_request(&conn, &mail.account_id, &key, &mail.list_name(), method, web_url.is_some(), now) {
         Ok(sub) => sub,
         // A parallel click already stored the list.
         Err(_) => store::find(&conn, &mail.account_id, &key).ok().flatten().ok_or(ERR_FAILED)?,
@@ -229,7 +246,7 @@ pub(crate) fn perform_block(db: &Database, mail_id: &str, trash: bool, now: Date
     if let Some(existing) = store::find(&conn, &mail.account_id, &key).map_err(|e| e.to_string())? {
         return Ok(UnsubscribeOutcome { subscription: store::view(&existing, now, false), web_url: None, trashed: 0 });
     }
-    let sub = store::insert_block(&conn, &mail.account_id, &key, mail.display_name(), now).map_err(|e| e.to_string())?;
+    let sub = store::insert_block(&conn, &mail.account_id, &key, mail.sender_name(), now).map_err(|e| e.to_string())?;
     Ok(finish(&conn, sub, None, trash, now))
 }
 
@@ -432,6 +449,59 @@ mod tests {
         assert_eq!(perform_unsubscribe(&f.db, &t, &id, false, t0()).await.unwrap_err(), "unsubscribe.errors.failed");
         assert_eq!(*t.calls.lock().unwrap(), ["mailto"]);
         assert_eq!(rows(&f), 0);
+    }
+
+    fn set_from_name(f: &Fx, id: &str, name: &str) {
+        f.db.lock_db().execute("UPDATE mails SET from_name = ?1 WHERE id = ?2", [name, id]).unwrap();
+    }
+
+    #[tokio::test]
+    async fn mailing_list_is_named_after_the_list() {
+        let f = fx();
+        let id = mail(&f, r#"{"list-id":"Studio-Halde-Forum <forum.studio-halde.example>"}"#, FULL, "2026-09-01T09:00:00Z");
+        set_from_name(&f, &id, "Anna Weber");
+        assert_eq!(list_status(&f.db.lock_db(), &id, t0()).unwrap().name, "Studio-Halde-Forum");
+        let out = perform_unsubscribe(&f.db, &fake(Ok(()), Ok(())), &id, false, t0()).await.unwrap();
+        assert_eq!(out.subscription.display_name, "Studio-Halde-Forum");
+    }
+
+    #[test]
+    fn garbage_header_offers_block() {
+        let f = fx();
+        let id = mail(&f, "{}", "<javascript:alert(1)>", "2026-09-01T09:00:00Z");
+        let status = list_status(&f.db.lock_db(), &id, t0()).unwrap();
+        assert_eq!(status.offer, Offer::Block);
+        assert_eq!(status.name, "news@halde-shop.example");
+    }
+
+    fn in_trash(f: &Fx) -> String {
+        let trash: String = f
+            .db
+            .lock_db()
+            .query_row("SELECT id FROM folders WHERE account_id = ?1 AND folder_type = 'trash'", [&f.account], |r| r.get(0))
+            .unwrap();
+        seed_mail(
+            &f.db.lock_db(),
+            &SeedMail { account_id: &f.account, folder_id: &trash, from_email: "news@halde-shop.example", signal_headers: ONE_CLICK, list_unsubscribe: FULL, ..Default::default() },
+        )
+    }
+
+    #[tokio::test]
+    async fn trash_mail_without_a_kept_copy_only_offers_block() {
+        let f = fx();
+        let id = in_trash(&f);
+        assert_eq!(list_status(&f.db.lock_db(), &id, t0()).unwrap().offer, Offer::Block);
+        let t = fake(Ok(()), Ok(()));
+        assert_eq!(perform_unsubscribe(&f.db, &t, &id, false, t0()).await.unwrap_err(), "unsubscribe.errors.spam");
+        assert!(t.calls.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn trash_mail_with_a_kept_copy_offers_unsubscribe() {
+        let f = fx();
+        let id = in_trash(&f);
+        mail(&f, ONE_CLICK, FULL, "2026-09-01T09:00:00Z");
+        assert_eq!(list_status(&f.db.lock_db(), &id, t0()).unwrap().offer, Offer::Unsubscribe);
     }
 
     #[tokio::test]
