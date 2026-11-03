@@ -49,8 +49,6 @@
     "starred": "Destacados",
     "noAccounts": "Aún no hay cuentas",
     "addAccount": "Añadir cuenta",
-    "accountLimit": "Plan gratuito: máx. 3 cuentas",
-    "upgradePremium": "Premium — próximamente",
     "newFolder": "Nueva carpeta",
     "forceResyncTitle": "Resincronización completa",
     "forceResyncMessage": "Todos los correos almacenados localmente de esta cuenta se eliminarán y se volverán a descargar del servidor. ¿Continuar?",
@@ -602,7 +600,7 @@
       "loginTitle": "Iniciar sesión",
       "loginDesc": "Inicia sesión con tu cuenta Prudii para activar tu licencia.",
       "activateTitle": "Activar clave de licencia",
-      "activateDesc": "Introduce tu clave de licencia para desbloquear Premium o Team.",
+      "activateDesc": "Introduce tu clave de licencia para activar las funciones de Team.",
       "email": "Correo electrónico",
       "password": "Contraseña",
       "login": "Iniciar sesión",
@@ -612,8 +610,8 @@
       "activateKeyInstead": "¿Tienes una clave de licencia?",
       "loginInstead": "Iniciar sesión con cuenta",
       "freePlan": "Plan gratuito",
-      "freePlanDesc": "Hasta 3 cuentas de correo. Premium llegará próximamente.",
-      "upgrade": "Premium — próximamente",
+      "freePlanDesc": "Todas las funciones gratis y cuentas ilimitadas. Team añade bandejas compartidas y funciones de equipo.",
+      "upgrade": "Prudii para equipos",
       "licenseKey": "Clave de licencia",
       "validUntil": "Válida hasta",
       "device": "Este dispositivo",
@@ -703,8 +701,7 @@
       "modelRecSmall": "Rápido y ligero — resúmenes básicos",
       "modelRecMedium": "Recomendado — ideal para tareas de correo",
       "modelRecLarge": "Mayor calidad, más lento — necesita hardware potente",
-      "quickStart": "Inicio rápido: ejecuta \"ollama pull llama3.2\" o \"ollama pull gemma3\" en tu terminal.",
-      "premiumDesc": "Las funciones de IA local llegarán con Premium — próximamente."
+      "quickStart": "Inicio rápido: ejecuta \"ollama pull llama3.2\" o \"ollama pull gemma3\" en tu terminal."
     },
     "undoSendDelay": "Retraso de deshacer envío",
     "undoSendDelayDesc": "Tiempo para cancelar un correo enviado. Establezca en Desactivado para enviar inmediatamente.",
@@ -982,8 +979,7 @@
     "enabled": "Habilitada",
     "save": "Guardar regla",
     "deleteConfirm": "¿Eliminar esta regla?",
-    "selectAccount": "Seleccionar cuenta",
-    "premiumDesc": "Las reglas de correo llegarán con Premium — próximamente."
+    "selectAccount": "Seleccionar cuenta"
   },
   "dateGroups": {
     "today": "Hoy",
@@ -1151,13 +1147,7 @@
     "templateName": "Nombre de plantilla",
     "body": "Cuerpo",
     "noTemplates": "Aún no hay plantillas. Crea una para comenzar.",
-    "insertTemplate": "Insertar plantilla",
-    "premiumDesc": "Las plantillas de correo llegarán con Premium — próximamente."
-  },
-  "premium": {
-    "badge": "Premium",
-    "upgradePrompt": "Función Premium",
-    "upgradeButton": "Premium — próximamente"
+    "insertTemplate": "Insertar plantilla"
   },
   "categories": {
     "names": {

@@ -398,7 +398,6 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   const storeAiReplyText = useAppStore((s) => s.composeAiReplyText);
   const composeAiReplyText = initData?.aiReplyText ?? storeAiReplyText;
 
-  const hasFeature = useAppStore((s) => s.hasFeature);
   const addToast = useAppStore((s) => s.addToast);
 
   const [fromAccountId, setFromAccountId] = useState<string>("");
@@ -938,10 +937,10 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   }, [lastSavedAt]);
 
   useEffect(() => {
-    if (isOpen && hasFeature("templates")) {
+    if (isOpen) {
       listTemplates().then(setTemplates).catch(() => {});
     }
-  }, [isOpen, hasFeature]);
+  }, [isOpen]);
 
   async function handleAiSuggest() {
     if (!originalMail) return;
@@ -1908,7 +1907,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
                   className={aiReplies.length > 0 ? "text-accent" : ""}
                 />
               )}
-              {hasFeature("templates") && templates.length > 0 && (
+              {templates.length > 0 && (
                 <div className="relative" ref={templateBtnRef}>
                   <IconButton
                     icon={<FileType />}

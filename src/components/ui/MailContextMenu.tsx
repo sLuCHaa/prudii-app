@@ -94,7 +94,6 @@ export function MailContextMenu({
   onToggleAssignmentDone,
 }: MailContextMenuProps) {
   const { t } = useTranslation();
-  const hasFeature = useAppStore((s) => s.hasFeature);
   const hiddenCategories = useAppStore((s) => s.appSettings.hidden_categories);
 
   const bulkMode = !!onBulkAction && (selectedCount ?? 0) >= 2;
@@ -216,7 +215,7 @@ export function MailContextMenu({
       : []),
     ...(onTogglePin ? [{ kind: "item" as const, id: "pin", label: mail.is_pinned ? t("mailDetail.unpin") : t("mailDetail.pin"), icon: mail.is_pinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />, onSelect: () => onTogglePin(mail) }] : []),
     { kind: "item", id: "read", label: mail.is_read ? t("mailDetail.markUnread") : t("mailDetail.markRead"), icon: mail.is_read ? <MailIcon className="w-4 h-4" /> : <MailOpen className="w-4 h-4" />, onSelect: () => onToggleRead(mail) },
-    ...(onSnooze && hasFeature("snooze") ? [{ kind: "item" as const, id: "snooze", label: t("snooze.snooze"), icon: <Clock className="w-4 h-4" />, submenu: snooze((until) => onSnooze(mail, until)) }] : []),
+    ...(onSnooze ? [{ kind: "item" as const, id: "snooze", label: t("snooze.snooze"), icon: <Clock className="w-4 h-4" />, submenu: snooze((until) => onSnooze(mail, until)) }] : []),
     ...(assignEntries.length > 0 ? [{ kind: "separator" as const }, ...assignEntries] : []),
     { kind: "separator" },
     ...(onMove && hasMoveTargets
@@ -253,7 +252,7 @@ export function MailContextMenu({
           ),
         }]
       : []),
-    ...(onBulkSnooze && hasFeature("snooze") ? [{ kind: "item" as const, id: "snooze", label: t("snooze.snooze"), icon: <Clock className="w-4 h-4" />, submenu: snooze(onBulkSnooze) }] : []),
+    ...(onBulkSnooze ? [{ kind: "item" as const, id: "snooze", label: t("snooze.snooze"), icon: <Clock className="w-4 h-4" />, submenu: snooze(onBulkSnooze) }] : []),
     ...(onBulkMove && hasMoveTargets
       ? [{
           kind: "item" as const,

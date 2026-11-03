@@ -49,8 +49,6 @@
     "starred": "Suivis",
     "noAccounts": "Aucun compte pour le moment",
     "addAccount": "Ajouter un compte",
-    "accountLimit": "Plan gratuit : 3 comptes max.",
-    "upgradePremium": "Premium — bientôt disponible",
     "newFolder": "Nouveau dossier",
     "forceResyncTitle": "Resynchronisation complète",
     "forceResyncMessage": "Tous les e-mails stockés localement pour ce compte seront supprimés et retéléchargés depuis le serveur. Continuer ?",
@@ -602,7 +600,7 @@
       "loginTitle": "Se connecter",
       "loginDesc": "Connectez-vous avec votre compte Prudii pour activer votre licence.",
       "activateTitle": "Activer une clé de licence",
-      "activateDesc": "Entrez votre clé de licence pour débloquer Premium ou Team.",
+      "activateDesc": "Saisissez votre clé de licence pour activer les fonctions Team.",
       "email": "E-mail",
       "password": "Mot de passe",
       "login": "Se connecter",
@@ -612,8 +610,8 @@
       "activateKeyInstead": "Vous avez une clé de licence ?",
       "loginInstead": "Se connecter avec un compte",
       "freePlan": "Plan gratuit",
-      "freePlanDesc": "Jusqu'à 3 comptes e-mail. Premium arrive bientôt.",
-      "upgrade": "Premium — bientôt disponible",
+      "freePlanDesc": "Toutes les fonctions gratuites, avec autant de comptes que vous voulez. Team ajoute les boîtes partagées et les fonctions d'équipe.",
+      "upgrade": "Prudii pour les équipes",
       "licenseKey": "Clé de licence",
       "validUntil": "Valide jusqu'au",
       "device": "Cet appareil",
@@ -712,8 +710,7 @@
       "modelRecSmall": "Rapide et léger — résumés de base",
       "modelRecMedium": "Recommandé — idéal pour les tâches d'email",
       "modelRecLarge": "Meilleure qualité, plus lent — nécessite du matériel puissant",
-      "quickStart": "Démarrage rapide : exécute \"ollama pull llama3.2\" ou \"ollama pull gemma3\" dans ton terminal.",
-      "premiumDesc": "Les fonctionnalités IA locales arriveront avec Premium — bientôt."
+      "quickStart": "Démarrage rapide : exécute \"ollama pull llama3.2\" ou \"ollama pull gemma3\" dans ton terminal."
     }
   },
   "mailExport": {
@@ -982,8 +979,7 @@
     "enabled": "Activée",
     "save": "Enregistrer la règle",
     "deleteConfirm": "Supprimer cette règle ?",
-    "selectAccount": "Sélectionner un compte",
-    "premiumDesc": "Les règles de messagerie arriveront avec Premium — bientôt."
+    "selectAccount": "Sélectionner un compte"
   },
   "dateGroups": {
     "today": "Aujourd'hui",
@@ -1151,13 +1147,7 @@
     "templateName": "Nom du modèle",
     "body": "Corps",
     "noTemplates": "Pas encore de modèles. Créez-en un pour commencer.",
-    "insertTemplate": "Insérer un modèle",
-    "premiumDesc": "Les modèles d'e-mail arriveront avec Premium — bientôt."
-  },
-  "premium": {
-    "badge": "Premium",
-    "upgradePrompt": "Fonctionnalité Premium",
-    "upgradeButton": "Premium — bientôt disponible"
+    "insertTemplate": "Insérer un modèle"
   },
   "categories": {
     "names": {

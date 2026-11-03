@@ -339,7 +339,7 @@ export interface MailRule {
 
 export interface LicenseInfo {
   user_email: string;
-  plan: "free" | "premium" | "team";
+  plan: "free" | "team";
   license_key: string;
   valid_until: string;
   features: string[];

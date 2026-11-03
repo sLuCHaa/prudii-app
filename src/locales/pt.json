@@ -49,8 +49,6 @@
     "starred": "Com Estrela",
     "noAccounts": "Nenhuma conta ainda",
     "addAccount": "Adicionar Conta",
-    "accountLimit": "Plano gratuito: máx. 3 contas",
-    "upgradePremium": "Premium — em breve",
     "newFolder": "Nova pasta",
     "forceResyncTitle": "Ressincronização completa",
     "forceResyncMessage": "Todos os e-mails armazenados localmente desta conta serão excluídos e baixados novamente do servidor. Continuar?",
@@ -611,7 +609,7 @@
       "loginTitle": "Entrar na sua conta",
       "loginDesc": "Entre com sua conta Prudii para ativar sua licença.",
       "activateTitle": "Ativar chave de licença",
-      "activateDesc": "Insira sua chave de licença para desbloquear Premium ou Team.",
+      "activateDesc": "Insira sua chave de licença para ativar os recursos do Team.",
       "email": "E-mail",
       "password": "Senha",
       "login": "Entrar",
@@ -621,8 +619,8 @@
       "activateKeyInstead": "Tem uma chave de licença?",
       "loginInstead": "Entrar com conta",
       "freePlan": "Plano gratuito",
-      "freePlanDesc": "Até 3 contas de e-mail. O Premium chega em breve.",
-      "upgrade": "Premium — em breve",
+      "freePlanDesc": "Todos os recursos grátis, com quantas contas quiser. O Team adiciona caixas compartilhadas e funções de equipe.",
+      "upgrade": "Prudii para equipes",
       "licenseKey": "Chave de licença",
       "validUntil": "Válida até",
       "device": "Este dispositivo",
@@ -712,8 +710,7 @@
       "modelRecSmall": "Rápido e leve — resumos básicos",
       "modelRecMedium": "Recomendado — ideal para tarefas de email",
       "modelRecLarge": "Maior qualidade, mais lento — precisa de hardware potente",
-      "quickStart": "Início rápido: execute \"ollama pull llama3.2\" ou \"ollama pull gemma3\" no seu terminal.",
-      "premiumDesc": "Recursos de IA local chegarão com o Premium — em breve."
+      "quickStart": "Início rápido: execute \"ollama pull llama3.2\" ou \"ollama pull gemma3\" no seu terminal."
     }
   },
   "mailExport": {
@@ -982,8 +979,7 @@
     "enabled": "Habilitada",
     "save": "Salvar regra",
     "deleteConfirm": "Excluir esta regra?",
-    "selectAccount": "Selecionar conta",
-    "premiumDesc": "Regras de e-mail chegarão com o Premium — em breve."
+    "selectAccount": "Selecionar conta"
   },
   "dateGroups": {
     "today": "Hoje",
@@ -1151,13 +1147,7 @@
     "templateName": "Nome do modelo",
     "body": "Corpo",
     "noTemplates": "Nenhum modelo ainda. Crie um para começar.",
-    "insertTemplate": "Inserir modelo",
-    "premiumDesc": "Modelos de e-mail chegarão com o Premium — em breve."
-  },
-  "premium": {
-    "badge": "Premium",
-    "upgradePrompt": "Recurso Premium",
-    "upgradeButton": "Premium — em breve"
+    "insertTemplate": "Inserir modelo"
   },
   "categories": {
     "names": {

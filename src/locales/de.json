@@ -49,8 +49,6 @@
     "starred": "Markiert",
     "noAccounts": "Noch keine Konten",
     "addAccount": "Konto hinzufügen",
-    "accountLimit": "Free-Plan: max. 3 Konten",
-    "upgradePremium": "Premium — bald verfügbar",
     "newFolder": "Neuer Ordner",
     "forceResyncTitle": "Vollständige Neusynchronisierung",
     "forceResyncMessage": "Alle lokal gespeicherten E-Mails dieses Kontos werden gelöscht und neu vom Server geladen. Fortfahren?",
@@ -602,7 +600,7 @@
       "loginTitle": "Bei deinem Konto anmelden",
       "loginDesc": "Melde dich mit deinem Prudii-Konto an, um deine Lizenz zu aktivieren.",
       "activateTitle": "Lizenzschlüssel aktivieren",
-      "activateDesc": "Gib deinen Lizenzschlüssel ein, um Premium- oder Team-Funktionen freizuschalten.",
+      "activateDesc": "Gib deinen Lizenzschlüssel ein, um die Team-Funktionen freizuschalten.",
       "email": "E-Mail",
       "password": "Passwort",
       "login": "Anmelden",
@@ -612,8 +610,8 @@
       "activateKeyInstead": "Hast du stattdessen einen Lizenzschlüssel?",
       "loginInstead": "Stattdessen mit Konto anmelden",
       "freePlan": "Free-Plan",
-      "freePlanDesc": "Bis zu 3 E-Mail-Konten. Premium ist bald verfügbar.",
-      "upgrade": "Premium — bald verfügbar",
+      "freePlanDesc": "Alle Funktionen kostenlos und beliebig viele Konten. Team ergänzt gemeinsame Postfächer und Team-Funktionen.",
+      "upgrade": "Prudii für Teams",
       "licenseKey": "Lizenzschlüssel",
       "validUntil": "Gültig bis",
       "device": "Dieses Gerät",
@@ -697,8 +695,7 @@
       "modelRecSmall": "Schnell & leichtgewichtig — einfache Zusammenfassungen",
       "modelRecMedium": "Empfohlen — ideal für E-Mail-Aufgaben",
       "modelRecLarge": "Höhere Qualität, langsamer — braucht leistungsstarke Hardware",
-      "quickStart": "Schnellstart: Führe \"ollama pull llama3.2\" oder \"ollama pull gemma3\" im Terminal aus.",
-      "premiumDesc": "Lokale KI-Funktionen kommen mit Premium — bald verfügbar."
+      "quickStart": "Schnellstart: Führe \"ollama pull llama3.2\" oder \"ollama pull gemma3\" im Terminal aus."
     },
     "undoSendDelay": "Senden-Rückgängig-Verzögerung",
     "undoSendDelayDesc": "Zeit zum Abbrechen einer gesendeten E-Mail. Auf Aus setzen für sofortigen Versand.",
@@ -982,8 +979,7 @@
     "enabled": "Aktiviert",
     "save": "Regel speichern",
     "deleteConfirm": "Diese Regel löschen?",
-    "selectAccount": "Konto auswählen",
-    "premiumDesc": "E-Mail-Regeln kommen mit Premium — bald verfügbar."
+    "selectAccount": "Konto auswählen"
   },
   "dateGroups": {
     "today": "Heute",
@@ -1151,13 +1147,7 @@
     "templateName": "Vorlagenname",
     "body": "Inhalt",
     "noTemplates": "Noch keine Vorlagen. Erstellen Sie eine, um loszulegen.",
-    "insertTemplate": "Vorlage einfügen",
-    "premiumDesc": "E-Mail-Vorlagen kommen mit Premium — bald verfügbar."
-  },
-  "premium": {
-    "badge": "Premium",
-    "upgradePrompt": "Premium-Funktion",
-    "upgradeButton": "Premium — bald verfügbar"
+    "insertTemplate": "Vorlage einfügen"
   },
   "categories": {
     "names": {

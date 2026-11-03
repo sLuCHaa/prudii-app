@@ -212,7 +212,7 @@ describe("shape audit", () => {
   });
 
   it("gives chips and notice badges 8px corners", () => {
-    const files = ["tasks/MailTaskChip.tsx", "layout/TrackingIndicator.tsx", "ui/PremiumBadge.tsx"];
+    const files = ["tasks/MailTaskChip.tsx", "layout/TrackingIndicator.tsx"];
     expect(files.filter((f) => !/\brounded-sm\b/.test(sourceOf(f)))).toEqual([]);
     const badges = classStrings().filter(({ file, cls }) => ["layout/ThreadView.tsx", "calendar/InvitationCard.tsx", "calendar/AgendaList.tsx"].includes(file) && /\bpx-1\.5\b/.test(cls) && /\bpy-0\.5\b/.test(cls) && /\brounded\b/.test(cls));
     expect(badges).toHaveLength(5);

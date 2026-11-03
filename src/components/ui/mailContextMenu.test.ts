@@ -11,7 +11,7 @@ import { MailContextMenu } from "./MailContextMenu";
 
 vi.mock("../../stores/appStore", () => ({
   useAppStore: (selector: (s: unknown) => unknown) =>
-    selector({ hasFeature: () => true, appSettings: { hidden_categories: [] } }),
+    selector({ licenseInfo: null, appSettings: { hidden_categories: [] } }),
 }));
 
 let root: Root;
@@ -103,6 +103,11 @@ function openFlagSubmenu() {
 }
 
 describe("MailContextMenu category", () => {
+  it("offers snooze without any license", () => {
+    render({ onSnooze: noop });
+    expect(item("snooze.snooze")).toBeDefined();
+  });
+
   it("offers every category plus none when onSetCategory is wired", () => {
     render({ onSetCategory: noop });
     openSubmenu("categories.menu");

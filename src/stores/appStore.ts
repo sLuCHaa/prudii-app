@@ -186,8 +186,6 @@ interface AppState {
 
   licenseInfo: LicenseInfo | null;
   setLicenseInfo: (info: LicenseInfo | null) => void;
-  canAddAccount: () => boolean;
-  hasFeature: (feature: string) => boolean;
 
   showSnoozed: boolean;
   setShowSnoozed: (show: boolean) => void;
@@ -491,17 +489,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   licenseInfo: null,
   setLicenseInfo: (licenseInfo) => set({ licenseInfo }),
-  canAddAccount: () => {
-    const state = get();
-    const plan = state.licenseInfo?.plan || "free";
-    if (plan === "premium" || plan === "team") return true;
-    return state.accounts.length < 3;
-  },
-  hasFeature: (feature: string) => {
-    const state = get();
-    const features = state.licenseInfo?.features || [];
-    return features.includes(feature);
-  },
 
   showSnoozed: false,
   setShowSnoozed: (showSnoozed) => set({ showSnoozed, showScheduled: false, showAttachmentBrowser: false, showTasks: false, showCalendar: false, showAssigned: false, showAllInboxes: false, selectedFolderId: null, activeFilter: null, activeCombinedFolder: null, activeCategory: null, selectedMailId: null, selectedMailIndex: -1, folderFilter: "all", selectedMailIds: new Set(), multiSelectMode: false, lastSelectedMailId: null }),

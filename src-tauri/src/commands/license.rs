@@ -450,6 +450,22 @@ pub(super) async fn pb_request(
     Ok(Some(value))
 }
 
+/// Everything an individual needs is free; a license only adds team functions.
+const FREE_FEATURES: &[&str] = &[
+    "basic_email", "search", "backup", "tracker_blocker", "unlimited_accounts",
+    "ai_replies", "ai_summaries", "rules_filters", "snooze", "undo_send_config",
+    "templates", "send_later",
+];
+
+fn feature_enabled(licensed: &[String], feature: &str) -> bool {
+    FREE_FEATURES.contains(&feature) || licensed.iter().any(|f| f == feature)
+}
+
+/// Premium was folded into Free, so a cached legacy plan must not read as paid.
+fn effective_plan(plan: &str) -> &'static str {
+    if plan == "team" { "team" } else { "free" }
+}
+
 fn read_cache(conn: &rusqlite::Connection) -> LicenseInfo {
     conn.query_row(
         "SELECT user_email, plan, license_key, valid_until, features, last_verified, device_id, COALESCE(pb_auth_token, '') FROM license_cache WHERE id = 1",
@@ -465,7 +481,7 @@ fn read_cache(conn: &rusqlite::Connection) -> LicenseInfo {
                 // Still know the user but the token is gone → session expired (401).
                 session_expired: logged_in && token.is_empty(),
                 user_email,
-                plan: row.get(1)?,
+                plan: effective_plan(&row.get::<_, String>(1)?).to_string(),
                 license_key: row.get(2)?,
                 valid_until: row.get(3)?,
                 features,
@@ -981,14 +997,12 @@ pub async fn activate_license_key(
 pub fn check_feature(db: State<'_, Database>, feature: String) -> Result<bool, String> {
     super::catch_panic(|| {
         let conn = db.lock_db();
-
-        if !verify_cache_integrity(&conn) {
-            return Ok(false);
-        }
-
-        let info = read_cache(&conn);
-        let info = apply_grace_period(&info);
-        Ok(info.features.contains(&feature))
+        let licensed = if verify_cache_integrity(&conn) {
+            apply_grace_period(&read_cache(&conn)).features
+        } else {
+            Vec::new()
+        };
+        Ok(feature_enabled(&licensed, &feature))
     })
 }
 
@@ -1035,5 +1049,21 @@ mod tests {
         // Malformed / empty signatures are rejected, never panic.
         assert!(!verify_with_key(&vk, plan, valid_until, verified_at, "deadbeef"));
         assert!(!verify_with_key(&vk, plan, valid_until, verified_at, ""));
+    }
+
+    #[test]
+    fn free_features_need_no_license() {
+        assert!(feature_enabled(&[], "rules_filters"));
+        assert!(feature_enabled(&[], "unlimited_accounts"));
+        assert!(!feature_enabled(&[], "shared_inbox"));
+        assert!(feature_enabled(&["shared_inbox".to_string()], "shared_inbox"));
+    }
+
+    #[test]
+    fn only_team_survives_as_a_plan() {
+        assert_eq!(effective_plan("team"), "team");
+        assert_eq!(effective_plan("premium"), "free");
+        assert_eq!(effective_plan("free"), "free");
+        assert_eq!(effective_plan(""), "free");
     }
 }

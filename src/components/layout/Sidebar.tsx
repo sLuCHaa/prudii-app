@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState, useRef } from "react";
 import { CategorySidebarEntries } from "../categories/CategorySidebarEntries";
 import { createPortal } from "react-dom";
-import { FileText, AlertOctagon, Folder, Plus, ChevronDown, ChevronRight, FolderPlus, Download, Pencil, HardDrive, Cloud, X, Check, Crown, Clock, CalendarClock, PanelLeftClose, PanelLeftOpen, Loader2, AlertCircle, Palette, RefreshCw, RotateCcw, Settings, ClipboardList, UserCheck, CalendarDays, Archive, Paperclip, Flag, Inbox, Send, Star, StarIcon, Trash2, TrashIcon } from "../icons";
+import { FileText, AlertOctagon, Folder, Plus, ChevronDown, ChevronRight, FolderPlus, Download, Pencil, HardDrive, Cloud, X, Check, Clock, CalendarClock, PanelLeftClose, PanelLeftOpen, Loader2, AlertCircle, Palette, RefreshCw, RotateCcw, Settings, ClipboardList, UserCheck, CalendarDays, Archive, Paperclip, Flag, Inbox, Send, Star, StarIcon, Trash2, TrashIcon } from "../icons";
 import { useTodayCount } from "../../hooks/useCalendar";
 import gsap from "gsap";
 import { prefersReducedMotion } from "../motion/tokens";
@@ -1109,7 +1109,6 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
   const showCalendar = useAppStore((s) => s.showCalendar);
   const setShowCalendar = useAppStore((s) => s.setShowCalendar);
   const { data: todayCount = 0 } = useTodayCount();
-  const hasFeature = useAppStore((s) => s.hasFeature);
   const accounts = useAppStore((s) => s.accounts);
   const { data: openTaskCount = 0 } = useOpenTaskCount();
   const showAssigned = useAppStore((s) => s.showAssigned);
@@ -1194,7 +1193,6 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
       onClick: () => setShowSnoozed(!showSnoozed),
       isActive: showSnoozed,
       count: snoozedCount,
-      show: hasFeature("snooze") || snoozedCount > 0,
     },
     {
       id: "scheduled",
@@ -1203,7 +1201,6 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
       onClick: () => setShowScheduled(!showScheduled),
       isActive: showScheduled,
       count: scheduledCount,
-      show: hasFeature("send_later") || scheduledCount > 0,
     },
     {
       id: "assigned",
@@ -1343,11 +1340,6 @@ export function Sidebar() {
   const isAnySyncing = useAppStore((s) =>
     Object.values(s.syncProgress).some((p) => p !== null)
   );
-  const canAddAccount = useAppStore((s) => {
-    const plan = s.licenseInfo?.plan || "free";
-    if (plan === "premium" || plan === "team") return true;
-    return s.accounts.length < 3;
-  });
   const { data: fetchedAccounts } = useAccounts();
   const syncAll = useSyncAll();
 
@@ -1419,16 +1411,14 @@ export function Sidebar() {
 
         <div className="p-2 border-t border-border flex flex-col items-center gap-1">
           <MailExportProgress compact className="mb-1" />
-          {canAddAccount && (
-            <Tooltip label={t("sidebar.addAccount")}>
-              <button
-                onClick={() => setShowAccountWizard(true)}
-                className="p-1.5 rounded-md hover:bg-hover transition-colors text-text-secondary"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
-            </Tooltip>
-          )}
+          <Tooltip label={t("sidebar.addAccount")}>
+            <button
+              onClick={() => setShowAccountWizard(true)}
+              className="p-1.5 rounded-md hover:bg-hover transition-colors text-text-secondary"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          </Tooltip>
           <Tooltip label={t("sidebar.expandSidebar", { defaultValue: "Expand sidebar" })} shortcut="Mod+B">
             <button
               onClick={toggleSidebar}
@@ -1497,28 +1487,14 @@ export function Sidebar() {
         <MailExportProgress className="mb-3" />
         <div className="flex items-center gap-2">
           <div className="flex-1 min-w-0">
-            {canAddAccount ? (
-              <Button
-                variant="secondary"
-                fullWidth
-                icon={<Plus />}
-                onClick={() => setShowAccountWizard(true)}
-              >
-                {t("sidebar.addAccount")}
-              </Button>
-            ) : (
-              <div className="text-center">
-                <p className="text-xs text-text-tertiary mb-2">{t("sidebar.accountLimit")}</p>
-                <Button
-                  variant="secondary"
-                  fullWidth
-                  icon={<Crown />}
-                  onClick={() => useAppStore.getState().setShowSettings(true)}
-                >
-                  {t("sidebar.upgradePremium")}
-                </Button>
-              </div>
-            )}
+            <Button
+              variant="secondary"
+              fullWidth
+              icon={<Plus />}
+              onClick={() => setShowAccountWizard(true)}
+            >
+              {t("sidebar.addAccount")}
+            </Button>
           </div>
           <Tooltip label={t("sidebar.collapseSidebar", { defaultValue: "Collapse sidebar" })} shortcut="Mod+B" className="shrink-0">
             <button

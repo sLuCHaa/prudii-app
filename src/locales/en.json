@@ -49,8 +49,6 @@
     "starred": "Starred",
     "noAccounts": "No accounts yet",
     "addAccount": "Add Account",
-    "accountLimit": "Free plan: 3 accounts max",
-    "upgradePremium": "Premium — coming soon",
     "newFolder": "New folder",
     "forceResyncTitle": "Full Resync",
     "forceResyncMessage": "All locally stored emails for this account will be deleted and re-downloaded from the server. Continue?",
@@ -611,7 +609,7 @@
       "loginTitle": "Log in to your account",
       "loginDesc": "Sign in with your Prudii account to activate your license.",
       "activateTitle": "Activate License Key",
-      "activateDesc": "Enter your license key to unlock Premium or Team features.",
+      "activateDesc": "Enter your license key to unlock Team features.",
       "email": "Email",
       "password": "Password",
       "login": "Log In",
@@ -621,8 +619,8 @@
       "activateKeyInstead": "Have a license key instead?",
       "loginInstead": "Log in with account instead",
       "freePlan": "Free Plan",
-      "freePlanDesc": "Up to 3 email accounts. Premium is coming soon.",
-      "upgrade": "Premium — coming soon",
+      "freePlanDesc": "Every feature free, with as many accounts as you like. Team adds shared inboxes and team functions.",
+      "upgrade": "Prudii for teams",
       "licenseKey": "License Key",
       "validUntil": "Valid Until",
       "device": "This Device",
@@ -712,8 +710,7 @@
       "modelRecSmall": "Fast & lightweight — basic summaries",
       "modelRecMedium": "Recommended — best for email tasks",
       "modelRecLarge": "Higher quality, slower — needs powerful hardware",
-      "quickStart": "Quick start: run \"ollama pull llama3.2\" or \"ollama pull gemma3\" in your terminal.",
-      "premiumDesc": "Local AI features will be part of Premium — coming soon."
+      "quickStart": "Quick start: run \"ollama pull llama3.2\" or \"ollama pull gemma3\" in your terminal."
     }
   },
   "mailExport": {
@@ -982,8 +979,7 @@
     "enabled": "Enabled",
     "save": "Save Rule",
     "deleteConfirm": "Delete this rule?",
-    "selectAccount": "Select account",
-    "premiumDesc": "Mail rules will be part of Premium — coming soon."
+    "selectAccount": "Select account"
   },
   "dateGroups": {
     "today": "Today",
@@ -1151,13 +1147,7 @@
     "templateName": "Template Name",
     "body": "Body",
     "noTemplates": "No templates yet. Create one to get started.",
-    "insertTemplate": "Insert Template",
-    "premiumDesc": "Email templates will be part of Premium — coming soon."
-  },
-  "premium": {
-    "badge": "Premium",
-    "upgradePrompt": "Premium Feature",
-    "upgradeButton": "Premium — coming soon"
+    "insertTemplate": "Insert Template"
   },
   "categories": {
     "names": {

@@ -27,7 +27,6 @@ import { UpdatePanel } from "./UpdatePanel";
 import { VacationSection } from "./VacationSection";
 import { Switch } from "../ui/Switch";
 import { SettingsGroup, SettingsBlock, SettingsRow } from "./SettingsGroup";
-import { PremiumBadge } from "../ui/PremiumBadge";
 import { getVersion } from "@tauri-apps/api/app";
 import { Button, IconButton } from "../ui/Button";
 import { TabButton } from "../ui/TabButton";
@@ -40,16 +39,16 @@ type ThemeMode = "light" | "dark" | "system";
 type SettingsView = "main" | "account";
 type SettingsTab = "general" | "privacy" | "accounts" | "calendar" | "rules" | "sorting" | "templates" | "backup" | "ai" | "license" | "update" | "info";
 
-const SETTINGS_TABS: { id: SettingsTab; labelKey: string; icon: typeof Settings2; premium?: boolean }[] = [
+const SETTINGS_TABS: { id: SettingsTab; labelKey: string; icon: typeof Settings2 }[] = [
   { id: "general", labelKey: "settings.tabs.general", icon: Settings2 },
   { id: "privacy", labelKey: "settings.tabs.privacy", icon: Shield },
   { id: "accounts", labelKey: "settings.tabs.accounts", icon: Users },
   { id: "calendar", labelKey: "settings.tabs.calendar", icon: CalendarDays },
-  { id: "rules", labelKey: "settings.tabs.rules", icon: Filter, premium: true },
+  { id: "rules", labelKey: "settings.tabs.rules", icon: Filter },
   { id: "sorting", labelKey: "settings.tabs.sorting", icon: Tags },
-  { id: "templates", labelKey: "settings.tabs.templates", icon: FileType, premium: true },
+  { id: "templates", labelKey: "settings.tabs.templates", icon: FileType },
   { id: "backup", labelKey: "settings.tabs.backup", icon: Database },
-  { id: "ai", labelKey: "settings.tabs.ai", icon: Sparkles, premium: true },
+  { id: "ai", labelKey: "settings.tabs.ai", icon: Sparkles },
   { id: "license", labelKey: "settings.tabs.license", icon: Key },
   { id: "update", labelKey: "settings.tabs.update", icon: Download },
   { id: "info", labelKey: "settings.tabs.info", icon: Info },
@@ -509,7 +508,7 @@ export function SettingsPanel() {
   const queryClient = useQueryClient();
   // useShallow-scoped: an unselected useAppStore() re-renders the whole
   // settings panel on every store write (sync ticks, toasts, selection).
-  const { setShowSettings, setShowAccountWizard, themeMode, chooseThemeMode, settingsAccountId, settingsTargetTab, appSettings, setAppSettings, hasFeature, systemAccentHex } = useAppStore(
+  const { setShowSettings, setShowAccountWizard, themeMode, chooseThemeMode, settingsAccountId, settingsTargetTab, appSettings, setAppSettings, systemAccentHex } = useAppStore(
     useShallow((s) => ({
       setShowSettings: s.setShowSettings,
       setShowAccountWizard: s.setShowAccountWizard,
@@ -519,7 +518,6 @@ export function SettingsPanel() {
       settingsTargetTab: s.settingsTargetTab,
       appSettings: s.appSettings,
       setAppSettings: s.setAppSettings,
-      hasFeature: s.hasFeature,
       systemAccentHex: s.systemAccentHex,
     }))
   );
@@ -702,7 +700,7 @@ export function SettingsPanel() {
             <div className="border-b border-border shrink-0">
               <div className="px-4 py-2">
                 <div role="tablist" className="segmented-track flex-wrap">
-                {SETTINGS_TABS.map(({ id, labelKey, icon: Icon, premium }) => (
+                {SETTINGS_TABS.map(({ id, labelKey, icon: Icon }) => (
                   <TabButton
                     key={id}
                     selected={activeTab === id}
@@ -711,9 +709,6 @@ export function SettingsPanel() {
                   >
                     <Icon className="w-4 h-4" />
                     {t(labelKey)}
-                    {premium && !hasFeature(id === "ai" ? "ai_replies" : id === "rules" ? "rules_filters" : "templates") && (
-                      <PremiumBadge />
-                    )}
                   </TabButton>
                 ))}
                 </div>
@@ -853,11 +848,7 @@ export function SettingsPanel() {
                       />
                     </SettingsGroup>
 
-                    <SettingsGroup
-                      title={t("settings.undoSendDelay")}
-                      icon={<Send className="w-4 h-4" />}
-                      action={!hasFeature("undo_send_config") ? <PremiumBadge /> : undefined}
-                    >
+                    <SettingsGroup title={t("settings.undoSendDelay")} icon={<Send className="w-4 h-4" />}>
                       <SettingsBlock description={t("settings.undoSendDelayDesc")}>
                         <div className="grid grid-cols-6 gap-2">
                           {UNDO_SEND_OPTIONS.map((option) => (
@@ -865,12 +856,7 @@ export function SettingsPanel() {
                               key={option.value}
                               type="button"
                               aria-pressed={localSettings.undo_send_delay === option.value}
-                              onClick={() => {
-                                if (hasFeature("undo_send_config") || option.value === 5) {
-                                  updateLocalSetting("undo_send_delay", option.value);
-                                }
-                              }}
-                              disabled={!hasFeature("undo_send_config") && option.value !== 5}
+                              onClick={() => updateLocalSetting("undo_send_delay", option.value)}
                               className="option-tile px-3 py-2 rounded-control text-xs"
                             >
                               {"labelKey" in option ? t(option.labelKey as string) : option.label}
@@ -1039,19 +1025,7 @@ export function SettingsPanel() {
 
                 {activeTab === "calendar" && <CalendarSettingsPanel />}
 
-                {activeTab === "rules" && (
-                  hasFeature("rules_filters") ? (
-                    <RulesPanel />
-                  ) : (
-                    <SettingsGroup title={t("premium.upgradePrompt")} icon={<Lock className="w-4 h-4" />}>
-                      <SettingsBlock description={t("rules.premiumDesc")}>
-                        <Button variant="primary" size="sm" onClick={() => window.open("https://prudii.com/pricing", "_blank")}>
-                          {t("premium.upgradeButton")}
-                        </Button>
-                      </SettingsBlock>
-                    </SettingsGroup>
-                  )
-                )}
+                {activeTab === "rules" && <RulesPanel />}
 
                 {activeTab === "sorting" && (
                   <SortingSettings
@@ -1060,19 +1034,7 @@ export function SettingsPanel() {
                   />
                 )}
 
-                {activeTab === "templates" && (
-                  hasFeature("templates") ? (
-                    <TemplatesPanel />
-                  ) : (
-                    <SettingsGroup title={t("premium.upgradePrompt")} icon={<Lock className="w-4 h-4" />}>
-                      <SettingsBlock description={t("templates.premiumDesc")}>
-                        <Button variant="primary" size="sm" onClick={() => window.open("https://prudii.com/pricing", "_blank")}>
-                          {t("premium.upgradeButton")}
-                        </Button>
-                      </SettingsBlock>
-                    </SettingsGroup>
-                  )
-                )}
+                {activeTab === "templates" && <TemplatesPanel />}
 
                 {activeTab === "backup" && (
                   <>
@@ -1082,20 +1044,10 @@ export function SettingsPanel() {
                 )}
 
                 {activeTab === "ai" && (
-                  hasFeature("ai_replies") ? (
-                    <AiSettings
-                      localSettings={localSettings}
-                      updateLocalSetting={updateLocalSetting}
-                    />
-                  ) : (
-                    <SettingsGroup title={t("premium.upgradePrompt")} icon={<Lock className="w-4 h-4" />}>
-                      <SettingsBlock description={t("settings.ai.premiumDesc")}>
-                        <Button variant="primary" size="sm" onClick={() => window.open("https://prudii.com/pricing", "_blank")}>
-                          {t("premium.upgradeButton")}
-                        </Button>
-                      </SettingsBlock>
-                    </SettingsGroup>
-                  )
+                  <AiSettings
+                    localSettings={localSettings}
+                    updateLocalSetting={updateLocalSetting}
+                  />
                 )}
 
                 {activeTab === "license" && (

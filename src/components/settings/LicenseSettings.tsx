@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Key, LogOut, Monitor, Crown, Users, ExternalLink, Copy, Check, Shield, AlertTriangle, RefreshCw } from "../icons";
+import { Key, LogOut, Monitor, Users, ExternalLink, Copy, Check, Shield, AlertTriangle, RefreshCw } from "../icons";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { licenseLogin, licenseLogout, getLicenseInfo, verifyLicense, activateLicenseKey, getDeviceId } from "../../lib/tauri";
@@ -152,7 +152,6 @@ export function LicenseSettings() {
     if (!license) return <Shield className="w-5 h-5" />;
     switch (license.plan) {
       case "team": return <Users className="w-5 h-5" />;
-      case "premium": return <Crown className="w-5 h-5" />;
       default: return <Shield className="w-5 h-5" />;
     }
   }
@@ -161,7 +160,6 @@ export function LicenseSettings() {
     if (!license) return "text-text-tertiary";
     switch (license.plan) {
       case "team": return "text-success";
-      case "premium": return "text-accent";
       default: return "text-text-tertiary";
     }
   }

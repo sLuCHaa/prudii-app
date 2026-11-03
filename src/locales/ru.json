@@ -49,8 +49,6 @@
     "starred": "Избранное",
     "noAccounts": "Пока нет аккаунтов",
     "addAccount": "Добавить аккаунт",
-    "accountLimit": "Бесплатный план: макс. 3 аккаунта",
-    "upgradePremium": "Premium — скоро",
     "newFolder": "Новая папка",
     "forceResyncTitle": "Полная пересинхронизация",
     "forceResyncMessage": "Все локально сохранённые письма этого аккаунта будут удалены и загружены заново с сервера. Продолжить?",
@@ -608,7 +606,7 @@
       "loginTitle": "Войти в аккаунт",
       "loginDesc": "Войдите в аккаунт Prudii для активации лицензии.",
       "activateTitle": "Активировать ключ лицензии",
-      "activateDesc": "Введите ключ лицензии для разблокировки Premium или Team.",
+      "activateDesc": "Введите лицензионный ключ, чтобы включить функции Team.",
       "email": "Электронная почта",
       "password": "Пароль",
       "login": "Войти",
@@ -618,8 +616,8 @@
       "activateKeyInstead": "Есть ключ лицензии?",
       "loginInstead": "Войти через аккаунт",
       "freePlan": "Бесплатный план",
-      "freePlanDesc": "До 3 почтовых аккаунтов. Premium скоро появится.",
-      "upgrade": "Premium — скоро",
+      "freePlanDesc": "Все функции бесплатно и любое количество аккаунтов. Team добавляет общие ящики и командные функции.",
+      "upgrade": "Prudii для команд",
       "licenseKey": "Ключ лицензии",
       "validUntil": "Действует до",
       "device": "Это устройство",
@@ -718,8 +716,7 @@
       "modelRecSmall": "Быстрая и лёгкая — базовые резюме",
       "modelRecMedium": "Рекомендуется — лучшая для задач с почтой",
       "modelRecLarge": "Выше качество, медленнее — нужно мощное оборудование",
-      "quickStart": "Быстрый старт: выполни \"ollama pull llama3.2\" или \"ollama pull gemma3\" в терминале.",
-      "premiumDesc": "Функции локального ИИ появятся в Premium — скоро."
+      "quickStart": "Быстрый старт: выполни \"ollama pull llama3.2\" или \"ollama pull gemma3\" в терминале."
     }
   },
   "mailExport": {
@@ -998,8 +995,7 @@
     "enabled": "Включено",
     "save": "Сохранить правило",
     "deleteConfirm": "Удалить это правило?",
-    "selectAccount": "Выбрать аккаунт",
-    "premiumDesc": "Правила почты появятся в Premium — скоро."
+    "selectAccount": "Выбрать аккаунт"
   },
   "dateGroups": {
     "today": "Сегодня",
@@ -1167,13 +1163,7 @@
     "templateName": "Название шаблона",
     "body": "Текст",
     "noTemplates": "Шаблонов пока нет. Создайте первый.",
-    "insertTemplate": "Вставить шаблон",
-    "premiumDesc": "Шаблоны писем появятся в Premium — скоро."
-  },
-  "premium": {
-    "badge": "Премиум",
-    "upgradePrompt": "Премиум-функция",
-    "upgradeButton": "Premium — скоро"
+    "insertTemplate": "Вставить шаблон"
   },
   "categories": {
     "names": {
