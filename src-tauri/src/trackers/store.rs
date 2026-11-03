@@ -70,6 +70,7 @@ pub fn unscanned_bodies(conn: &Connection, cutoff: &str, limit: u32) -> rusqlite
 }
 
 pub const DEFAULT_DAYS: u32 = 30;
+pub const BODY_LIMIT_PER_ACCOUNT: u32 = 500;
 const TOP: usize = 10;
 
 #[derive(Debug, Default, Serialize)]
@@ -174,6 +175,21 @@ pub fn report(conn: &Connection, cutoff: &str, account_id: Option<&str>, days: u
         |s| s.address.as_str(),
     );
     Ok(TrackerReport { days, scanned_mails, mails_with_trackers: mails.len() as u32, total, by_kind, companies, senders })
+}
+
+/// One row per message: a Gmail label copy whose twin already has a body needs no download.
+pub fn bulk_mails_missing_body(conn: &Connection, account_id: &str, cutoff: &str, limit: u32) -> rusqlite::Result<Vec<String>> {
+    conn.prepare(&format!(
+        "SELECT MIN(m.id), MAX(m.date) AS newest FROM mails m
+         WHERE m.account_id = ?1 AND {BULK_SQL} AND m.date >= ?2 AND m.date GLOB '[0-9][0-9][0-9][0-9]-*'
+           AND COALESCE(m.body_html, '') = '' AND COALESCE(m.body_text, '') = ''
+           AND NOT EXISTS (SELECT 1 FROM mails o WHERE o.account_id = m.account_id AND COALESCE(m.message_id, '') != ''
+                           AND o.message_id = m.message_id AND (COALESCE(o.body_html, '') != '' OR COALESCE(o.body_text, '') != ''))
+         GROUP BY COALESCE(NULLIF(m.message_id, ''), m.id)
+         ORDER BY newest DESC LIMIT ?3"
+    ))?
+    .query_map(params![account_id, cutoff, limit], |r| r.get(0))?
+    .collect()
 }
 
 #[cfg(test)]
@@ -335,6 +351,36 @@ mod tests {
         scanned(&f, &other, "news@halde-shop.example", "", "2026-10-10T09:00:00Z", "b", vec![hit("pixel", "open.halde-shop.example", None, 4)]);
         assert_eq!(report(&f.db.lock_db(), CUTOFF, Some(&other), 30).unwrap().total, 4);
         assert_eq!(report(&f.db.lock_db(), CUTOFF, None, 30).unwrap().total, 5);
+    }
+
+    #[test]
+    fn bulk_selection_skips_loaded_old_and_personal_mail() {
+        let f = fx();
+        let newest = list_mail(&f, "2026-10-15T09:00:00Z", "n1", "");
+        let middle = list_mail(&f, "2026-10-12T09:00:00Z", "n2", "");
+        list_mail(&f, "2026-10-11T09:00:00Z", "n3", "");
+        list_mail(&f, "2026-10-14T09:00:00Z", "loaded", "<p>da</p>");
+        list_mail(&f, "2026-09-20T09:00:00Z", "old", "");
+        let conn = f.db.lock_db();
+        seed_mail(&conn, &SeedMail { account_id: &f.account, folder_id: &f.inbox, from_email: "anna.weber@studio-halde.example", date: "2026-10-16T09:00:00Z", ..Default::default() });
+        let other = seed_account(&conn, "anna.weber@studio-halde.example");
+        let other_inbox = seed_folder(&conn, &other, "inbox");
+        seed_mail(&conn, &SeedMail { account_id: &other, folder_id: &other_inbox, from_email: "news@halde-shop.example", list_unsubscribe: UNSUB, date: "2026-10-17T09:00:00Z", ..Default::default() });
+        assert_eq!(bulk_mails_missing_body(&conn, &f.account, CUTOFF, 2).unwrap(), vec![newest, middle]);
+        assert_eq!(bulk_mails_missing_body(&conn, &f.account, CUTOFF, 10).unwrap().len(), 3);
+    }
+
+    #[test]
+    fn bulk_selection_loads_a_message_once() {
+        let f = fx();
+        list_mail(&f, "2026-10-15T09:00:00Z", "msg-1", "");
+        let conn = f.db.lock_db();
+        let label = seed_folder(&conn, &f.account, "custom");
+        let copy = seed_mail(&conn, &SeedMail { account_id: &f.account, folder_id: &label, from_email: "news@halde-shop.example", list_unsubscribe: UNSUB, date: "2026-10-15T09:00:00Z", ..Default::default() });
+        conn.execute("UPDATE mails SET message_id = 'msg-1' WHERE id = ?1", [&copy]).unwrap();
+        assert_eq!(bulk_mails_missing_body(&conn, &f.account, CUTOFF, 10).unwrap().len(), 1);
+        conn.execute("UPDATE mails SET body_html = '<p>da</p>' WHERE id = ?1", [&copy]).unwrap();
+        assert!(bulk_mails_missing_body(&conn, &f.account, CUTOFF, 10).unwrap().is_empty());
     }
 
     #[test]
