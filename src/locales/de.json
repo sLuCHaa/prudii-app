@@ -1104,12 +1104,33 @@
   },
   "unsubscribe": {
     "title": "Abmelden",
-    "confirmMessage": "Möchten Sie sich von diesem Verteiler abmelden?",
+    "block": "Blockieren",
+    "dialogTitle": "Von „{{name}}“ abmelden?",
+    "dialogMessage": "Prudii meldet dich ab und prüft danach, ob wirklich nichts mehr kommt. Was nach 3 Tagen trotzdem noch kommt, landet automatisch im Papierkorb.",
+    "blockDialogTitle": "„{{name}}“ blockieren?",
+    "blockDialogMessage": "Neue Mails von {{address}} landen ab sofort im Papierkorb. Der Absender erfährt davon nichts.",
+    "trashExisting": "Bisherige Mails dieser Liste in den Papierkorb",
     "confirm": "Abmelden",
-    "success": "Abgemeldet",
-    "successMessage": "Sie wurden erfolgreich von diesem Verteiler abgemeldet.",
-    "error": "Abmeldung fehlgeschlagen",
-    "browserOpened": "Eine Abmeldeseite wurde in Ihrem Browser geöffnet."
+    "confirmBlock": "Blockieren",
+    "allowAgain": "Wieder zulassen",
+    "retry": "Nochmal versuchen",
+    "movedToTrash_one": "{{count}} Mail in den Papierkorb verschoben",
+    "movedToTrash_other": "{{count}} Mails in den Papierkorb verschoben",
+    "status": {
+      "waiting": "Abgemeldet am {{date}}, Prudii wartet ab",
+      "webPending": "Abmeldeseite geöffnet – bitte dort bestätigen",
+      "quiet_one": "Abgemeldet, seit {{count}} Tag Ruhe",
+      "quiet_other": "Abgemeldet, seit {{count}} Tagen Ruhe",
+      "stillSending_one": "Schickt trotzdem – {{count}} Mail aussortiert",
+      "stillSending_other": "Schickt trotzdem – {{count}} Mails aussortiert",
+      "blocked_one": "Blockiert – {{count}} Mail aussortiert",
+      "blocked_other": "Blockiert – {{count}} Mails aussortiert"
+    },
+    "errors": {
+      "failed": "Abmelden hat nicht geklappt. Prüf deine Verbindung und versuch es nochmal.",
+      "noTarget": "Dieser Absender bietet keine Abmeldung an. Du kannst ihn blockieren.",
+      "spam": "Bei Spam meldet Prudii dich nicht ab, das würde deine Adresse bestätigen. Blockiere den Absender stattdessen."
+    }
   },
   "snooze": {
     "snooze": "Zurückstellen",

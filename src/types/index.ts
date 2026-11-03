@@ -186,10 +186,28 @@ export interface AiRepliesEvent {
   error: string | null;
 }
 
-export interface UnsubscribeResult {
-  method: string;
-  success: boolean;
-  url: string;
+export type ListOffer = "unsubscribe" | "block" | "none";
+
+export interface Unsubscription {
+  id: string;
+  display_name: string;
+  status: "waiting" | "quiet" | "still_sending" | "blocked";
+  requested_at: string;
+  web_pending: boolean;
+  quiet_days: number;
+  sorted_count: number;
+  can_retry: boolean;
+}
+
+export interface ListStatus {
+  offer: ListOffer;
+  subscription: Unsubscription | null;
+}
+
+export interface UnsubscribeOutcome {
+  subscription: Unsubscription;
+  web_url: string | null;
+  trashed: number;
 }
 
 export interface SyncStats {

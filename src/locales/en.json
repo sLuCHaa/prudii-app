@@ -1104,12 +1104,33 @@
   },
   "unsubscribe": {
     "title": "Unsubscribe",
-    "confirmMessage": "Do you want to unsubscribe from this mailing list?",
+    "block": "Block",
+    "dialogTitle": "Unsubscribe from “{{name}}”?",
+    "dialogMessage": "Prudii unsubscribes you and then checks that nothing else arrives. Anything that still comes after 3 days goes straight to the trash.",
+    "blockDialogTitle": "Block “{{name}}”?",
+    "blockDialogMessage": "New mail from {{address}} goes straight to the trash from now on. The sender won't know.",
+    "trashExisting": "Move earlier mails from this list to the trash",
     "confirm": "Unsubscribe",
-    "success": "Unsubscribed",
-    "successMessage": "You have been successfully unsubscribed from this mailing list.",
-    "error": "Unsubscribe failed",
-    "browserOpened": "An unsubscribe page has been opened in your browser."
+    "confirmBlock": "Block",
+    "allowAgain": "Allow again",
+    "retry": "Try again",
+    "movedToTrash_one": "Moved {{count}} mail to the trash",
+    "movedToTrash_other": "Moved {{count}} mails to the trash",
+    "status": {
+      "waiting": "Unsubscribed on {{date}}, waiting",
+      "webPending": "Unsubscribe page opened – please confirm there",
+      "quiet_one": "Unsubscribed, quiet for {{count}} day",
+      "quiet_other": "Unsubscribed, quiet for {{count}} days",
+      "stillSending_one": "Still sending – {{count}} mail sorted out",
+      "stillSending_other": "Still sending – {{count}} mails sorted out",
+      "blocked_one": "Blocked – {{count}} mail sorted out",
+      "blocked_other": "Blocked – {{count}} mails sorted out"
+    },
+    "errors": {
+      "failed": "Unsubscribing didn't work. Check your connection and try again.",
+      "noTarget": "This sender offers no way to unsubscribe. You can block it instead.",
+      "spam": "Prudii doesn't unsubscribe from spam, that would confirm your address. Block the sender instead."
+    }
   },
   "snooze": {
     "snooze": "Snooze",

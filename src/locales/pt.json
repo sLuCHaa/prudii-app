@@ -1104,12 +1104,33 @@
   },
   "unsubscribe": {
     "title": "Cancelar inscrição",
-    "confirmMessage": "Deseja cancelar a inscrição desta lista de e-mails?",
+    "block": "Bloquear",
+    "dialogTitle": "Cancelar a inscrição em “{{name}}”?",
+    "dialogMessage": "O Prudii cancela sua inscrição e depois confere se nada mais chega. O que ainda chegar depois de 3 dias vai direto para a lixeira.",
+    "blockDialogTitle": "Bloquear “{{name}}”?",
+    "blockDialogMessage": "A partir de agora, os novos e-mails de {{address}} vão direto para a lixeira. O remetente não ficará sabendo.",
+    "trashExisting": "Mover para a lixeira os e-mails anteriores desta lista",
     "confirm": "Cancelar inscrição",
-    "success": "Inscrição cancelada",
-    "successMessage": "Sua inscrição foi cancelada com sucesso.",
-    "error": "Falha ao cancelar inscrição",
-    "browserOpened": "Uma página de cancelamento foi aberta no seu navegador."
+    "confirmBlock": "Bloquear",
+    "allowAgain": "Permitir de novo",
+    "retry": "Tentar de novo",
+    "movedToTrash_one": "{{count}} e-mail movido para a lixeira",
+    "movedToTrash_other": "{{count}} e-mails movidos para a lixeira",
+    "status": {
+      "waiting": "Inscrição cancelada em {{date}}, aguardando",
+      "webPending": "Página de cancelamento aberta – confirme por lá",
+      "quiet_one": "Inscrição cancelada, nada há {{count}} dia",
+      "quiet_other": "Inscrição cancelada, nada há {{count}} dias",
+      "stillSending_one": "Ainda envia – {{count}} e-mail separado",
+      "stillSending_other": "Ainda envia – {{count}} e-mails separados",
+      "blocked_one": "Bloqueado – {{count}} e-mail separado",
+      "blocked_other": "Bloqueado – {{count}} e-mails separados"
+    },
+    "errors": {
+      "failed": "Não foi possível cancelar a inscrição. Verifique sua conexão e tente de novo.",
+      "noTarget": "Este remetente não oferece como cancelar a inscrição. Você pode bloqueá-lo.",
+      "spam": "O Prudii não cancela inscrições de spam, isso confirmaria seu endereço. Bloqueie o remetente em vez disso."
+    }
   },
   "snooze": {
     "snooze": "Adiar",

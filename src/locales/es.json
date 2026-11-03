@@ -1103,13 +1103,34 @@
     "data_exfil": "Cadena de consulta inusualmente larga"
   },
   "unsubscribe": {
-    "title": "Cancelar suscripción",
-    "confirmMessage": "¿Desea cancelar la suscripción a esta lista de correo?",
-    "confirm": "Cancelar suscripción",
-    "success": "Suscripción cancelada",
-    "successMessage": "Se ha cancelado su suscripción a esta lista de correo exitosamente.",
-    "error": "Error al cancelar suscripción",
-    "browserOpened": "Se ha abierto una página de cancelación en su navegador."
+    "title": "Darse de baja",
+    "block": "Bloquear",
+    "dialogTitle": "¿Darte de baja de «{{name}}»?",
+    "dialogMessage": "Prudii te da de baja y después comprueba que no llegue nada más. Lo que siga llegando pasados 3 días irá directamente a la papelera.",
+    "blockDialogTitle": "¿Bloquear a «{{name}}»?",
+    "blockDialogMessage": "A partir de ahora, los correos nuevos de {{address}} irán directamente a la papelera. El remitente no se enterará.",
+    "trashExisting": "Mover a la papelera los correos anteriores de esta lista",
+    "confirm": "Darse de baja",
+    "confirmBlock": "Bloquear",
+    "allowAgain": "Volver a permitir",
+    "retry": "Intentar de nuevo",
+    "movedToTrash_one": "{{count}} correo movido a la papelera",
+    "movedToTrash_other": "{{count}} correos movidos a la papelera",
+    "status": {
+      "waiting": "Baja solicitada el {{date}}, esperando",
+      "webPending": "Página de baja abierta: confírmala allí",
+      "quiet_one": "Dado de baja, sin correos desde hace {{count}} día",
+      "quiet_other": "Dado de baja, sin correos desde hace {{count}} días",
+      "stillSending_one": "Sigue enviando: {{count}} correo apartado",
+      "stillSending_other": "Sigue enviando: {{count}} correos apartados",
+      "blocked_one": "Bloqueado: {{count}} correo apartado",
+      "blocked_other": "Bloqueado: {{count}} correos apartados"
+    },
+    "errors": {
+      "failed": "No se pudo completar la baja. Revisa tu conexión e inténtalo de nuevo.",
+      "noTarget": "Este remitente no ofrece ninguna forma de darse de baja. Puedes bloquearlo.",
+      "spam": "Prudii no se da de baja del spam, porque eso confirmaría tu dirección. Bloquea al remitente en su lugar."
+    }
   },
   "snooze": {
     "snooze": "Posponer",

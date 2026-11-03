@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { BundleImportResult, Calendar, CalendarPatch, CalendarSettings, EditScope, EventDetail, EventInput, EventPatch, EventTimes, ImportResult, InvitationView, Occurrence, RespondInvitationArgs, SubscribeResult } from "../types/calendar";
-import type { Account, AiResponse, Assignment, Attachment, AttachmentWithContext, AppConfig, AppSettings, BackupOptions, BulkSaveResult, CategoryCount, ChecklistItem, Contact, ContactDomain, CreateAccountRequest, CreateRuleRequest, CreateTaskInput, EmailTemplate, ExportLabels, ExportOptions, Folder, LicenseInfo, Mail, MailCategoryInfo, MailRule, OAuthResult, OllamaStatus, RestorePreview, ScheduledMail, SearchResult, SenderRule, SendMailRequest, SieveSupport, Task, TaskAttachment, TaskDetail, TaskStatus, TeamSnapshot, UnsubscribeResult, UpdateTaskPatch, VacationSettings, VacationState } from "../types";
+import type { Account, AiResponse, Assignment, Attachment, AttachmentWithContext, AppConfig, AppSettings, BackupOptions, BulkSaveResult, CategoryCount, ChecklistItem, Contact, ContactDomain, CreateAccountRequest, CreateRuleRequest, CreateTaskInput, EmailTemplate, ExportLabels, ExportOptions, Folder, LicenseInfo, ListStatus, Mail, MailCategoryInfo, MailRule, OAuthResult, OllamaStatus, RestorePreview, ScheduledMail, SearchResult, SenderRule, SendMailRequest, SieveSupport, Task, TaskAttachment, TaskDetail, TaskStatus, TeamSnapshot, UnsubscribeOutcome, UpdateTaskPatch, VacationSettings, VacationState } from "../types";
 import { prefers24HourClock } from "./localeDefaults";
 
 export async function listAccounts(): Promise<Account[]> {
@@ -378,8 +378,24 @@ export async function applyRulesNow(accountId: string): Promise<number> {
   return invoke("apply_rules_now", { accountId });
 }
 
-export async function unsubscribeMail(mailId: string): Promise<UnsubscribeResult> {
-  return invoke("unsubscribe_mail", { mailId });
+export async function unsubscribeMail(mailId: string, trashExisting: boolean): Promise<UnsubscribeOutcome> {
+  return invoke("unsubscribe_mail", { mailId, trashExisting });
+}
+
+export async function blockSender(mailId: string, trashExisting: boolean): Promise<UnsubscribeOutcome> {
+  return invoke("block_sender", { mailId, trashExisting });
+}
+
+export async function getListStatus(mailId: string): Promise<ListStatus> {
+  return invoke("get_list_status", { mailId });
+}
+
+export async function allowListAgain(id: string): Promise<void> {
+  return invoke("allow_list_again", { id });
+}
+
+export async function retryUnsubscribe(id: string): Promise<UnsubscribeOutcome> {
+  return invoke("retry_unsubscribe", { id });
 }
 
 export async function registerMailtoHandler(): Promise<void> {

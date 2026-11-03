@@ -1104,12 +1104,33 @@
   },
   "unsubscribe": {
     "title": "Se désabonner",
-    "confirmMessage": "Voulez-vous vous désabonner de cette liste de diffusion ?",
+    "block": "Bloquer",
+    "dialogTitle": "Se désabonner de « {{name}} » ?",
+    "dialogMessage": "Prudii vous désabonne, puis vérifie que plus rien n'arrive. Ce qui arrive encore après 3 jours part directement à la corbeille.",
+    "blockDialogTitle": "Bloquer « {{name}} » ?",
+    "blockDialogMessage": "Désormais, les nouveaux messages de {{address}} partent directement à la corbeille. L'expéditeur n'en saura rien.",
+    "trashExisting": "Mettre à la corbeille les anciens messages de cette liste",
     "confirm": "Se désabonner",
-    "success": "Désabonné",
-    "successMessage": "Vous avez été désabonné avec succès de cette liste de diffusion.",
-    "error": "Échec du désabonnement",
-    "browserOpened": "Une page de désabonnement a été ouverte dans votre navigateur."
+    "confirmBlock": "Bloquer",
+    "allowAgain": "Autoriser à nouveau",
+    "retry": "Réessayer",
+    "movedToTrash_one": "{{count}} message mis à la corbeille",
+    "movedToTrash_other": "{{count}} messages mis à la corbeille",
+    "status": {
+      "waiting": "Désabonné le {{date}}, en attente",
+      "webPending": "Page de désabonnement ouverte – veuillez confirmer sur la page",
+      "quiet_one": "Désabonné, plus rien depuis {{count}} jour",
+      "quiet_other": "Désabonné, plus rien depuis {{count}} jours",
+      "stillSending_one": "Envoie encore – {{count}} message écarté",
+      "stillSending_other": "Envoie encore – {{count}} messages écartés",
+      "blocked_one": "Bloqué – {{count}} message écarté",
+      "blocked_other": "Bloqué – {{count}} messages écartés"
+    },
+    "errors": {
+      "failed": "Le désabonnement n'a pas abouti. Vérifiez votre connexion et réessayez.",
+      "noTarget": "Cet expéditeur ne propose aucun moyen de se désabonner. Vous pouvez le bloquer.",
+      "spam": "Prudii ne se désabonne pas des spams, cela confirmerait votre adresse. Bloquez plutôt l'expéditeur."
+    }
   },
   "snooze": {
     "snooze": "Reporter",

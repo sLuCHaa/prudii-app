@@ -1102,13 +1102,34 @@
     "data_exfil": "异常长的查询字符串"
   },
   "unsubscribe": {
-    "title": "取消订阅",
-    "confirmMessage": "您要取消订阅此邮件列表吗？",
-    "confirm": "取消订阅",
-    "success": "已取消订阅",
-    "successMessage": "您已成功取消订阅此邮件列表。",
-    "error": "取消订阅失败",
-    "browserOpened": "退订页面已在浏览器中打开。"
+    "title": "退订",
+    "block": "屏蔽",
+    "dialogTitle": "退订“{{name}}”？",
+    "dialogMessage": "Prudii 会为你退订，并随后确认不再收到邮件。3 天后仍然发来的邮件会直接进入废纸篓。",
+    "blockDialogTitle": "屏蔽“{{name}}”？",
+    "blockDialogMessage": "从现在起，来自 {{address}} 的新邮件会直接进入废纸篓。发件人不会知道。",
+    "trashExisting": "将此列表以前的邮件移到废纸篓",
+    "confirm": "退订",
+    "confirmBlock": "屏蔽",
+    "allowAgain": "重新允许",
+    "retry": "再试一次",
+    "movedToTrash_one": "已将 {{count}} 封邮件移到废纸篓",
+    "movedToTrash_other": "已将 {{count}} 封邮件移到废纸篓",
+    "status": {
+      "waiting": "已于 {{date}} 退订，等待确认",
+      "webPending": "已打开退订页面，请在页面上确认",
+      "quiet_one": "已退订，已安静 {{count}} 天",
+      "quiet_other": "已退订，已安静 {{count}} 天",
+      "stillSending_one": "仍在发送，已清理 {{count}} 封邮件",
+      "stillSending_other": "仍在发送，已清理 {{count}} 封邮件",
+      "blocked_one": "已屏蔽，已清理 {{count}} 封邮件",
+      "blocked_other": "已屏蔽，已清理 {{count}} 封邮件"
+    },
+    "errors": {
+      "failed": "退订失败。请检查网络连接后再试一次。",
+      "noTarget": "此发件人没有提供退订方式。你可以屏蔽它。",
+      "spam": "Prudii 不会退订垃圾邮件，因为这会确认你的地址有效。请改为屏蔽发件人。"
+    }
   },
   "snooze": {
     "snooze": "延后",

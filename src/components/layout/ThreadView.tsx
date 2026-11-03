@@ -1,18 +1,20 @@
 import { Fragment, createContext, useContext, useEffect, useLayoutEffect, useState, useRef, useCallback, memo, useMemo } from "react";
 import { Tooltip } from "../ui/Tooltip";
 import { parseISO } from "date-fns";
-import { FileText, Image, Film, Music, File, Loader2, Download, ChevronDown, ChevronRight, ChevronUp, MessageSquare, Copy, Check, Code, Eye, FileCode, FileType, Printer, MailMinus, ImageOff, FileWarning, FolderOpen, ClipboardList, ClipboardPlus, Ellipsis, Archive, Paperclip, Forward, Reply, ReplyAll, StarIcon, TrashIcon } from "../icons";
+import { FileText, Image, Film, Music, File, Loader2, Download, ChevronDown, ChevronRight, ChevronUp, MessageSquare, Copy, Check, Code, Eye, FileCode, FileType, Printer, MailMinus, UserMinus, ImageOff, FileWarning, FolderOpen, ClipboardList, ClipboardPlus, Ellipsis, Archive, Paperclip, Forward, Reply, ReplyAll, StarIcon, TrashIcon } from "../icons";
 import { SkeletonText } from "../ui/Skeleton";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "../../stores/appStore";
 import { ReadingAmbient } from "./ReadingAmbient";
 import { resolveInlineImages, removeUnresolvableImages, listedAttachments } from "../../lib/inlineImages";
 import { findMissingParts, stripMmlTags } from "../../lib/missingParts";
 import { invalidateMailListQueries } from "../../lib/mailQueries";
+import { ListStatusChip } from "./ListStatusChip";
+import { UnsubscribeDialog } from "./UnsubscribeDialog";
 import { useAttachments, useToggleStar, useToggleMailFlag } from "../../hooks/useAccounts";
 import { useScroller } from "../../hooks/useScroller";
 import { useChatAnchor } from "../../hooks/useChatAnchor";
@@ -23,7 +25,7 @@ import { AddressName } from "./AddressName";
 import { stripQuotedHtml, stripQuotedText, isForwardSubject } from "../../lib/quotedHistory";
 import { makeIsOutgoing } from "../../lib/outgoing";
 import { recipientSummary } from "../../lib/recipientSummary";
-import { searchContacts, openAttachment, startAttachmentDrag, quickLookAttachment, saveAttachment, fetchMailBody, trashMail, archiveMail, getThreadMails, markAsRead, unsubscribeMail } from "../../lib/tauri";
+import { searchContacts, openAttachment, startAttachmentDrag, quickLookAttachment, saveAttachment, fetchMailBody, trashMail, archiveMail, getThreadMails, markAsRead, unsubscribeMail, blockSender, getListStatus, allowListAgain, retryUnsubscribe } from "../../lib/tauri";
 import { revealLabelKey, revealAttachment } from "../../lib/attachmentActions";
 import { isMacOS, isWindows } from "../../lib/platform";
 import { MAIL_LINK_BRIDGE, MAIL_LINK_BRIDGE_CSP_HASH, relayBridgeKey, parseBridgeContextMenu, type BridgeContextMenu } from "../../lib/mailLinkBridge";
@@ -48,7 +50,7 @@ import { LinkedTaskChip } from "../tasks/MailTaskChip";
 import { TaskPickerDialog } from "../tasks/TaskPickerDialog";
 import { CreateTaskFromMail } from "../tasks/CreateTaskFromMail";
 import { InvitationCard } from "../calendar/InvitationCard";
-import type { Mail, Attachment, MailAddress } from "../../types";
+import type { Mail, Attachment, MailAddress, UnsubscribeOutcome } from "../../types";
 import { useTranslation } from "react-i18next";
 import { ImageLightbox, type ImageLightboxItem } from "./ImageLightbox";
 import { formatFileSize } from "../../lib/fileSize";
@@ -1761,26 +1763,58 @@ export function ThreadView({ mail }: ThreadViewProps) {
     openCheckedLink(href);
   }, [openCheckedLink]);
 
-  const handleUnsubscribe = useCallback(async () => {
-    const confirmed = await dialog.danger({
-      title: t("unsubscribe.title"),
-      message: t("unsubscribe.confirmMessage"),
-    });
-    if (!confirmed) return;
+  const { data: listStatus } = useQuery({
+    queryKey: ["list-status", mail.id],
+    queryFn: () => getListStatus(mail.id),
+    staleTime: 30_000,
+  });
+  const [unsubscribeMode, setUnsubscribeMode] = useState<"unsubscribe" | "block" | null>(null);
+  const [unsubscribeBusy, setUnsubscribeBusy] = useState(false);
+
+  const showUnsubscribeError = useCallback((e: unknown) => {
+    const raw = String(e);
+    dialog.alert({ type: "danger", title: t("common.error"), message: raw.startsWith("unsubscribe.errors.") ? t(raw) : causeMessage(e) });
+  }, [dialog, t]);
+
+  const applyUnsubscribeOutcome = useCallback((outcome: UnsubscribeOutcome) => {
+    if (outcome.web_url) openUrl(outcome.web_url).catch(() => {});
+    if (outcome.trashed > 0) {
+      addToast("success", t("unsubscribe.movedToTrash", { count: outcome.trashed }));
+      invalidateMailListQueries(queryClient);
+    }
+    queryClient.invalidateQueries({ queryKey: ["list-status"] });
+  }, [addToast, queryClient, t]);
+
+  const handleUnsubscribeConfirm = useCallback(async (trashExisting: boolean) => {
+    const mode = unsubscribeMode;
+    setUnsubscribeMode(null);
+    if (!mode) return;
+    setUnsubscribeBusy(true);
     try {
-      const result = await unsubscribeMail(mail.id);
-      if (result.method === "one_click" && result.success) {
-        dialog.alert({ type: "info", title: t("unsubscribe.success"), message: t("unsubscribe.successMessage") });
-      } else if (result.method === "browser") {
-        openUrl(result.url).catch(() => {});
-        dialog.alert({ type: "info", title: t("unsubscribe.title"), message: t("unsubscribe.browserOpened") });
-      } else if (result.method === "mailto") {
-        openUrl(result.url).catch(() => {});
+      const run = mode === "block" ? blockSender : unsubscribeMail;
+      applyUnsubscribeOutcome(await run(mail.id, trashExisting));
+    } catch (e) {
+      showUnsubscribeError(e);
+    } finally {
+      setUnsubscribeBusy(false);
+    }
+  }, [unsubscribeMode, mail.id, applyUnsubscribeOutcome, showUnsubscribeError]);
+
+  const handleListAction = useCallback(async (action: "retry" | "allow", id: string) => {
+    setUnsubscribeBusy(true);
+    try {
+      if (action === "allow") {
+        await allowListAgain(id);
+        queryClient.invalidateQueries({ queryKey: ["list-status"] });
+      } else {
+        applyUnsubscribeOutcome(await retryUnsubscribe(id));
       }
     } catch (e) {
-      dialog.alert({ type: "danger", title: t("common.error"), message: causeMessage(e) });
+      showUnsubscribeError(e);
+    } finally {
+      setUnsubscribeBusy(false);
     }
-  }, [mail.id, dialog, t]);
+  }, [queryClient, applyUnsubscribeOutcome, showUnsubscribeError]);
 
   const threadMailIdsKey = useMemo(
     () => threadMails.map((m) => m.id).join(","),
@@ -2002,16 +2036,28 @@ export function ThreadView({ mail }: ThreadViewProps) {
             <div className="w-px h-4 bg-border mx-0.5" />
             <AiSummaryButton mailId={mail.id} threadMode={!isSingleMail} onToggle={() => setShowAiSummary((v) => !v)} active={showAiSummary} />
             <AiReplyButton mailId={latestMail.id} onToggle={() => setShowAiReplies((v) => !v)} active={showAiReplies} />
-            {mail.list_unsubscribe && (
-              <Tooltip label={t("unsubscribe.title")}>
+            {listStatus?.subscription ? (
+              <ListStatusChip sub={listStatus.subscription} busy={unsubscribeBusy} onAction={handleListAction} />
+            ) : listStatus && listStatus.offer !== "none" ? (
+              <Tooltip label={t(listStatus.offer === "block" ? "unsubscribe.block" : "unsubscribe.title")}>
               <button
-                aria-label={t("unsubscribe.title")}
-                onClick={handleUnsubscribe}
-                className="p-2 rounded-lg hover:bg-hover transition-colors text-text-secondary"
+                aria-label={t(listStatus.offer === "block" ? "unsubscribe.block" : "unsubscribe.title")}
+                onClick={() => setUnsubscribeMode(listStatus.offer === "block" ? "block" : "unsubscribe")}
+                disabled={unsubscribeBusy}
+                className="p-2 rounded-lg hover:bg-hover transition-colors text-text-secondary disabled:opacity-50"
               >
-                <MailMinus className="w-5 h-5" />
+                {listStatus.offer === "block" ? <UserMinus className="w-5 h-5" /> : <MailMinus className="w-5 h-5" />}
               </button>
               </Tooltip>
+            ) : null}
+            {unsubscribeMode && (
+              <UnsubscribeDialog
+                mode={unsubscribeMode}
+                name={mail.from.name || mail.from.email}
+                address={mail.from.email}
+                onConfirm={handleUnsubscribeConfirm}
+                onCancel={() => setUnsubscribeMode(null)}
+              />
             )}
           </div>
         </div>
