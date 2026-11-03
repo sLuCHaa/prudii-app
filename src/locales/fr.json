@@ -41,6 +41,7 @@
     "checking": "Vérification de la connexion…"
   },
   "sidebar": {
+    "mailboxCheck": "Bilan de la boîte",
     "calendar": "Calendrier",
     "views": "Vues",
     "accounts": "Comptes",
@@ -1133,6 +1134,50 @@
       "failed": "Le désabonnement n'a pas abouti. Vérifiez votre connexion et réessayez.",
       "noTarget": "Cet expéditeur ne propose aucun moyen de se désabonner. Vous pouvez le bloquer.",
       "spam": "Prudii ne se désabonne pas des spams, cela confirmerait votre adresse. Bloquez plutôt l'expéditeur."
+    }
+  },
+  "mailboxCheck": {
+    "title": "Bilan de la boîte",
+    "period": "30 derniers jours",
+    "local": "Calculé sur cet ordinateur. Aucun serveur ne voit ces chiffres.",
+    "allAccounts": "Tous les comptes",
+    "scanning": "Recherche de traqueurs dans les messages …",
+    "tiles": {
+      "newsletters": "Newsletters",
+      "newslettersText_one": "{{count}} message en 30 jours",
+      "newslettersText_other": "{{count}} messages en 30 jours",
+      "trackers": "Traqueurs bloqués",
+      "trackersText_one": "dans {{count}} message",
+      "trackersText_other": "dans {{count}} messages",
+      "unsubscribed": "Désabonnements",
+      "blockedText_one": "{{count}} expéditeur bloqué",
+      "blockedText_other": "{{count}} expéditeurs bloqués"
+    },
+    "list": {
+      "title": "Newsletters et promotions",
+      "subtitle": "Triées par volume sur les 30 derniers jours",
+      "sender": "Expéditeur",
+      "volume": "Volume",
+      "read": "Lus",
+      "trackers": "Traqueurs",
+      "action": "Action",
+      "mails_one": "{{count}} message",
+      "mails_other": "{{count}} messages",
+      "readOf": "{{read}} sur {{count}} lus",
+      "trackerChip_one": "{{count}} traqueur",
+      "trackerChip_other": "{{count}} traqueurs",
+      "noTracker": "aucun traqueur",
+      "showAll": "Tout afficher",
+      "empty": "Aucune newsletter ces 30 derniers jours pour l'instant."
+    },
+    "trackers": {
+      "title": "Qui voulait vous observer",
+      "explain": "Un pixel de suivi est une image invisible dans un message. S'il se charge, l'expéditeur apprend que vous avez ouvert le message et quand, combien de fois, à peu près où et sur quel appareil. Prudii ne charge pas ces images.",
+      "byCompany": "Bloqués par entreprise",
+      "other": "Autres traqueurs",
+      "bySender": "Expéditeurs avec le plus de traqueurs",
+      "none": "Aucun traqueur trouvé pour l'instant.",
+      "footnote": "Détectés grâce aux domaines de suivi connus et aux images 1×1 cachées. Les chiffres restent sur cet ordinateur."
     }
   },
   "snooze": {

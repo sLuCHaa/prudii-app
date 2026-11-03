@@ -41,6 +41,7 @@
     "checking": "Verbindung wird geprüft…"
   },
   "sidebar": {
+    "mailboxCheck": "Postfach-Check",
     "calendar": "Kalender",
     "views": "Ansichten",
     "accounts": "Konten",
@@ -1133,6 +1134,50 @@
       "failed": "Abmelden hat nicht geklappt. Prüf deine Verbindung und versuch es nochmal.",
       "noTarget": "Dieser Absender bietet keine Abmeldung an. Du kannst ihn blockieren.",
       "spam": "Bei Spam meldet Prudii dich nicht ab, das würde deine Adresse bestätigen. Blockiere den Absender stattdessen."
+    }
+  },
+  "mailboxCheck": {
+    "title": "Postfach-Check",
+    "period": "Letzte 30 Tage",
+    "local": "Auf diesem Rechner ausgewertet. Kein Server sieht diese Zahlen.",
+    "allAccounts": "Alle Konten",
+    "scanning": "Prüfe Mails auf Tracker …",
+    "tiles": {
+      "newsletters": "Newsletter",
+      "newslettersText_one": "{{count}} Mail in 30 Tagen",
+      "newslettersText_other": "{{count}} Mails in 30 Tagen",
+      "trackers": "Tracker blockiert",
+      "trackersText_one": "in {{count}} Mail",
+      "trackersText_other": "in {{count}} Mails",
+      "unsubscribed": "Abgemeldet",
+      "blockedText_one": "{{count}} Absender blockiert",
+      "blockedText_other": "{{count}} Absender blockiert"
+    },
+    "list": {
+      "title": "Newsletter und Werbung",
+      "subtitle": "Sortiert nach Menge der letzten 30 Tage",
+      "sender": "Absender",
+      "volume": "Menge",
+      "read": "Gelesen",
+      "trackers": "Tracker",
+      "action": "Aktion",
+      "mails_one": "{{count}} Mail",
+      "mails_other": "{{count}} Mails",
+      "readOf": "{{read}} von {{count}} gelesen",
+      "trackerChip_one": "{{count}} Tracker",
+      "trackerChip_other": "{{count}} Tracker",
+      "noTracker": "kein Tracker",
+      "showAll": "Alle anzeigen",
+      "empty": "Noch keine Newsletter in den letzten 30 Tagen."
+    },
+    "trackers": {
+      "title": "Wer mitlesen wollte",
+      "explain": "Ein Tracking-Pixel ist ein unsichtbares Bild in der Mail. Lädt es, erfährt der Absender, dass und wann du die Mail geöffnet hast, wie oft, ungefähr wo und mit welchem Gerät. Prudii lädt diese Bilder nicht.",
+      "byCompany": "Blockiert nach Firma",
+      "other": "Weitere Tracker",
+      "bySender": "Absender mit den meisten Trackern",
+      "none": "Bisher keine Tracker gefunden.",
+      "footnote": "Erkannt über bekannte Tracking-Domains und versteckte 1×1-Bilder. Die Zahlen bleiben auf diesem Rechner."
     }
   },
   "snooze": {

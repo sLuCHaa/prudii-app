@@ -41,6 +41,7 @@
     "checking": "Checking connection…"
   },
   "sidebar": {
+    "mailboxCheck": "Inbox check",
     "calendar": "Calendar",
     "views": "Views",
     "accounts": "Accounts",
@@ -1133,6 +1134,50 @@
       "failed": "Unsubscribing didn't work. Check your connection and try again.",
       "noTarget": "This sender offers no way to unsubscribe. You can block it instead.",
       "spam": "Prudii doesn't unsubscribe from spam, that would confirm your address. Block the sender instead."
+    }
+  },
+  "mailboxCheck": {
+    "title": "Inbox check",
+    "period": "Last 30 days",
+    "local": "Worked out on this computer. No server sees these numbers.",
+    "allAccounts": "All accounts",
+    "scanning": "Checking mails for trackers …",
+    "tiles": {
+      "newsletters": "Newsletters",
+      "newslettersText_one": "{{count}} mail in 30 days",
+      "newslettersText_other": "{{count}} mails in 30 days",
+      "trackers": "Trackers blocked",
+      "trackersText_one": "in {{count}} mail",
+      "trackersText_other": "in {{count}} mails",
+      "unsubscribed": "Unsubscribed",
+      "blockedText_one": "{{count}} sender blocked",
+      "blockedText_other": "{{count}} senders blocked"
+    },
+    "list": {
+      "title": "Newsletters and promotions",
+      "subtitle": "Sorted by volume over the last 30 days",
+      "sender": "Sender",
+      "volume": "Volume",
+      "read": "Read",
+      "trackers": "Trackers",
+      "action": "Action",
+      "mails_one": "{{count}} mail",
+      "mails_other": "{{count}} mails",
+      "readOf": "{{read}} of {{count}} read",
+      "trackerChip_one": "{{count}} tracker",
+      "trackerChip_other": "{{count}} trackers",
+      "noTracker": "no tracker",
+      "showAll": "Show all",
+      "empty": "No newsletters in the last 30 days yet."
+    },
+    "trackers": {
+      "title": "Who wanted to watch",
+      "explain": "A tracking pixel is an invisible image in a mail. If it loads, the sender learns that and when you opened the mail, how often, roughly where and on which device. Prudii doesn't load these images.",
+      "byCompany": "Blocked by company",
+      "other": "Other trackers",
+      "bySender": "Senders with the most trackers",
+      "none": "No trackers found so far.",
+      "footnote": "Detected through known tracking domains and hidden 1×1 images. The numbers stay on this computer."
     }
   },
   "snooze": {

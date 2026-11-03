@@ -10,6 +10,7 @@ import { SettingsPanel } from "../settings/SettingsPanel";
 import { AttachmentBrowser } from "./AttachmentBrowser";
 import { TasksView } from "../tasks/TasksView";
 import { CalendarView } from "../calendar/CalendarView";
+import { MailboxCheckView } from "../check/MailboxCheckView";
 import { AgendaRail } from "../calendar/AgendaRail";
 import { OfflineBanner } from "./OfflineBanner";
 import { UpdateBanner } from "../ui/UpdateBanner";
@@ -40,9 +41,10 @@ export function AppLayout() {
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const showAttachmentBrowser = useAppStore((s) => s.showAttachmentBrowser);
+  const showMailboxCheck = useAppStore((s) => s.showMailboxCheck);
   const showTasks = useAppStore((s) => s.showTasks);
   const showCalendar = useAppStore((s) => s.showCalendar);
-  const mainView = showCalendar ? "calendar" : showTasks ? "tasks" : showAttachmentBrowser ? "attachments" : "mail";
+  const mainView = showCalendar ? "calendar" : showTasks ? "tasks" : showMailboxCheck ? "check" : showAttachmentBrowser ? "attachments" : "mail";
   const reduceMotion = useReducedMotion();
   const [sidebarWidth, setSidebarWidth] = useState(() => loadPanelWidth("sidebar-width", 240, SIDEBAR_MIN, SIDEBAR_MAX));
   const [mailListWidth, setMailListWidth] = useState(() => loadPanelWidth("maillist-width", 320, MAILLIST_MIN, MAILLIST_MAX));
@@ -235,6 +237,10 @@ export function AppLayout() {
               ) : showTasks ? (
                 <div className="flex-1 min-w-0 bg-bg">
                   <TasksView />
+                </div>
+              ) : showMailboxCheck ? (
+                <div className="flex-1 min-w-0 bg-bg">
+                  <MailboxCheckView />
                 </div>
               ) : showAttachmentBrowser ? (
                 <div className="flex-1 min-w-0 bg-bg">

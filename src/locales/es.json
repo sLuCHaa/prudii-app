@@ -41,6 +41,7 @@
     "checking": "Comprobando conexión…"
   },
   "sidebar": {
+    "mailboxCheck": "Revisión del buzón",
     "calendar": "Calendario",
     "views": "Vistas",
     "accounts": "Cuentas",
@@ -1133,6 +1134,50 @@
       "failed": "No se pudo completar la baja. Revisa tu conexión e inténtalo de nuevo.",
       "noTarget": "Este remitente no ofrece ninguna forma de darse de baja. Puedes bloquearlo.",
       "spam": "Prudii no se da de baja del spam, porque eso confirmaría tu dirección. Bloquea al remitente en su lugar."
+    }
+  },
+  "mailboxCheck": {
+    "title": "Revisión del buzón",
+    "period": "Últimos 30 días",
+    "local": "Calculado en este equipo. Ningún servidor ve estas cifras.",
+    "allAccounts": "Todas las cuentas",
+    "scanning": "Buscando rastreadores en los correos …",
+    "tiles": {
+      "newsletters": "Boletines",
+      "newslettersText_one": "{{count}} correo en 30 días",
+      "newslettersText_other": "{{count}} correos en 30 días",
+      "trackers": "Rastreadores bloqueados",
+      "trackersText_one": "en {{count}} correo",
+      "trackersText_other": "en {{count}} correos",
+      "unsubscribed": "Bajas",
+      "blockedText_one": "{{count}} remitente bloqueado",
+      "blockedText_other": "{{count}} remitentes bloqueados"
+    },
+    "list": {
+      "title": "Boletines y promociones",
+      "subtitle": "Ordenado por volumen de los últimos 30 días",
+      "sender": "Remitente",
+      "volume": "Volumen",
+      "read": "Leídos",
+      "trackers": "Rastreadores",
+      "action": "Acción",
+      "mails_one": "{{count}} correo",
+      "mails_other": "{{count}} correos",
+      "readOf": "{{read}} de {{count}} leídos",
+      "trackerChip_one": "{{count}} rastreador",
+      "trackerChip_other": "{{count}} rastreadores",
+      "noTracker": "sin rastreador",
+      "showAll": "Mostrar todo",
+      "empty": "Todavía no hay boletines en los últimos 30 días."
+    },
+    "trackers": {
+      "title": "Quién quería mirar",
+      "explain": "Un píxel de seguimiento es una imagen invisible en el correo. Si se carga, el remitente sabe que abriste el correo y cuándo, cuántas veces, más o menos dónde y con qué dispositivo. Prudii no carga estas imágenes.",
+      "byCompany": "Bloqueados por empresa",
+      "other": "Otros rastreadores",
+      "bySender": "Remitentes con más rastreadores",
+      "none": "Aún no se han encontrado rastreadores.",
+      "footnote": "Detectados mediante dominios de seguimiento conocidos e imágenes ocultas de 1×1. Las cifras se quedan en este equipo."
     }
   },
   "snooze": {

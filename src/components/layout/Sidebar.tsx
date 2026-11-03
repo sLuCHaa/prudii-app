@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState, useRef } from "react";
 import { CategorySidebarEntries } from "../categories/CategorySidebarEntries";
 import { createPortal } from "react-dom";
-import { FileText, AlertOctagon, Folder, Plus, ChevronDown, ChevronRight, FolderPlus, Download, Pencil, HardDrive, Cloud, X, Check, Clock, CalendarClock, PanelLeftClose, PanelLeftOpen, Loader2, AlertCircle, Palette, RefreshCw, RotateCcw, Settings, ClipboardList, UserCheck, CalendarDays, Archive, Paperclip, Flag, Inbox, Send, Star, StarIcon, Trash2, TrashIcon } from "../icons";
+import { FileText, AlertOctagon, Folder, Plus, ChevronDown, ChevronRight, FolderPlus, Download, Pencil, HardDrive, Cloud, X, Check, Clock, CalendarClock, PanelLeftClose, PanelLeftOpen, Loader2, AlertCircle, Palette, RefreshCw, RotateCcw, Settings, ClipboardList, UserCheck, CalendarDays, Archive, Paperclip, Flag, Inbox, Send, Shield, Star, StarIcon, Trash2, TrashIcon } from "../icons";
 import { useTodayCount } from "../../hooks/useCalendar";
 import gsap from "gsap";
 import { prefersReducedMotion } from "../motion/tokens";
@@ -1104,6 +1104,8 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
   const setShowScheduled = useAppStore((s) => s.setShowScheduled);
   const showAttachmentBrowser = useAppStore((s) => s.showAttachmentBrowser);
   const setShowAttachmentBrowser = useAppStore((s) => s.setShowAttachmentBrowser);
+  const showMailboxCheck = useAppStore((s) => s.showMailboxCheck);
+  const setShowMailboxCheck = useAppStore((s) => s.setShowMailboxCheck);
   const showTasks = useAppStore((s) => s.showTasks);
   const setShowTasks = useAppStore((s) => s.setShowTasks);
   const showCalendar = useAppStore((s) => s.showCalendar);
@@ -1241,6 +1243,14 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
       isActive: showAttachmentBrowser,
       show: true,
     },
+    {
+      id: "check",
+      label: t("sidebar.mailboxCheck"),
+      icon: <Shield className="w-4 h-4" />,
+      onClick: () => setShowMailboxCheck(!showMailboxCheck),
+      isActive: showMailboxCheck,
+      show: true,
+    },
     ...Object.entries(MAIL_FLAG_COLORS).map(([flag, { bg, nameKey }]) => ({
       id: flag,
       label: t(nameKey),
@@ -1362,7 +1372,7 @@ export function Sidebar() {
       // hijack the open mail via the per-folder selection restore.
       const s = useAppStore.getState();
       const viewActive = s.activeFilter || s.showAllInboxes || s.activeCombinedFolder
-        || s.activeCategory || s.showSnoozed || s.showScheduled || s.showAttachmentBrowser || s.showTasks || s.showCalendar;
+        || s.activeCategory || s.showSnoozed || s.showScheduled || s.showAttachmentBrowser || s.showMailboxCheck || s.showTasks || s.showCalendar;
       if (folders.length > 0 && !s.selectedFolderId && !viewActive) {
         setSelectedFolderId(folders[0].id);
       }

@@ -41,6 +41,7 @@
     "checking": "正在检查连接…"
   },
   "sidebar": {
+    "mailboxCheck": "邮箱检查",
     "calendar": "日历",
     "views": "视图",
     "accounts": "账户",
@@ -1132,6 +1133,50 @@
       "failed": "退订失败。请检查网络连接后再试一次。",
       "noTarget": "此发件人没有提供退订方式。你可以屏蔽它。",
       "spam": "Prudii 不会退订垃圾邮件，因为这会确认你的地址有效。请改为屏蔽发件人。"
+    }
+  },
+  "mailboxCheck": {
+    "title": "邮箱检查",
+    "period": "最近 30 天",
+    "local": "在这台电脑上计算。没有服务器能看到这些数字。",
+    "allAccounts": "所有账户",
+    "scanning": "正在检查邮件中的跟踪器 …",
+    "tiles": {
+      "newsletters": "新闻通讯",
+      "newslettersText_one": "30 天内 {{count}} 封邮件",
+      "newslettersText_other": "30 天内 {{count}} 封邮件",
+      "trackers": "已拦截的跟踪器",
+      "trackersText_one": "在 {{count}} 封邮件中",
+      "trackersText_other": "在 {{count}} 封邮件中",
+      "unsubscribed": "已退订",
+      "blockedText_one": "已屏蔽 {{count}} 个发件人",
+      "blockedText_other": "已屏蔽 {{count}} 个发件人"
+    },
+    "list": {
+      "title": "新闻通讯与促销",
+      "subtitle": "按最近 30 天的数量排序",
+      "sender": "发件人",
+      "volume": "数量",
+      "read": "已读",
+      "trackers": "跟踪器",
+      "action": "操作",
+      "mails_one": "{{count}} 封邮件",
+      "mails_other": "{{count}} 封邮件",
+      "readOf": "已读 {{read}} / {{count}}",
+      "trackerChip_one": "{{count}} 个跟踪器",
+      "trackerChip_other": "{{count}} 个跟踪器",
+      "noTracker": "无跟踪器",
+      "showAll": "全部显示",
+      "empty": "最近 30 天还没有新闻通讯。"
+    },
+    "trackers": {
+      "title": "谁想偷看",
+      "explain": "跟踪像素是邮件中的一张隐形图片。一旦加载，发件人就会知道你打开了邮件、打开的时间和次数、大致位置以及所用设备。Prudii 不会加载这些图片。",
+      "byCompany": "按公司拦截",
+      "other": "其他跟踪器",
+      "bySender": "跟踪器最多的发件人",
+      "none": "目前还没有发现跟踪器。",
+      "footnote": "通过已知的跟踪域名和隐藏的 1×1 图片识别。这些数字只保存在这台电脑上。"
     }
   },
   "snooze": {

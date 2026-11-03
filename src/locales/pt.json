@@ -41,6 +41,7 @@
     "checking": "Verificando conexão…"
   },
   "sidebar": {
+    "mailboxCheck": "Revisão da caixa",
     "calendar": "Calendário",
     "views": "Visualizações",
     "accounts": "Contas",
@@ -1133,6 +1134,50 @@
       "failed": "Não foi possível cancelar a inscrição. Verifique sua conexão e tente de novo.",
       "noTarget": "Este remetente não oferece como cancelar a inscrição. Você pode bloqueá-lo.",
       "spam": "O Prudii não cancela inscrições de spam, isso confirmaria seu endereço. Bloqueie o remetente em vez disso."
+    }
+  },
+  "mailboxCheck": {
+    "title": "Revisão da caixa",
+    "period": "Últimos 30 dias",
+    "local": "Calculado neste computador. Nenhum servidor vê estes números.",
+    "allAccounts": "Todas as contas",
+    "scanning": "Procurando rastreadores nos e-mails …",
+    "tiles": {
+      "newsletters": "Newsletters",
+      "newslettersText_one": "{{count}} e-mail em 30 dias",
+      "newslettersText_other": "{{count}} e-mails em 30 dias",
+      "trackers": "Rastreadores bloqueados",
+      "trackersText_one": "em {{count}} e-mail",
+      "trackersText_other": "em {{count}} e-mails",
+      "unsubscribed": "Inscrições canceladas",
+      "blockedText_one": "{{count}} remetente bloqueado",
+      "blockedText_other": "{{count}} remetentes bloqueados"
+    },
+    "list": {
+      "title": "Newsletters e promoções",
+      "subtitle": "Ordenado por volume nos últimos 30 dias",
+      "sender": "Remetente",
+      "volume": "Volume",
+      "read": "Lidos",
+      "trackers": "Rastreadores",
+      "action": "Ação",
+      "mails_one": "{{count}} e-mail",
+      "mails_other": "{{count}} e-mails",
+      "readOf": "{{read}} de {{count}} lidos",
+      "trackerChip_one": "{{count}} rastreador",
+      "trackerChip_other": "{{count}} rastreadores",
+      "noTracker": "sem rastreador",
+      "showAll": "Mostrar tudo",
+      "empty": "Ainda não há newsletters nos últimos 30 dias."
+    },
+    "trackers": {
+      "title": "Quem queria espiar",
+      "explain": "Um pixel de rastreamento é uma imagem invisível no e-mail. Se carregar, o remetente fica sabendo que e quando você abriu o e-mail, quantas vezes, mais ou menos onde e em qual aparelho. O Prudii não carrega essas imagens.",
+      "byCompany": "Bloqueados por empresa",
+      "other": "Outros rastreadores",
+      "bySender": "Remetentes com mais rastreadores",
+      "none": "Nenhum rastreador encontrado até agora.",
+      "footnote": "Detectados por domínios de rastreamento conhecidos e imagens ocultas de 1×1. Os números ficam neste computador."
     }
   },
   "snooze": {

@@ -25,7 +25,7 @@ export function TitleBar() {
   const appSettings = useAppStore((s) => s.appSettings);
   const agendaRailOpen = useAppStore((s) => s.agendaRailOpen);
   const setAgendaRailOpen = useAppStore((s) => s.setAgendaRailOpen);
-  const mailViewVisible = useAppStore((s) => !s.showCalendar && !s.showTasks && !s.showAttachmentBrowser);
+  const mailViewVisible = useAppStore((s) => !s.showCalendar && !s.showTasks && !s.showAttachmentBrowser && !s.showMailboxCheck);
   const { data: openTaskCount = 0 } = useOpenTaskCount();
   const tasksButtonRef = useRef<HTMLButtonElement>(null);
   const [quickAddAnchor, setQuickAddAnchor] = useState<DOMRect | null>(null);
