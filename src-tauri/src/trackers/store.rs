@@ -107,6 +107,7 @@ pub struct TrackerReport {
     pub scanned_mails: u32,
     pub mails_with_trackers: u32,
     pub total: u32,
+    pub other_count: u32,
     pub by_kind: KindCounts,
     pub companies: Vec<CompanyCount>,
     pub senders: Vec<SenderCount>,
@@ -139,6 +140,7 @@ pub fn report(conn: &Connection, cutoff: &str, account_id: Option<&str>, days: u
 
     let mut by_kind = KindCounts::default();
     let mut total = 0;
+    let mut other_count = 0;
     let mut mails = std::collections::HashSet::new();
     let mut companies: std::collections::HashMap<(String, bool), u32> = std::collections::HashMap::new();
     // address -> (count, mail ids, newest date with a name, that name)
@@ -151,6 +153,9 @@ pub fn report(conn: &Connection, cutoff: &str, account_id: Option<&str>, days: u
             _ => by_kind.tracking_domain += count,
         }
         mails.insert(mail_id.clone());
+        if company.is_empty() {
+            other_count += count;
+        }
         let key = if company.is_empty() { (domain, false) } else { (company, true) };
         *companies.entry(key).or_default() += count;
         let entry = senders.entry(address).or_default();
@@ -180,7 +185,7 @@ pub fn report(conn: &Connection, cutoff: &str, account_id: Option<&str>, days: u
         |s| s.count,
         |s| s.address.as_str(),
     );
-    Ok(TrackerReport { days, scanned_mails, mails_with_trackers: mails.len() as u32, total, by_kind, companies, senders })
+    Ok(TrackerReport { days, scanned_mails, mails_with_trackers: mails.len() as u32, total, other_count, by_kind, companies, senders })
 }
 
 /// One row per message: a Gmail label copy whose twin already has a body needs no download.
@@ -329,6 +334,18 @@ mod tests {
         assert_eq!(r.senders.len(), 1);
         assert_eq!((r.senders[0].name.as_str(), r.senders[0].address.as_str()), ("Halde Shop", "news@halde-shop.example"));
         assert_eq!((r.senders[0].count, r.senders[0].mails), (5, 2));
+    }
+
+    #[test]
+    fn report_totals_other_trackers() {
+        let f = fx();
+        let account = f.account.clone();
+        let mut hits: Vec<TrackerHit> = (0..12).map(|i| hit("pixel", &format!("open{i}.halde-shop.example"), None, 1)).collect();
+        hits.push(hit("tracking_domain", "list-manage.com", Some("Mailchimp"), 3));
+        scanned(&f, &account, "news@halde-shop.example", "", "2026-10-10T09:00:00Z", "a", hits);
+        let r = report(&f.db.lock_db(), CUTOFF, None, 30).unwrap();
+        assert_eq!(r.companies.len(), 10);
+        assert_eq!(r.other_count, 12);
     }
 
     #[test]

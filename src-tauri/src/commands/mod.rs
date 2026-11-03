@@ -9,6 +9,7 @@ pub mod calendar;
 pub mod connectivity;
 pub mod export;
 pub mod license;
+pub mod mailbox_check;
 pub mod mails;
 pub mod mailto;
 pub mod native;

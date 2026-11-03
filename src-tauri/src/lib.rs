@@ -1122,6 +1122,7 @@ pub fn run() {
             commands::trackers::list_unscanned_bodies,
             commands::trackers::get_tracker_report,
             commands::trackers::fetch_bulk_bodies,
+            commands::mailbox_check::get_newsletter_overview,
             commands::mails::toggle_pin,
             commands::mails::snooze_mail,
             commands::mails::unsnooze_mail,
