@@ -796,19 +796,17 @@ pub async fn save_attachment(
         .map_err(|e| format!("Dialog error: {}", e))?
 }
 
-/// Fetch a single mail's body from IMAP on demand.
-/// Mails flagged with attachments must have their records, and a body loaded only for the
-/// tracker count still needs its attachments before it can be shown.
+/// Mails flagged with attachments only count as loaded once their attachment records exist.
 pub(crate) fn body_cache_usable(conn: &rusqlite::Connection, mail_id: &str) -> bool {
-    let row: Option<(bool, bool, bool)> = conn
+    let row: Option<(bool, bool)> = conn
         .query_row(
-            "SELECT (body_html != '' OR body_text != ''), has_attachments != 0, COALESCE(attachments_pending, 0) != 0 FROM mails WHERE id = ?1",
+            "SELECT (body_html != '' OR body_text != ''), has_attachments != 0 FROM mails WHERE id = ?1",
             rusqlite::params![mail_id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .ok();
-    let Some((has_body, has_att_flag, pending)) = row else { return false };
-    if !has_body || pending {
+    let Some((has_body, has_att_flag)) = row else { return false };
+    if !has_body {
         return false;
     }
     if !has_att_flag {
@@ -819,44 +817,41 @@ pub(crate) fn body_cache_usable(conn: &rusqlite::Connection, mail_id: &str) -> b
         .unwrap_or(false)
 }
 
-/// Text and HTML only, for counting trackers; attachments follow when the user opens the mail.
-/// Returns whether the mail now has a body.
+/// Loads a Gmail/Outlook mail's HTML for the tracker count into `mail_scan_bodies`; the mail itself
+/// stays unloaded. Returns whether there is now something to scan.
 pub(crate) async fn fetch_body_for_scan(db: &Database, mail_id: &str) -> Result<bool, String> {
-    let has_body = |db: &Database| {
+    let ready = |db: &Database| {
         db.read_db()
-            .query_row("SELECT (body_html != '' OR body_text != '') FROM mails WHERE id = ?1", rusqlite::params![mail_id], |row| row.get::<_, bool>(0))
+            .query_row(
+                "SELECT (m.body_html != '' OR m.body_text != '') OR EXISTS (SELECT 1 FROM mail_scan_bodies sb WHERE sb.mail_id = m.id)
+                 FROM mails m WHERE m.id = ?1",
+                rusqlite::params![mail_id],
+                |row| row.get::<_, bool>(0),
+            )
             .unwrap_or(false)
     };
-    if has_body(db) {
+    // A mail the user is opening right now arrives in full anyway.
+    if ready(db) || FETCHING_BODIES.lock().unwrap_or_else(|e| e.into_inner()).contains(mail_id) {
         return Ok(true);
     }
-    {
-        let mut fetching = FETCHING_BODIES.lock().unwrap_or_else(|e| e.into_inner());
-        if !fetching.insert(mail_id.to_string()) {
-            return Ok(true);
-        }
-    }
-    let result = async {
-        let (api_msg_id, account_id) = get_api_message_id(db, mail_id).ok_or("Mail not found")?;
-        let (api_type, provider, auth_type) = get_api_type(db, &account_id);
-        let credential = credentials::resolve_credential(&account_id, &auth_type, &provider)
+    let (api_msg_id, account_id) = get_api_message_id(db, mail_id).ok_or("Mail not found")?;
+    let (api_type, provider, auth_type) = get_api_type(db, &account_id);
+    let credential = credentials::resolve_credential(&account_id, &auth_type, &provider)
+        .await
+        .map_err(|e| format!("Credentials: {}", e))?;
+    match api_type {
+        ApiType::Gmail => gmail::messages::fetch_message_body(&gmail::api::GmailClient::new(&credential), &api_msg_id, mail_id, db, false)
             .await
-            .map_err(|e| format!("Credentials: {}", e))?;
-        match api_type {
-            ApiType::Gmail => gmail::messages::fetch_message_body(&gmail::api::GmailClient::new(&credential), &api_msg_id, mail_id, db, false)
-                .await
-                .map_err(|e| format!("Gmail body fetch: {}", e)),
-            ApiType::Outlook => outlook::messages::fetch_message_body(&outlook::api::OutlookClient::new(&credential), &api_msg_id, mail_id, db, false)
-                .await
-                .map_err(|e| format!("Outlook body fetch: {}", e)),
-            ApiType::Imap => Err("IMAP bodies come from the search backfill".to_string()),
-        }
+            .map_err(|e| format!("Gmail body fetch: {}", e))?,
+        ApiType::Outlook => outlook::messages::fetch_message_body(&outlook::api::OutlookClient::new(&credential), &api_msg_id, mail_id, db, false)
+            .await
+            .map_err(|e| format!("Outlook body fetch: {}", e))?,
+        ApiType::Imap => return Err("IMAP bodies come from the search backfill".to_string()),
     }
-    .await;
-    FETCHING_BODIES.lock().unwrap_or_else(|e| e.into_inner()).remove(mail_id);
-    result.map(|_| has_body(db))
+    Ok(ready(db))
 }
 
+/// Fetch a single mail's body from IMAP on demand.
 /// Called when the user opens a mail whose body hasn't been downloaded yet.
 #[tauri::command]
 pub async fn fetch_mail_body(
@@ -4693,16 +4688,28 @@ mod body_cache_tests {
     use crate::test_support::{seed_account, seed_folder, seed_mail, temp_db, SeedMail};
 
     #[test]
-    fn pending_attachments_force_a_full_fetch() {
+    fn scan_body_never_counts_as_a_loaded_mail() {
         let db = temp_db();
         let conn = db.lock_db();
         let account = seed_account(&conn, "me@studio-halde.example");
         let inbox = seed_folder(&conn, &account, "inbox");
         let id = seed_mail(&conn, &SeedMail { account_id: &account, folder_id: &inbox, from_email: "news@halde-shop.example", ..Default::default() });
+        crate::trackers::store::store_scan_body(&conn, &id, "<p>nur zum Zählen</p>").unwrap();
         assert!(!body_cache_usable(&conn, &id));
         conn.execute("UPDATE mails SET body_html = '<p>Hallo</p>' WHERE id = ?1", [&id]).unwrap();
         assert!(body_cache_usable(&conn, &id));
-        conn.execute("UPDATE mails SET attachments_pending = 1 WHERE id = ?1", [&id]).unwrap();
+    }
+
+    #[test]
+    fn announced_attachments_must_be_stored() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        let account = seed_account(&conn, "me@studio-halde.example");
+        let inbox = seed_folder(&conn, &account, "inbox");
+        let id = seed_mail(&conn, &SeedMail { account_id: &account, folder_id: &inbox, from_email: "news@halde-shop.example", ..Default::default() });
+        conn.execute("UPDATE mails SET body_html = '<p>Hallo</p>', has_attachments = 1 WHERE id = ?1", [&id]).unwrap();
         assert!(!body_cache_usable(&conn, &id));
+        conn.execute("INSERT INTO attachments (id, mail_id, filename) VALUES ('a1', ?1, 'rechnung.pdf')", [&id]).unwrap();
+        assert!(body_cache_usable(&conn, &id));
     }
 }

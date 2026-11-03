@@ -8,8 +8,8 @@ use std::sync::{LazyLock, Mutex};
 use tauri::{Manager, State};
 
 static FETCHING: AtomicBool = AtomicBool::new(false);
-// Mails that came back without text or HTML; asking again every time the check opens would only cost bandwidth.
-static WITHOUT_BODY: LazyLock<Mutex<HashSet<String>>> = LazyLock::new(|| Mutex::new(HashSet::new()));
+// Mails that failed or came back without HTML; asking again every time the check opens would only cost bandwidth.
+static SKIP_THIS_SESSION: LazyLock<Mutex<HashSet<String>>> = LazyLock::new(|| Mutex::new(HashSet::new()));
 
 pub(crate) const MAX_DAYS: u32 = 365;
 // Several failures in a row mean offline or a lapsed token; one failure is just that mail.
@@ -30,7 +30,7 @@ fn cutoff(days: u32) -> String {
 #[derive(Debug, Default)]
 pub(crate) struct FetchOutcome {
     pub loaded: u32,
-    pub without_body: Vec<String>,
+    pub skip_next_time: Vec<String>,
 }
 
 pub(crate) async fn fetch_each<F, Fut>(ids: &[String], mut fetch: F) -> FetchOutcome
@@ -47,11 +47,12 @@ where
                 failures_in_a_row = 0;
             }
             Ok(false) => {
-                outcome.without_body.push(id.clone());
+                outcome.skip_next_time.push(id.clone());
                 failures_in_a_row = 0;
             }
             Err(e) => {
                 log::warn!("tracker body fetch failed for one mail: {e}");
+                outcome.skip_next_time.push(id.clone());
                 failures_in_a_row += 1;
                 if failures_in_a_row >= GIVE_UP_AFTER {
                     break;
@@ -74,7 +75,7 @@ pub fn list_unscanned_bodies(db: State<'_, Database>, limit: u32) -> Result<Vec<
 
 #[tauri::command(async)]
 pub fn get_tracker_report(db: State<'_, Database>, account_id: Option<String>, days: Option<u32>) -> Result<TrackerReport, String> {
-    let days = days.unwrap_or(DEFAULT_DAYS);
+    let days = days.unwrap_or(DEFAULT_DAYS).clamp(1, MAX_DAYS);
     store::report(&db.read_db(), &cutoff(days), account_id.as_deref(), days).map_err(|e| e.to_string())
 }
 
@@ -87,7 +88,7 @@ pub async fn fetch_bulk_bodies(app: tauri::AppHandle) -> Result<u32, String> {
     let _claim = FetchClaim;
     let db = app.state::<Database>();
     let cutoff = cutoff(DEFAULT_DAYS);
-    let skip = WITHOUT_BODY.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    let skip = SKIP_THIS_SESSION.lock().unwrap_or_else(|e| e.into_inner()).clone();
     let plan: Vec<Vec<String>> = {
         let conn = db.read_db();
         let accounts: Vec<String> = conn
@@ -104,7 +105,7 @@ pub async fn fetch_bulk_bodies(app: tauri::AppHandle) -> Result<u32, String> {
         let db: &Database = &db;
         let outcome = fetch_each(&ids, |id| async move { crate::commands::mails::fetch_body_for_scan(db, &id).await }).await;
         loaded += outcome.loaded;
-        WITHOUT_BODY.lock().unwrap_or_else(|e| e.into_inner()).extend(outcome.without_body);
+        SKIP_THIS_SESSION.lock().unwrap_or_else(|e| e.into_inner()).extend(outcome.skip_next_time);
     }
     Ok(loaded)
 }
@@ -145,6 +146,6 @@ mod tests {
         })
         .await;
         assert_eq!(outcome.loaded, 2);
-        assert_eq!(outcome.without_body, vec!["empty".to_string()]);
+        assert_eq!(outcome.skip_next_time, vec!["gone".to_string(), "empty".to_string()]);
     }
 }

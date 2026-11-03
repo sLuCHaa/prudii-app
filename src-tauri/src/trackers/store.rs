@@ -61,7 +61,13 @@ pub fn record_batch(conn: &Connection, recs: &[TrackerRecord], now: DateTime<Utc
     Ok(counted)
 }
 
+pub fn store_scan_body(conn: &Connection, mail_id: &str, html: &str) -> rusqlite::Result<()> {
+    conn.execute("INSERT OR REPLACE INTO mail_scan_bodies (mail_id, html) VALUES (?1, ?2)", params![mail_id, html])?;
+    Ok(())
+}
+
 fn insert_record(conn: &Connection, rec: &TrackerRecord, now: DateTime<Utc>) -> rusqlite::Result<bool> {
+    conn.execute("DELETE FROM mail_scan_bodies WHERE mail_id = ?1", params![rec.mail_id])?;
     let fresh: bool = conn
         .query_row(&format!("SELECT NOT {SCANNED_SQL} FROM mails m WHERE m.id = ?1"), params![rec.mail_id], |r| r.get(0))
         .optional()?
@@ -82,9 +88,9 @@ fn insert_record(conn: &Connection, rec: &TrackerRecord, now: DateTime<Utc>) -> 
 
 fn unscanned_sql() -> String {
     format!(
-        "SELECT m.id, m.body_html FROM mails m
+        "SELECT m.id, COALESCE(NULLIF(m.body_html, ''), sb.html) FROM mails m LEFT JOIN mail_scan_bodies sb ON sb.mail_id = m.id
          WHERE {BULK_SQL} AND m.date >= ?1 AND m.date GLOB '[0-9][0-9][0-9][0-9]-*'
-           AND COALESCE(m.body_html, '') != '' AND NOT {SCANNED_SQL}
+           AND (COALESCE(m.body_html, '') != '' OR sb.html IS NOT NULL) AND NOT {SCANNED_SQL}
          ORDER BY m.date DESC LIMIT ?2"
     )
 }
@@ -214,9 +220,11 @@ pub fn bulk_mails_missing_body(conn: &Connection, account_id: &str, cutoff: &str
     let ids: Vec<String> = conn.prepare(&format!(
         "SELECT MIN(m.id), MAX(m.date) AS newest FROM mails m
          WHERE m.account_id = ?1 AND {BULK_SQL} AND m.date >= ?2 AND m.date GLOB '[0-9][0-9][0-9][0-9]-*'
-           AND COALESCE(m.body_html, '') = '' AND COALESCE(m.body_text, '') = ''
+           AND COALESCE(m.body_html, '') = '' AND COALESCE(m.body_text, '') = '' AND NOT {SCANNED_SQL}
+           AND NOT EXISTS (SELECT 1 FROM mail_scan_bodies sb WHERE sb.mail_id = m.id)
            AND NOT EXISTS (SELECT 1 FROM mails o WHERE o.account_id = m.account_id AND COALESCE(m.message_id, '') != ''
-                           AND o.message_id = m.message_id AND (COALESCE(o.body_html, '') != '' OR COALESCE(o.body_text, '') != ''))
+                           AND o.message_id = m.message_id AND (COALESCE(o.body_html, '') != '' OR COALESCE(o.body_text, '') != ''
+                           OR EXISTS (SELECT 1 FROM mail_scan_bodies sb2 WHERE sb2.mail_id = o.id)))
          GROUP BY COALESCE(NULLIF(m.message_id, ''), m.id)
          ORDER BY newest DESC LIMIT ?3"
     ))?
@@ -498,6 +506,35 @@ mod tests {
         let r = report(&f.db.lock_db(), CUTOFF, None, 30).unwrap();
         let domains: Vec<(&str, u32)> = r.other_domains.iter().map(|d| (d.name.as_str(), d.count)).collect();
         assert_eq!(domains, vec![("open.halde-shop.example", 7), ("trk.laden-halde.example", 2)]);
+    }
+
+    #[test]
+    fn scan_bodies_are_listed_and_dropped_once_counted() {
+        let f = fx();
+        let id = list_mail(&f, "2026-10-10T09:00:00Z", "msg-1", "");
+        let conn = f.db.lock_db();
+        store_scan_body(&conn, &id, "<p>nur zum Zählen</p>").unwrap();
+        let bodies = unscanned_bodies(&conn, CUTOFF, 10).unwrap();
+        assert_eq!(bodies.len(), 1);
+        assert_eq!(bodies[0].html, "<p>nur zum Zählen</p>");
+        record(&conn, &TrackerRecord { mail_id: id.clone(), hits: vec![] }, now()).unwrap();
+        let left: u32 = conn.query_row("SELECT COUNT(*) FROM mail_scan_bodies", [], |r| r.get(0)).unwrap();
+        assert_eq!(left, 0);
+        let body: String = conn.query_row("SELECT COALESCE(body_html, '') FROM mails WHERE id = ?1", [&id], |r| r.get(0)).unwrap();
+        assert_eq!(body, "");
+    }
+
+    #[test]
+    fn bulk_selection_skips_scanned_and_already_fetched_mails() {
+        let f = fx();
+        let fetched = list_mail(&f, "2026-10-15T09:00:00Z", "n1", "");
+        let scanned_mail = list_mail(&f, "2026-10-14T09:00:00Z", "n2", "");
+        let open = list_mail(&f, "2026-10-13T09:00:00Z", "n3", "");
+        let conn = f.db.lock_db();
+        store_scan_body(&conn, &fetched, "<p>a</p>").unwrap();
+        record(&conn, &TrackerRecord { mail_id: scanned_mail, hits: vec![] }, now()).unwrap();
+        let none = std::collections::HashSet::new();
+        assert_eq!(bulk_mails_missing_body(&conn, &f.account, CUTOFF, 10, &none).unwrap(), vec![open]);
     }
 
     #[test]

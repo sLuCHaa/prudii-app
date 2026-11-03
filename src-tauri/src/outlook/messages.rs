@@ -168,13 +168,21 @@ pub async fn fetch_message_body(
         }
     }
 
+    // The tracker count needs only the HTML; the mail row stays unloaded so every reader still fetches it in full.
+    if !with_attachments {
+        if !body_html.is_empty() {
+            crate::trackers::store::store_scan_body(&db.lock_db(), mail_id, &body_html)?;
+        }
+        return Ok(());
+    }
+
     // Download and save attachments BEFORE writing body to DB.
     // The dedup mechanism polls for non-empty body_text/body_html to detect completion,
     // so the body update must happen last to prevent premature cache hits while
     // attachments are still being downloaded.
     let mut has_ics_attachment = false;
     let mut has_real_attachments = has_attachments_from_body;
-    if with_attachments && has_attachments_from_body {
+    if has_attachments_from_body {
         let attachments = client.list_attachments(graph_id).await?;
 
         if !attachments.is_empty() {
@@ -276,9 +284,7 @@ pub async fn fetch_message_body(
     }
 
     // Graph's JSON lacks the calendar part; a failed MIME fetch keeps what was recorded.
-    let invite = if !with_attachments {
-        None
-    } else if is_event_message(msg.odata_type.as_deref()) || has_ics_attachment {
+    let invite = if is_event_message(msg.odata_type.as_deref()) || has_ics_attachment {
         match client.get_message_raw(graph_id).await {
             Ok(raw) => Some(crate::calendar::invite_mail::find_in_mime(&raw)),
             Err(e) => {
@@ -298,11 +304,8 @@ pub async fn fetch_message_body(
     {
         let conn = db.lock_db();
         conn.execute(
-            "UPDATE mails SET body_text = ?1, body_html = ?2, snippet = ?3, has_attachments = ?4, attachments_pending = ?6 WHERE id = ?5",
-            rusqlite::params![
-                body_text, body_html, snippet, has_real_attachments as i32, mail_id,
-                (!with_attachments && (has_attachments_from_body || is_event_message(msg.odata_type.as_deref()))) as i32
-            ],
+            "UPDATE mails SET body_text = ?1, body_html = ?2, snippet = ?3, has_attachments = ?4 WHERE id = ?5",
+            rusqlite::params![body_text, body_html, snippet, has_real_attachments as i32, mail_id],
         )?;
     }
 

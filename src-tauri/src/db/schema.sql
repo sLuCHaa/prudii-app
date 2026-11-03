@@ -214,3 +214,12 @@ CREATE TABLE IF NOT EXISTS mail_tracker_hits (
     PRIMARY KEY (mail_id, kind, domain),
     FOREIGN KEY (mail_id) REFERENCES mails(id) ON DELETE CASCADE
 );
+
+-- HTML fetched only to count trackers. Kept apart from mails.body_*, where a non-empty body means
+-- "fully loaded with attachments"; rows go once the mail is counted.
+CREATE TABLE IF NOT EXISTS mail_scan_bodies (
+    mail_id TEXT PRIMARY KEY,
+    html TEXT NOT NULL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (mail_id) REFERENCES mails(id) ON DELETE CASCADE
+);
