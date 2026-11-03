@@ -370,6 +370,7 @@ fn do_create_backup_inner(
         let json = serde_json::to_string_pretty(&accounts).map_err(|e| e.to_string())?;
         zip.start_file("accounts.json", zip_options).map_err(|e| e.to_string())?;
         zip.write_all(json.as_bytes()).map_err(|e| e.to_string())?;
+        export_unsubscriptions(&db, &mut zip, &zip_options)?;
 
         if options.include_credentials {
             let store = crate::credentials::KeyringStore;
@@ -1246,6 +1247,82 @@ pub(crate) fn import_sender_categories<R: Read + Seek>(
     Ok(())
 }
 
+const UNSUBSCRIPTION_COLUMNS: [&str; 13] = [
+    "id", "account_id", "key_kind", "key_value", "display_name", "blocked", "methods_tried", "web_pending",
+    "requested_at", "last_request_at", "sweep_after", "sorted_count", "last_sorted_at",
+];
+
+pub(crate) fn export_unsubscriptions<W: Write + Seek>(
+    db: &Database,
+    zip: &mut zip::ZipWriter<W>,
+    opts: &zip::write::SimpleFileOptions,
+) -> Result<(), String> {
+    let rows: Vec<serde_json::Value> = {
+        let conn = db.lock_db();
+        let mut stmt = conn
+            .prepare(&format!("SELECT {} FROM unsubscriptions ORDER BY requested_at", UNSUBSCRIPTION_COLUMNS.join(", ")))
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |row| {
+                let mut obj = serde_json::Map::new();
+                for (i, name) in UNSUBSCRIPTION_COLUMNS.iter().enumerate() {
+                    let value: rusqlite::types::Value = row.get(i)?;
+                    let json = match value {
+                        rusqlite::types::Value::Integer(n) => serde_json::Value::from(n),
+                        rusqlite::types::Value::Text(t) => serde_json::Value::from(t),
+                        _ => serde_json::Value::Null,
+                    };
+                    obj.insert((*name).to_string(), json);
+                }
+                Ok(serde_json::Value::Object(obj))
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        rows
+    };
+    if rows.is_empty() {
+        return Ok(());
+    }
+    let json = serde_json::to_string_pretty(&rows).map_err(|e| e.to_string())?;
+    zip.start_file("unsubscriptions.json", *opts).map_err(|e| e.to_string())?;
+    zip.write_all(json.as_bytes()).map_err(|e| e.to_string())
+}
+
+/// Runs after the accounts are restored: rows for an account the backup did not bring back are dropped.
+pub(crate) fn import_unsubscriptions<R: Read + Seek>(
+    archive: &mut zip::ZipArchive<R>,
+    conn: &rusqlite::Connection,
+    is_replace: bool,
+) -> Result<(), String> {
+    if is_replace {
+        conn.execute("DELETE FROM unsubscriptions", []).map_err(|e| e.to_string())?;
+    }
+    let Ok(mut f) = archive.by_name("unsubscriptions.json") else {
+        return Ok(());
+    };
+    let mut s = String::new();
+    f.read_to_string(&mut s).map_err(|e| e.to_string())?;
+    let rows: Vec<serde_json::Map<String, serde_json::Value>> = serde_json::from_str(&s).map_err(|e| e.to_string())?;
+    let sql = format!(
+        "INSERT OR REPLACE INTO unsubscriptions ({}) SELECT {} WHERE EXISTS (SELECT 1 FROM accounts WHERE id = ?2)",
+        UNSUBSCRIPTION_COLUMNS.join(", "),
+        (1..=UNSUBSCRIPTION_COLUMNS.len()).map(|i| format!("?{i}")).collect::<Vec<_>>().join(", ")
+    );
+    for row in &rows {
+        let values: Vec<rusqlite::types::Value> = UNSUBSCRIPTION_COLUMNS
+            .iter()
+            .map(|name| match row.get(*name) {
+                Some(serde_json::Value::Number(n)) => rusqlite::types::Value::Integer(n.as_i64().unwrap_or(0)),
+                Some(serde_json::Value::String(t)) => rusqlite::types::Value::Text(t.clone()),
+                _ => rusqlite::types::Value::Null,
+            })
+            .collect();
+        conn.execute(&sql, rusqlite::params_from_iter(values)).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 pub(crate) fn export_calendar<W: Write + Seek>(
     db: &Database,
     zip: &mut zip::ZipWriter<W>,
@@ -1741,6 +1818,7 @@ fn do_restore_backup_inner(
                 imported_account_ids.push(id.to_string());
             }
         }
+        import_unsubscriptions(&mut archive, &db.lock_db(), is_replace)?;
     }
 
     if let Some(entries) = &credentials {
@@ -2705,6 +2783,56 @@ mod category_roundtrip {
         let conn = db.lock_db();
         import_sender_categories(&mut archive, &conn, false).unwrap();
         import_mail_chunk(&conn, &mails, false).unwrap();
+    }
+
+    fn unsubscriptions_zip(db: &Database) -> Vec<u8> {
+        let opts = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        export_unsubscriptions(db, &mut zip, &opts).unwrap();
+        zip.finish().unwrap().into_inner()
+    }
+
+    fn seed_unsubscription(db: &Database) -> String {
+        use crate::unsubscribe::{key::{KeyKind, ListKey}, store};
+        let conn = db.lock_db();
+        let account = seed_account(&conn, "me@studio-halde.example");
+        let key = ListKey { kind: KeyKind::ListId, value: "wr.halde-shop.example".into() };
+        let now = chrono::Utc::now();
+        let sub = store::insert_request(&conn, &account, &key, "Halde Shop", "mailto", false, now).unwrap();
+        store::record_sorted(&conn, &sub.id, now).unwrap();
+        store::record_sorted(&conn, &sub.id, now).unwrap();
+        account
+    }
+
+    #[test]
+    fn unsubscriptions_round_trip() {
+        let db_a = temp_db();
+        let account = seed_unsubscription(&db_a);
+        let db_b = temp_db();
+        db_b.lock_db()
+            .execute(
+                "INSERT INTO accounts (id, email, display_name, provider, imap_host, smtp_host) VALUES (?1, 'me@studio-halde.example', 'me', 'imap', 'imap.studio-halde.example', 'smtp.studio-halde.example')",
+                [&account],
+            )
+            .unwrap();
+        let mut archive = zip::ZipArchive::new(Cursor::new(unsubscriptions_zip(&db_a))).unwrap();
+        import_unsubscriptions(&mut archive, &db_b.lock_db(), false).unwrap();
+        let subs = crate::unsubscribe::store::for_account(&db_b.lock_db(), &account).unwrap();
+        assert_eq!(subs.len(), 1);
+        assert_eq!(subs[0].methods_tried, ["mailto"]);
+        assert_eq!(subs[0].sorted_count, 2);
+        assert_eq!(subs[0].key.value, "wr.halde-shop.example");
+    }
+
+    #[test]
+    fn import_skips_unknown_accounts() {
+        let db_a = temp_db();
+        seed_unsubscription(&db_a);
+        let db_b = temp_db();
+        let mut archive = zip::ZipArchive::new(Cursor::new(unsubscriptions_zip(&db_a))).unwrap();
+        import_unsubscriptions(&mut archive, &db_b.lock_db(), false).unwrap();
+        let count: u32 = db_b.lock_db().query_row("SELECT COUNT(*) FROM unsubscriptions", [], |r| r.get(0)).unwrap();
+        assert_eq!(count, 0);
     }
 
     fn seed_into(db: &Database, f: impl FnOnce(&rusqlite::Connection, &str, &str)) {
