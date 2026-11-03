@@ -193,6 +193,7 @@ CREATE TABLE IF NOT EXISTS unsubscriptions (
     sweep_after TEXT NOT NULL,
     sorted_count INTEGER NOT NULL DEFAULT 0,
     last_sorted_at TEXT,
+    last_seen_at TEXT,
     FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
     UNIQUE(account_id, key_kind, key_value)
 );

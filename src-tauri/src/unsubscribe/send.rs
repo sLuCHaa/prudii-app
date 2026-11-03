@@ -2,6 +2,21 @@ use super::header::MailtoTarget;
 use crate::smtp::EmailMessage;
 use std::future::Future;
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum Failure {
+    Unreachable(String),
+    Rejected(String),
+}
+
+impl std::fmt::Display for Failure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Failure::Unreachable(e) => write!(f, "unreachable: {e}"),
+            Failure::Rejected(e) => write!(f, "rejected: {e}"),
+        }
+    }
+}
+
 /// RFC 8058: no cookies, no auth, no referer, and a redirect is not an answer.
 pub fn http_client() -> reqwest::Client {
     reqwest::Client::builder()
@@ -12,18 +27,18 @@ pub fn http_client() -> reqwest::Client {
         .unwrap_or_default()
 }
 
-pub async fn one_click(client: &reqwest::Client, url: &str) -> Result<(), String> {
+pub async fn one_click(client: &reqwest::Client, url: &str) -> Result<(), Failure> {
     let response = client
         .post(url)
         .header("Content-Type", "application/x-www-form-urlencoded")
         .body("List-Unsubscribe=One-Click")
         .send()
         .await
-        .map_err(|e| format!("one-click request failed: {e}"))?;
+        .map_err(|e| Failure::Unreachable(e.to_string()))?;
     if response.status().is_success() {
         Ok(())
     } else {
-        Err(format!("one-click answered {}", response.status()))
+        Err(Failure::Rejected(format!("answered {}", response.status())))
     }
 }
 
@@ -43,8 +58,8 @@ pub fn mailto_message(target: &MailtoTarget) -> EmailMessage {
 }
 
 pub trait Transport {
-    fn one_click(&self, url: &str) -> impl Future<Output = Result<(), String>> + Send;
-    fn send_mail(&self, account_id: &str, message: EmailMessage) -> impl Future<Output = Result<(), String>> + Send;
+    fn one_click(&self, url: &str) -> impl Future<Output = Result<(), Failure>> + Send;
+    fn send_mail(&self, account_id: &str, message: EmailMessage) -> impl Future<Output = Result<(), Failure>> + Send;
 }
 
 pub struct AppTransport {
@@ -53,12 +68,14 @@ pub struct AppTransport {
 }
 
 impl Transport for AppTransport {
-    fn one_click(&self, url: &str) -> impl Future<Output = Result<(), String>> + Send {
+    fn one_click(&self, url: &str) -> impl Future<Output = Result<(), Failure>> + Send {
         one_click(&self.client, url)
     }
 
-    fn send_mail(&self, account_id: &str, message: EmailMessage) -> impl Future<Output = Result<(), String>> + Send {
-        crate::commands::send::send_prepared_mail(&self.app, account_id, message)
+    // A send error does not say whether the network is down, so it never blocks the web fallback.
+    fn send_mail(&self, account_id: &str, message: EmailMessage) -> impl Future<Output = Result<(), Failure>> + Send {
+        let sent = crate::commands::send::send_prepared_mail(&self.app, account_id, message);
+        async move { sent.await.map_err(Failure::Rejected) }
     }
 }
 
@@ -94,6 +111,16 @@ mod tests {
     async fn server_error_is_failure() {
         let (base, _) = serve_http(vec!["HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string()]);
         assert!(one_click(&http_client(), &format!("{base}/u")).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn dead_host_is_unreachable_and_refusal_is_rejected() {
+        let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        let dead = one_click(&http_client(), &format!("http://127.0.0.1:{port}/u")).await;
+        assert!(matches!(dead, Err(Failure::Unreachable(_))), "{dead:?}");
+        let (base, _) = serve_http(vec!["HTTP/1.1 410 Gone\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string()]);
+        let gone = one_click(&http_client(), &format!("{base}/u")).await;
+        assert!(matches!(gone, Err(Failure::Rejected(_))), "{gone:?}");
     }
 
     #[test]

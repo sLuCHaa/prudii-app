@@ -3,7 +3,7 @@ use crate::categorize::store::load_correspondents;
 use crate::db::Database;
 use crate::unsubscribe::header::{parse_targets, plan_methods, Method};
 use crate::unsubscribe::key::{list_id_value, list_key, sender_key, KeyKind, ListKey, MailFacts};
-use crate::unsubscribe::send::{http_client, mailto_message, AppTransport, Transport};
+use crate::unsubscribe::send::{http_client, mailto_message, AppTransport, Failure, Transport};
 use crate::unsubscribe::store::{self, Unsubscription, UnsubscriptionView};
 use crate::unsubscribe::sweep::trash_existing;
 use chrono::{DateTime, Utc};
@@ -96,15 +96,38 @@ fn load_mail(conn: &Connection, mail_id: &str) -> Result<MailRow, String> {
     .map_err(|e| format!("Mail not found: {e}"))
 }
 
-/// Headers come from the list's newest mail: older ones predate storing List-Unsubscribe-Post.
+fn one_click_offered(signal_headers: &str, list_unsubscribe: &str) -> bool {
+    HeaderSignals::parse(signal_headers, list_unsubscribe).one_click
+}
+
+/// Older mail predates storing List-Unsubscribe-Post, so a newer copy of the very same header may vouch for one-click.
+fn plan_for_mail(conn: &Connection, mail: &MailRow) -> Vec<Method> {
+    let offered = one_click_offered(&mail.signal_headers, &mail.list_unsubscribe)
+        || conn
+            .prepare(
+                "SELECT COALESCE(m.signal_headers, '') FROM mails m JOIN folders f ON m.folder_id = f.id
+                 WHERE m.account_id = ?1 AND m.list_unsubscribe = ?2 AND f.folder_type != 'spam'",
+            )
+            .and_then(|mut stmt| {
+                stmt.query_map(params![mail.account_id, mail.list_unsubscribe], |r| r.get::<_, String>(0))?
+                    .collect::<Result<Vec<_>, _>>()
+            })
+            .unwrap_or_default()
+            .iter()
+            .any(|headers| one_click_offered(headers, &mail.list_unsubscribe));
+    plan_methods(&parse_targets(&mail.list_unsubscribe), offered)
+}
+
+/// A retry has no clicked mail; spam is skipped because a spoofed copy could carry a stranger's target.
 fn plan_for(conn: &Connection, account_id: &str, key: &ListKey) -> Vec<Method> {
     let (narrow, value) = match key.kind {
-        KeyKind::ListId => ("instr(lower(COALESCE(signal_headers, '')), ?2) > 0", key.value.as_str()),
-        KeyKind::Sender => ("lower(from_email) = ?2", key.value.as_str()),
+        KeyKind::ListId => ("instr(lower(COALESCE(m.signal_headers, '')), ?2) > 0", key.value.as_str()),
+        KeyKind::Sender => ("lower(m.from_email) = ?2", key.value.as_str()),
     };
     let sql = format!(
-        "SELECT COALESCE(signal_headers, ''), list_unsubscribe FROM mails
-         WHERE account_id = ?1 AND {narrow} AND COALESCE(list_unsubscribe, '') != '' ORDER BY date DESC LIMIT 50"
+        "SELECT COALESCE(m.signal_headers, ''), m.list_unsubscribe FROM mails m JOIN folders f ON m.folder_id = f.id
+         WHERE m.account_id = ?1 AND {narrow} AND COALESCE(m.list_unsubscribe, '') != '' AND f.folder_type != 'spam'
+         ORDER BY m.date DESC LIMIT 50"
     );
     let rows: Vec<(String, String)> = conn
         .prepare(&sql)
@@ -112,7 +135,7 @@ fn plan_for(conn: &Connection, account_id: &str, key: &ListKey) -> Vec<Method> {
         .unwrap_or_default();
     rows.into_iter()
         .find(|(headers, _)| key.kind != KeyKind::ListId || list_id_value(headers).as_deref() == Some(key.value.as_str()))
-        .map(|(headers, unsub)| plan_methods(&parse_targets(&unsub), HeaderSignals::parse(&headers, &unsub).one_click))
+        .map(|(headers, unsub)| plan_methods(&parse_targets(&unsub), one_click_offered(&headers, &unsub)))
         .unwrap_or_default()
 }
 
@@ -139,16 +162,22 @@ pub(crate) fn list_status(conn: &Connection, mail_id: &str, now: DateTime<Utc>) 
 /// The first way that goes out wins; a web page counts because the user finishes it there.
 async fn run_plan<T: Transport>(transport: &T, account_id: &str, plan: &[Method]) -> Result<(&'static str, Option<String>), String> {
     let mut attempted = false;
+    let mut unreachable = false;
     for method in plan {
         let sent = match method {
             Method::OneClick(url) => transport.one_click(url).await,
             Method::Mailto(target) => transport.send_mail(account_id, mailto_message(target)).await,
+            // Without a network the page would not load, and a waiting status would claim a request went out.
+            Method::Web(_) if unreachable => break,
             Method::Web(url) => return Ok(("web", Some(url.clone()))),
         };
         attempted = true;
         match sent {
             Ok(()) => return Ok((method.kind(), None)),
-            Err(e) => log::warn!("unsubscribe via {} failed: {}", method.kind(), e),
+            Err(e) => {
+                unreachable |= matches!(e, Failure::Unreachable(_));
+                log::warn!("unsubscribe via {} failed: {}", method.kind(), e);
+            }
         }
     }
     Err(if attempted { ERR_FAILED } else { ERR_NO_TARGET }.to_string())
@@ -177,7 +206,7 @@ pub(crate) async fn perform_unsubscribe<T: Transport>(
             let ready = can_retry(&conn, &existing, now);
             return Ok(UnsubscribeOutcome { subscription: store::view(&existing, now, ready), web_url: None, trashed: 0 });
         }
-        let plan = plan_for(&conn, &mail.account_id, &key);
+        let plan = plan_for_mail(&conn, &mail);
         (mail, key, plan)
     };
     if plan.is_empty() {
@@ -233,17 +262,17 @@ pub async fn unsubscribe_mail(app: tauri::AppHandle, db: State<'_, Database>, ma
     perform_unsubscribe(&db, &transport(app), &mail_id, trash_existing, Utc::now()).await
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn block_sender(db: State<'_, Database>, mail_id: String, trash_existing: bool) -> Result<UnsubscribeOutcome, String> {
     perform_block(&db, &mail_id, trash_existing, Utc::now())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_list_status(db: State<'_, Database>, mail_id: String) -> Result<ListStatus, String> {
-    list_status(&db.lock_db(), &mail_id, Utc::now())
+    list_status(&db.read_db(), &mail_id, Utc::now())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn allow_list_again(db: State<'_, Database>, id: String) -> Result<(), String> {
     store::delete(&db.lock_db(), &id).map_err(|e| e.to_string())
 }
@@ -267,25 +296,29 @@ mod tests {
     const WEB_ONLY: &str = "<https://news.halde-shop.example/u>";
 
     struct Fake {
-        one_click: Result<(), String>,
-        mail: Result<(), String>,
+        one_click: Result<(), Failure>,
+        mail: Result<(), Failure>,
         calls: Mutex<Vec<&'static str>>,
     }
 
-    fn fake(one_click: Result<(), String>, mail: Result<(), String>) -> Fake {
+    fn fake(one_click: Result<(), Failure>, mail: Result<(), Failure>) -> Fake {
         Fake { one_click, mail, calls: Mutex::new(Vec::new()) }
     }
 
-    fn down() -> Result<(), String> {
-        Err("offline".into())
+    fn down() -> Result<(), Failure> {
+        Err(Failure::Unreachable("offline".into()))
+    }
+
+    fn refused() -> Result<(), Failure> {
+        Err(Failure::Rejected("410 Gone".into()))
     }
 
     impl Transport for Fake {
-        fn one_click(&self, _url: &str) -> impl Future<Output = Result<(), String>> + Send {
+        fn one_click(&self, _url: &str) -> impl Future<Output = Result<(), Failure>> + Send {
             self.calls.lock().unwrap().push("one_click");
             std::future::ready(self.one_click.clone())
         }
-        fn send_mail(&self, _account_id: &str, _message: EmailMessage) -> impl Future<Output = Result<(), String>> + Send {
+        fn send_mail(&self, _account_id: &str, _message: EmailMessage) -> impl Future<Output = Result<(), Failure>> + Send {
             self.calls.lock().unwrap().push("mailto");
             std::future::ready(self.mail.clone())
         }
@@ -374,7 +407,7 @@ mod tests {
     async fn failed_one_click_falls_through_to_mailto() {
         let f = fx();
         let id = mail(&f, ONE_CLICK, FULL, "2026-09-01T09:00:00Z");
-        let t = fake(down(), Ok(()));
+        let t = fake(refused(), Ok(()));
         perform_unsubscribe(&f.db, &t, &id, false, t0()).await.unwrap();
         assert_eq!(*t.calls.lock().unwrap(), ["one_click", "mailto"]);
         assert_eq!(methods(&f), ["mailto"]);
@@ -400,6 +433,37 @@ mod tests {
         assert_eq!(perform_unsubscribe(&f.db, &t, &id, false, t0()).await.unwrap_err(), "unsubscribe.errors.failed");
         assert_eq!(*t.calls.lock().unwrap(), ["mailto"]);
         assert_eq!(rows(&f), 0);
+    }
+
+    #[tokio::test]
+    async fn offline_one_click_does_not_open_the_web_page() {
+        let f = fx();
+        let id = mail(&f, ONE_CLICK, FULL, "2026-09-01T09:00:00Z");
+        let t = fake(down(), down());
+        assert_eq!(perform_unsubscribe(&f.db, &t, &id, false, t0()).await.unwrap_err(), "unsubscribe.errors.failed");
+        assert_eq!(rows(&f), 0);
+    }
+
+    #[tokio::test]
+    async fn spam_copy_never_supplies_the_target() {
+        let f = fx();
+        let real = mail(&f, "{}", FULL, "2026-09-01T09:00:00Z");
+        let spam = seed_folder(&f.db.lock_db(), &f.account, "spam");
+        seed_mail(
+            &f.db.lock_db(),
+            &SeedMail {
+                account_id: &f.account,
+                folder_id: &spam,
+                from_email: "news@halde-shop.example",
+                signal_headers: r#"{"list-unsubscribe-post":"List-Unsubscribe=One-Click"}"#,
+                list_unsubscribe: "<https://phish.example/u>",
+                date: "2026-12-31T09:00:00Z",
+                ..Default::default()
+            },
+        );
+        let t = fake(Ok(()), Ok(()));
+        perform_unsubscribe(&f.db, &t, &real, false, t0()).await.unwrap();
+        assert_eq!(*t.calls.lock().unwrap(), ["mailto"]);
     }
 
     #[tokio::test]

@@ -298,11 +298,29 @@ pub(crate) fn trash_mail(
     is_gmail: bool,
 ) -> bool {
     let Some((trash_id, trash_path)) = folder_of_type(conn, account_id, "trash") else { return false };
-    if let Err(e) = conn.execute("UPDATE mails SET folder_id = ?1 WHERE id = ?2", rusqlite::params![trash_id, mail_id]) {
+    let Ok((source_id, is_read, uid)) = conn.query_row(
+        "SELECT folder_id, is_read, uid FROM mails WHERE id = ?1",
+        rusqlite::params![mail_id],
+        |row| Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)? != 0, row.get::<_, Option<u32>>(2)?)),
+    ) else {
+        return false;
+    };
+    // The trash sync claims a uid-less row by Message-ID; keeping the inbox uid could collide with a trash row.
+    if let Err(e) = conn.execute("UPDATE mails SET folder_id = ?1, uid = NULL WHERE id = ?2", rusqlite::params![trash_id, mail_id]) {
         log::warn!("failed to trash mail {}: {}", mail_id, e);
         return false;
     }
+    let unread = if is_read { 0 } else { 1 };
+    let _ = conn.execute(
+        "UPDATE folders SET total_count = MAX(0, total_count - 1), unread_count = MAX(0, unread_count - ?2) WHERE id = ?1",
+        rusqlite::params![source_id, unread],
+    );
+    let _ = conn.execute(
+        "UPDATE folders SET total_count = total_count + 1, unread_count = unread_count + ?2 WHERE id = ?1",
+        rusqlite::params![trash_id, unread],
+    );
     let payload = serde_json::json!({
+        "uid": uid,
         "api_id": message_id,
         "message_id": message_id,
         "source_folder": source_folder_path,

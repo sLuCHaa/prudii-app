@@ -649,6 +649,7 @@ pub async fn incremental_sync(
     }
 
     let mut changes: u32 = 0;
+    let mut new_mail_ids: Vec<String> = Vec::new();
     let mut page_token: Option<String> = None;
     let mut latest_history_id = history_id.clone();
 
@@ -710,6 +711,13 @@ pub async fn incremental_sync(
                                     let conn = db.lock_db();
                                     if insert_message_from_metadata(&conn, full_msg, &folder, account_id)? {
                                         changes += 1;
+                                        if let Ok(local_id) = conn.query_row(
+                                            "SELECT id FROM mails WHERE account_id = ?1 AND folder_id = ?2 AND message_id = ?3",
+                                            rusqlite::params![account_id, folder.id, full_msg.id],
+                                            |row| row.get::<_, String>(0),
+                                        ) {
+                                            new_mail_ids.push(local_id);
+                                        }
                                     }
                                 }
                             }
@@ -819,6 +827,12 @@ pub async fn incremental_sync(
 
         // Throttle between history pages
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    }
+
+    // Once a history id exists, all new Gmail mail arrives here, not through the folder sync.
+    if !new_mail_ids.is_empty() {
+        let remaining = crate::unsubscribe::sweep::sweep_new_mails(account_id, &new_mail_ids, db);
+        crate::rules::apply_rules_to_mails(account_id, &remaining, db);
     }
 
     {

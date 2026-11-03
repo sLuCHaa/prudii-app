@@ -1247,9 +1247,9 @@ pub(crate) fn import_sender_categories<R: Read + Seek>(
     Ok(())
 }
 
-const UNSUBSCRIPTION_COLUMNS: [&str; 13] = [
+const UNSUBSCRIPTION_COLUMNS: [&str; 14] = [
     "id", "account_id", "key_kind", "key_value", "display_name", "blocked", "methods_tried", "web_pending",
-    "requested_at", "last_request_at", "sweep_after", "sorted_count", "last_sorted_at",
+    "requested_at", "last_request_at", "sweep_after", "sorted_count", "last_sorted_at", "last_seen_at",
 ];
 
 pub(crate) fn export_unsubscriptions<W: Write + Seek>(

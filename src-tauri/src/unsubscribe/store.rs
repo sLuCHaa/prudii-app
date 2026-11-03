@@ -19,6 +19,7 @@ pub struct Unsubscription {
     pub sweep_after: DateTime<Utc>,
     pub sorted_count: u32,
     pub last_sorted_at: Option<DateTime<Utc>>,
+    pub last_seen_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -33,7 +34,7 @@ pub struct UnsubscriptionView {
     pub can_retry: bool,
 }
 
-const COLUMNS: &str = "id, account_id, key_kind, key_value, display_name, blocked, methods_tried, web_pending, requested_at, last_request_at, sweep_after, sorted_count, last_sorted_at";
+const COLUMNS: &str = "id, account_id, key_kind, key_value, display_name, blocked, methods_tried, web_pending, requested_at, last_request_at, sweep_after, sorted_count, last_sorted_at, last_seen_at";
 
 pub fn stamp(t: DateTime<Utc>) -> String {
     t.format("%Y-%m-%dT%H:%M:%SZ").to_string()
@@ -68,6 +69,7 @@ fn from_row(row: &Row) -> rusqlite::Result<Unsubscription> {
         sweep_after: time_col(row, 10)?,
         sorted_count: row.get(11)?,
         last_sorted_at: row.get::<_, Option<String>>(12)?.as_deref().and_then(parse_stamp),
+        last_seen_at: row.get::<_, Option<String>>(13)?.as_deref().and_then(parse_stamp),
     })
 }
 
@@ -160,6 +162,12 @@ pub fn record_sorted(conn: &Connection, id: &str, now: DateTime<Utc>) -> rusqlit
     Ok(())
 }
 
+/// A spared match was not moved, but it still shows the list did not stop.
+pub fn record_seen(conn: &Connection, id: &str, now: DateTime<Utc>) -> rusqlite::Result<()> {
+    conn.execute("UPDATE unsubscriptions SET last_seen_at = ?1 WHERE id = ?2", params![stamp(now), id])?;
+    Ok(())
+}
+
 pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
     conn.execute("DELETE FROM unsubscriptions WHERE id = ?1", params![id])?;
     Ok(())
@@ -170,7 +178,7 @@ pub fn status(sub: &Unsubscription, now: DateTime<Utc>) -> &'static str {
         "blocked"
     } else if now < sub.last_request_at + Duration::days(GRACE_DAYS) {
         "waiting"
-    } else if sub.last_sorted_at.is_some_and(|t| t > sub.last_request_at) {
+    } else if sub.last_sorted_at.max(sub.last_seen_at).is_some_and(|t| t > sub.last_request_at) {
         "still_sending"
     } else {
         "quiet"

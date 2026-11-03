@@ -113,6 +113,18 @@ fn decide(conn: &Connection, mail: &Pending, correspondents: &HashMap<String, u3
 
 const PROTECTED: &[&str] = &["important", "purchases"];
 
+// Services often send codes and password resets from the same address as their newsletter.
+const SECURITY_KEYWORDS: &[&str] = &[
+    "verification", "verify", "security code", "login code", "sign-in", "sign in", "password", "passcode",
+    "one-time", "2fa", "two-factor",
+    "bestätigungscode", "sicherheitscode", "anmeldecode", "einmalcode", "passwort", "kennwort", "verifizierung", "anmeldung",
+    "código de verificación", "código de seguridad", "contraseña",
+    "code de vérification", "code de sécurité", "mot de passe",
+    "código de verificação", "código de segurança", "senha",
+    "код подтверждения", "код для входа", "пароль",
+    "验证码", "密码", "登录",
+];
+
 /// Cleanup runs right after sync, before sorting has labelled new mail, so it decides afresh.
 pub(crate) fn protected_from_cleanup(conn: &Connection, mail_id: &str, correspondents: &HashMap<String, u32>) -> bool {
     let row = conn.query_row(
@@ -137,7 +149,8 @@ pub(crate) fn protected_from_cleanup(conn: &Connection, mail_id: &str, correspon
         },
     );
     let Ok((mail, stored)) = row else { return true };
-    if stored.as_deref().is_some_and(|c| PROTECTED.contains(&c)) {
+    let subject = mail.subject.to_lowercase();
+    if stored.as_deref().is_some_and(|c| PROTECTED.contains(&c)) || SECURITY_KEYWORDS.iter().any(|k| subject.contains(k)) {
         return true;
     }
     match decide(conn, &mail, correspondents) {

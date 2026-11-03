@@ -77,6 +77,7 @@ pub fn sweep_new_mails(account_id: &str, mail_ids: &[String], db: &Database) -> 
         }
         let known = correspondents.get_or_insert_with(|| load_correspondents(&conn));
         if protected_from_cleanup(&conn, &mail.id, known) {
+            let _ = store::record_seen(&conn, &sub.id, now);
             continue;
         }
         // Moving spam would only shuffle it between two junk folders; the hit still counts.
@@ -102,7 +103,7 @@ pub(crate) fn trash_existing(conn: &Connection, sub: &Unsubscription, correspond
     };
     let sql = format!(
         "SELECT {CANDIDATE_COLUMNS} FROM mails m JOIN folders f ON m.folder_id = f.id
-         WHERE m.account_id = ?1 AND f.folder_type NOT IN ('trash', 'spam') AND {narrow}"
+         WHERE m.account_id = ?1 AND f.folder_type NOT IN ('trash', 'spam') AND COALESCE(f.is_local, 0) = 0 AND {narrow}"
     );
     let mails: Vec<Candidate> = conn
         .prepare(&sql)
@@ -307,6 +308,62 @@ mod tests {
         let rest = sweep_new_mails(&f.account, &[mail.clone()], &f.db);
         crate::rules::apply_rules_to_mails(&f.account, &rest, &f.db);
         assert_eq!(folder(&f.db.lock_db(), &mail), f.trash);
+    }
+
+    #[test]
+    fn local_folder_mail_is_left_alone() {
+        let f = fx();
+        let sub_id = unsubscribe(&f);
+        let conn = f.db.lock_db();
+        let local = seed_folder(&conn, &f.account, "custom");
+        conn.execute("UPDATE folders SET is_local = 1 WHERE id = ?1", [&local]).unwrap();
+        let kept = seed_mail(&conn, &SeedMail { folder_id: &local, ..list_mail(&f, "2026-09-01T09:00:00Z") });
+        seed_mail(&conn, &list_mail(&f, "2026-09-02T09:00:00Z"));
+        let sub = get(&conn, &sub_id).unwrap().unwrap();
+        assert_eq!(trash_existing(&conn, &sub, &std::collections::HashMap::new()), 1);
+        assert_eq!(folder(&conn, &kept), local);
+    }
+
+    #[test]
+    fn spared_list_mail_after_grace_still_counts_as_sending() {
+        let f = fx();
+        let sub = unsubscribe(&f);
+        let mail = seed_mail(&f.db.lock_db(), &SeedMail { category: Some("purchases"), ..list_mail(&f, AFTER) });
+        sweep_new_mails(&f.account, &[mail], &f.db);
+        let sub = get(&f.db.lock_db(), &sub).unwrap().unwrap();
+        assert_eq!(crate::unsubscribe::store::status(&sub, chrono::Utc::now()), "still_sending");
+        assert_eq!(sub.sorted_count, 0);
+    }
+
+    #[test]
+    fn trash_clears_uid_so_trash_rows_never_collide() {
+        let f = fx();
+        unsubscribe(&f);
+        let conn = f.db.lock_db();
+        let old = seed_mail(&conn, &SeedMail { folder_id: &f.trash, ..list_mail(&f, "2026-09-01T09:00:00Z") });
+        let mail = seed_mail(&conn, &list_mail(&f, AFTER));
+        conn.execute("UPDATE mails SET uid = 5 WHERE id IN (?1, ?2)", [&old, &mail]).unwrap();
+        conn.execute("UPDATE folders SET total_count = 1, unread_count = 1 WHERE id = ?1", [&f.inbox]).unwrap();
+        drop(conn);
+        assert!(sweep_new_mails(&f.account, &[mail.clone()], &f.db).is_empty());
+        let conn = f.db.lock_db();
+        assert_eq!(folder(&conn, &mail), f.trash);
+        let uid: Option<u32> = conn.query_row("SELECT uid FROM mails WHERE id = ?1", [&mail], |r| r.get(0)).unwrap();
+        assert_eq!(uid, None);
+        let payload: String = conn.query_row("SELECT payload FROM pending_ops WHERE mail_id = ?1", [&mail], |r| r.get(0)).unwrap();
+        assert_eq!(serde_json::from_str::<serde_json::Value>(&payload).unwrap()["uid"], 5);
+        let counts: (u32, u32) = conn
+            .query_row("SELECT total_count, unread_count FROM folders WHERE id = ?1", [&f.inbox], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap();
+        assert_eq!(counts, (0, 0));
+    }
+
+    #[test]
+    fn security_mails_are_spared() {
+        let f = fx();
+        unsubscribe(&f);
+        let mail = seed_mail(&f.db.lock_db(), &SeedMail { subject: "Dein Bestätigungscode: 482913", ..list_mail(&f, AFTER) });
+        assert_eq!(sweep_new_mails(&f.account, &[mail.clone()], &f.db), vec![mail]);
     }
 
     #[test]
