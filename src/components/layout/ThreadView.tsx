@@ -395,7 +395,7 @@ function MarkedText({ text, pattern }: { text: string; pattern: RegExp | null })
 // Lets a frame hold the conversation back until it is measured; returns the release.
 const PendingFrameContext = createContext<(() => () => void) | null>(null);
 
-const HtmlMailFrame = memo(function HtmlMailFrame({ mailId, html, tight = false, allowExternalImages = true, onIframeRef, onTrackersDetected, onLinkClick, onImageClick }: { mailId: string; html: string; tight?: boolean; allowExternalImages?: boolean; onIframeRef?: (el: HTMLIFrameElement | null) => void; onTrackersDetected?: (trackers: TrackerInfo[]) => void; onLinkClick?: (href: string) => void; onImageClick?: (src: string) => void }) {
+const HtmlMailFrame = memo(function HtmlMailFrame({ mailId, html, tight = false, allowExternalImages = true, showTrackedImages = false, onIframeRef, onTrackersDetected, onHeldBack, onLinkClick, onImageClick }: { mailId: string; html: string; tight?: boolean; allowExternalImages?: boolean; showTrackedImages?: boolean; onIframeRef?: (el: HTMLIFrameElement | null) => void; onTrackersDetected?: (trackers: TrackerInfo[]) => void; onHeldBack?: (mailId: string) => void; onLinkClick?: (href: string) => void; onImageClick?: (src: string) => void }) {
   const darkMode = useAppStore((s) => s.darkMode);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const { height, refit, fitted } = useMailFrameFit(iframeRef);
@@ -422,8 +422,8 @@ const HtmlMailFrame = memo(function HtmlMailFrame({ mailId, html, tight = false,
 
   const themeStyles = darkMode ? DARK_STYLES : LIGHT_STYLES;
 
-  const { html: cleanHtml, trackers } = useMemo(() => {
-    const res = sanitizeEmailHtml(html, allowExternalImages);
+  const { html: cleanHtml, trackers, heldBack } = useMemo(() => {
+    const res = sanitizeEmailHtml(html, allowExternalImages, false, showTrackedImages);
     if (!INLINE_IMAGE_REF.test(res.html)) return res;
     const d = document.createElement("div");
     d.innerHTML = res.html;
@@ -436,14 +436,18 @@ const HtmlMailFrame = memo(function HtmlMailFrame({ mailId, html, tight = false,
     d.querySelectorAll('img[src^="file://"]').forEach((img) => {
       img.setAttribute("src", convertFileSrc(decodeFileUrl(img.getAttribute("src") ?? "")));
     });
-    return { html: d.innerHTML, trackers: res.trackers };
-  }, [html, allowExternalImages, attachments]);
+    return { html: d.innerHTML, trackers: res.trackers, heldBack: res.heldBack };
+  }, [html, allowExternalImages, showTrackedImages, attachments]);
 
   useEffect(() => {
     if (onTrackersDetected && trackers.length > 0) {
       onTrackersDetected(trackers);
     }
   }, [html, allowExternalImages]);
+
+  useEffect(() => {
+    if (heldBack) onHeldBack?.(mailId);
+  }, [heldBack, mailId, onHeldBack]);
 
   // The bridge script is allow-listed by its SHA-256 hash in both this iframe's
   // CSP and the parent CSP (tauri.conf.json) — a `srcdoc` iframe inherits the
@@ -731,7 +735,14 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
     return acct?.load_external_images !== "never";
   }, [accounts, mail.account_id]);
 
-  const allowExternalImages = allowImagesOverride || accountAllowsImages;
+  // Keyed by mail so neither the choice nor a frame's report carries over to the next mail.
+  const [trackedShownFor, setTrackedShownFor] = useState<string | null>(null);
+  const [heldBackFor, setHeldBackFor] = useState<string | null>(null);
+  const showTrackedImages = trackedShownFor === displayMail.id;
+  const heldBack = heldBackFor === displayMail.id;
+  const handleHeldBack = useCallback((id: string) => setHeldBackFor(id), []);
+
+  const allowExternalImages = allowImagesOverride || showTrackedImages || accountAllowsImages;
 
   // Reset per-message image override when navigating to a different mail
   useEffect(() => {
@@ -755,8 +766,8 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
   }, [incrementTrackersBlocked]);
 
   const cardTrackers = useMemo(
-    () => (split ? sanitizeEmailHtml(displayMail.body_html, allowExternalImages).trackers : null),
-    [!!split, displayMail.body_html, allowExternalImages],
+    () => (split ? sanitizeEmailHtml(displayMail.body_html, allowExternalImages, false, showTrackedImages).trackers : null),
+    [!!split, displayMail.body_html, allowExternalImages, showTrackedImages],
   );
   useEffect(() => {
     if (cardTrackers) handleTrackersDetected(cardTrackers);
@@ -872,6 +883,14 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
     <p className="py-4 text-sm text-text-tertiary text-center">{t("mailDetail.noContent")}</p>
   ) : null;
 
+  const trackingIndicator = (
+    <TrackingIndicator
+      trackers={showTrackedImages ? trackers.filter((tr) => tr.type !== "tracking_domain") : trackers}
+      trackedShown={showTrackedImages}
+      onShowTracked={heldBack && !showTrackedImages ? () => setTrackedShownFor(displayMail.id) : undefined}
+    />
+  );
+
   const notices = (
     <>
       <InvitationCard mailId={displayMail.id} enabled={!!hasBody} />
@@ -890,6 +909,21 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
           </button>
         </div>
       )}
+      {heldBack && !showTrackedImages && allowExternalImages && (
+        <div className="flex items-center justify-between gap-3 px-4 py-2 mb-2 bg-bg-secondary border border-border rounded-lg text-xs text-text-secondary">
+          <div className="flex items-center gap-2">
+            <ImageOff className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
+            <span>{t("tracking.heldBack")}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setTrackedShownFor(displayMail.id)}
+            className="px-2 py-1 rounded hover:bg-hover transition-colors text-accent font-medium shrink-0"
+          >
+            {t("tracking.showTracked")}
+          </button>
+        </div>
+      )}
       {missingParts.count > 0 && (
         <div className="flex items-start gap-2 px-4 py-2 mb-2 bg-bg-secondary border border-border rounded-lg text-xs text-text-secondary">
           <FileWarning className="w-3.5 h-3.5 mt-px text-text-tertiary shrink-0" />
@@ -904,7 +938,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
   );
 
   const frame = (html: string, ref?: (el: HTMLIFrameElement | null) => void) => (
-    <HtmlMailFrame mailId={displayMail.id} html={html} tight={!!chat} allowExternalImages={allowExternalImages} onIframeRef={ref} onTrackersDetected={split ? undefined : handleTrackersDetected} onLinkClick={onLinkClick} onImageClick={handleInlineImageClick} />
+    <HtmlMailFrame mailId={displayMail.id} html={html} tight={!!chat} allowExternalImages={allowExternalImages} showTrackedImages={showTrackedImages} onIframeRef={ref} onTrackersDetected={split ? undefined : handleTrackersDetected} onHeldBack={handleHeldBack} onLinkClick={onLinkClick} onImageClick={handleInlineImageClick} />
   );
   const mainFrameRef = (el: HTMLIFrameElement | null) => { messageIframeRef.current = el; onIframeRef?.(el); };
 
@@ -1066,7 +1100,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
                         <Printer className="w-3.5 h-3.5" />
                         {t("mailDetail.print")}
                       </button>
-                      {trackers.length === 0 && <TrackingIndicator trackers={trackers} />}
+                      {trackers.length === 0 && trackingIndicator}
                     </div>
                   )}
                 </div>
@@ -1088,7 +1122,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
                   {t("mailDetail.forward")}
                 </button>
                 <div className="flex-1" />
-                {trackers.length > 0 && <TrackingIndicator trackers={trackers} />}
+                {trackers.length > 0 && trackingIndicator}
                 <button
                   onClick={() => setShowDetails((v) => !v)}
                   aria-expanded={showDetails}
@@ -1198,7 +1232,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
               <div className="flex items-center gap-1 mb-2">
                 {viewToggles}
                 <div className="flex-1" />
-                <TrackingIndicator trackers={trackers} />
+                {trackingIndicator}
               </div>
               {notices}
               {body}

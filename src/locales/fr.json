@@ -1073,7 +1073,11 @@
     "pixelTracker": "Pixel de suivi",
     "knownTracker": "Domaine de suivi connu",
     "hiddenTracker": "Image cachée",
-    "noTrackers": "Aucun traqueur détecté"
+    "noTrackers": "Aucun traqueur détecté",
+    "heldBack": "Certaines images sont masquées car elles vous pistent.",
+    "showTracked": "Afficher quand même",
+    "showTrackedHint": "L'expéditeur pourra alors voir que vous avez ouvert ce message.",
+    "trackedShown": "Images avec pistage affichées"
   },
   "ai": {
     "summarize": "Résumer avec l'IA",

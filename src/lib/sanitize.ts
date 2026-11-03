@@ -72,6 +72,8 @@ export interface TrackerInfo {
 export interface SanitizeResult {
   html: string;
   trackers: TrackerInfo[];
+  /** Visible images or CSS resources were dropped for tracking, so the mail may look broken. */
+  heldBack: boolean;
 }
 
 const KNOWN_TRACKER_DOMAINS = new Set([
@@ -140,6 +142,10 @@ function isHiddenImage(img: Element): boolean {
   return false;
 }
 
+// Outlook mails carry url(#default#VML) in nearly every message; only remote urls change how a mail looks.
+const REMOTE_CSS_URL = /url\s*\(\s*['"]?\s*(?:https?:)?\/\//i;
+const isRemoteUrl = (value: string) => /^\s*(?:https?:)?\/\//i.test(value);
+
 const ORIGINAL_STYLE = "data-prudii-style";
 const ORIGINAL_CSS = "data-prudii-css";
 const ORIGINAL_SRC = "data-prudii-src";
@@ -163,7 +169,8 @@ export function parseBody(html: string): HTMLElement {
 // When allowExternalImages is false, strips external image src attributes (keeps data: URIs).
 // Detects and removes tracking pixels, returning info about them.
 // `reversible` keeps what the display rewrites, so restoreSanitizedHtml can undo it.
-export function sanitizeEmailHtml(html: string, allowExternalImages = true, reversible = false): SanitizeResult {
+// `showTrackedImages` lets visible tracked images and CSS urls through; invisible pixels stay out.
+export function sanitizeEmailHtml(html: string, allowExternalImages = true, reversible = false, showTrackedImages = false): SanitizeResult {
   const sanitized = DOMPurify.sanitize(html, {
     ALLOWED_TAGS: [
       "html", "head", "body", "div", "span", "p", "br", "hr",
@@ -200,20 +207,28 @@ export function sanitizeEmailHtml(html: string, allowExternalImages = true, reve
   // (e.g. background-image: url('https://tracker.example.com/pixel.gif'))
   // Inert parse: a live element would start fetching the tracker pixels removed below.
   const div = parseBody(sanitized);
-  div.querySelectorAll("[background]").forEach((el) => {
-    if (reversible) el.setAttribute(ORIGINAL_BACKGROUND, el.getAttribute("background") ?? "");
-    el.removeAttribute("background");
-  });
-  div.querySelectorAll("[style]").forEach((el) => {
-    const style = el.getAttribute("style") || "";
-    if (/url\s*\(/i.test(style)) {
-      if (reversible) el.setAttribute(ORIGINAL_STYLE, style);
-      el.setAttribute("style", style.replace(/url\s*\([^)]*\)/gi, "none"));
-    }
-  });
+  let heldBack = false;
+  if (!showTrackedImages) {
+    div.querySelectorAll("[background]").forEach((el) => {
+      const background = el.getAttribute("background") ?? "";
+      if (reversible) el.setAttribute(ORIGINAL_BACKGROUND, background);
+      el.removeAttribute("background");
+      if (isRemoteUrl(background)) heldBack = true;
+    });
+    div.querySelectorAll("[style]").forEach((el) => {
+      const style = el.getAttribute("style") || "";
+      if (/url\s*\(/i.test(style)) {
+        if (reversible) el.setAttribute(ORIGINAL_STYLE, style);
+        el.setAttribute("style", style.replace(/url\s*\([^)]*\)/gi, "none"));
+        if (REMOTE_CSS_URL.test(style)) heldBack = true;
+      }
+    });
+  }
   div.querySelectorAll("style").forEach((styleEl) => {
     const css = styleEl.textContent || "";
-    const shown = lightSchemeOnly(css.replace(/url\s*\([^)]*\)/gi, "none"));
+    const withoutUrls = showTrackedImages ? css : css.replace(/url\s*\([^)]*\)/gi, "none");
+    if (withoutUrls !== css && REMOTE_CSS_URL.test(css)) heldBack = true;
+    const shown = lightSchemeOnly(withoutUrls);
     if (shown !== css) {
       if (reversible) styleEl.setAttribute(ORIGINAL_CSS, css);
       styleEl.textContent = shown;
@@ -234,8 +249,9 @@ export function sanitizeEmailHtml(html: string, allowExternalImages = true, reve
       trackerType = "pixel";
     } else if (isHiddenImage(img)) {
       trackerType = "hidden";
-    } else if (isTrackerDomain(domain)) {
+    } else if (!showTrackedImages && isTrackerDomain(domain)) {
       trackerType = "tracking_domain";
+      heldBack = true;
     }
 
     if (trackerType) {
@@ -273,7 +289,7 @@ export function sanitizeEmailHtml(html: string, allowExternalImages = true, reve
     }
   });
 
-  return { html: div.innerHTML, trackers };
+  return { html: div.innerHTML, trackers, heldBack };
 }
 
 /** Point locally stored inline images (file://) at a URL the webview can load. */

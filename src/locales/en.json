@@ -1073,7 +1073,11 @@
     "pixelTracker": "Tracking pixel",
     "knownTracker": "Known tracker domain",
     "hiddenTracker": "Hidden image",
-    "noTrackers": "No trackers detected"
+    "noTrackers": "No trackers detected",
+    "heldBack": "Some images are hidden because they track you.",
+    "showTracked": "Show anyway",
+    "showTrackedHint": "The sender may then see that you opened this mail.",
+    "trackedShown": "Images with tracking shown"
   },
   "ai": {
     "summarize": "Summarize with AI",

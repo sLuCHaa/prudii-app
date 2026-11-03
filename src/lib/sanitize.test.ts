@@ -87,6 +87,56 @@ describe("sanitizeEmailHtml", () => {
   });
 });
 
+describe("showing a mail's tracked images on request", () => {
+  const HERO = `<img src="https://img.halde-shop.example/hero.jpg" width="600" height="300">`;
+  const PIXEL = `<img src="https://open.halde-shop.example/o.gif" width="1" height="1">`;
+  const BACKGROUND = `<td style="background-image: url('https://cdn.halde-shop.example/bg.png')">Sale</td>`;
+
+  it("keeps visible images from tracking domains", () => {
+    const { html, trackers } = sanitizeEmailHtml(HERO, true, false, true);
+    expect(parse(html).querySelector("img")?.getAttribute("src")).toBe("https://img.halde-shop.example/hero.jpg");
+    expect(trackers).toEqual([]);
+  });
+
+  it("still removes invisible pixels", () => {
+    const { html, trackers } = sanitizeEmailHtml(HERO + PIXEL, true, false, true);
+    expect(html).not.toContain("o.gif");
+    expect(trackers.map((t) => t.type)).toEqual(["pixel"]);
+  });
+
+  it("keeps CSS backgrounds, the background attribute and style-block urls", () => {
+    const { html } = sanitizeEmailHtml(
+      `<style>.hero { background: url(https://cdn.halde-shop.example/a.png) }</style>` +
+        `<table><tbody><tr>${BACKGROUND}<td background="https://cdn.halde-shop.example/b.png">x</td></tr></tbody></table>`,
+      true,
+      false,
+      true,
+    );
+    expect(html).toContain("url(https://cdn.halde-shop.example/a.png)");
+    expect(html).toContain("url('https://cdn.halde-shop.example/bg.png')");
+    expect(parse(html).querySelector("[background]")?.getAttribute("background")).toBe("https://cdn.halde-shop.example/b.png");
+  });
+
+  it("reports visible content held back by default", () => {
+    expect(sanitizeEmailHtml(HERO).heldBack).toBe(true);
+    expect(sanitizeEmailHtml(`<table><tbody><tr>${BACKGROUND}</tr></tbody></table>`).heldBack).toBe(true);
+  });
+
+  it("does not count a lone invisible pixel as held-back content", () => {
+    expect(sanitizeEmailHtml(`<p>Hallo</p>${PIXEL}`).heldBack).toBe(false);
+  });
+
+  it("does not count CSS urls that load nothing from the network", () => {
+    const outlook = "<style>v\\:* { behavior: url(#default#VML); }</style>" +
+      `<td style="background: url(data:image/gif;base64,R0lGODlhAQABAAAAACw=)">x</td><p>Hallo Anna</p>`;
+    expect(sanitizeEmailHtml(outlook).heldBack).toBe(false);
+  });
+
+  it("holds nothing back once tracked images are shown", () => {
+    expect(sanitizeEmailHtml(HERO + BACKGROUND, true, false, true).heldBack).toBe(false);
+  });
+});
+
 describe("reversible sanitize for editing a quote", () => {
   const LINK = '<p><a href="https://studio-halde.de/angebot" style="color: red">Angebot</a></p>';
   const BACKGROUND = `<table><tbody><tr><td style="background-image: url('https://studio-halde.de/bg.png'); color: #1f3d36">Stand</td></tr></tbody></table>`;

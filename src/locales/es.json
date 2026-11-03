@@ -1073,7 +1073,11 @@
     "pixelTracker": "Píxel de rastreo",
     "knownTracker": "Dominio de rastreo conocido",
     "hiddenTracker": "Imagen oculta",
-    "noTrackers": "No se detectaron rastreadores"
+    "noTrackers": "No se detectaron rastreadores",
+    "heldBack": "Algunas imágenes están ocultas porque te rastrean.",
+    "showTracked": "Mostrar de todos modos",
+    "showTrackedHint": "El remitente podrá ver que abriste este correo.",
+    "trackedShown": "Imágenes con rastreo mostradas"
   },
   "ai": {
     "summarize": "Resumir con IA",

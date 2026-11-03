@@ -1072,7 +1072,11 @@
     "pixelTracker": "跟踪像素",
     "knownTracker": "已知跟踪域名",
     "hiddenTracker": "隐藏图片",
-    "noTrackers": "未检测到跟踪器"
+    "noTrackers": "未检测到跟踪器",
+    "heldBack": "部分图片会跟踪你，已被隐藏。",
+    "showTracked": "仍然显示",
+    "showTrackedHint": "发件人可能会看到你已打开此邮件。",
+    "trackedShown": "已显示含跟踪的图片"
   },
   "ai": {
     "summarize": "使用 AI 总结",
