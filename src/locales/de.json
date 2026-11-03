@@ -1512,6 +1512,24 @@
     "title": "Neu in Prudii {{version}}",
     "subtitle": "Das hat sich seit deinem letzten Update getan.",
     "done": "Verstanden",
+    "v1_8_0": {
+      "check": {
+        "title": "Postfach-Check",
+        "text": "Sieh, welche Newsletter du kaum liest und welche Tracker Prudii für dich blockiert hat. Alles wird auf deinem Computer ausgewertet, zu finden in der Seitenleiste."
+      },
+      "unsubscribe": {
+        "title": "Abmelden, das wirklich wirkt",
+        "text": "Prudii probiert jeden Weg und prüft danach, ob wirklich nichts mehr kommt. Was nach 3 Tagen trotzdem eintrifft, landet automatisch im Papierkorb."
+      },
+      "free": {
+        "title": "Alles kostenlos",
+        "text": "Zurückstellen, Vorlagen, Regeln, KI und beliebig viele Konten sind jetzt für alle frei. Nur die Team-Funktionen brauchen eine Lizenz."
+      },
+      "images": {
+        "title": "Bilder trotz Tracking",
+        "text": "Sieht eine Mail ohne ihre Bilder kaputt aus, holst du sie mit einem Klick zurück. Unsichtbare Zählpixel bleiben trotzdem gesperrt."
+      }
+    },
     "v1_7_10": {
       "icons": {
         "title": "Neue Icons, ein Stil",

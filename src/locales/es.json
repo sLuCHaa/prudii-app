@@ -1512,6 +1512,24 @@
     "title": "Novedades de Prudii {{version}}",
     "subtitle": "Esto es lo que ha cambiado desde tu última actualización.",
     "done": "Entendido",
+    "v1_8_0": {
+      "check": {
+        "title": "Revisión del buzón",
+        "text": "Mira qué boletines casi no lees y qué rastreadores ha bloqueado Prudii por ti. Todo se calcula en tu equipo; la encontrarás en la barra lateral."
+      },
+      "unsubscribe": {
+        "title": "Bajas que funcionan",
+        "text": "Prudii prueba todas las vías y después comprueba que no llegue nada más. Lo que siga llegando pasados 3 días irá directamente a la papelera."
+      },
+      "free": {
+        "title": "Todo gratis",
+        "text": "Posponer, plantillas, reglas, IA y cuentas ilimitadas ahora son gratis para todos. Solo las funciones de equipo necesitan licencia."
+      },
+      "images": {
+        "title": "Imágenes pese al rastreo",
+        "text": "Si un correo se ve roto sin sus imágenes, recupéralas con un clic. Los píxeles de seguimiento invisibles siguen bloqueados."
+      }
+    },
     "v1_7_10": {
       "icons": {
         "title": "Iconos nuevos, un solo estilo",

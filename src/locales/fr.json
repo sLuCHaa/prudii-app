@@ -1512,6 +1512,24 @@
     "title": "Nouveautés de Prudii {{version}}",
     "subtitle": "Voici ce qui a changé depuis votre dernière mise à jour.",
     "done": "Compris",
+    "v1_8_0": {
+      "check": {
+        "title": "Bilan de la boîte mail",
+        "text": "Voyez quelles newsletters vous lisez à peine et quels traqueurs Prudii a bloqués pour vous. Tout est calculé sur votre ordinateur ; à retrouver dans la barre latérale."
+      },
+      "unsubscribe": {
+        "title": "Un désabonnement qui tient",
+        "text": "Prudii essaie chaque moyen, puis vérifie que plus rien n'arrive. Ce qui arrive encore après 3 jours part directement à la corbeille."
+      },
+      "free": {
+        "title": "Tout est gratuit",
+        "text": "Rappel, modèles, règles, IA et comptes illimités sont désormais gratuits pour tous. Seules les fonctions d'équipe nécessitent une licence."
+      },
+      "images": {
+        "title": "Images malgré le suivi",
+        "text": "Si un message paraît cassé sans ses images, récupérez-les en un clic. Les pixels de suivi invisibles restent bloqués."
+      }
+    },
     "v1_7_10": {
       "icons": {
         "title": "Nouvelles icônes, un seul style",

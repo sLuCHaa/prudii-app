@@ -1512,6 +1512,24 @@
     "title": "Novidades do Prudii {{version}}",
     "subtitle": "Veja o que mudou desde a sua última atualização.",
     "done": "Entendi",
+    "v1_8_0": {
+      "check": {
+        "title": "Revisão da caixa de entrada",
+        "text": "Veja quais newsletters você quase não lê e quais rastreadores o Prudii bloqueou para você. Tudo é calculado no seu computador; está na barra lateral."
+      },
+      "unsubscribe": {
+        "title": "Cancelamento que funciona",
+        "text": "O Prudii tenta todos os caminhos e depois confere se nada mais chega. O que ainda chegar depois de 3 dias vai direto para a lixeira."
+      },
+      "free": {
+        "title": "Tudo grátis",
+        "text": "Adiar, modelos, regras, IA e contas ilimitadas agora são grátis para todos. Só as funções de equipe precisam de licença."
+      },
+      "images": {
+        "title": "Imagens apesar do rastreamento",
+        "text": "Se um e-mail parecer quebrado sem as imagens, traga-as de volta com um clique. Pixels de rastreamento invisíveis continuam bloqueados."
+      }
+    },
     "v1_7_10": {
       "icons": {
         "title": "Novos ícones, um só estilo",
