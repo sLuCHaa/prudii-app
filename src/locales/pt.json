@@ -1168,6 +1168,7 @@
       "mails_other": "{{count}} e-mails",
       "readOf": "{{read}} de {{count}} lidos",
       "last": "último: {{date}}",
+      "toAccount": "para {{account}}",
       "trackerChip_one": "{{count}} rastreador",
       "trackerChip_other": "{{count}} rastreadores",
       "noTracker": "sem rastreador",

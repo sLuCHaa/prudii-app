@@ -53,8 +53,26 @@ struct Group {
     newest_id: String,
     newest_date: String,
     address: String,
+    senders: HashSet<String>,
     // The newest mail that can be unsubscribed from keeps a list's action stable when its latest copy lacks the header.
     newest_unsub: Option<Sample>,
+}
+
+impl Group {
+    fn absorb(&mut self, other: Group) {
+        self.messages.extend(other.messages);
+        self.read.extend(other.read);
+        self.mail_ids.extend(other.mail_ids);
+        self.senders.extend(other.senders);
+        if other.newest_date > self.newest_date {
+            self.newest_date = other.newest_date;
+            self.newest_id = other.newest_id;
+        }
+        // The list's own mail names and acts for the row; an older header-less copy only fills a gap.
+        if self.newest_unsub.is_none() {
+            self.newest_unsub = other.newest_unsub;
+        }
+    }
 }
 
 struct Sample {
@@ -127,6 +145,7 @@ pub(crate) fn newsletter_overview(
                     newest_id: String::new(),
                     newest_date: String::new(),
                     address: String::new(),
+                    senders: HashSet::new(),
                     newest_unsub: None,
                 },
             )
@@ -135,6 +154,7 @@ pub(crate) fn newsletter_overview(
             group.read.insert(c.message.clone());
         }
         group.messages.insert(c.message);
+        group.senders.insert(c.from_email.to_lowercase());
         if c.date > group.newest_date {
             group.newest_date = c.date.clone();
             group.newest_id = c.id.clone();
@@ -149,6 +169,31 @@ pub(crate) fn newsletter_overview(
             });
         }
         group.mail_ids.push(c.id);
+    }
+
+    // Mail synced before List-Id was stored has no list key; it belongs to the one list its sender runs in that account.
+    let mut lists_by_sender: HashMap<(String, String), Vec<String>> = HashMap::new();
+    for (key, (account, group)) in &groups {
+        if group.key.kind == KeyKind::ListId {
+            for sender in &group.senders {
+                lists_by_sender.entry((account.clone(), sender.clone())).or_default().push(key.clone());
+            }
+        }
+    }
+    let merges: Vec<(String, String)> = groups
+        .iter()
+        .filter(|(_, (_, group))| group.key.kind == KeyKind::Sender)
+        .filter_map(|(key, (account, group))| match lists_by_sender.get(&(account.clone(), group.key.value.clone())) {
+            Some(lists) if lists.len() == 1 => Some((key.clone(), lists[0].clone())),
+            _ => None,
+        })
+        .collect();
+    for (from, into) in merges {
+        if let Some((_, source)) = groups.remove(&from) {
+            if let Some((_, target)) = groups.get_mut(&into) {
+                target.absorb(source);
+            }
+        }
     }
 
     let tracker_counts: HashMap<String, u32> = conn
@@ -414,6 +459,26 @@ mod tests {
         let view = overview(&f, None, true).rows[0].subscription.clone().unwrap();
         assert_eq!(view.status, "still_sending");
         assert!(view.can_retry);
+    }
+
+    #[test]
+    fn old_mail_without_list_id_joins_its_list() {
+        let f = fx();
+        put(&f, M { date: "2026-11-03T13:00:00Z", ..base(&f, "new") });
+        put(&f, M { headers: "{}", date: "2026-10-24T06:00:00Z", read: true, ..base(&f, "old") });
+        let o = overview(&f, None, true);
+        assert_eq!(o.rows.len(), 1);
+        assert_eq!((o.rows[0].count, o.rows[0].read), (2, 1));
+        assert_eq!(o.rows[0].name, "Wochenrückblick");
+    }
+
+    #[test]
+    fn sender_with_several_lists_stays_apart() {
+        let f = fx();
+        put(&f, M { from: "notifications@forge.example", headers: r#"{"list-id":"<app.forge.example>"}"#, ..base(&f, "a") });
+        put(&f, M { from: "notifications@forge.example", headers: r#"{"list-id":"<web.forge.example>"}"#, ..base(&f, "b") });
+        put(&f, M { from: "notifications@forge.example", headers: "{}", ..base(&f, "c") });
+        assert_eq!(overview(&f, None, true).rows.len(), 3);
     }
 
     #[test]

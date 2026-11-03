@@ -33,6 +33,7 @@ const KEYS = [
   "mailboxCheck.list.mails_other",
   "mailboxCheck.list.readOf",
   "mailboxCheck.list.last",
+  "mailboxCheck.list.toAccount",
   "mailboxCheck.list.trackerChip_other",
   "mailboxCheck.list.noTracker",
   "mailboxCheck.list.showAll",

@@ -11,11 +11,6 @@ export function companyBars(report: TrackerReport): Array<{ label: string; count
   return bars;
 }
 
-// The same list can reach several accounts; with all accounts shown, each row says which one it acts on.
-export function rowCaption(row: Pick<NewsletterRow, "address">, accountLabel: string | null): string {
-  return [row.address, accountLabel].filter(Boolean).join(" · ");
-}
-
 export function initials(name: string): string {
   const isAddress = name.includes("@");
   const source = isAddress ? name.trim().split("@")[0] : name;

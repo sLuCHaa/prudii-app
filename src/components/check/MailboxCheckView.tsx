@@ -5,7 +5,7 @@ import { Loader2, Lock, Mail, MailMinus, Shield, ShieldAlert, UserMinus } from "
 import { useAppStore } from "../../stores/appStore";
 import { getNewsletterOverview, getTrackerReport } from "../../lib/tauri";
 import { runTrackerScan } from "../../lib/trackerScan";
-import { checkState, companyBars, initials, readShare, rowCaption } from "../../lib/mailboxCheck";
+import { checkState, companyBars, initials, readShare } from "../../lib/mailboxCheck";
 import { markMailboxCheckSeen } from "../../lib/achievements";
 import { useListActions } from "../../hooks/useListActions";
 import { Select } from "../ui/Select";
@@ -272,7 +272,7 @@ export function MailboxCheckView() {
                       <p className="px-4 py-6 border-t border-border text-sm text-text-tertiary">{t("mailboxCheck.list.empty")}</p>
                     ) : (
                       rows.map((row) => {
-                        const caption = rowCaption(row, labelAccounts ? accountLabels.get(row.account_id) ?? null : null);
+                        const accountLabel = labelAccounts ? accountLabels.get(row.account_id) ?? null : null;
                         const busy = busyKey === row.key;
                         return (
                           <div
@@ -289,7 +289,12 @@ export function MailboxCheckView() {
                               </span>
                               <div className="min-w-0">
                                 <div className="text-sm font-medium text-text truncate" title={row.name}>{row.name}</div>
-                                {caption && <div className="text-xs text-text-secondary truncate" title={caption}>{caption}</div>}
+                                {row.address && <div className="text-xs text-text-secondary truncate" title={row.address}>{row.address}</div>}
+                                {accountLabel && (
+                                  <div className="text-[11px] text-text-tertiary truncate" title={accountLabel}>
+                                    {t("mailboxCheck.list.toAccount", { account: accountLabel })}
+                                  </div>
+                                )}
                               </div>
                             </div>
                             <div role="cell" className="flex flex-col min-w-0">
