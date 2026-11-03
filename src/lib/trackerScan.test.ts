@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createTrackerRecorder, scanStoredBodies, toRecord } from "./trackerScan";
+import { createTrackerRecorder, createTrackerScanRunner, scanStoredBodies, toRecord } from "./trackerScan";
 import type { TrackerInfo } from "./sanitize";
 import type { StoredBody, TrackerRecord } from "../types";
 
@@ -73,5 +73,42 @@ describe("scanStoredBodies", () => {
     const scanned = await scanStoredBodies({ list, detect: () => [], send: async () => 0, pause: async () => {} }, 25);
     expect(scanned).toBe(2);
     expect(list).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("createTrackerScanRunner", () => {
+  it("runs one scan at a time", async () => {
+    let release: (n: number) => void = () => {};
+    const fetchBodies = vi.fn(() => new Promise<number>((resolve) => { release = resolve; }));
+    const run = createTrackerScanRunner({ scanStored: async () => 1, fetchBodies });
+    const first = run();
+    const second = run();
+    await vi.waitFor(() => expect(fetchBodies).toHaveBeenCalledTimes(1));
+    release(0);
+    expect(await first).toBe(1);
+    expect(await second).toBe(1);
+    const third = run();
+    await vi.waitFor(() => expect(fetchBodies).toHaveBeenCalledTimes(2));
+    release(0);
+    await third;
+  });
+
+  it("scans stored bodies before fetching", async () => {
+    const calls: string[] = [];
+    const runner = (loaded: number) =>
+      createTrackerScanRunner({
+        scanStored: async () => { calls.push("scan"); return 2; },
+        fetchBodies: async () => { calls.push("fetch"); return loaded; },
+      });
+    expect(await runner(3)()).toBe(4);
+    expect(calls).toEqual(["scan", "fetch", "scan"]);
+    calls.length = 0;
+    expect(await runner(0)()).toBe(2);
+    expect(calls).toEqual(["scan", "fetch"]);
+  });
+
+  it("keeps going when fetching fails", async () => {
+    const run = createTrackerScanRunner({ scanStored: async () => 5, fetchBodies: async () => { throw new Error("offline"); } });
+    expect(await run()).toBe(5);
   });
 });

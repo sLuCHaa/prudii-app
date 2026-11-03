@@ -81,11 +81,29 @@ export async function scanStoredBodies(deps: ScanDeps, batch = 25): Promise<numb
   }
 }
 
-export async function runTrackerScan(): Promise<number> {
-  await fetchBulkBodies().catch(() => 0);
-  return scanStoredBodies({
-    list: listUnscannedBodies,
-    detect: (html) => sanitizeEmailHtml(html).trackers,
-    send: recordMailTrackers,
-  });
+// Stored bodies first, so the numbers appear at once; a second open while scanning joins the running scan.
+export function createTrackerScanRunner(deps: { scanStored: () => Promise<number>; fetchBodies: () => Promise<number> }): () => Promise<number> {
+  let running: Promise<number> | null = null;
+  const scan = async () => {
+    let scanned = await deps.scanStored();
+    const loaded = await deps.fetchBodies().catch(() => 0);
+    if (loaded > 0) scanned += await deps.scanStored();
+    return scanned;
+  };
+  return () => {
+    running ??= scan().finally(() => {
+      running = null;
+    });
+    return running;
+  };
 }
+
+export const runTrackerScan = createTrackerScanRunner({
+  scanStored: () =>
+    scanStoredBodies({
+      list: listUnscannedBodies,
+      detect: (html) => sanitizeEmailHtml(html).trackers,
+      send: recordMailTrackers,
+    }),
+  fetchBodies: fetchBulkBodies,
+});

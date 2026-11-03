@@ -208,6 +208,7 @@ export interface TrackerReport {
   scanned_mails: number;
   mails_with_trackers: number;
   total: number;
+  other_count: number;
   by_kind: { pixel: number; hidden: number; tracking_domain: number };
   companies: Array<{ name: string; known: boolean; count: number }>;
   senders: Array<{ name: string; address: string; count: number; mails: number }>;
