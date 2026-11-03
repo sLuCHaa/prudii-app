@@ -1295,9 +1295,6 @@ pub(crate) fn import_unsubscriptions<R: Read + Seek>(
     conn: &rusqlite::Connection,
     is_replace: bool,
 ) -> Result<(), String> {
-    if is_replace {
-        conn.execute("DELETE FROM unsubscriptions", []).map_err(|e| e.to_string())?;
-    }
     let Ok(mut f) = archive.by_name("unsubscriptions.json") else {
         return Ok(());
     };
@@ -1305,7 +1302,8 @@ pub(crate) fn import_unsubscriptions<R: Read + Seek>(
     f.read_to_string(&mut s).map_err(|e| e.to_string())?;
     let rows: Vec<serde_json::Map<String, serde_json::Value>> = serde_json::from_str(&s).map_err(|e| e.to_string())?;
     let sql = format!(
-        "INSERT OR REPLACE INTO unsubscriptions ({}) SELECT {} WHERE EXISTS (SELECT 1 FROM accounts WHERE id = ?2)",
+        "{} INTO unsubscriptions ({}) SELECT {} WHERE EXISTS (SELECT 1 FROM accounts WHERE id = ?2)",
+        if is_replace { "INSERT OR REPLACE" } else { "INSERT OR IGNORE" },
         UNSUBSCRIPTION_COLUMNS.join(", "),
         (1..=UNSUBSCRIPTION_COLUMNS.len()).map(|i| format!("?{i}")).collect::<Vec<_>>().join(", ")
     );
@@ -2822,6 +2820,49 @@ mod category_roundtrip {
         assert_eq!(subs[0].methods_tried, ["mailto"]);
         assert_eq!(subs[0].sorted_count, 2);
         assert_eq!(subs[0].key.value, "wr.halde-shop.example");
+    }
+
+    fn account_with_id(db: &Database, id: &str) {
+        db.lock_db()
+            .execute(
+                "INSERT INTO accounts (id, email, display_name, provider, imap_host, smtp_host) VALUES (?1, 'me@studio-halde.example', 'me', 'imap', 'imap.studio-halde.example', 'smtp.studio-halde.example')",
+                [id],
+            )
+            .unwrap();
+    }
+
+    fn list_entry(db: &Database, account: &str, method: &str) {
+        use crate::unsubscribe::{key::{KeyKind, ListKey}, store};
+        let key = ListKey { kind: KeyKind::ListId, value: "wr.halde-shop.example".into() };
+        store::insert_request(&db.lock_db(), account, &key, "Halde Shop", method, false, chrono::Utc::now()).unwrap();
+    }
+
+    #[test]
+    fn replace_import_keeps_entries_of_other_accounts() {
+        let db_a = temp_db();
+        let account = seed_unsubscription(&db_a);
+        let db_b = temp_db();
+        account_with_id(&db_b, &account);
+        let other = seed_account(&db_b.lock_db(), "anna.weber@studio-halde.example");
+        list_entry(&db_b, &other, "one_click");
+        let mut archive = zip::ZipArchive::new(Cursor::new(unsubscriptions_zip(&db_a))).unwrap();
+        import_unsubscriptions(&mut archive, &db_b.lock_db(), true).unwrap();
+        assert_eq!(crate::unsubscribe::store::for_account(&db_b.lock_db(), &other).unwrap().len(), 1);
+        assert_eq!(crate::unsubscribe::store::for_account(&db_b.lock_db(), &account).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn merge_import_keeps_the_local_entry() {
+        let db_a = temp_db();
+        let account = seed_unsubscription(&db_a);
+        let db_b = temp_db();
+        account_with_id(&db_b, &account);
+        list_entry(&db_b, &account, "one_click");
+        let mut archive = zip::ZipArchive::new(Cursor::new(unsubscriptions_zip(&db_a))).unwrap();
+        import_unsubscriptions(&mut archive, &db_b.lock_db(), false).unwrap();
+        let subs = crate::unsubscribe::store::for_account(&db_b.lock_db(), &account).unwrap();
+        assert_eq!(subs.len(), 1);
+        assert_eq!(subs[0].methods_tried, ["one_click"]);
     }
 
     #[test]
