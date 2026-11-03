@@ -1163,6 +1163,7 @@
       "mails_one": "{{count}} 封邮件",
       "mails_other": "{{count}} 封邮件",
       "readOf": "已读 {{read}} / {{count}}",
+      "last": "最近：{{date}}",
       "trackerChip_one": "{{count}} 个跟踪器",
       "trackerChip_other": "{{count}} 个跟踪器",
       "noTracker": "无跟踪器",

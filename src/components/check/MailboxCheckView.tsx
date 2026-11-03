@@ -6,7 +6,7 @@ import { Loader2, Lock, Mail, MailMinus, Shield, ShieldAlert, UserMinus } from "
 import { useAppStore } from "../../stores/appStore";
 import { allowListAgain, blockSender, getNewsletterOverview, getTrackerReport, retryUnsubscribe, unsubscribeMail } from "../../lib/tauri";
 import { runTrackerScan } from "../../lib/trackerScan";
-import { checkState, companyBars, initials, readShare } from "../../lib/mailboxCheck";
+import { checkState, companyBars, initials, readShare, rowCaption } from "../../lib/mailboxCheck";
 import { invalidateMailListQueries } from "../../lib/mailQueries";
 import { causeMessage } from "../../lib/errorToast";
 import { useDialog } from "../ui/DialogProvider";
@@ -17,7 +17,9 @@ import { ListStatusChip } from "../layout/ListStatusChip";
 import type { NewsletterRow, TrackerReport, UnsubscribeOutcome } from "../../types";
 
 const FIRST_ROWS = 20;
-const ROW_GRID = "grid grid-cols-[minmax(0,2.4fr)_minmax(0,0.8fr)_minmax(0,1.3fr)_minmax(0,0.9fr)_minmax(0,1.6fr)] items-center gap-4";
+const ROW_GRID = "grid grid-cols-[minmax(0,2.2fr)_minmax(0,0.9fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,2.2fr)] items-center gap-4";
+// While bodies load in the background the numbers keep growing; poll instead of waiting for the whole download.
+const SCAN_POLL_MS = 4000;
 
 function Tile({ icon, label, value, text, signal }: { icon: React.ReactNode; label: string; value: string; text: string; signal?: boolean }) {
   return (
@@ -106,8 +108,9 @@ export function MailboxCheckView() {
   const [pending, setPending] = useState<{ row: NewsletterRow; mode: "unsubscribe" | "block" } | null>(null);
   const account = accountId || undefined;
 
-  const { data: overview } = useQuery({ queryKey: ["newsletter-overview", accountId], queryFn: () => getNewsletterOverview(account) });
-  const { data: report } = useQuery({ queryKey: ["tracker-report", accountId], queryFn: () => getTrackerReport(account) });
+  const poll = scanning ? SCAN_POLL_MS : false;
+  const { data: overview } = useQuery({ queryKey: ["newsletter-overview", accountId], queryFn: () => getNewsletterOverview(account), refetchInterval: poll });
+  const { data: report } = useQuery({ queryKey: ["tracker-report", accountId], queryFn: () => getTrackerReport(account), refetchInterval: poll });
 
   const refresh = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["newsletter-overview"] });
@@ -183,6 +186,9 @@ export function MailboxCheckView() {
     [accounts, t],
   );
 
+  const accountLabels = useMemo(() => new Map(accounts.map((a) => [a.id, a.email])), [accounts]);
+  const labelAccounts = accounts.length > 1 && !accountId;
+  const formatDay = (iso: string) => new Date(iso).toLocaleDateString(i18n.language, { day: "numeric", month: "short" });
   const state = checkState(overview, report, scanning);
   const rows = overview ? (showAll ? overview.rows : overview.rows.slice(0, FIRST_ROWS)) : [];
   const num = (n: number) => n.toLocaleString(i18n.language);
@@ -271,11 +277,18 @@ export function MailboxCheckView() {
                               {initials(row.name)}
                             </span>
                             <div className="min-w-0">
-                              <div className="text-sm font-medium text-text truncate">{row.name}</div>
-                              <div className="text-xs text-text-secondary truncate">{row.address}</div>
+                              <div className="text-sm font-medium text-text truncate" title={row.name}>{row.name}</div>
+                              <div className="text-xs text-text-secondary truncate" title={rowCaption(row, labelAccounts ? accountLabels.get(row.account_id) ?? null : null)}>
+                                {rowCaption(row, labelAccounts ? accountLabels.get(row.account_id) ?? null : null)}
+                              </div>
                             </div>
                           </div>
-                          <span className="text-sm text-text tabular-nums">{t("mailboxCheck.list.mails", { count: row.count })}</span>
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-sm text-text tabular-nums">{t("mailboxCheck.list.mails", { count: row.count })}</span>
+                            {row.last_received && (
+                              <span className="text-xs text-text-tertiary truncate">{t("mailboxCheck.list.last", { date: formatDay(row.last_received) })}</span>
+                            )}
+                          </div>
                           <ReadBar row={row} />
                           {row.trackers > 0 ? (
                             <span className="inline-flex w-fit items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-xs text-accent">
@@ -306,7 +319,11 @@ export function MailboxCheckView() {
                   </div>
                 </div>
                 {!showAll && overview.rows.length > FIRST_ROWS && (
-                  <button type="button" onClick={() => setShowAll(true)} className="self-start text-sm font-medium text-accent hover:underline">
+                  <button
+                    type="button"
+                    onClick={() => setShowAll(true)}
+                    className="self-start rounded-control text-sm font-medium text-accent hover:underline focus-visible:outline-2 focus-visible:outline-accent"
+                  >
                     {t("mailboxCheck.list.showAll")} ({num(overview.rows.length)})
                   </button>
                 )}

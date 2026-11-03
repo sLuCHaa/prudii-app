@@ -4,11 +4,16 @@ export function readShare(row: Pick<NewsletterRow, "count" | "read">): number {
   return row.count > 0 ? row.read / row.count : 0;
 }
 
-// Unknown domains are noise one by one; together they show how much tracking has no name.
+// Everything outside the shown companies forms one bar, so the bars add up to the tile's total.
 export function companyBars(report: TrackerReport): Array<{ label: string; count: number; other: boolean }> {
   const bars = report.companies.filter((c) => c.known).map((c) => ({ label: c.name, count: c.count, other: false }));
   if (report.other_count > 0) bars.push({ label: "", count: report.other_count, other: true });
   return bars;
+}
+
+// The same list can reach several accounts; with all accounts shown, each row says which one it acts on.
+export function rowCaption(row: Pick<NewsletterRow, "address">, accountLabel: string | null): string {
+  return [row.address, accountLabel].filter(Boolean).join(" · ");
 }
 
 export function initials(name: string): string {

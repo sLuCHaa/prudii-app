@@ -1196,6 +1196,7 @@
       "mails_many": "{{count}} писем",
       "mails_other": "{{count}} письма",
       "readOf": "Прочитано {{read}} из {{count}}",
+      "last": "последнее: {{date}}",
       "trackerChip_one": "{{count}} трекер",
       "trackerChip_few": "{{count}} трекера",
       "trackerChip_many": "{{count}} трекеров",

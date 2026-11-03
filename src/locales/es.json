@@ -1164,6 +1164,7 @@
       "mails_one": "{{count}} correo",
       "mails_other": "{{count}} correos",
       "readOf": "{{read}} de {{count}} leídos",
+      "last": "último: {{date}}",
       "trackerChip_one": "{{count}} rastreador",
       "trackerChip_other": "{{count}} rastreadores",
       "noTracker": "sin rastreador",

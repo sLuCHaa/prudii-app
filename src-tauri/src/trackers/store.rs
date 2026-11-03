@@ -140,7 +140,7 @@ pub fn report(conn: &Connection, cutoff: &str, account_id: Option<&str>, days: u
 
     let mut by_kind = KindCounts::default();
     let mut total = 0;
-    let mut other_count = 0;
+    let other_count;
     let mut mails = std::collections::HashSet::new();
     let mut companies: std::collections::HashMap<(String, bool), u32> = std::collections::HashMap::new();
     // address -> (count, mail ids, newest date with a name, that name)
@@ -153,9 +153,6 @@ pub fn report(conn: &Connection, cutoff: &str, account_id: Option<&str>, days: u
             _ => by_kind.tracking_domain += count,
         }
         mails.insert(mail_id.clone());
-        if company.is_empty() {
-            other_count += count;
-        }
         let key = if company.is_empty() { (domain, false) } else { (company, true) };
         *companies.entry(key).or_default() += count;
         let entry = senders.entry(address).or_default();
@@ -167,11 +164,13 @@ pub fn report(conn: &Connection, cutoff: &str, account_id: Option<&str>, days: u
         }
     }
 
+    // Only named companies compete for the list; everything not shown is summed up, so the bars add up to the total.
     let companies = top(
-        companies.into_iter().map(|((name, known), count)| CompanyCount { name, known, count }).collect(),
+        companies.into_iter().filter(|((_, known), _)| *known).map(|((name, known), count)| CompanyCount { name, known, count }).collect(),
         |c| c.count,
         |c| c.name.as_str(),
     );
+    other_count = total - companies.iter().map(|c| c.count).sum::<u32>();
     let senders = top(
         senders
             .into_iter()
@@ -330,7 +329,8 @@ mod tests {
         assert_eq!((r.total, r.scanned_mails, r.mails_with_trackers), (5, 3, 2));
         assert_eq!((r.by_kind.tracking_domain, r.by_kind.pixel, r.by_kind.hidden), (4, 1, 0));
         assert_eq!((r.companies[0].name.as_str(), r.companies[0].known, r.companies[0].count), ("Mailchimp", true, 4));
-        assert_eq!((r.companies[1].name.as_str(), r.companies[1].known, r.companies[1].count), ("open.halde-shop.example", false, 1));
+        assert_eq!(r.companies.len(), 1);
+        assert_eq!(r.other_count, 1);
         assert_eq!(r.senders.len(), 1);
         assert_eq!((r.senders[0].name.as_str(), r.senders[0].address.as_str()), ("Halde Shop", "news@halde-shop.example"));
         assert_eq!((r.senders[0].count, r.senders[0].mails), (5, 2));
@@ -344,8 +344,21 @@ mod tests {
         hits.push(hit("tracking_domain", "list-manage.com", Some("Mailchimp"), 3));
         scanned(&f, &account, "news@halde-shop.example", "", "2026-10-10T09:00:00Z", "a", hits);
         let r = report(&f.db.lock_db(), CUTOFF, None, 30).unwrap();
-        assert_eq!(r.companies.len(), 10);
+        assert_eq!(r.companies.len(), 1);
         assert_eq!(r.other_count, 12);
+    }
+
+    #[test]
+    fn report_ranks_known_companies_and_keeps_the_rest_in_other() {
+        let f = fx();
+        let account = f.account.clone();
+        let mut hits: Vec<TrackerHit> = (0..12).map(|i| hit("tracking_domain", &format!("firma{i}.example"), Some(&format!("Firma {i:02}")), 10 + i)).collect();
+        hits.extend((0..5).map(|i| hit("pixel", &format!("open{i}.halde-shop.example"), None, 50)));
+        scanned(&f, &account, "news@halde-shop.example", "", "2026-10-10T09:00:00Z", "a", hits);
+        let r = report(&f.db.lock_db(), CUTOFF, None, 30).unwrap();
+        assert_eq!(r.companies.len(), 10);
+        assert!(r.companies.iter().all(|c| c.known));
+        assert_eq!(r.companies.iter().map(|c| c.count).sum::<u32>() + r.other_count, r.total);
     }
 
     #[test]

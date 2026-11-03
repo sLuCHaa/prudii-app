@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkState, companyBars, initials, readShare } from "./mailboxCheck";
+import { checkState, companyBars, initials, readShare, rowCaption } from "./mailboxCheck";
 import type { NewsletterOverview, TrackerReport } from "../types";
 
 const report = (over: Partial<TrackerReport> = {}): TrackerReport => ({
@@ -59,6 +59,15 @@ describe("companyBars", () => {
 
   it("leaves out the other bar when every tracker has a company", () => {
     expect(companyBars(report({ companies: [{ name: "Klaviyo", known: true, count: 2 }] }))).toEqual([{ label: "Klaviyo", count: 2, other: false }]);
+  });
+});
+
+describe("rowCaption", () => {
+  it("joins the address with the account when several accounts are shown", () => {
+    const row = overview(1).rows[0];
+    expect(rowCaption(row, null)).toBe("news@halde-shop.example");
+    expect(rowCaption(row, "me@studio-halde.example")).toBe("news@halde-shop.example · me@studio-halde.example");
+    expect(rowCaption({ ...row, address: "" }, "me@studio-halde.example")).toBe("me@studio-halde.example");
   });
 });
 

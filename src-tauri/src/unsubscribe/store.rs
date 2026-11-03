@@ -86,6 +86,12 @@ pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<Unsubscriptio
     conn.query_row(&format!("SELECT {COLUMNS} FROM unsubscriptions WHERE id = ?1"), params![id], from_row).optional()
 }
 
+pub fn list(conn: &Connection, account_id: Option<&str>) -> rusqlite::Result<Vec<Unsubscription>> {
+    conn.prepare(&format!("SELECT {COLUMNS} FROM unsubscriptions WHERE (?1 IS NULL OR account_id = ?1)"))?
+        .query_map(params![account_id], from_row)?
+        .collect()
+}
+
 pub fn for_account(conn: &Connection, account_id: &str) -> rusqlite::Result<Vec<Unsubscription>> {
     conn.prepare(&format!("SELECT {COLUMNS} FROM unsubscriptions WHERE account_id = ?1"))?
         .query_map(params![account_id], from_row)?

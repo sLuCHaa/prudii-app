@@ -29,6 +29,7 @@ const KEYS = [
   "mailboxCheck.list.action",
   "mailboxCheck.list.mails_other",
   "mailboxCheck.list.readOf",
+  "mailboxCheck.list.last",
   "mailboxCheck.list.trackerChip_other",
   "mailboxCheck.list.noTracker",
   "mailboxCheck.list.showAll",

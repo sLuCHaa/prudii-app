@@ -159,7 +159,7 @@ fn untried(plan: Vec<Method>, tried: &[String]) -> Vec<Method> {
     plan.into_iter().filter(|m| !tried.iter().any(|t| t == m.kind())).collect()
 }
 
-fn can_retry(conn: &Connection, sub: &Unsubscription, now: DateTime<Utc>) -> bool {
+pub(crate) fn can_retry(conn: &Connection, sub: &Unsubscription, now: DateTime<Utc>) -> bool {
     store::status(sub, now) == "still_sending" && !untried(plan_for(conn, &sub.account_id, &sub.key), &sub.methods_tried).is_empty()
 }
 

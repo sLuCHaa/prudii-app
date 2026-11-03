@@ -15,8 +15,8 @@ export function ListStatusChip({ sub, busy, onAction }: ListStatusChipProps) {
   const warn = sub.status === "still_sending";
 
   return (
-    <div className={`flex items-center gap-2 px-2.5 py-1 rounded-lg text-xs ${warn ? "bg-warning/10 text-warning" : "bg-hover text-text-secondary"}`}>
-      <span className="truncate max-w-64">{t(label.key, label.options)}</span>
+    <div className={`flex items-center gap-2 min-w-0 max-w-full px-2.5 py-1 rounded-lg text-xs ${warn ? "bg-warning/10 text-warning" : "bg-hover text-text-secondary"}`}>
+      <span className="truncate min-w-0 max-w-64" title={t(label.key, label.options)}>{t(label.key, label.options)}</span>
       {statusActions(sub).map((action) => (
         <button
           key={action}
