@@ -3486,6 +3486,7 @@ dependencies = [
  "mail-parser",
  "objc2-app-kit",
  "open",
+ "percent-encoding",
  "rand",
  "reqwest",
  "ring",

@@ -11,6 +11,7 @@ pub const SIGNAL_HEADERS: &[&str] = &[
     "X-MC-User",
     "X-SES-Outgoing",
     "X-CSA-Complaints",
+    "List-Unsubscribe-Post",
 ];
 
 pub const GMAIL_CATEGORY_KEY: &str = "x-gmail-category";
@@ -47,6 +48,7 @@ pub fn gmail_category_from_labels(label_ids: &[String]) -> Option<&'static str> 
 pub struct HeaderSignals {
     pub list_id: bool,
     pub unsubscribe: bool,
+    pub one_click: bool,
     pub precedence_bulk: bool,
     pub auto_submitted: bool,
     pub feedback_id: bool,
@@ -93,6 +95,7 @@ impl HeaderSignals {
         Self {
             list_id: !get("list-id").is_empty(),
             unsubscribe: !list_unsubscribe.trim().is_empty(),
+            one_click: get("list-unsubscribe-post").to_ascii_lowercase().contains("list-unsubscribe=one-click"),
             precedence_bulk: matches!(precedence.as_str(), "bulk" | "list" | "junk") || map.contains_key("x-csa-complaints"),
             auto_submitted: !auto_submitted.is_empty() && auto_submitted != "no",
             feedback_id: !get("feedback-id").is_empty(),
@@ -110,6 +113,14 @@ impl HeaderSignals {
 mod tests {
     use super::*;
     use serde_json::Value;
+
+    #[test]
+    fn one_click_header_is_kept() {
+        assert!(SIGNAL_HEADERS.contains(&"List-Unsubscribe-Post"));
+        let on = HeaderSignals::parse(r#"{"list-unsubscribe-post":"List-Unsubscribe=One-Click"}"#, "<https://h.example/u>");
+        assert!(on.one_click);
+        assert!(!HeaderSignals::parse("{}", "<https://h.example/u>").one_click);
+    }
 
     #[test]
     fn json_keeps_only_known_present_headers() {
