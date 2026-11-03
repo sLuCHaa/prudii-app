@@ -268,7 +268,7 @@ pub async fn send_mail(app: AppHandle, db: State<'_, Database>, request: SendMai
 }
 
 /// Generated mails (iMIP replies) have no composer, undo window or draft.
-pub(crate) async fn send_calendar_mail(app: &AppHandle, account_id: &str, message: EmailMessage) -> Result<(), String> {
+pub(crate) async fn send_prepared_mail(app: &AppHandle, account_id: &str, message: EmailMessage) -> Result<(), String> {
     let account = load_send_account(&app.state::<Database>(), account_id)?;
     let credential = credentials::resolve_credential(&account.id, &account.auth_type, &account.provider)
         .await

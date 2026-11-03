@@ -413,30 +413,12 @@ pub async fn run_due_subscriptions(app: AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::{Read, Write};
-    use std::sync::{Arc, Mutex};
 
     pub(crate) const FEED: &str = "BEGIN:VCALENDAR\r\nX-WR-CALNAME:Team\r\nBEGIN:VEVENT\r\nUID:one@test\r\n\
 DTSTART:20261015T090000Z\r\nDTEND:20261015T100000Z\r\nSUMMARY:One\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:two@test\r\n\
 DTSTART:20261016T090000Z\r\nDTEND:20261016T100000Z\r\nSUMMARY:Two\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
 
-    /// Serves one canned response per connection, in order, and records each request head.
-    pub(crate) fn serve(responses: Vec<String>) -> (String, Arc<Mutex<Vec<String>>>) {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let base = format!("http://{}", listener.local_addr().unwrap());
-        let seen = Arc::new(Mutex::new(Vec::new()));
-        let log = seen.clone();
-        std::thread::spawn(move || {
-            for response in responses {
-                let Ok((mut stream, _)) = listener.accept() else { return };
-                let mut buf = [0u8; 8192];
-                let n = stream.read(&mut buf).unwrap_or(0);
-                log.lock().unwrap().push(String::from_utf8_lossy(&buf[..n]).to_ascii_lowercase());
-                let _ = stream.write_all(response.as_bytes());
-            }
-        });
-        (base, seen)
-    }
+    pub(crate) use crate::test_support::serve_http as serve;
 
     pub(crate) fn ok(body: &str, etag: &str) -> String {
         format!(

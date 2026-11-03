@@ -301,7 +301,7 @@ pub async fn respond_invitation(
         attachments: vec![],
         calendar_part: Some(CalendarPart { method: "REPLY".into(), ics: draft.ics }),
     };
-    crate::commands::send::send_calendar_mail(&app, &draft.account_id, message).await.map_err(|e| {
+    crate::commands::send::send_prepared_mail(&app, &draft.account_id, message).await.map_err(|e| {
         log::warn!("invitation reply for {} not sent: {}", mail_id, e);
         "calendar.invite.errors.sendFailed".to_string()
     })

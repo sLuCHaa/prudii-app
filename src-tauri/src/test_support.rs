@@ -55,3 +55,21 @@ pub fn seed_mail(conn: &Connection, m: &SeedMail) -> String {
     .unwrap();
     id
 }
+
+/// Serves one canned response per connection, in order, and records each request head.
+pub fn serve_http(responses: Vec<String>) -> (String, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let log = seen.clone();
+    std::thread::spawn(move || {
+        for response in responses {
+            let Ok((mut stream, _)) = listener.accept() else { return };
+            let mut buf = [0u8; 8192];
+            let n = std::io::Read::read(&mut stream, &mut buf).unwrap_or(0);
+            log.lock().unwrap().push(String::from_utf8_lossy(&buf[..n]).to_ascii_lowercase());
+            let _ = std::io::Write::write_all(&mut stream, response.as_bytes());
+        }
+    });
+    (base, seen)
+}
