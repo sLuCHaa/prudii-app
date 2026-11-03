@@ -14,6 +14,7 @@ import { resolveInlineImages, removeUnresolvableImages, listedAttachments } from
 import { findMissingParts, stripMmlTags } from "../../lib/missingParts";
 import { invalidateMailListQueries } from "../../lib/mailQueries";
 import { ListStatusChip } from "./ListStatusChip";
+import { useListActions } from "../../hooks/useListActions";
 import { displayTrackerRecorder } from "../../lib/trackerScan";
 import { UnsubscribeDialog } from "./UnsubscribeDialog";
 import { useAttachments, useToggleStar, useToggleMailFlag } from "../../hooks/useAccounts";
@@ -26,7 +27,7 @@ import { AddressName } from "./AddressName";
 import { stripQuotedHtml, stripQuotedText, isForwardSubject } from "../../lib/quotedHistory";
 import { makeIsOutgoing } from "../../lib/outgoing";
 import { recipientSummary } from "../../lib/recipientSummary";
-import { searchContacts, openAttachment, startAttachmentDrag, quickLookAttachment, saveAttachment, fetchMailBody, trashMail, archiveMail, getThreadMails, markAsRead, unsubscribeMail, blockSender, getListStatus, allowListAgain, retryUnsubscribe } from "../../lib/tauri";
+import { searchContacts, openAttachment, startAttachmentDrag, quickLookAttachment, saveAttachment, fetchMailBody, trashMail, archiveMail, getThreadMails, markAsRead, getListStatus } from "../../lib/tauri";
 import { revealLabelKey, revealAttachment } from "../../lib/attachmentActions";
 import { isMacOS, isWindows } from "../../lib/platform";
 import { MAIL_LINK_BRIDGE, MAIL_LINK_BRIDGE_CSP_HASH, relayBridgeKey, parseBridgeContextMenu, type BridgeContextMenu } from "../../lib/mailLinkBridge";
@@ -51,7 +52,7 @@ import { LinkedTaskChip } from "../tasks/MailTaskChip";
 import { TaskPickerDialog } from "../tasks/TaskPickerDialog";
 import { CreateTaskFromMail } from "../tasks/CreateTaskFromMail";
 import { InvitationCard } from "../calendar/InvitationCard";
-import type { Mail, Attachment, MailAddress, UnsubscribeOutcome } from "../../types";
+import type { Mail, Attachment, MailAddress } from "../../types";
 import { useTranslation } from "react-i18next";
 import { ImageLightbox, type ImageLightboxItem } from "./ImageLightbox";
 import { formatFileSize } from "../../lib/fileSize";
@@ -1781,58 +1782,23 @@ export function ThreadView({ mail }: ThreadViewProps) {
   const [unsubscribeMode, setUnsubscribeMode] = useState<"unsubscribe" | "block" | null>(null);
   const [unsubscribeBusy, setUnsubscribeBusy] = useState(false);
 
-  const showUnsubscribeError = useCallback((e: unknown) => {
-    const raw = String(e);
-    dialog.alert({ type: "danger", title: t("common.error"), message: raw.startsWith("unsubscribe.errors.") ? t(raw) : causeMessage(e) });
-  }, [dialog, t]);
-
-  const applyUnsubscribeOutcome = useCallback((outcome: UnsubscribeOutcome) => {
-    if (outcome.web_url) openUrl(outcome.web_url).catch(() => {});
-    if (outcome.trashed > 0) {
-      addToast("success", t("unsubscribe.movedToTrash", { count: outcome.trashed }));
-      invalidateMailListQueries(queryClient);
-    }
-    queryClient.invalidateQueries({ queryKey: ["list-status"] });
-  }, [addToast, queryClient, t]);
+  const refreshListStatus = useCallback(() => void queryClient.invalidateQueries({ queryKey: ["list-status"] }), [queryClient]);
+  const { unsubscribeOrBlock, listAction } = useListActions(refreshListStatus);
 
   const handleUnsubscribeConfirm = useCallback(async (trashExisting: boolean) => {
     const mode = unsubscribeMode;
     setUnsubscribeMode(null);
     if (!mode) return;
     setUnsubscribeBusy(true);
-    try {
-      const run = mode === "block" ? blockSender : unsubscribeMail;
-      applyUnsubscribeOutcome(await run(mail.id, trashExisting));
-    } catch (e) {
-      showUnsubscribeError(e);
-    } finally {
-      setUnsubscribeBusy(false);
-    }
-  }, [unsubscribeMode, mail.id, applyUnsubscribeOutcome, showUnsubscribeError]);
+    await unsubscribeOrBlock(mode, mail.id, trashExisting);
+    setUnsubscribeBusy(false);
+  }, [unsubscribeMode, mail.id, unsubscribeOrBlock]);
 
   const handleListAction = useCallback(async (action: "retry" | "allow", id: string) => {
-    if (action === "allow") {
-      const confirmed = await dialog.confirm({
-        title: t("unsubscribe.allowAgainTitle", { name: listStatus?.subscription?.display_name ?? "" }),
-        message: t("unsubscribe.allowAgainMessage"),
-        confirmLabel: t("unsubscribe.allowAgain"),
-      });
-      if (!confirmed) return;
-    }
     setUnsubscribeBusy(true);
-    try {
-      if (action === "allow") {
-        await allowListAgain(id);
-        queryClient.invalidateQueries({ queryKey: ["list-status"] });
-      } else {
-        applyUnsubscribeOutcome(await retryUnsubscribe(id));
-      }
-    } catch (e) {
-      showUnsubscribeError(e);
-    } finally {
-      setUnsubscribeBusy(false);
-    }
-  }, [dialog, t, listStatus, queryClient, applyUnsubscribeOutcome, showUnsubscribeError]);
+    await listAction(action, id, listStatus?.subscription?.display_name ?? "");
+    setUnsubscribeBusy(false);
+  }, [listAction, listStatus]);
 
   const threadMailIdsKey = useMemo(
     () => threadMails.map((m) => m.id).join(","),

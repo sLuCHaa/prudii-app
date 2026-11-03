@@ -10,6 +10,7 @@ const report = (over: Partial<TrackerReport> = {}): TrackerReport => ({
   other_count: 0,
   by_kind: { pixel: 0, hidden: 0, tracking_domain: 0 },
   companies: [],
+  other_domains: [],
   senders: [],
   ...over,
 });
