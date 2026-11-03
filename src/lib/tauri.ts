@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { BundleImportResult, Calendar, CalendarPatch, CalendarSettings, EditScope, EventDetail, EventInput, EventPatch, EventTimes, ImportResult, InvitationView, Occurrence, RespondInvitationArgs, SubscribeResult } from "../types/calendar";
-import type { Account, AiResponse, Assignment, Attachment, AttachmentWithContext, AppConfig, AppSettings, BackupOptions, BulkSaveResult, CategoryCount, ChecklistItem, Contact, ContactDomain, CreateAccountRequest, CreateRuleRequest, CreateTaskInput, EmailTemplate, ExportLabels, ExportOptions, Folder, LicenseInfo, ListStatus, Mail, MailCategoryInfo, MailRule, OAuthResult, OllamaStatus, RestorePreview, ScheduledMail, SearchResult, SenderRule, SendMailRequest, SieveSupport, Task, TaskAttachment, TaskDetail, StoredBody, TaskStatus, TeamSnapshot, TrackerRecord, TrackerReport, UnsubscribeOutcome, UpdateTaskPatch, VacationSettings, VacationState } from "../types";
+import type { Account, AiResponse, Assignment, Attachment, AttachmentWithContext, AppConfig, AppSettings, BackupOptions, BulkSaveResult, CategoryCount, ChecklistItem, Contact, ContactDomain, CreateAccountRequest, CreateRuleRequest, CreateTaskInput, EmailTemplate, ExportLabels, ExportOptions, Folder, LicenseInfo, ListStatus, Mail, NewsletterOverview, MailCategoryInfo, MailRule, OAuthResult, OllamaStatus, RestorePreview, ScheduledMail, SearchResult, SenderRule, SendMailRequest, SieveSupport, Task, TaskAttachment, TaskDetail, StoredBody, TaskStatus, TeamSnapshot, TrackerRecord, TrackerReport, UnsubscribeOutcome, UpdateTaskPatch, VacationSettings, VacationState } from "../types";
 import { prefers24HourClock } from "./localeDefaults";
 
 export async function listAccounts(): Promise<Account[]> {
@@ -392,6 +392,10 @@ export async function listUnscannedBodies(limit: number): Promise<StoredBody[]> 
 
 export async function getTrackerReport(accountId?: string, days?: number): Promise<TrackerReport> {
   return invoke("get_tracker_report", { accountId: accountId ?? null, days: days ?? null });
+}
+
+export async function getNewsletterOverview(accountId?: string): Promise<NewsletterOverview> {
+  return invoke("get_newsletter_overview", { accountId: accountId ?? null });
 }
 
 export async function fetchBulkBodies(): Promise<number> {

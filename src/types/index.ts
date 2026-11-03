@@ -216,6 +216,27 @@ export interface TrackerReport {
 
 export type ListOffer = "unsubscribe" | "block" | "none";
 
+export interface NewsletterRow {
+  account_id: string;
+  key: string;
+  name: string;
+  address: string;
+  count: number;
+  read: number;
+  last_received: string;
+  trackers: number;
+  sample_mail_id: string;
+  offer: ListOffer;
+  subscription: Unsubscription | null;
+}
+
+export interface NewsletterOverview {
+  rows: NewsletterRow[];
+  mails: number;
+  unsubscribed: number;
+  blocked: number;
+}
+
 export interface Unsubscription {
   id: string;
   display_name: string;
