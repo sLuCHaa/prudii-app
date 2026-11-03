@@ -1178,6 +1178,11 @@
       "bySender": "Remitentes con más rastreadores",
       "none": "Aún no se han encontrado rastreadores.",
       "footnote": "Detectados mediante dominios de seguimiento conocidos e imágenes ocultas de 1×1. Las cifras se quedan en este equipo."
+    },
+    "hint": {
+      "title": "Tu revisión del buzón está lista",
+      "text": "Mira qué boletines casi no lees y quién quería mirar.",
+      "open": "Abrir"
     }
   },
   "snooze": {

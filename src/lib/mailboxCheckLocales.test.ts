@@ -40,6 +40,9 @@ const KEYS = [
   "mailboxCheck.trackers.bySender",
   "mailboxCheck.trackers.none",
   "mailboxCheck.trackers.footnote",
+  "mailboxCheck.hint.title",
+  "mailboxCheck.hint.text",
+  "mailboxCheck.hint.open",
 ];
 
 function lookup(data: unknown, path: string): unknown {

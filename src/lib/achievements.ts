@@ -4,6 +4,7 @@
 const KEY_ARCHIVED_TODAY = "prudii.archivedToday";
 const KEY_STREAK         = "prudii.inboxZeroStreak";
 const KEY_FIRST_HUNDRED  = "prudii.firstHundredMailsSeen";
+const KEY_CHECK_HINT     = "prudii.mailboxCheckHintShown";
 
 function todayStr(): string {
   return new Date().toISOString().slice(0, 10);
@@ -79,6 +80,17 @@ export function checkFirstHundredOnce(): boolean {
   try {
     if (localStorage.getItem(KEY_FIRST_HUNDRED) === "1") return false;
     localStorage.setItem(KEY_FIRST_HUNDRED, "1");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// A failing store means no hint at all, never one after every sync.
+export function checkMailboxCheckHintOnce(): boolean {
+  try {
+    if (localStorage.getItem(KEY_CHECK_HINT) === "1") return false;
+    localStorage.setItem(KEY_CHECK_HINT, "1");
     return true;
   } catch {
     return false;

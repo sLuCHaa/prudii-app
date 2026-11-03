@@ -1178,6 +1178,11 @@
       "bySender": "Senders with the most trackers",
       "none": "No trackers found so far.",
       "footnote": "Detected through known tracking domains and hidden 1×1 images. The numbers stay on this computer."
+    },
+    "hint": {
+      "title": "Your inbox check is ready",
+      "text": "See which newsletters you hardly read and who wanted to watch.",
+      "open": "Open"
     }
   },
   "snooze": {

@@ -1178,6 +1178,11 @@
       "bySender": "Expéditeurs avec le plus de traqueurs",
       "none": "Aucun traqueur trouvé pour l'instant.",
       "footnote": "Détectés grâce aux domaines de suivi connus et aux images 1×1 cachées. Les chiffres restent sur cet ordinateur."
+    },
+    "hint": {
+      "title": "Votre bilan de la boîte est prêt",
+      "text": "Voyez quelles newsletters vous lisez à peine et qui voulait vous observer.",
+      "open": "Ouvrir"
     }
   },
   "snooze": {

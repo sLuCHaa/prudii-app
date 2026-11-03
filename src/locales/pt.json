@@ -1178,6 +1178,11 @@
       "bySender": "Remetentes com mais rastreadores",
       "none": "Nenhum rastreador encontrado até agora.",
       "footnote": "Detectados por domínios de rastreamento conhecidos e imagens ocultas de 1×1. Os números ficam neste computador."
+    },
+    "hint": {
+      "title": "Sua revisão da caixa está pronta",
+      "text": "Veja quais newsletters você quase não lê e quem queria espiar.",
+      "open": "Abrir"
     }
   },
   "snooze": {

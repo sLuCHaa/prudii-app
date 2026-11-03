@@ -1178,6 +1178,11 @@
       "bySender": "Absender mit den meisten Trackern",
       "none": "Bisher keine Tracker gefunden.",
       "footnote": "Erkannt über bekannte Tracking-Domains und versteckte 1×1-Bilder. Die Zahlen bleiben auf diesem Rechner."
+    },
+    "hint": {
+      "title": "Dein Postfach-Check ist fertig",
+      "text": "Sieh nach, welche Newsletter du kaum liest und wer mitlesen wollte.",
+      "open": "Öffnen"
     }
   },
   "snooze": {

@@ -39,7 +39,7 @@ import { parseMailSort } from "./lib/mailSort";
 import { checkForUpdate } from "./lib/updater";
 import { installGlobalTooltips } from "./lib/globalTooltips";
 import { resolveAppMode } from "./lib/appMode";
-import { checkFirstHundredOnce } from "./lib/achievements";
+import { checkFirstHundredOnce, checkMailboxCheckHintOnce } from "./lib/achievements";
 import { playSentSound } from "./lib/sounds";
 import { useDialog } from "./components/ui/DialogProvider";
 import { useTranslation } from "react-i18next";
@@ -202,6 +202,15 @@ function AppInner() {
               "success",
               i18next.t("achievements.firstHundredTitle"),
               i18next.t("achievements.firstHundredDesc"),
+            );
+          }
+          if (checkMailboxCheckHintOnce()) {
+            useAppStore.getState().addToast(
+              "info",
+              i18next.t("mailboxCheck.hint.title"),
+              i18next.t("mailboxCheck.hint.text"),
+              10000,
+              { label: i18next.t("mailboxCheck.hint.open"), onClick: () => useAppStore.getState().setShowMailboxCheck(true) },
             );
           }
         }
