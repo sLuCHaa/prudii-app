@@ -1514,6 +1514,16 @@
     "title": "Novedades de Prudii {{version}}",
     "subtitle": "Esto es lo que ha cambiado desde tu última actualización.",
     "done": "Entendido",
+    "v1_8_1": {
+      "history": {
+        "title": "Cadenas de correos de un vistazo",
+        "text": "Los correos reenviados aparecen ahora como un historial continuo, con fechas uniformes y sin barras de cita duplicadas. Responder y reenviar aparecen al pasar el ratón sobre un correo."
+      },
+      "signature": {
+        "title": "Firmas plegadas",
+        "text": "Las firmas grandes con logotipo se pliegan tras un pequeño botón para que el mensaje vaya primero. Un clic las vuelve a mostrar."
+      }
+    },
     "v1_8_0": {
       "check": {
         "title": "Revisión del buzón",

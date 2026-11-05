@@ -96,6 +96,17 @@ describe("RELEASES", () => {
     ]);
   });
 
+  it("leads 1.8.1 with the mail history and folded signatures and repeats the 1.8.0 highlights", () => {
+    const r = RELEASES.find((x) => x.version === "1.8.1");
+    expect(r?.items.map((i) => i.key)).toEqual([
+      "whatsNew.v1_8_1.history",
+      "whatsNew.v1_8_1.signature",
+      "whatsNew.v1_8_0.check",
+      "whatsNew.v1_8_0.unsubscribe",
+      "whatsNew.v1_8_0.free",
+    ]);
+  });
+
   it("announces the signature right after pasted images in 1.7.3", () => {
     const r = RELEASES.find((x) => x.version === "1.7.3");
     expect(r?.items.map((i) => i.key)).toEqual([

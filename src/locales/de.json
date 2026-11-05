@@ -1514,6 +1514,16 @@
     "title": "Neu in Prudii {{version}}",
     "subtitle": "Das hat sich seit deinem letzten Update getan.",
     "done": "Verstanden",
+    "v1_8_1": {
+      "history": {
+        "title": "Mail-Verläufe auf einen Blick",
+        "text": "Weitergeleitete Mails stehen jetzt als zusammenhängender Verlauf untereinander, mit einheitlichem Datum und ohne doppelte Zitatbalken. Antworten und Weiterleiten erscheinen, sobald du über eine Mail fährst."
+      },
+      "signature": {
+        "title": "Signaturen eingeklappt",
+        "text": "Große Signaturen mit Logo klappen sich hinter einen kleinen Knopf ein, damit der Text im Vordergrund steht. Ein Klick zeigt sie wieder an."
+      }
+    },
     "v1_8_0": {
       "check": {
         "title": "Postfach-Check",

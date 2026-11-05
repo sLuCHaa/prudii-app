@@ -1514,6 +1514,16 @@
     "title": "Novidades do Prudii {{version}}",
     "subtitle": "Veja o que mudou desde a sua última atualização.",
     "done": "Entendi",
+    "v1_8_1": {
+      "history": {
+        "title": "Cadeias de e-mails num relance",
+        "text": "Os e-mails encaminhados aparecem agora como um histórico contínuo, com datas uniformes e sem barras de citação duplicadas. Responder e encaminhar aparecem assim que você passa o cursor sobre um e-mail."
+      },
+      "signature": {
+        "title": "Assinaturas recolhidas",
+        "text": "Assinaturas grandes com logotipo ficam recolhidas atrás de um pequeno botão, para que a mensagem venha primeiro. Um clique as mostra de novo."
+      }
+    },
     "v1_8_0": {
       "check": {
         "title": "Revisão da caixa de entrada",

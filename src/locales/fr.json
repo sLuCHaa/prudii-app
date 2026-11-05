@@ -1514,6 +1514,16 @@
     "title": "Nouveautés de Prudii {{version}}",
     "subtitle": "Voici ce qui a changé depuis votre dernière mise à jour.",
     "done": "Compris",
+    "v1_8_1": {
+      "history": {
+        "title": "Les fils d'e-mails d'un coup d'œil",
+        "text": "Les e-mails transférés s'affichent désormais comme un historique continu, avec des dates homogènes et sans doubles barres de citation. Répondre et transférer apparaissent dès que vous survolez un e-mail."
+      },
+      "signature": {
+        "title": "Signatures repliées",
+        "text": "Les grandes signatures avec logo se replient derrière un petit bouton pour laisser la place au message. Un clic suffit pour les afficher."
+      }
+    },
     "v1_8_0": {
       "check": {
         "title": "Bilan de la boîte mail",
