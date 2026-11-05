@@ -52,7 +52,8 @@ function parseAddress(raw: string): MailAddress | null {
     .replace(email, " ")
     .replace(/["“”]/g, "")
     .replace(/\s+/g, " ")
-    .trim();
+    .trim()
+    .replace(/^'(.+)'$/, "$1");
   return { name, email };
 }
 
@@ -105,9 +106,15 @@ const month = (name: string) => MONTHS[name.toLowerCase().replace(/\./g, "")];
 const NUMERIC_ZONE = /\s[+-]\d{2}:?\d{2}\s*$/;
 const TIME = /(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([ap]\.?m\.?)?/i;
 
-function dateParts(text: string): [number, number, number] | null {
+function dateParts(text: string, twelveHour: boolean): [number, number, number] | null {
   let m = /(\d{1,2})\.(\d{1,2})\.(\d{4})/.exec(text);
   if (m) return [+m[3], +m[2], +m[1]];
+  m = /(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(text);
+  if (m) {
+    // Only en-US writes month first, and it pairs that with a 12-hour clock.
+    const monthFirst = +m[2] > 12 || (+m[1] <= 12 && twelveHour);
+    return monthFirst ? [+m[3], +m[1], +m[2]] : [+m[3], +m[2], +m[1]];
+  }
   m = /(\d{1,2})\.?\s*([a-zäöü]+)\.?\s*,?\s*(\d{4})/i.exec(text);
   if (m && month(m[2])) return [+m[3], month(m[2]), +m[1]];
   m = /([a-zäöü]+)\.?\s+(\d{1,2}),?\s+(\d{4})/i.exec(text);
@@ -122,7 +129,7 @@ export function parseHeaderDate(text: string): string {
     if (!isNaN(t)) return new Date(t).toISOString();
   }
   const time = TIME.exec(input);
-  const parts = dateParts(time ? input.replace(time[0], " ") : input);
+  const parts = dateParts(time ? input.replace(time[0], " ") : input, !!time?.[4]);
   if (!parts) return input;
   let hours = time ? +time[1] : 0;
   const minutes = time ? +time[2] : 0;

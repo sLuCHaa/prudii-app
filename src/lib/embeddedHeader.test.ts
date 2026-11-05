@@ -50,6 +50,13 @@ describe("parseAddressList", () => {
     ]);
     expect(parseAddressList("Lea Kraus, Jonas Berger")).toHaveLength(2);
   });
+
+  it("drops the single quotes Outlook puts around a name, not an apostrophe", () => {
+    expect(parseAddressList("'Studio Halde | Anna' <anna.weber@studio-halde.example>")).toEqual([
+      { name: "Studio Halde | Anna", email: "anna.weber@studio-halde.example" },
+    ]);
+    expect(parseAddressList("Lea O'Neill <lea@studio-halde.example>")).toEqual([{ name: "Lea O'Neill", email: "lea@studio-halde.example" }]);
+  });
 });
 
 describe("parseHeaderDate", () => {
@@ -69,6 +76,13 @@ describe("parseHeaderDate", () => {
     ]) {
       expect(local(parseHeaderDate(text)), text).toEqual([2026, 9, 12, 22, 22]);
     }
+  });
+
+  it("reads slashed dates day first unless the numbers or a 12-hour clock say month first", () => {
+    expect(local(parseHeaderDate("21/10/2026, 17:28:44"))).toEqual([2026, 10, 21, 17, 28]);
+    expect(local(parseHeaderDate("10/21/2026, 5:28:44 PM"))).toEqual([2026, 10, 21, 17, 28]);
+    expect(local(parseHeaderDate("03/04/2026, 17:28:44"))).toEqual([2026, 4, 3, 17, 28]);
+    expect(local(parseHeaderDate("3/4/2026, 5:28:44 PM"))).toEqual([2026, 3, 4, 17, 28]);
   });
 
   it("honours an explicit numeric zone", () => {
