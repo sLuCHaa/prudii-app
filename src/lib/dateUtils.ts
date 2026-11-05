@@ -45,6 +45,27 @@ function listDateFormat(kind: "monthDay" | "numeric"): Intl.DateTimeFormat {
   return formatter;
 }
 
+const shortDateTimeFormats = new Map<string, Intl.DateTimeFormat>();
+
+export function formatShortDateTime(date: Date, use24h: boolean): string {
+  if (isNaN(date.getTime())) return "";
+  const withYear = !isThisYear(date);
+  const key = `${i18n.language}|${use24h}|${withYear}`;
+  let formatter = shortDateTimeFormats.get(key);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(i18n.language, {
+      day: "numeric",
+      month: "short",
+      year: withYear ? "numeric" : undefined,
+      hour: use24h ? "2-digit" : "numeric",
+      minute: "2-digit",
+      hourCycle: use24h ? "h23" : "h12",
+    });
+    shortDateTimeFormats.set(key, formatter);
+  }
+  return formatter.format(date);
+}
+
 /**
  * Format date for mail list - shows time for today, "Yesterday" for yesterday, date for older
  */

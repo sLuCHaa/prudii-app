@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import i18n from "./i18n";
 import de from "../locales/de.json";
-import { formatMailDate, formatDateTime, formatTime, getDateGroup } from "./dateUtils";
+import { formatMailDate, formatDateTime, formatShortDateTime, formatTime, getDateGroup } from "./dateUtils";
 
 // Fixed "now" so today/yesterday buckets are deterministic. Assertions avoid
 // exact clock times — the runner's timezone shifts rendered hours.
@@ -66,6 +66,24 @@ describe("formatDateTime", () => {
 
   it("returns empty string for invalid dates", () => {
     expect(formatDateTime(new Date("invalid"), true)).toBe("");
+  });
+});
+
+describe("formatShortDateTime", () => {
+  const plain = (s: string) => s.replace(/\s/g, " ");
+
+  it("shows day, short month and time, the year only for another year", async () => {
+    expect(plain(formatShortDateTime(new Date(2026, 9, 21, 17, 28), true))).toBe("Oct 21, 17:28");
+    expect(plain(formatShortDateTime(new Date(2026, 9, 21, 17, 28), false))).toBe("Oct 21, 5:28 PM");
+    expect(plain(formatShortDateTime(new Date(2025, 9, 21, 17, 28), true))).toBe("Oct 21, 2025, 17:28");
+
+    i18n.addResourceBundle("de", "translation", de, true, true);
+    await i18n.changeLanguage("de");
+    expect(plain(formatShortDateTime(new Date(2026, 9, 21, 8, 3), true))).toBe("21. Okt., 08:03");
+  });
+
+  it("returns empty string for invalid dates", () => {
+    expect(formatShortDateTime(new Date("invalid"), true)).toBe("");
   });
 });
 
