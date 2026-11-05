@@ -310,6 +310,8 @@
     "showAllRecipients": "Mostrar todos os destinatários",
     "showQuoted": "Mostrar histórico",
     "hideQuoted": "Ocultar histórico",
+    "showSignature": "Mostrar assinatura",
+    "hideSignature": "Ocultar assinatura",
     "details": "Detalhes",
     "expandMessage": "Expandir a mensagem de {{name}}",
     "collapseMessage": "Recolher a mensagem",

@@ -314,6 +314,8 @@
     "showAllRecipients": "Показать всех получателей",
     "showQuoted": "Показать историю",
     "hideQuoted": "Скрыть историю",
+    "showSignature": "Показать подпись",
+    "hideSignature": "Скрыть подпись",
     "details": "Подробности",
     "expandMessage": "Развернуть сообщение от {{name}}",
     "collapseMessage": "Свернуть сообщение",

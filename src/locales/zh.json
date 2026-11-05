@@ -309,6 +309,8 @@
     "showAllRecipients": "显示所有收件人",
     "showQuoted": "显示历史记录",
     "hideQuoted": "隐藏历史记录",
+    "showSignature": "显示签名",
+    "hideSignature": "隐藏签名",
     "details": "详情",
     "expandMessage": "展开来自 {{name}} 的邮件",
     "collapseMessage": "收起邮件",

@@ -23,6 +23,7 @@ import { useChatAnchor } from "../../hooks/useChatAnchor";
 import { splitEmbeddedMails } from "../../lib/embeddedMails";
 import { embeddedMailToMail, resolveNameOnlySender } from "../../lib/embeddedReply";
 import { EmbeddedMailCards } from "./EmbeddedMailCards";
+import { SignatureFold } from "./SignatureFold";
 import { AddressName } from "./AddressName";
 import { stripQuotedHtml, stripQuotedText, isForwardSubject } from "../../lib/quotedHistory";
 import { makeIsOutgoing } from "../../lib/outgoing";
@@ -969,11 +970,11 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
     <MailSourceView mailId={displayMail.id} />
   ) : split ? (
     <>
-      {split.outer && frame(split.outer, mainFrameRef)}
+      {split.outer && <SignatureFold html={split.outer} render={(html, main) => frame(html, main ? mainFrameRef : undefined)} />}
       <EmbeddedMailCards
         key={`${displayMail.id}:${split.parts.length}`}
         parts={split.parts}
-        renderBody={(html) => frame(html)}
+        renderBody={(html) => <SignatureFold html={html} render={(h) => frame(h)} />}
         onReply={handleCardReply}
         onForward={handleCardForward}
         onShowWithout={() => setCardsOff(true)}
@@ -986,7 +987,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
           {t("mailDetail.embedded.showCards")}
         </button>
       )}
-      {frame((hideQuotes && htmlWithoutQuotes) || displayMail.body_html || "", mainFrameRef)}
+      <SignatureFold html={(hideQuotes && htmlWithoutQuotes) || displayMail.body_html || ""} render={(html, main) => frame(html, main ? mainFrameRef : undefined)} />
     </>
   ) : (
     <pre className="text-sm text-text-secondary whitespace-pre-wrap font-sans leading-relaxed select-text">

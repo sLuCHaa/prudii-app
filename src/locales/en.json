@@ -310,6 +310,8 @@
     "showAllRecipients": "Show all recipients",
     "showQuoted": "Show history",
     "hideQuoted": "Hide history",
+    "showSignature": "Show signature",
+    "hideSignature": "Hide signature",
     "details": "Details",
     "expandMessage": "Expand message from {{name}}",
     "collapseMessage": "Collapse message",

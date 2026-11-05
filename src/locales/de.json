@@ -310,6 +310,8 @@
     "showAllRecipients": "Alle Empfänger anzeigen",
     "showQuoted": "Verlauf anzeigen",
     "hideQuoted": "Verlauf ausblenden",
+    "showSignature": "Signatur anzeigen",
+    "hideSignature": "Signatur ausblenden",
     "details": "Details",
     "expandMessage": "Nachricht von {{name}} aufklappen",
     "collapseMessage": "Nachricht einklappen",
