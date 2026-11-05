@@ -27,9 +27,11 @@ const QUOTE_ATTR = "data-prudii-quote";
 
 export const QUOTE_EDIT_ROOT = "prudii-quote-edit";
 
+// The header's labels follow the UI language, so its date does too, not the system locale.
 function formatDate(date: string): string {
   const d = new Date(date);
-  return isNaN(d.getTime()) ? date || "" : d.toLocaleString();
+  if (isNaN(d.getTime())) return date || "";
+  return new Intl.DateTimeFormat(i18n.language, { dateStyle: "full", timeStyle: "short" }).format(d);
 }
 
 function address(name: string, email: string): string {

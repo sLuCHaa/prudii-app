@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { applyQuoteEdit, bodyWithoutQuote, buildQuote, editableQuoteHtml, quoteFromHtml, renderQuote, splitQuote, stripQuoteMarker, type ComposeQuote } from "./composeQuote";
 import { stripQuotedHtml } from "./quotedHistory";
+import { splitEmbeddedMails } from "./embeddedMails";
+import i18n from "./i18n";
+import de from "../locales/de.json";
 
 const FORWARD: ComposeQuote = {
   kind: "forward",
@@ -157,6 +160,25 @@ describe("renderQuote", () => {
     expect(text).toContain("Lena Hoffmann <lena@studio-halde.de>");
     expect(text).toContain("Angebot Messestand Frühjahr 2027");
     expect(text).toContain("einkauf@beispiel.de");
+  });
+
+  it("dates the header in the UI language so the card view reads it back", async () => {
+    const quote: ComposeQuote = { ...FORWARD, meta: { ...FORWARD.meta, date: new Date(2026, 9, 21, 17, 28).toISOString() } };
+    const local = (html: string) => {
+      const d = new Date(splitEmbeddedMails(`<p>Hi</p>${html}`)!.parts[0].date);
+      return [d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours(), d.getMinutes()];
+    };
+    try {
+      expect(textOf(renderQuote(quote)).replace(/\s/g, " ")).toContain("Wednesday, October 21, 2026 at 5:28 PM");
+      expect(local(renderQuote(quote))).toEqual([2026, 10, 21, 17, 28]);
+
+      i18n.addResourceBundle("de", "translation", de, true, true);
+      await i18n.changeLanguage("de");
+      expect(textOf(renderQuote(quote)).replace(/\s/g, " ")).toContain("Mittwoch, 21. Oktober 2026 um 17:28");
+      expect(local(renderQuote(quote))).toEqual([2026, 10, 21, 17, 28]);
+    } finally {
+      await i18n.changeLanguage("en");
+    }
   });
 
   it("escapes the sender's name", () => {
