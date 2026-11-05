@@ -167,6 +167,11 @@ function trimEdge(root: Node, edge: "firstChild" | "lastChild") {
   }
 }
 
+function soleChild(parent: Node): Element | null {
+  const visible = Array.from(parent.childNodes).filter(seen);
+  return visible.length === 1 && visible[0].nodeType === Node.ELEMENT_NODE ? (visible[0] as Element) : null;
+}
+
 function clean(fragment: DocumentFragment, doc: Document): HTMLElement {
   const box = doc.createElement("div");
   box.appendChild(fragment);
@@ -174,8 +179,8 @@ function clean(fragment: DocumentFragment, doc: Document): HTMLElement {
   for (;;) {
     trimEdge(box, "firstChild");
     trimEdge(box, "lastChild");
-    const visible = Array.from(box.childNodes).filter(seen);
-    const only = visible.length === 1 && visible[0].nodeType === Node.ELEMENT_NODE ? (visible[0] as Element) : null;
+    let only = soleChild(box);
+    while (only?.tagName === "DIV" && !only.matches(QUOTE_WRAPPER)) only = soleChild(only);
     if (!only?.matches(QUOTE_WRAPPER)) return box;
     only.replaceWith(...Array.from(only.childNodes));
   }

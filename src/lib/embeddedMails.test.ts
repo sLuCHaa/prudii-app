@@ -216,6 +216,14 @@ describe("splitEmbeddedMails", () => {
     }
   });
 
+  it("unwraps quote wrappers nested in plain containers", () => {
+    const html =
+      '<p>Bitte bearbeiten.</p><div><blockquote><div class="WordSection1"><div name="messageReplySection"><p><b>Von:</b> Lea Kraus &lt;kontakt@studio-halde.example&gt;<br><b>Datum:</b> 20. Okt. 2026, 08:43 +0200<br><b>An:</b> planung@studio-halde.example<br><b>Betreff:</b> Neubau<br><br></p><blockquote style="margin-top:5pt"><p>Guten Morgen Frau Weber,</p><p>das Haus ist fertig.</p></blockquote></div></div></blockquote></div>';
+    const part = splitEmbeddedMails(html)!.parts[0];
+    expect(new DOMParser().parseFromString(part.html, "text/html").querySelector("blockquote")).toBeNull();
+    expect(textOf(part.html)).toBe(strip("Guten Morgen Frau Weber,das Haus ist fertig."));
+  });
+
   it("has no outer part when the mail starts with the header", () => {
     const html = FIXTURES[2].html.replace('<div dir="ltr">Zur Kenntnis.</div><br>', "");
     expect(splitEmbeddedMails(html)!.outer).toBe("");
