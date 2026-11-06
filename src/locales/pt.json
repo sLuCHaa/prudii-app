@@ -1352,11 +1352,15 @@
   "imapError": {
     "authFailed": {
       "title": "Falha no início de sessão",
-      "generic": "O servidor rejeitou as credenciais. Verifique o seu e-mail e palavra-passe.",
+      "generic": "O servidor rejeitou o início de sessão. Verifique o seu e-mail e palavra-passe. Se o início de sessão no site do fornecedor funcionar, ele provavelmente exige uma senha de aplicação para programas de e-mail (sobretudo com verificação em dois passos) ou o acesso IMAP está desativado nas definições.",
       "gmail": "O Gmail requer uma senha de aplicação para acesso IMAP. As senhas normais não funcionarão se a verificação em dois passos estiver ativada.",
       "gmailLink": "Criar uma senha de aplicação",
       "outlook": "As contas Outlook/Microsoft com 2FA requerem uma senha de aplicação. As senhas normais podem não funcionar.",
-      "outlookLink": "Criar uma senha de aplicação"
+      "outlookLink": "Criar uma senha de aplicação",
+      "imapAccess": "O {{provider}} só aceita programas de e-mail depois de ativar o acesso IMAP: E-Mail-Einstellungen → POP3/IMAP → «POP3- und IMAP-Zugriff erlauben». O {{provider}} volta a desativá-lo após um longo período sem utilização. Com a verificação em dois passos precisa também de uma senha de aplicação.",
+      "imapAccessLink": "Ativar o acesso IMAP",
+      "icloud": "Nos programas de e-mail, o iCloud só aceita uma palavra-passe específica da app, não a palavra-passe da sua conta Apple.",
+      "icloudLink": "Criar uma palavra-passe específica da app"
     },
     "tls": {
       "title": "Falha na conexão segura",
@@ -1377,7 +1381,9 @@
     "unknown": {
       "title": "Falha na conexão",
       "detail": "Erro desconhecido. Verifique as configurações do servidor e tente novamente."
-    }
+    },
+    "serverReply": "Resposta do servidor: {{reply}}",
+    "details": "Detalhes: {{details}}"
   },
   "sync": {
     "doneNew": "{{count}} novos e-mails",

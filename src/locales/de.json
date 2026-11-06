@@ -1352,11 +1352,15 @@
   "imapError": {
     "authFailed": {
       "title": "Anmeldung fehlgeschlagen",
-      "generic": "Der Server hat die Anmeldedaten abgelehnt. Überprüfe E-Mail-Adresse und Passwort.",
+      "generic": "Der Server hat die Anmeldung abgelehnt. Prüfe E-Mail-Adresse und Passwort. Klappt die Anmeldung im Browser, verlangt der Anbieter für Mail-Programme wahrscheinlich ein App-Passwort (meist bei Zwei-Faktor-Anmeldung), oder der IMAP-Zugriff ist in seinen Einstellungen ausgeschaltet.",
       "gmail": "Gmail erfordert für den IMAP-Zugriff ein App-Passwort. Normale Passwörter funktionieren nicht, wenn die 2-Schritt-Verifizierung aktiviert ist.",
       "gmailLink": "App-Passwort erstellen",
       "outlook": "Outlook-/Microsoft-Konten mit 2FA benötigen ein App-Passwort. Normale Passwörter funktionieren möglicherweise nicht.",
-      "outlookLink": "App-Passwort erstellen"
+      "outlookLink": "App-Passwort erstellen",
+      "imapAccess": "{{provider}} lässt Mail-Programme erst zu, wenn der IMAP-Zugriff eingeschaltet ist: E-Mail-Einstellungen → POP3/IMAP → „POP3- und IMAP-Zugriff erlauben“. Nach längerer Pause schaltet {{provider}} ihn wieder ab. Mit Zwei-Faktor-Anmeldung brauchst du zusätzlich ein App-Passwort.",
+      "imapAccessLink": "IMAP-Zugriff einschalten",
+      "icloud": "iCloud nimmt in Mail-Programmen nur ein app-spezifisches Passwort an, nicht das Passwort deines Apple Accounts.",
+      "icloudLink": "App-spezifisches Passwort erstellen"
     },
     "tls": {
       "title": "Sichere Verbindung fehlgeschlagen",
@@ -1377,7 +1381,9 @@
     "unknown": {
       "title": "Verbindung fehlgeschlagen",
       "detail": "Unbekannter Fehler. Überprüfe die Servereinstellungen und versuche es erneut."
-    }
+    },
+    "serverReply": "Antwort des Servers: {{reply}}",
+    "details": "Details: {{details}}"
   },
   "sync": {
     "doneNew": "{{count}} neue Mails",

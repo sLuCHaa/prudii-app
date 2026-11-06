@@ -1352,11 +1352,15 @@
   "imapError": {
     "authFailed": {
       "title": "Échec de la connexion",
-      "generic": "Le serveur a refusé les identifiants. Vérifiez votre adresse e-mail et votre mot de passe.",
+      "generic": "Le serveur a refusé la connexion. Vérifiez votre adresse e-mail et votre mot de passe. Si la connexion sur le site du fournisseur fonctionne, il exige probablement un mot de passe d'application pour les logiciels de messagerie (surtout avec la validation en deux étapes), ou l'accès IMAP est désactivé dans ses paramètres.",
       "gmail": "Gmail requiert un mot de passe d'application pour l'accès IMAP. Les mots de passe habituels ne fonctionnent pas si la validation en deux étapes est activée.",
       "gmailLink": "Créer un mot de passe d'application",
       "outlook": "Les comptes Outlook/Microsoft avec 2FA nécessitent un mot de passe d'application. Les mots de passe habituels peuvent ne pas fonctionner.",
-      "outlookLink": "Créer un mot de passe d'application"
+      "outlookLink": "Créer un mot de passe d'application",
+      "imapAccess": "{{provider}} n'accepte les logiciels de messagerie qu'une fois l'accès IMAP activé : E-Mail-Einstellungen → POP3/IMAP → « POP3- und IMAP-Zugriff erlauben ». {{provider}} le désactive de nouveau après une longue période sans utilisation. Avec la validation en deux étapes, il vous faut aussi un mot de passe d'application.",
+      "imapAccessLink": "Activer l'accès IMAP",
+      "icloud": "Dans les logiciels de messagerie, iCloud n'accepte qu'un mot de passe pour app, pas le mot de passe de votre compte Apple.",
+      "icloudLink": "Créer un mot de passe pour app"
     },
     "tls": {
       "title": "Échec de la connexion sécurisée",
@@ -1377,7 +1381,9 @@
     "unknown": {
       "title": "Échec de la connexion",
       "detail": "Erreur inconnue. Vérifiez les paramètres du serveur et réessayez."
-    }
+    },
+    "serverReply": "Réponse du serveur : {{reply}}",
+    "details": "Détails : {{details}}"
   },
   "sync": {
     "doneNew": "{{count}} nouveaux e-mails",

@@ -117,6 +117,9 @@ export function WizardStepAuth({
         <div className="rounded-lg border border-danger/40 bg-danger/5 p-3 text-sm">
           <p className="font-semibold text-danger mb-1">{errorHint.title}</p>
           <p className="text-text-secondary">{errorHint.detail}</p>
+          {errorHint.technical && (
+            <p className="mt-1 text-xs text-text-tertiary break-words select-text">{errorHint.technical}</p>
+          )}
           {errorHint.link && (
             <a
               href={errorHint.link}

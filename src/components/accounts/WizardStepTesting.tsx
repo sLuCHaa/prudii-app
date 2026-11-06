@@ -73,6 +73,11 @@ export function WizardStepTesting({
           <p className="text-sm text-text-tertiary mb-1 max-w-xs mx-auto">
             {errorHint.detail}
           </p>
+          {errorHint.technical && (
+            <p className="text-xs text-text-tertiary mb-3 max-w-xs mx-auto break-words select-text">
+              {errorHint.technical}
+            </p>
+          )}
           {errorHint.link && (
             <a
               href={errorHint.link}

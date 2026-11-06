@@ -1352,11 +1352,15 @@
   "imapError": {
     "authFailed": {
       "title": "Error de inicio de sesión",
-      "generic": "El servidor rechazó las credenciales. Verifica tu correo electrónico y contraseña.",
+      "generic": "El servidor rechazó el inicio de sesión. Verifica tu correo electrónico y contraseña. Si el inicio de sesión en la web del proveedor funciona, probablemente exige una contraseña de aplicación para programas de correo (sobre todo con verificación en dos pasos) o el acceso IMAP está desactivado en su configuración.",
       "gmail": "Gmail requiere una contraseña de aplicación para el acceso IMAP. Las contraseñas normales no funcionarán si la verificación en dos pasos está activada.",
       "gmailLink": "Crear una contraseña de aplicación",
       "outlook": "Las cuentas de Outlook/Microsoft con 2FA requieren una contraseña de aplicación. Las contraseñas normales pueden no funcionar.",
-      "outlookLink": "Crear una contraseña de aplicación"
+      "outlookLink": "Crear una contraseña de aplicación",
+      "imapAccess": "{{provider}} solo admite programas de correo cuando el acceso IMAP está activado: E-Mail-Einstellungen → POP3/IMAP → «POP3- und IMAP-Zugriff erlauben». {{provider}} lo vuelve a desactivar tras un tiempo sin uso. Con la verificación en dos pasos necesitas además una contraseña de aplicación.",
+      "imapAccessLink": "Activar el acceso IMAP",
+      "icloud": "iCloud solo acepta una contraseña específica de app en los programas de correo, no la contraseña de tu cuenta de Apple.",
+      "icloudLink": "Crear una contraseña específica de app"
     },
     "tls": {
       "title": "Error de conexión segura",
@@ -1377,7 +1381,9 @@
     "unknown": {
       "title": "Error de conexión",
       "detail": "Error desconocido. Verifica la configuración del servidor e inténtalo de nuevo."
-    }
+    },
+    "serverReply": "Respuesta del servidor: {{reply}}",
+    "details": "Detalles: {{details}}"
   },
   "sync": {
     "doneNew": "{{count}} correos nuevos",

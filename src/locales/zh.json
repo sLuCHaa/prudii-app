@@ -1350,11 +1350,15 @@
   "imapError": {
     "authFailed": {
       "title": "登录失败",
-      "generic": "服务器拒绝了凭据。请检查您的电子邮件和密码。",
+      "generic": "服务器拒绝了登录。请检查您的电子邮件地址和密码。如果在服务商网站上可以登录，服务商可能要求邮件程序使用应用专用密码（通常在启用两步验证时），或者其设置中关闭了 IMAP 访问。",
       "gmail": "Gmail 的 IMAP 访问需要应用专用密码。如果启用了两步验证，常规密码将无法使用。",
       "gmailLink": "创建应用专用密码",
       "outlook": "启用了两步验证的 Outlook/Microsoft 账户需要应用专用密码，常规密码可能无法使用。",
-      "outlookLink": "创建应用专用密码"
+      "outlookLink": "创建应用专用密码",
+      "imapAccess": "{{provider}} 只有在开启 IMAP 访问后才允许邮件程序登录：E-Mail-Einstellungen → POP3/IMAP → “POP3- und IMAP-Zugriff erlauben”。长时间未使用后，{{provider}} 会再次关闭它。启用两步验证时还需要应用专用密码。",
+      "imapAccessLink": "开启 IMAP 访问",
+      "icloud": "在邮件程序中，iCloud 只接受 App 专用密码，不接受您的 Apple 账户密码。",
+      "icloudLink": "创建 App 专用密码"
     },
     "tls": {
       "title": "安全连接失败",
@@ -1375,7 +1379,9 @@
     "unknown": {
       "title": "连接失败",
       "detail": "未知错误。请检查服务器设置并重试。"
-    }
+    },
+    "serverReply": "服务器回复：{{reply}}",
+    "details": "详细信息：{{details}}"
   },
   "sync": {
     "doneNew": "{{count}} 封新邮件",

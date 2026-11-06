@@ -446,7 +446,11 @@ pub async fn test_imap_connection(
     let at = auth_type.as_deref().unwrap_or("password");
     crate::imap::test_connection_with_auth(&host, port as u16, &email, at, &password)
         .await
-        .map_err(|e| format!("{:#}", e))
+        .map_err(|e| {
+            let msg = format!("{:#}", e);
+            log::warn!("IMAP connection test to {}:{} failed: {}", host, port, msg);
+            msg
+        })
 }
 
 #[tauri::command]

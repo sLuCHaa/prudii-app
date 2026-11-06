@@ -1352,11 +1352,15 @@
   "imapError": {
     "authFailed": {
       "title": "Sign-in failed",
-      "generic": "The server rejected the credentials. Double-check your email and password.",
+      "generic": "The server rejected the sign-in. Check your email and password. If signing in on the provider's website works, the provider probably wants an app password for mail apps (usually with two-step verification), or IMAP access is switched off in its settings.",
       "gmail": "Gmail requires an App Password for IMAP access. Regular passwords will not work if 2-Step Verification is enabled.",
       "gmailLink": "Create an App Password",
       "outlook": "Outlook/Microsoft accounts with 2FA require an App Password. Regular passwords may not work.",
-      "outlookLink": "Create an App Password"
+      "outlookLink": "Create an App Password",
+      "imapAccess": "{{provider}} only lets mail apps in once IMAP access is switched on: E-Mail-Einstellungen → POP3/IMAP → “POP3- und IMAP-Zugriff erlauben”. {{provider}} switches it off again after a longer pause. With two-step verification you also need an app password.",
+      "imapAccessLink": "Switch on IMAP access",
+      "icloud": "iCloud only accepts an app-specific password from mail apps, not your Apple Account password.",
+      "icloudLink": "Create an app-specific password"
     },
     "tls": {
       "title": "Secure connection failed",
@@ -1377,7 +1381,9 @@
     "unknown": {
       "title": "Connection failed",
       "detail": "Unknown error. Check the server settings and try again."
-    }
+    },
+    "serverReply": "Server reply: {{reply}}",
+    "details": "Details: {{details}}"
   },
   "sync": {
     "doneNew": "{{count}} new mails",
