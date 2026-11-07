@@ -1045,12 +1045,12 @@ async fn do_gmail_sync(app: &AppHandle, _account: &Account, account_id: &str, cr
     let folders_needing_sync: Vec<&crate::models::Folder> = if has_history {
         let conn = db.lock_db();
         folders.iter().filter(|f| {
-            let count: i32 = conn.query_row(
+            let count: i64 = conn.query_row(
                 "SELECT COUNT(*) FROM mails WHERE folder_id = ?1",
                 rusqlite::params![f.id],
                 |row| row.get(0),
             ).unwrap_or(0);
-            count == 0 // only sync folders with no messages (newly discovered)
+            gmail_folder_needs_listing(&f.folder_type, count, true)
         }).collect()
     } else {
         folders.iter().collect()
@@ -1089,7 +1089,7 @@ async fn do_gmail_sync(app: &AppHandle, _account: &Account, account_id: &str, cr
                 }
             }
             Err(e) => {
-                log::warn!("Gmail: failed to sync folder {}: {}", folder.name, e);
+                log::warn!("Gmail: failed to sync folder {}: {:#}", folder.name, e);
             }
         }
     }
@@ -1105,7 +1105,7 @@ async fn do_gmail_sync(app: &AppHandle, _account: &Account, account_id: &str, cr
             match gmail::sync::reconcile_folder(&client, folder, account_id, &db).await {
                 Ok(n) if n > 0 => log::info!("Gmail: reconciled {} — removed {} stale mails", folder.name, n),
                 Ok(_) => {}
-                Err(e) => log::warn!("Gmail: reconcile '{}' failed: {}", folder.name, e),
+                Err(e) => log::warn!("Gmail: reconcile '{}' failed: {:#}", folder.name, e),
             }
         }
     }
@@ -2077,6 +2077,16 @@ pub async fn force_resync_account(
     sync_account(app, db, account_id, None).await
 }
 
+/// With a history id, an empty folder is one that was never listed, except
+/// Trash and Spam: the user empties those, and listing them while the server
+/// is still deleting brings the mails back. History reports what arrives there.
+fn gmail_folder_needs_listing(folder_type: &str, local_count: i64, has_history: bool) -> bool {
+    if !has_history {
+        return true;
+    }
+    local_count == 0 && folder_type != "trash" && folder_type != "spam"
+}
+
 #[cfg(test)]
 mod pending_op_claim_tests {
     use super::claim_pending_op;
@@ -2089,5 +2099,24 @@ mod pending_op_claim_tests {
         assert!(claim_pending_op("mail-claim-1", "delete").is_some());
         drop(first);
         assert!(claim_pending_op("mail-claim-1", "trash").is_some());
+    }
+}
+
+#[cfg(test)]
+mod gmail_listing_tests {
+    use super::gmail_folder_needs_listing;
+
+    #[test]
+    fn an_emptied_trash_or_spam_is_not_listed_again() {
+        assert!(!gmail_folder_needs_listing("trash", 0, true));
+        assert!(!gmail_folder_needs_listing("spam", 0, true));
+    }
+
+    #[test]
+    fn an_empty_label_is_still_listed_and_without_history_every_folder_is() {
+        assert!(gmail_folder_needs_listing("custom", 0, true));
+        assert!(!gmail_folder_needs_listing("custom", 3, true));
+        assert!(gmail_folder_needs_listing("trash", 0, false));
+        assert!(gmail_folder_needs_listing("inbox", 12, false));
     }
 }
