@@ -1523,6 +1523,20 @@
     "title": "Novedades de Prudii {{version}}",
     "subtitle": "Esto es lo que ha cambiado desde tu última actualización.",
     "done": "Entendido",
+    "v1_8_2": {
+      "search": {
+        "title": "La búsqueda llega a todo",
+        "text": "En Gmail y Outlook, la búsqueda ahora también encuentra palabras en correos que nunca abriste. Prudii consulta la búsqueda de tu proveedor y añade sus resultados, sin descargar nada."
+      },
+      "cleanup": {
+        "title": "Spam y Papelera a la vista",
+        "text": "La barra lateral muestra cuántos correos quedan en Spam y Papelera, con un botón para vaciarlos ahí mismo. Puedes desactivarlo en Ajustes."
+      },
+      "sync": {
+        "title": "Sincronización con los colores de tus cuentas",
+        "text": "Una fina línea de luz bajo el título muestra cada cuenta sincronizando en su propio color, y el correo nuevo entra deslizándose en la lista. Ya nada salta."
+      }
+    },
     "v1_8_1": {
       "history": {
         "title": "Cadenas de correos de un vistazo",

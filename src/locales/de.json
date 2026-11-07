@@ -1523,6 +1523,20 @@
     "title": "Neu in Prudii {{version}}",
     "subtitle": "Das hat sich seit deinem letzten Update getan.",
     "done": "Verstanden",
+    "v1_8_2": {
+      "search": {
+        "title": "Die Suche findet jede Mail",
+        "text": "Bei Gmail und Outlook findet die Suche jetzt auch Wörter in Mails, die du nie geöffnet hast. Prudii fragt dazu die Suche deines Anbieters und ergänzt die Treffer, ohne etwas herunterzuladen."
+      },
+      "cleanup": {
+        "title": "Spam und Papierkorb im Blick",
+        "text": "Die Seitenleiste zeigt, wie viele Mails noch in Spam und Papierkorb liegen, mit einem Knopf zum Leeren direkt daneben. In den Einstellungen lässt sich das abschalten."
+      },
+      "sync": {
+        "title": "Abgleich in deinen Kontofarben",
+        "text": "Eine feine Lichtlinie unter dem Titel zeigt jedes Konto in seiner Farbe beim Abgleichen, und neue Mails gleiten in die Liste. Nichts springt mehr."
+      }
+    },
     "v1_8_1": {
       "history": {
         "title": "Mail-Verläufe auf einen Blick",

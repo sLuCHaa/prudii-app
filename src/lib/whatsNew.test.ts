@@ -96,6 +96,17 @@ describe("RELEASES", () => {
     ]);
   });
 
+  it("leads 1.8.2 with search, the Spam/Trash counts and the sync line, and repeats the 1.8.1 highlights", () => {
+    const r = RELEASES.find((x) => x.version === "1.8.2");
+    expect(r?.items.map((i) => i.key)).toEqual([
+      "whatsNew.v1_8_2.search",
+      "whatsNew.v1_8_2.cleanup",
+      "whatsNew.v1_8_2.sync",
+      "whatsNew.v1_8_1.history",
+      "whatsNew.v1_8_1.signature",
+    ]);
+  });
+
   it("leads 1.8.1 with the mail history and folded signatures and repeats the 1.8.0 highlights", () => {
     const r = RELEASES.find((x) => x.version === "1.8.1");
     expect(r?.items.map((i) => i.key)).toEqual([

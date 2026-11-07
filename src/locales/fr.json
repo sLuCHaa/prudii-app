@@ -1523,6 +1523,20 @@
     "title": "Nouveautés de Prudii {{version}}",
     "subtitle": "Voici ce qui a changé depuis votre dernière mise à jour.",
     "done": "Compris",
+    "v1_8_2": {
+      "search": {
+        "title": "La recherche trouve tout",
+        "text": "Pour Gmail et Outlook, la recherche trouve désormais aussi les mots des messages jamais ouverts. Prudii interroge la recherche de votre fournisseur et ajoute ses résultats, sans rien télécharger."
+      },
+      "cleanup": {
+        "title": "Spam et corbeille en un coup d'œil",
+        "text": "La barre latérale indique combien de messages restent dans le spam et la corbeille, avec un bouton pour les vider sur place. Désactivable dans les paramètres."
+      },
+      "sync": {
+        "title": "Synchronisation aux couleurs de vos comptes",
+        "text": "Une fine ligne de lumière sous le titre montre chaque compte qui se synchronise dans sa couleur, et les nouveaux messages glissent dans la liste. Plus rien ne saute."
+      }
+    },
     "v1_8_1": {
       "history": {
         "title": "Les fils d'e-mails d'un coup d'œil",

@@ -1523,6 +1523,20 @@
     "title": "Novidades do Prudii {{version}}",
     "subtitle": "Veja o que mudou desde a sua última atualização.",
     "done": "Entendi",
+    "v1_8_2": {
+      "search": {
+        "title": "A pesquisa chega a todos os e-mails",
+        "text": "No Gmail e no Outlook, a pesquisa agora também encontra palavras em e-mails que você nunca abriu. O Prudii consulta a pesquisa do seu provedor e adiciona os resultados, sem baixar nada."
+      },
+      "cleanup": {
+        "title": "Spam e Lixeira à vista",
+        "text": "A barra lateral mostra quantos e-mails ainda estão no Spam e na Lixeira, com um botão para esvaziá-los ali mesmo. Pode ser desativado nas configurações."
+      },
+      "sync": {
+        "title": "Sincronização nas cores das suas contas",
+        "text": "Uma linha fina de luz sob o título mostra cada conta sincronizando na sua própria cor, e os novos e-mails deslizam para a lista. Nada mais pula."
+      }
+    },
     "v1_8_1": {
       "history": {
         "title": "Cadeias de e-mails num relance",
