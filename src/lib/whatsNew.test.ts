@@ -14,9 +14,10 @@ describe("compareVersions", () => {
 });
 
 describe("displayVersion", () => {
-  it("keeps major and minor", () => {
+  it("drops a zero patch and keeps any other", () => {
     expect(displayVersion("1.7.0")).toBe("1.7");
-    expect(displayVersion("1.10.3")).toBe("1.10");
+    expect(displayVersion("1.8.2")).toBe("1.8.2");
+    expect(displayVersion("1.10.3")).toBe("1.10.3");
   });
 });
 

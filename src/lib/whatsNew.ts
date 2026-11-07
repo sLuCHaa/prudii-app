@@ -114,7 +114,8 @@ export function compareVersions(a: string, b: string): number {
 
 export function displayVersion(version: string): string {
   const p = parseVersion(version);
-  return p ? `${p[0]}.${p[1]}` : version;
+  if (!p) return version;
+  return p[2] === 0 ? `${p[0]}.${p[1]}` : `${p[0]}.${p[1]}.${p[2]}`;
 }
 
 export function readSeen(store: Pick<Storage, "getItem"> | null): string | null | undefined {
