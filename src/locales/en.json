@@ -540,6 +540,8 @@
       "use24hClockDesc": "Display times in 24-hour format (14:30 vs 2:30 PM)",
       "showAllUnreadCounts": "Show unread counts for all folders",
       "showAllUnreadCountsDesc": "Display unread count badges on all folders, not just Inbox",
+      "showCleanupCounts": "Show what's left in Spam and Trash",
+      "showCleanupCountsDesc": "Show in the sidebar how many mails are still in Spam and Trash, with a button to empty them",
       "notifications": "Desktop notifications",
       "notificationsDesc": "Show a notification when new emails arrive during sync",
       "notificationSound": "Notification sound",

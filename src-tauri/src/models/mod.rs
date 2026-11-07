@@ -120,6 +120,8 @@ pub struct AppSettings {
     pub show_in_tray: bool,
     pub use_24h_clock: Option<bool>,
     pub show_all_unread_counts: bool,
+    #[serde(default = "default_true")]
+    pub show_cleanup_counts: bool,
     pub notifications_enabled: bool,
     pub notification_sound: bool,
     pub language: String,

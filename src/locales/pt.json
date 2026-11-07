@@ -540,6 +540,8 @@
       "use24hClockDesc": "Exibir horários no formato de 24 horas (14:30 em vez de 2:30 PM)",
       "showAllUnreadCounts": "Mostrar contagem de não lidas para todas as pastas",
       "showAllUnreadCountsDesc": "Exibir contador de não lidas em todas as pastas, não apenas na Caixa de Entrada",
+      "showCleanupCounts": "Mostrar o que resta no Spam e na Lixeira",
+      "showCleanupCountsDesc": "Mostra na barra lateral quantos e-mails ainda estão no Spam e na Lixeira, com um botão para os esvaziar",
       "notifications": "Notificações da área de trabalho",
       "notificationsDesc": "Mostrar uma notificação quando novos emails chegarem durante a sincronização",
       "notificationSound": "Som de notificação",

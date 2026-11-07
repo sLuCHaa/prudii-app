@@ -531,6 +531,8 @@
       "use24hClockDesc": "Afficher les heures au format 24h (14:30 au lieu de 2:30 PM)",
       "showAllUnreadCounts": "Afficher le nombre de non lus pour tous les dossiers",
       "showAllUnreadCountsDesc": "Afficher les badges de messages non lus sur tous les dossiers, pas seulement la boîte de réception",
+      "showCleanupCounts": "Afficher ce qui reste dans le spam et la corbeille",
+      "showCleanupCountsDesc": "Indique dans la barre latérale combien de messages restent dans le spam et la corbeille, avec un bouton pour les vider",
       "notifications": "Notifications bureau",
       "notificationsDesc": "Afficher une notification quand de nouveaux emails arrivent lors de la synchronisation",
       "notificationSound": "Son de notification",

@@ -14,6 +14,7 @@ import { useRemoveAccount } from "../../hooks/useRemoveAccount";
 import { useOpenTaskCount } from "../../hooks/useTasks";
 import { useTeamSnapshot, useTeamAssignments } from "../../hooks/useTeam";
 import { invalidateMailListQueries } from "../../lib/mailQueries";
+import { cleanupCount, formatCleanupCount, isCleanupFolder } from "../../lib/cleanupCount";
 import { openAssignedTo } from "../../lib/team";
 import { TeamSection } from "./TeamSection";
 import { CreateTaskFromMail } from "../tasks/CreateTaskFromMail";
@@ -332,7 +333,7 @@ function UnreadBadge({ count, className = "" }: { count: number; className?: str
 }
 
 function AccountSection({ account, collapsed }: { account: AccountType; collapsed: boolean }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const accountExpandedStates = useAppStore((s) => s.accountExpandedStates);
   const toggleAccountExpanded = useAppStore((s) => s.toggleAccountExpanded);
   const activeCategory = useAppStore((s) => s.activeCategory);
@@ -350,6 +351,11 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
   const setSelectedAccountId = useAppStore((s) => s.setSelectedAccountId);
   const setActiveFilter = useAppStore((s) => s.setActiveFilter);
   const appSettings = useAppStore((s) => s.appSettings);
+  // Spam and Trash show what is left in them instead of the unread count.
+  const showsUnread = (folder: FolderT) =>
+    folder.unread_count > 0 &&
+    !(appSettings.show_cleanup_counts && isCleanupFolder(folder.folder_type)) &&
+    (appSettings.show_all_unread_counts || folder.folder_type === "inbox");
   const syncProgress = useAppStore((s) => s.syncProgress[account.id]);
   const backfillProgress = useAppStore((s) => s.backfillProgress[account.id]);
   const openAccountSettings = useAppStore((s) => s.openAccountSettings);
@@ -523,11 +529,14 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
     }
   }
 
-  async function handleEmptyFolder() {
+  function handleEmptyFolder() {
     if (!contextMenu) return;
     const folder = contextMenu.folder;
     setContextMenu(null);
+    void emptyFolder(folder);
+  }
 
+  async function emptyFolder(folder: FolderT) {
     const isTrash = folder.folder_type === "trash";
     const folderName = isTrash ? t("folder.types.trash") : t("folder.types.spam");
 
@@ -692,7 +701,10 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
 
         <Collapse open={!!(expanded && folders)}>
           <div className="mt-0.5 space-y-0.5 px-px pb-1">
-            {(folders ?? []).map((folder) => (
+            {(folders ?? []).map((folder) => {
+              const leftover = cleanupCount(folder, appSettings.show_cleanup_counts);
+              const label = t(`folder.types.${folder.folder_type}`, { defaultValue: folder.name });
+              return (
               <button
                 key={folder.id}
                 ref={(el) => setFolderRef(folder.id, el)}
@@ -710,16 +722,19 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
                     ? "bg-accent/20 ring-2 ring-accent ring-inset text-accent"
                     : "text-text-secondary hover:bg-hover"
                 }`}
-                title={t(`folder.types.${folder.folder_type}`, { defaultValue: folder.name })}
+                title={leftover > 0 ? `${label} (${formatCleanupCount(leftover, i18n.language)})` : label}
               >
                 <span className="shrink-0">
                   {FOLDER_ICONS[folder.folder_type as FolderType] || FOLDER_ICONS.custom}
                 </span>
-                {folder.unread_count > 0 && (appSettings.show_all_unread_counts || folder.folder_type === "inbox") && (
+                {leftover > 0 ? (
+                  <span className="absolute top-0.5 right-1.5 w-1.5 h-1.5 rounded-full bg-text-tertiary" />
+                ) : showsUnread(folder) && (
                   <span className="absolute top-0.5 right-1.5 w-1.5 h-1.5 rounded-full bg-accent" />
                 )}
               </button>
-            ))}
+              );
+            })}
           </div>
         </Collapse>
 
@@ -814,7 +829,10 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
 
       <Collapse open={!!(expanded && folders)}>
         <div className="mt-0.5 space-y-0.5 px-px pb-1">
-          {(folders ?? []).map((folder) => (
+          {(folders ?? []).map((folder) => {
+            const leftover = cleanupCount(folder, appSettings.show_cleanup_counts);
+            const emptyLabel = folder.folder_type === "trash" ? t("folder.emptyTrash") : t("folder.emptySpam");
+            return (
             <Fragment key={folder.id}>
             {renamingFolder?.id === folder.id ? (
               <div className="flex items-center gap-1 px-1">
@@ -837,6 +855,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
                 </button>
               </div>
             ) : (
+              <div className="relative">
               <CardButton
                 ref={(el) => setFolderRef(folder.id, el)}
                 selected={selectedFolderId === folder.id && !activeCategory}
@@ -871,18 +890,43 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
                         <HardDrive className="w-3 h-3 text-text-tertiary" />
                       </span>
                     )}
-                    {folder.unread_count > 0 && (appSettings.show_all_unread_counts || folder.folder_type === "inbox") && (
+                    {showsUnread(folder) && (
                       <UnreadBadge count={folder.unread_count} />
+                    )}
+                    {leftover > 0 && (
+                      <span className="inline-flex items-center gap-1 align-middle">
+                        <span className="text-[11px] font-semibold tabular-nums leading-4 text-text-secondary bg-bg-tertiary rounded-full px-1.5">
+                          {formatCleanupCount(leftover, i18n.language)}
+                        </span>
+                        {/* Room for the empty button, which sits over the row as its own button. */}
+                        <span className="inline-block w-5 h-5" aria-hidden="true" />
+                      </span>
                     )}
                   </>
                 }
               >
                 {t(`folder.types.${folder.folder_type}`, { defaultValue: folder.name })}
               </CardButton>
+              {leftover > 0 && (
+                <button
+                  type="button"
+                  onClick={() => void emptyFolder(folder)}
+                  onDragOver={(e) => handleDragOver(e, folder)}
+                  onDragLeave={(e) => handleDragLeave(e, folder)}
+                  onDrop={(e) => handleDrop(e, folder)}
+                  title={emptyLabel}
+                  aria-label={emptyLabel}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded text-text-tertiary hover:text-danger hover:bg-danger/10 focus-visible:text-danger transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+              </div>
             )}
             {folder.folder_type === "inbox" && <CategorySidebarEntries inboxFolderId={folder.id} accountId={account.id} />}
             </Fragment>
-          ))}
+            );
+          })}
         </div>
       </Collapse>
 

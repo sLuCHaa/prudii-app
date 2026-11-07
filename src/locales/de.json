@@ -531,6 +531,8 @@
       "use24hClockDesc": "Zeiten im 24-Stunden-Format anzeigen (14:30 statt 2:30 PM)",
       "showAllUnreadCounts": "Ungelesene für alle Ordner anzeigen",
       "showAllUnreadCountsDesc": "Anzahl ungelesener E-Mails für alle Ordner anzeigen, nicht nur für den Posteingang",
+      "showCleanupCounts": "Inhalt von Spam und Papierkorb anzeigen",
+      "showCleanupCountsDesc": "Zeigt in der Seitenleiste, wie viele E-Mails noch in Spam und Papierkorb liegen, mit einem Knopf zum Leeren",
       "notifications": "Desktop-Benachrichtigungen",
       "notificationsDesc": "Benachrichtigung anzeigen, wenn neue E-Mails beim Sync eintreffen",
       "notificationSound": "Benachrichtigungston",

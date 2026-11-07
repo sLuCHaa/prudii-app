@@ -809,6 +809,13 @@ export function SettingsPanel() {
                       />
 
                       <SettingsRow
+                        icon={<Trash2 className="w-4 h-4 text-text-tertiary shrink-0" />}
+                        title={t("settings.appSettings.showCleanupCounts")}
+                        description={t("settings.appSettings.showCleanupCountsDesc")}
+                        control={<Switch checked={localSettings.show_cleanup_counts} onChange={(v) => updateLocalSetting("show_cleanup_counts", v)} />}
+                      />
+
+                      <SettingsRow
                         icon={<Bell className="w-4 h-4 text-text-tertiary shrink-0" />}
                         title={t("settings.appSettings.notifications")}
                         description={t("settings.appSettings.notificationsDesc")}
