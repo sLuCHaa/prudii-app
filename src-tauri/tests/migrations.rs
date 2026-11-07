@@ -213,7 +213,7 @@ fn calendar_tables_exist_with_unique_slots_and_cascade() {
     let conn = db.lock_db();
 
     let version: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
-    assert_eq!(version, 46);
+    assert_eq!(version, 47);
 
     conn.execute("INSERT INTO calendars (id, name, color) VALUES ('c1', 'Cal', '#3b82f6')", []).unwrap();
     let insert = |id: &str, rid: Option<&str>| {
@@ -253,7 +253,7 @@ fn subscription_columns_are_added_to_existing_calendars() {
     let db = Database::new(dir.clone()).unwrap();
     let conn = db.lock_db();
     let version: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
-    assert_eq!(version, 46);
+    assert_eq!(version, 47);
     let (muted, refresh): (i64, Option<i64>) =
         conn.query_row("SELECT reminders_muted, refresh_minutes FROM calendars WHERE id = 'c1'", [], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
     assert_eq!((muted, refresh), (0, None));
@@ -276,7 +276,7 @@ fn invite_columns_are_added_to_existing_mails() {
     let db = Database::new(dir.clone()).unwrap();
     let conn = db.lock_db();
     let version: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
-    assert_eq!(version, 46);
+    assert_eq!(version, 47);
     let cols: Vec<String> = conn
         .prepare("SELECT name FROM pragma_table_info('mails')")
         .unwrap()
@@ -295,6 +295,57 @@ fn invite_columns_are_added_to_existing_mails() {
         .map(Result::unwrap)
         .collect();
     assert!(index.iter().any(|sql| sql.contains("WHERE invite_method = 'REQUEST'")), "idx_mails_invites missing: {index:?}");
+    drop(conn);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn upgrade_from_46_indexes_preview_text() {
+    let dir = temp_dir("preview-upgrade");
+    // Forge the v46 world: external-content FTS and triggers without the
+    // preview column, and a Gmail-style mail with only a preview line.
+    {
+        let db = Database::new(dir.clone()).unwrap();
+        let conn = db.lock_db();
+        conn.execute_batch(
+            "DROP TRIGGER IF EXISTS mails_fts_ai;
+             DROP TRIGGER IF EXISTS mails_fts_ad;
+             DROP TRIGGER IF EXISTS mails_fts_au;
+             DROP TABLE IF EXISTS mails_fts;
+             CREATE VIRTUAL TABLE mails_fts USING fts5(
+                subject, from_email, from_name, body_text,
+                content='mails', content_rowid='rowid', tokenize='unicode61'
+             );
+             CREATE TRIGGER mails_fts_ai AFTER INSERT ON mails BEGIN
+                INSERT INTO mails_fts(rowid, subject, from_email, from_name, body_text)
+                VALUES (new.rowid, new.subject, new.from_email, new.from_name, new.body_text);
+             END;
+             CREATE TRIGGER mails_fts_ad AFTER DELETE ON mails BEGIN
+                INSERT INTO mails_fts(mails_fts, rowid, subject, from_email, from_name, body_text)
+                VALUES ('delete', old.rowid, old.subject, old.from_email, old.from_name, old.body_text);
+             END;
+             CREATE TRIGGER mails_fts_au AFTER UPDATE OF subject, from_email, from_name, body_text ON mails BEGIN
+                INSERT INTO mails_fts(mails_fts, rowid, subject, from_email, from_name, body_text)
+                VALUES ('delete', old.rowid, old.subject, old.from_email, old.from_name, old.body_text);
+                INSERT INTO mails_fts(rowid, subject, from_email, from_name, body_text)
+                VALUES (new.rowid, new.subject, new.from_email, new.from_name, new.body_text);
+             END;",
+        )
+        .unwrap();
+        insert_mail(&conn, "m1", "Booking", "", "g-1");
+        conn.execute("UPDATE mails SET snippet = 'kiwi festival tickets' WHERE id = 'm1'", []).unwrap();
+        assert!(fts_hits(&conn, "kiwi").is_empty(), "old index does not know the preview");
+        conn.pragma_update(None, "user_version", 46u32).unwrap();
+    }
+
+    let db = Database::new(dir.clone()).unwrap();
+    let conn = db.lock_db();
+    assert_eq!(fts_hits(&conn, "kiwi"), vec!["m1".to_string()], "upgrade rebuilds the index with the preview");
+
+    conn.execute("UPDATE mails SET snippet = 'mango' WHERE id = 'm1'", []).unwrap();
+    assert!(fts_hits(&conn, "kiwi").is_empty(), "triggers now keep the preview in sync");
+    assert_eq!(fts_hits(&conn, "mango"), vec!["m1".to_string()]);
+
     drop(conn);
     let _ = std::fs::remove_dir_all(&dir);
 }

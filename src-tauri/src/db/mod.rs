@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
-pub(crate) const SCHEMA_VERSION: u32 = 46;
+pub(crate) const SCHEMA_VERSION: u32 = 47;
 
 pub struct Database {
     pub conn: Mutex<Connection>,
@@ -199,6 +199,7 @@ impl Database {
                     from_email,
                     from_name,
                     body_text,
+                    snippet,
                     content='mails',
                     content_rowid='rowid',
                     tokenize='unicode61'
@@ -206,6 +207,40 @@ impl Database {
             );
             let _ = conn.execute_batch("INSERT INTO mails_fts(mails_fts) VALUES('rebuild');");
             log::info!("DB v38: rebuilt mails_fts as external content in {:?}", t0.elapsed());
+        }
+
+        // v47: the index gains the preview column. schema.sql only creates
+        // missing objects, so an older index and its triggers are replaced
+        // here — before any migration below writes mails rows. One transaction,
+        // so a crash mid-rebuild cannot leave an empty index behind; detected
+        // rather than version-gated, so a failed attempt is retried next start.
+        let fts_has_snippet = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('mails_fts') WHERE name = 'snippet'",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .map(|n| n > 0)
+            .unwrap_or(true);
+        if !fts_has_snippet {
+            let t0 = std::time::Instant::now();
+            let rebuild = format!(
+                "BEGIN;
+                 DROP TRIGGER IF EXISTS mails_fts_ai;
+                 DROP TRIGGER IF EXISTS mails_fts_ad;
+                 DROP TRIGGER IF EXISTS mails_fts_au;
+                 DROP TABLE IF EXISTS mails_fts;
+                 {schema}
+                 INSERT INTO mails_fts(mails_fts) VALUES('rebuild');
+                 COMMIT;"
+            );
+            match conn.execute_batch(&rebuild) {
+                Ok(()) => log::info!("DB v47: rebuilt mails_fts with the preview column in {:?}", t0.elapsed()),
+                Err(e) => {
+                    let _ = conn.execute_batch("ROLLBACK;");
+                    log::error!("DB v47: rebuilding mails_fts failed, keeping the old index: {}", e);
+                }
+            }
         }
 
         // v38: compose-window autosave snapshots (crash/quit safety net).

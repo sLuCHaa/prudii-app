@@ -459,7 +459,8 @@
   "search": {
     "placeholder": "Buscar correos...",
     "emptyTitle": "Sin resultados",
-    "emptyDescription": "Ningún correo coincide con \"{{query}}\"."
+    "emptyDescription": "Ningún correo coincide con \"{{query}}\".",
+    "searchingServer": "Buscando también en el servidor de correo…"
   },
   "settings": {
     "title": "Configuración",

@@ -459,7 +459,8 @@
   "search": {
     "placeholder": "Buscar emails...",
     "emptyTitle": "Sem resultados",
-    "emptyDescription": "Nenhum email corresponde a \"{{query}}\"."
+    "emptyDescription": "Nenhum email corresponde a \"{{query}}\".",
+    "searchingServer": "Buscando também no servidor de e-mail…"
   },
   "settings": {
     "title": "Configurações",

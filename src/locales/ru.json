@@ -465,7 +465,8 @@
   "search": {
     "placeholder": "Поиск писем...",
     "emptyTitle": "Нет результатов",
-    "emptyDescription": "Письма по запросу \"{{query}}\" не найдены."
+    "emptyDescription": "Письма по запросу \"{{query}}\" не найдены.",
+    "searchingServer": "Ищем также на почтовом сервере…"
   },
   "settings": {
     "title": "Настройки",

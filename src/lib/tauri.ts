@@ -60,6 +60,10 @@ export async function updateAccountSettings(
   });
 }
 
+export async function searchMailsRemote(query: string, accountId?: string): Promise<SearchResult[]> {
+  return invoke("search_mails_remote", { query, accountId });
+}
+
 export async function listFolders(accountId: string): Promise<Folder[]> {
   return invoke("list_folders", { accountId });
 }

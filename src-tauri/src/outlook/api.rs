@@ -21,6 +21,29 @@ fn percent_encode_query(value: &str) -> String {
     out
 }
 
+/// Graph wants the search term in double quotes, so quotes inside it are dropped.
+pub fn search_url(query: &str, top: u32) -> String {
+    let term = format!("\"{}\"", query.replace('"', ""));
+    format!(
+        "{}/messages?$search={}&$select=id,internetMessageId&$top={}",
+        BASE_URL,
+        percent_encode_query(&term),
+        top
+    )
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GraphSearchHit {
+    pub id: String,
+    pub internet_message_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GraphSearchResponse {
+    value: Vec<GraphSearchHit>,
+}
+
 /// Body of a MIME `sendMail`: the whole RFC 822 message, base64 encoded.
 pub fn mime_send_body(raw: &[u8]) -> String {
     use base64::Engine;
@@ -55,6 +78,24 @@ impl OutlookClient {
 
     fn is_retryable(status: reqwest::StatusCode) -> bool {
         status.as_u16() == 429 || status.is_server_error()
+    }
+
+    /// Messages Outlook's own search finds across all folders; it knows the
+    /// full text of mails whose bodies were never downloaded.
+    pub async fn search_messages(&self, query: &str, top: u32) -> Result<Vec<GraphSearchHit>> {
+        let resp = self.http
+            .get(search_url(query, top))
+            .header("Authorization", self.auth_header())
+            .send()
+            .await
+            .context("search request failed")?;
+        let status = resp.status();
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            bail!("search failed ({}): {}", status, body);
+        }
+        let parsed: GraphSearchResponse = resp.json().await.context("search parse failed")?;
+        Ok(parsed.value)
     }
 
     pub async fn list_folders(&self) -> Result<Vec<GraphFolder>> {

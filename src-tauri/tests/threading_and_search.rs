@@ -4,6 +4,7 @@
 // so index/trigger/generated-column behavior is exercised for real.
 
 use prudii_lib::commands::mails::{get_thread_mails_inner, thread_link_filter};
+use prudii_lib::commands::remote_search::{gmail_search_url, graph_search_url, resolve_remote_hits};
 use prudii_lib::commands::sync::search_mails_inner;
 use prudii_lib::db::Database;
 
@@ -189,6 +190,85 @@ fn search_ignores_empty_and_garbage_queries() {
     assert!(search_mails_inner(&conn, "", None).unwrap().is_empty());
     // FTS operator characters must not produce SQL errors
     assert!(search_mails_inner(&conn, "\"(*", None).is_ok());
+}
+
+/// Mail as the Gmail/Outlook sync stores it: no body until opened, only the
+/// provider's preview line. `message_id` holds the API id; Outlook keeps the
+/// internet Message-ID in `references`.
+fn insert_api_mail(conn: &rusqlite::Connection, id: &str, folder: &str, api_id: &str, internet_id: &str, subject: &str, preview: &str, date: &str) {
+    conn.execute(
+        "INSERT INTO mails (id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, body_text, body_html, \"references\")
+         VALUES (?1, 'acc', ?2, ?3, NULL, ?5, 'Alice', 'alice@example.com', '[]', '[]', '[]', ?7, ?6, '', '', ?4)",
+        rusqlite::params![id, folder, api_id, internet_id, subject, preview, date],
+    )
+    .unwrap();
+}
+
+#[test]
+fn search_finds_unopened_mail_by_its_preview_text() {
+    let db = fixture("preview");
+    let conn = db.lock_db();
+    insert_api_mail(&conn, "m1", "inbox", "g1", "", "Your booking", "The walrus tour starts at nine", "2026-01-01T10:00:00Z");
+
+    let hits = search_mails_inner(&conn, "walrus", None).unwrap();
+    assert_eq!(hits.len(), 1, "preview text is searchable before the body is loaded");
+    assert!(hits[0].snippet.contains("[[hl]]walrus[[/hl]]"), "the hit is highlighted: {}", hits[0].snippet);
+
+    conn.execute("UPDATE mails SET snippet = 'nothing to see' WHERE id = 'm1'", []).unwrap();
+    assert!(search_mails_inner(&conn, "walrus", None).unwrap().is_empty(), "preview updates reach the index");
+}
+
+#[test]
+fn remote_hits_resolve_to_local_mails_newest_first() {
+    let db = fixture("remote");
+    let conn = db.lock_db();
+    insert_api_mail(&conn, "old", "inbox", "g-old", "", "Old", "", "2026-01-01T10:00:00Z");
+    insert_api_mail(&conn, "new", "archive", "g-new", "", "New", "preview", "2026-01-05T10:00:00Z");
+    insert_api_mail(&conn, "skip", "inbox", "g-skip", "", "Not a hit", "", "2026-01-09T10:00:00Z");
+
+    let hits = resolve_remote_hits(&conn, "acc", &["g-old".into(), "g-new".into(), "g-unknown".into()], &[]).unwrap();
+    let ids: Vec<&str> = hits.iter().map(|h| h.mail_id.as_str()).collect();
+    assert_eq!(ids, vec!["new", "old"], "only known mails, newest first");
+    assert_eq!(hits[0].folder_name, "archive");
+    assert_eq!(hits[0].snippet, "preview");
+
+    assert!(resolve_remote_hits(&conn, "other-acc", &["g-old".into()], &[]).unwrap().is_empty(), "account filter applies");
+    assert!(resolve_remote_hits(&conn, "acc", &[], &[]).unwrap().is_empty());
+}
+
+#[test]
+fn remote_hits_follow_a_moved_outlook_mail_by_its_message_id() {
+    let db = fixture("remote-moved");
+    let conn = db.lock_db();
+    // Graph gave the mail a new id when it moved; the internet Message-ID stays.
+    insert_api_mail(&conn, "moved", "archive", "graph-old-id", "<abc@example.com>", "Moved", "", "2026-01-01T10:00:00Z");
+
+    let hits = resolve_remote_hits(&conn, "acc", &["graph-new-id".into()], &["<abc@example.com>".into()]).unwrap();
+    assert_eq!(hits.iter().map(|h| h.mail_id.as_str()).collect::<Vec<_>>(), vec!["moved"]);
+}
+
+#[test]
+fn remote_hits_list_a_gmail_message_once_across_labels() {
+    let db = fixture("remote-labels");
+    let conn = db.lock_db();
+    insert_api_mail(&conn, "in-archive", "archive", "g1", "", "Labelled", "", "2026-01-01T10:00:00Z");
+    insert_api_mail(&conn, "in-inbox", "inbox", "g1", "", "Labelled", "", "2026-01-01T10:00:00Z");
+
+    let hits = resolve_remote_hits(&conn, "acc", &["g1".into()], &[]).unwrap();
+    assert_eq!(hits.iter().map(|h| h.mail_id.as_str()).collect::<Vec<_>>(), vec!["in-inbox"], "one row, the inbox copy");
+}
+
+#[test]
+fn server_search_urls_encode_the_query() {
+    let gmail = gmail_search_url("rechnung & mahnung", 100);
+    assert!(gmail.starts_with("https://gmail.googleapis.com/gmail/v1/users/me/messages?q=rechnung%20%26%20mahnung"), "{gmail}");
+    assert!(gmail.contains("includeSpamTrash=true"));
+    assert!(gmail.contains("maxResults=100"));
+
+    let graph = graph_search_url("say \"hi\" & bye", 50);
+    assert!(graph.starts_with("https://graph.microsoft.com/v1.0/me/messages?$search=%22say%20hi%20%26%20bye%22"), "quotes in the query are dropped: {graph}");
+    assert!(graph.contains("$select=id,internetMessageId"));
+    assert!(graph.contains("$top=50"));
 }
 
 #[test]

@@ -458,7 +458,8 @@
   "search": {
     "placeholder": "搜索邮件...",
     "emptyTitle": "无结果",
-    "emptyDescription": "没有邮件匹配\"{{query}}\"。"
+    "emptyDescription": "没有邮件匹配\"{{query}}\"。",
+    "searchingServer": "同时在邮件服务器上搜索…"
   },
   "settings": {
     "title": "设置",

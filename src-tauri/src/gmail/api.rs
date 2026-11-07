@@ -201,6 +201,24 @@ impl GmailClient {
         }
     }
 
+    /// Ids of the messages Gmail's own search finds; it knows the full text of
+    /// mails whose bodies were never downloaded.
+    pub async fn search_message_ids(&self, query: &str, max_results: u32) -> Result<Vec<String>> {
+        let resp = self.http
+            .get(search_url(query, max_results))
+            .header("Authorization", self.auth_header())
+            .send()
+            .await
+            .context("search request failed")?;
+        let status = resp.status();
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            bail!("search failed ({}): {}", status, body);
+        }
+        let list: MessageListResponse = resp.json().await.context("search parse failed")?;
+        Ok(list.messages.unwrap_or_default().into_iter().map(|m| m.id).collect())
+    }
+
     fn is_retryable(status: reqwest::StatusCode) -> bool {
         status.as_u16() == 429 || status.is_server_error()
     }
@@ -625,6 +643,16 @@ pub struct GmailLabel {
     pub label_type: Option<String>,
     pub messages_total: Option<u32>,
     pub messages_unread: Option<u32>,
+}
+
+/// Spam and Trash are included because the local search covers them too.
+pub fn search_url(query: &str, max_results: u32) -> String {
+    format!(
+        "{}/messages?q={}&maxResults={}&includeSpamTrash=true",
+        BASE_URL,
+        percent_encoding::utf8_percent_encode(query, percent_encoding::NON_ALPHANUMERIC),
+        max_results
+    )
 }
 
 #[derive(Debug, Deserialize)]

@@ -1138,6 +1138,7 @@ pub fn run() {
             commands::sync::force_resync_account,
             commands::sync::sync_folder,
             commands::sync::search_mails,
+            commands::remote_search::search_mails_remote,
             commands::sync::backfill_bodies,
             commands::send::send_mail,
             commands::send::test_smtp_connection,

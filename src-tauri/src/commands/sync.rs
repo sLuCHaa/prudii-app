@@ -1964,19 +1964,20 @@ pub fn search_mails_inner(
     // (Account-scoped search over-fetches to 500 hits before filtering, so a
     // busy shared term can still fill its 50 rows.)
     // External-content FTS: rows are addressed by mails.rowid; column order is
-    // subject(0), from_email(1), from_name(2), body_text(3).
+    // subject(0), from_email(1), from_name(2), body_text(3), snippet(4).
     let sql = if account_id.is_some() {
         "WITH hits AS (
              SELECT rowid AS mail_rowid, rank,
                     snippet(mails_fts, 3, '[[hl]]', '[[/hl]]', '…', 48) AS snip_body,
-                    snippet(mails_fts, 0, '[[hl]]', '[[/hl]]', '…', 48) AS snip_subject
+                    snippet(mails_fts, 0, '[[hl]]', '[[/hl]]', '…', 48) AS snip_subject,
+                    snippet(mails_fts, 4, '[[hl]]', '[[/hl]]', '…', 48) AS snip_preview
              FROM mails_fts
              WHERE mails_fts MATCH ?1
              ORDER BY rank
              LIMIT 500
          )
          SELECT m.id, m.subject,
-                COALESCE(NULLIF(hits.snip_body, ''), NULLIF(m.snippet, ''), NULLIF(hits.snip_subject, ''), SUBSTR(m.body_text, 1, 300)) as snippet,
+                COALESCE(NULLIF(hits.snip_body, ''), NULLIF(hits.snip_preview, ''), NULLIF(m.snippet, ''), NULLIF(hits.snip_subject, ''), SUBSTR(m.body_text, 1, 300)) as snippet,
                 m.from_name, m.from_email, m.date, m.folder_id,
                 COALESCE(f.name, '') as folder_name,
                 m.is_read, m.has_attachments, hits.rank
@@ -1990,14 +1991,15 @@ pub fn search_mails_inner(
         "WITH hits AS (
              SELECT rowid AS mail_rowid, rank,
                     snippet(mails_fts, 3, '[[hl]]', '[[/hl]]', '…', 48) AS snip_body,
-                    snippet(mails_fts, 0, '[[hl]]', '[[/hl]]', '…', 48) AS snip_subject
+                    snippet(mails_fts, 0, '[[hl]]', '[[/hl]]', '…', 48) AS snip_subject,
+                    snippet(mails_fts, 4, '[[hl]]', '[[/hl]]', '…', 48) AS snip_preview
              FROM mails_fts
              WHERE mails_fts MATCH ?1
              ORDER BY rank
              LIMIT 200
          )
          SELECT m.id, m.subject,
-                COALESCE(NULLIF(hits.snip_body, ''), NULLIF(m.snippet, ''), NULLIF(hits.snip_subject, ''), SUBSTR(m.body_text, 1, 300)) as snippet,
+                COALESCE(NULLIF(hits.snip_body, ''), NULLIF(hits.snip_preview, ''), NULLIF(m.snippet, ''), NULLIF(hits.snip_subject, ''), SUBSTR(m.body_text, 1, 300)) as snippet,
                 m.from_name, m.from_email, m.date, m.folder_id,
                 COALESCE(f.name, '') as folder_name,
                 m.is_read, m.has_attachments, hits.rank

@@ -13,6 +13,7 @@ pub mod mailbox_check;
 pub mod mails;
 pub mod mailto;
 pub mod native;
+pub mod remote_search;
 pub mod rules;
 pub mod send;
 pub mod settings;

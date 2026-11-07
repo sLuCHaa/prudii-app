@@ -459,7 +459,8 @@
   "search": {
     "placeholder": "Rechercher dans les emails...",
     "emptyTitle": "Aucun résultat",
-    "emptyDescription": "Aucun email ne correspond a \"{{query}}\"."
+    "emptyDescription": "Aucun email ne correspond a \"{{query}}\".",
+    "searchingServer": "Recherche aussi sur le serveur de messagerie…"
   },
   "settings": {
     "title": "Paramètres",

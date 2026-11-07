@@ -2145,6 +2145,12 @@ export function MailList() {
                     {searchResultsData && (
                       <span className="text-xs text-text-tertiary">· {searchResultsData.length}</span>
                     )}
+                    {searchResults.isSearchingServer && (
+                      <span className="inline-flex items-center gap-1 text-xs text-text-tertiary" role="status">
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        {t("search.searchingServer")}
+                      </span>
+                    )}
                   </>
                 ) : (
                   <>

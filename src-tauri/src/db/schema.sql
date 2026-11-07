@@ -98,31 +98,35 @@ CREATE TABLE IF NOT EXISTS drafts (
 -- external content makes those O(1) and the triggers replace all the manual
 -- maintenance the sync paths used to do.
 -- (v38 migration in db/mod.rs drops the old table and rebuilds this one.)
+-- snippet is the preview line Gmail and Outlook send with every mail; their
+-- bodies arrive only when a mail is opened, so without it an unopened API
+-- mail could only be found by subject and sender (added in v47).
 CREATE VIRTUAL TABLE IF NOT EXISTS mails_fts USING fts5(
     subject,
     from_email,
     from_name,
     body_text,
+    snippet,
     content='mails',
     content_rowid='rowid',
     tokenize='unicode61'
 );
 
 CREATE TRIGGER IF NOT EXISTS mails_fts_ai AFTER INSERT ON mails BEGIN
-    INSERT INTO mails_fts(rowid, subject, from_email, from_name, body_text)
-    VALUES (new.rowid, new.subject, new.from_email, new.from_name, new.body_text);
+    INSERT INTO mails_fts(rowid, subject, from_email, from_name, body_text, snippet)
+    VALUES (new.rowid, new.subject, new.from_email, new.from_name, new.body_text, new.snippet);
 END;
 
 CREATE TRIGGER IF NOT EXISTS mails_fts_ad AFTER DELETE ON mails BEGIN
-    INSERT INTO mails_fts(mails_fts, rowid, subject, from_email, from_name, body_text)
-    VALUES ('delete', old.rowid, old.subject, old.from_email, old.from_name, old.body_text);
+    INSERT INTO mails_fts(mails_fts, rowid, subject, from_email, from_name, body_text, snippet)
+    VALUES ('delete', old.rowid, old.subject, old.from_email, old.from_name, old.body_text, old.snippet);
 END;
 
-CREATE TRIGGER IF NOT EXISTS mails_fts_au AFTER UPDATE OF subject, from_email, from_name, body_text ON mails BEGIN
-    INSERT INTO mails_fts(mails_fts, rowid, subject, from_email, from_name, body_text)
-    VALUES ('delete', old.rowid, old.subject, old.from_email, old.from_name, old.body_text);
-    INSERT INTO mails_fts(rowid, subject, from_email, from_name, body_text)
-    VALUES (new.rowid, new.subject, new.from_email, new.from_name, new.body_text);
+CREATE TRIGGER IF NOT EXISTS mails_fts_au AFTER UPDATE OF subject, from_email, from_name, body_text, snippet ON mails BEGIN
+    INSERT INTO mails_fts(mails_fts, rowid, subject, from_email, from_name, body_text, snippet)
+    VALUES ('delete', old.rowid, old.subject, old.from_email, old.from_name, old.body_text, old.snippet);
+    INSERT INTO mails_fts(rowid, subject, from_email, from_name, body_text, snippet)
+    VALUES (new.rowid, new.subject, new.from_email, new.from_name, new.body_text, new.snippet);
 END;
 
 CREATE TABLE IF NOT EXISTS mail_rules (
