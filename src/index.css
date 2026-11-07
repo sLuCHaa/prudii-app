@@ -1370,9 +1370,9 @@ html[data-vibrancy].dark .glass-sidebar {
 
 /* Sync light edge (sidebar): one segment per syncing account, in its colour.
    Sits in the header's margin, so showing it never moves anything. */
-.sync-edge { display: flex; gap: 4px; height: 2px; opacity: 0; pointer-events: none; transition: opacity 0.45s ease; }
+.sync-edge { display: flex; gap: 4px; height: 3px; opacity: 0; pointer-events: none; transition: opacity 0.45s ease; }
 .sync-edge.is-on { opacity: 1; }
-.sync-seg { position: relative; flex: 1; height: 2px; border-radius: 9999px; background: color-mix(in srgb, var(--c-text) 8%, transparent); }
+.sync-seg { position: relative; flex: 1; height: 3px; border-radius: 9999px; background: color-mix(in srgb, var(--c-text) 8%, transparent); }
 .sync-seg > i {
   position: absolute; top: 0; bottom: 0; left: 0; width: 0; border-radius: inherit;
   background: var(--seg); box-shadow: 0 0 8px 0 var(--seg);
@@ -1392,7 +1392,7 @@ html[data-vibrancy].dark .glass-sidebar {
 .account-trace { position: absolute; left: 28px; right: 8px; bottom: 0; display: flex; opacity: 0; pointer-events: none; transition: opacity 0.5s ease; }
 .account-trace.is-on { opacity: 0.9; }
 .account-trace.is-quiet { opacity: 0.45; }
-.account-trace .sync-seg { height: 1.5px; background: transparent; }
+.account-trace .sync-seg { height: 2px; background: transparent; }
 .account-trace .sync-seg > i { box-shadow: 0 0 6px 0 var(--seg); }
 
 /* "+3" / "✓" after a sync: in, hold, out — removed when CHIP_MS ends. */
