@@ -36,15 +36,18 @@
 
 ## ✨ Why Prudii
 
-- 🛡️ **Tracker blocker, on by default** — detects and strips tracking pixels, hidden images, and **70+ known tracker domains**, so senders can't tell when (or whether) you opened their mail.
+- 🛡️ **Tracker blocker, on by default** — detects and strips tracking pixels, hidden images, and **50+ known tracker domains**, so senders can't tell when (or whether) you opened their mail. A mail that looks broken without its images gets them back with one click; the invisible pixels stay blocked.
 - 🔒 **Everything local** — your emails live on your machine, not in someone's cloud. No server ever sees them.
 - 🔑 **Passwords encrypted at rest** — Windows DPAPI · macOS Keychain · Linux keyring. Other apps can't touch them.
-- 📥 **All your accounts, one inbox** — Gmail, Outlook / Microsoft 365, iCloud, Fastmail, GMX, any IMAP/SMTP.
+- 📥 **All your accounts, one inbox** — Gmail, Outlook / Microsoft 365, iCloud, Fastmail, GMX, WEB.DE, ProtonMail (via Bridge), any IMAP/SMTP.
 - ⚡ **Native & fast** — Rust + Tauri, not Electron. Starts in seconds, sips memory.
 - 🤖 **Local AI (optional)** — summaries and reply suggestions via [Ollama](https://ollama.com) on *your* machine. No cloud, no API keys, nothing leaves your network.
-- 🔍 **Instant full-text search** — across every account, offline.
+- 🔍 **Full-text search** — across every account, from a local index that works offline. For Gmail and Outlook, Prudii also asks their own search, so words in mails you never opened are found too, without downloading anything.
+- 🗂️ **Mail that sorts itself** — new mail lands in categories like Personal or Newsletters, worked out on your computer, and every category tells you why a mail ended up there.
+- 🧹 **Inbox check & real unsubscribe** — see which newsletters you hardly read and which trackers were blocked; unsubscribing tries every way and checks that nothing else arrives. Spam and Trash show what's left in them, with a button to empty them.
+- 📅 **Calendar & tasks** — month, week, day and agenda views with reminders, Google exports and webcal subscriptions, and due tasks right next to your events.
 - 🌍 **Speaks your language** — English, Deutsch, Español, Français, Português, Русский, 中文.
-- 🌗 dark & light · 🔄 signed auto-updates · 💾 ZIP backup & restore.
+- 🌗 dark & light · 🔄 signed auto-updates · 💾 ZIP backup & restore · 📤 export all your mail as readable pages and original `.eml` files.
 
 <p align="center">
   <img src="screenshots/compose.png" alt="Composing a message in Prudii Mail" width="760" />
@@ -52,12 +55,12 @@
 
 ## 🔐 I don't want your data
 
-There's no server for your mail. The only thing that ever talks to `prudii.com` is an optional license check for paid plans — and even then your emails never leave your machine.
+There's no server for your mail. The only thing that ever talks to `prudii.com` is the license check for the Team plan — and even then your emails never leave your machine.
 
 - No server · no tracking · no telemetry
 - External images blocked, tracking pixels stripped
 - AI runs locally via Ollama — nothing leaves your network
-- Direct IMAP/SMTP — no proxy in the middle
+- Direct IMAP/SMTP, and Gmail / Outlook through their official APIs — straight from your machine, no proxy in the middle
 
 ## ⬇️ Download
 
@@ -71,7 +74,7 @@ Installers are **signed & notarized**, and the app **updates itself**. It's free
 
 ## 🧠 Heads up — it's a hobby project
 
-I build this in my spare time, on energy drinks and good vibes. There's no big company behind it. It's free and it works today. Paid plans (Premium, Team) are on the roadmap but a long way off yet — and the free version isn't going anywhere either way. This isn't one of those "free until you need it" things.
+I build this in my spare time, on energy drinks and good vibes. There's no big company behind it. Everything for individuals is free — any number of accounts, snooze, templates, rules and local AI included. The only paid plan is **Team**, for organizations that want shared inboxes, a team address book and admin tools. This isn't one of those "free until you need it" things.
 
 ## 🛠️ Build it yourself
 
