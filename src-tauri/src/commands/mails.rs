@@ -3167,9 +3167,17 @@ async fn empty_folder_by_type(app: tauri::AppHandle, db: State<'_, Database>, ac
                 if let Ok(credential) = credentials::resolve_credential(&account_id_clone, &auth_type, &provider).await {
                     if is_gmail {
                         let client = gmail::api::GmailClient::new(&credential);
-                        for msg_id in &api_ids {
-                            if let Err(e) = client.delete_message(msg_id).await {
-                                log::warn!("Gmail delete {} failed: {}", msg_id, e);
+                        for chunk in api_ids.chunks(gmail::api::BATCH_DELETE_MAX) {
+                            match client.batch_delete_messages(chunk).await {
+                                Ok(()) => log::info!("EmptyFolder: deleted {} Gmail mails on the server", chunk.len()),
+                                Err(e) => {
+                                    log::warn!("Gmail batch delete of {} mails failed, deleting one by one: {:#}", chunk.len(), e);
+                                    for msg_id in chunk {
+                                        if let Err(e) = client.delete_message(msg_id).await {
+                                            log::warn!("Gmail delete {} failed: {:#}", msg_id, e);
+                                        }
+                                    }
+                                }
                             }
                         }
                     } else {

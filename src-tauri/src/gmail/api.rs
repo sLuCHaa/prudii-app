@@ -5,6 +5,8 @@ use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 
 const BASE_URL: &str = "https://gmail.googleapis.com/gmail/v1/users/me";
+/// Gmail's limit for messages.batchDelete.
+pub const BATCH_DELETE_MAX: usize = 1000;
 
 /// Lightweight Gmail API client wrapping a reqwest client + access token.
 pub struct GmailClient {
@@ -553,6 +555,39 @@ impl GmailClient {
 
             let body = resp.text().await.unwrap_or_default();
             bail!("delete_message {} failed ({}): {}", id, status, body);
+        }
+    }
+
+    /// Permanently deletes up to `BATCH_DELETE_MAX` messages in one request.
+    pub async fn batch_delete_messages(&self, ids: &[String]) -> Result<()> {
+        let url = format!("{}/messages/batchDelete", BASE_URL);
+        let body = serde_json::json!({ "ids": ids });
+
+        let mut attempt = 0u32;
+        loop {
+            let resp = self.http
+                .post(&url)
+                .header("Authorization", self.auth_header())
+                .json(&body)
+                .send()
+                .await
+                .context("batch_delete request failed")?;
+
+            let status = resp.status();
+            if status.is_success() {
+                return Ok(());
+            }
+
+            attempt += 1;
+            if Self::is_retryable(status) && attempt <= 3 {
+                let delay = std::time::Duration::from_millis(1000 * 2u64.pow(attempt - 1));
+                log::warn!("batch_delete: {} on attempt {}, retrying in {:?}", status, attempt, delay);
+                tokio::time::sleep(delay).await;
+                continue;
+            }
+
+            let body = resp.text().await.unwrap_or_default();
+            bail!("batch_delete failed ({}): {}", status, body);
         }
     }
 
