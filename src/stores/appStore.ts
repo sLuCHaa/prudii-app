@@ -9,6 +9,7 @@ import { prefers24HourClock } from "../lib/localeDefaults";
 import type { MailSort } from "../lib/mailSort";
 import type { CalendarViewKind, EventDraft, EventEditorTarget } from "../types/calendar";
 import { isoDate } from "../lib/calendar/dates";
+import { REVEAL_WINDOW_MS } from "../lib/syncLine";
 
 export interface ComposeSnapshot {
   to: string[];
@@ -180,6 +181,9 @@ interface AppState {
 
   syncProgress: Record<string, SyncProgress>;
   setSyncProgress: (accountId: string, progress: SyncProgress | null) => void;
+  /** Until then the sync line shows every account at once, not only syncs past the push threshold. */
+  syncRevealUntil: number;
+  revealSyncLine: () => void;
 
   backfillProgress: Record<string, BackfillProgress>;
   setBackfillProgress: (accountId: string, progress: BackfillProgress | null) => void;
@@ -477,6 +481,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
       return { syncProgress: next };
     }),
+  syncRevealUntil: 0,
+  revealSyncLine: () => set({ syncRevealUntil: performance.now() + REVEAL_WINDOW_MS }),
 
   backfillProgress: {},
   setBackfillProgress: (accountId, progress) =>

@@ -11,20 +11,17 @@ export interface SyncLine {
   revealNext: () => void;
 }
 
-// Long enough to catch the first progress event of a sync the user just started.
-const MANUAL_WINDOW_MS = 4000;
-
 /** One instance per sidebar; children read it through SyncLineContext. */
 export function useSyncLineSource(): SyncLine {
   const progress = useAppStore((s) => s.syncProgress);
   const [line, setLine] = useState<{ state: LineState; now: number; sweepKey: number }>({ state: {}, now: 0, sweepKey: 0 });
   const stateRef = useRef<LineState>({});
-  const manualUntil = useRef(0);
 
   const advance = useCallback(() => {
     const now = performance.now();
     const prev = stateRef.current;
-    const next = advanceLine(prev, useAppStore.getState().syncProgress, now, now < manualUntil.current);
+    const { syncProgress, syncRevealUntil } = useAppStore.getState();
+    const next = advanceLine(prev, syncProgress, now, now < syncRevealUntil);
     stateRef.current = next;
     const swept = finishedWithNewMail(prev, next);
     setLine((l) => ({ state: next, now, sweepKey: l.sweepKey + (swept ? 1 : 0) }));
@@ -43,7 +40,7 @@ export function useSyncLineSource(): SyncLine {
   }, [line, advance]);
 
   const revealNext = useCallback(() => {
-    manualUntil.current = performance.now() + MANUAL_WINDOW_MS;
+    useAppStore.getState().revealSyncLine();
     advance();
   }, [advance]);
 

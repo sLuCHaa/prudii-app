@@ -171,6 +171,7 @@ function AppInner() {
   useEffect(() => {
     if (!hasSynced.current && accounts.length > 0) {
       hasSynced.current = true;
+      useAppStore.getState().revealSyncLine();
       syncAll.mutate();
     }
   }, [accounts.length]);
@@ -335,7 +336,7 @@ function AppInner() {
       case "newMessage": s.openCompose("new"); break;
       case "search": s.setSearchOpen(true); break;
       case "settings": s.setShowSettings(true); break;
-      case "syncAll": syncAll.mutate(); break;
+      case "syncAll": s.revealSyncLine(); syncAll.mutate(); break;
       case "reply": if (selected) s.openCompose("reply", selected); break;
       case "replyAll": if (selected) s.openCompose("replyAll", selected); break;
       case "forward": if (selected) s.openCompose("forward", selected); break;

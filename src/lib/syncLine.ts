@@ -9,6 +9,8 @@ import { syncPercent } from "./syncProgress";
  * user asked for the sync).
  */
 export const REVEAL_MS = 400;
+/** Long enough to catch the first progress event of a sync the user just started. */
+export const REVEAL_WINDOW_MS = 4000;
 /** How long the finished line stays lit before it fades. */
 export const LINGER_MS = 450;
 /** How long "+N" or "✓" stays next to the account. */
