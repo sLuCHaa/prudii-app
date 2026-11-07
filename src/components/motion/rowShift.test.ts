@@ -1,5 +1,30 @@
 import { describe, it, expect } from "vitest";
-import { rowShifts } from "./rowShift";
+import { arrivedOnTop, rowShifts } from "./rowShift";
+
+describe("arrivedOnTop", () => {
+  it("finds mail that arrived above the rows already shown", () => {
+    const before = new Map([["a", 0], ["b", 72]]);
+    const after = [{ key: "n", top: 0 }, { key: "a", top: 72 }, { key: "b", top: 144 }];
+    expect(arrivedOnTop(before, after)).toEqual(["n"]);
+  });
+
+  it("finds mail that arrived under a date header that was already there", () => {
+    const before = new Map([["sep-today", 0], ["a", 30]]);
+    const after = [{ key: "sep-today", top: 0 }, { key: "n", top: 30 }, { key: "a", top: 112 }];
+    expect(arrivedOnTop(before, after)).toEqual(["n"]);
+  });
+
+  it("ignores a page loaded below", () => {
+    const before = new Map([["a", 0], ["b", 72]]);
+    const after = [{ key: "a", top: 0 }, { key: "b", top: 72 }, { key: "p", top: 144 }];
+    expect(arrivedOnTop(before, after)).toEqual([]);
+  });
+
+  it("treats a list with nothing in common as a different list", () => {
+    const before = new Map([["a", 0]]);
+    expect(arrivedOnTop(before, [{ key: "x", top: 0 }])).toEqual([]);
+  });
+});
 
 describe("rowShifts", () => {
   it("moves rows below a removed one back to where they stood", () => {

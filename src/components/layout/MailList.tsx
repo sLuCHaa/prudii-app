@@ -640,15 +640,22 @@ function VirtualMailList({
   // clear it when the list shrinks (folder reload — handled by the entrance
   // staggers, not here).
   const prevItemCountRef = useRef(virtualItems.length);
+  const prevFirstKeyRef = useRef<string | null>(virtualItems[0] ? listItemKey(virtualItems[0]) : null);
   const animatedIndicesRef = useRef<Set<number>>(new Set());
   useEffect(() => {
     const prev = prevItemCountRef.current;
     const len = virtualItems.length;
-    if (len < prev) {
+    const firstKey = virtualItems[0] ? listItemKey(virtualItems[0]) : null;
+    // Mail arriving on top also grows the list, but shifts every index; its
+    // entrance is the row glide's job, and fading "the last indices" here
+    // would blink rows at the bottom instead.
+    const prepended = firstKey !== prevFirstKeyRef.current;
+    prevFirstKeyRef.current = firstKey;
+    if (len < prev || prepended) {
       animatedIndicesRef.current.clear();
     }
     prevItemCountRef.current = len;
-    if (prefersReducedMotion() || prev === 0 || len <= prev || !listRef.current) return;
+    if (prefersReducedMotion() || prev === 0 || len <= prev || prepended || !listRef.current) return;
     const nodes = listRef.current.querySelectorAll<HTMLElement>("[data-index]");
     nodes.forEach((node) => {
       const idx = Number(node.dataset.index);

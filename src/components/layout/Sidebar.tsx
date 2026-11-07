@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState, useRef } from "react";
 import { CategorySidebarEntries } from "../categories/CategorySidebarEntries";
 import { createPortal } from "react-dom";
-import { FileText, AlertOctagon, Folder, Plus, ChevronDown, ChevronRight, FolderPlus, Download, Pencil, HardDrive, Cloud, X, Check, Clock, CalendarClock, PanelLeftClose, PanelLeftOpen, Loader2, AlertCircle, Palette, RefreshCw, RotateCcw, Settings, ClipboardList, UserCheck, CalendarDays, Archive, Paperclip, Flag, Inbox, Send, Shield, Star, StarIcon, Trash2, TrashIcon } from "../icons";
+import { FileText, AlertOctagon, Folder, Plus, ChevronDown, ChevronRight, FolderPlus, Download, Pencil, HardDrive, Cloud, X, Check, Clock, CalendarClock, PanelLeftClose, PanelLeftOpen, AlertCircle, Palette, RefreshCw, RotateCcw, Settings, ClipboardList, UserCheck, CalendarDays, Archive, Paperclip, Flag, Inbox, Send, Shield, Star, StarIcon, Trash2, TrashIcon } from "../icons";
 import { useTodayCount } from "../../hooks/useCalendar";
 import gsap from "gsap";
 import { prefersReducedMotion } from "../motion/tokens";
@@ -33,12 +33,13 @@ import { Collapse } from "../motion/Collapse";
 import { requestMailSweep, SWEEP_DURATION_MS } from "../motion/sweepMails";
 import { createFolder, deleteFolder, renameFolder, updateFolderColor, moveMail, emptyTrash, emptySpam, prefetchFolder, countFolderMails, countCombinedFolderMails, emptyAllTrash, emptyAllSpam, countSnoozedMails, listScheduledMails, forceResyncAccount, syncFolder } from "../../lib/tauri";
 import { useQueryClient } from "@tanstack/react-query";
-import type { BackfillProgress, FolderType, Account as AccountType, Folder as FolderT, MailFlag, SyncProgress } from "../../types";
+import type { FolderType, Account as AccountType, Folder as FolderT, MailFlag } from "../../types";
 import { MAIL_FLAG_COLORS } from "../../types";
 import { useTranslation } from "react-i18next";
 import { toastError, causeMessage } from "../../lib/errorToast";
-import { inMailPhase, syncFolderLine, syncStatusKey } from "../../lib/syncProgress";
-import { useSyncRun } from "../../hooks/useSyncRun";
+import { syncFolderLine, syncStatusKey } from "../../lib/syncProgress";
+import { lineChip, linePercentShown, lineSegments, type LineSegment } from "../../lib/syncLine";
+import { SyncLineContext, useSyncLine, useSyncLineSource } from "../../hooks/useSyncLine";
 import { isMailDrag, readMailDrag } from "../../lib/mailDrag";
 import { Tooltip } from "../ui/Tooltip";
 
@@ -47,83 +48,46 @@ import { Tooltip } from "../ui/Tooltip";
 const lastArchiveSync = new Map<string, number>();
 const ARCHIVE_SYNC_THROTTLE_MS = 5 * 60 * 1000;
 
-function SyncProgressIndicator({ progress }: { progress: SyncProgress }) {
-  const { t } = useTranslation();
-  const progressRef = useRef<HTMLDivElement>(null);
-  const glowRef = useRef<HTMLDivElement>(null);
-  const prevMessageRef = useRef("");
-
-  const { percent, mails } = useSyncRun(progress);
-  const showBar = inMailPhase(progress);
-  const statusKey = syncStatusKey(progress.status);
-  const statusLine =
-    statusKey ? t(statusKey)
-    : progress.status === "done" ? (mails > 0 ? t("sync.doneNew", { count: mails }) : t("sync.allCaughtUp"))
-    : progress.status === "error" ? progress.message
-    : syncFolderLine(progress) ?? t("sidebar.sync.syncing");
-
-  useEffect(() => {
-    if (!progressRef.current || !glowRef.current) return;
-    gsap.to(progressRef.current, { width: `${percent}%`, duration: 0.4, ease: "power2.out" });
-    gsap.to(glowRef.current, { left: `${percent}%`, duration: 0.4, ease: "power2.out" });
-  }, [percent, showBar]);
-
-  useEffect(() => {
-    const glow = glowRef.current;
-    if (!glow || prefersReducedMotion()) return;
-    gsap.to(glow, { opacity: 0.3, scale: 1.5, duration: 0.8, ease: "power1.inOut", yoyo: true, repeat: -1 });
-    return () => { gsap.killTweensOf(glow); };
-  }, [showBar]);
-
-  // Detect activity: message changes = something is happening
-  const isActive = progress.message !== prevMessageRef.current;
-  useEffect(() => { prevMessageRef.current = progress.message; }, [progress.message]);
-
+/** The light edge: one segment per syncing account, in that account's colour. */
+function SyncEdge({ accounts, className = "" }: { accounts: AccountType[]; className?: string }) {
+  const { state, now } = useSyncLine();
+  const segments = lineSegments(state, accounts.map((a) => a.id), now);
+  // The last segments stay rendered while the edge fades out instead of blinking away.
+  const lastSegments = useRef<LineSegment[]>([]);
+  if (segments.length > 0) lastSegments.current = segments;
+  const shown = segments.length > 0 ? segments : lastSegments.current;
+  const colors = new Map(accounts.map((a) => [a.id, a.color]));
   return (
-    <div className="px-2 ml-5 mb-2">
-      <div className="flex items-center gap-1.5 mb-1.5">
-        <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${isActive ? "bg-accent animate-pulse" : "bg-text-tertiary"}`} />
-        <p className="text-xs text-accent font-medium truncate flex-1">
-          {statusLine}
-        </p>
-        {mails > 0 && (
-          <span className="text-xs text-text-tertiary shrink-0">+{mails.toLocaleString()}</span>
-        )}
-      </div>
-      {showBar && (
-        <div className="relative h-1.5 rounded-full bg-border overflow-hidden">
-          <div
-            ref={progressRef}
-            className="absolute h-full bg-linear-to-r from-accent to-purple-500 rounded-full transition-none"
-            style={{ width: "0%" }}
-          />
-          <div
-            ref={glowRef}
-            className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-accent rounded-full blur-sm opacity-60"
-            style={{ left: "0%", transform: "translate(-50%, -50%)" }}
-          />
-        </div>
-      )}
+    <div aria-hidden="true" className={`sync-edge ${segments.length > 0 ? "is-on" : ""} ${className}`}>
+      {shown.map((s) => (
+        <span
+          key={s.accountId}
+          className={`sync-seg ${s.state === "running" && s.percent === null ? "indeterminate" : ""}`}
+          data-state={s.state}
+          style={{ "--seg": colors.get(s.accountId) ?? "var(--c-accent)" } as React.CSSProperties}
+        >
+          <i style={s.percent !== null ? { width: `${s.percent}%` } : undefined} />
+        </span>
+      ))}
     </div>
   );
 }
 
-function BackfillProgressIndicator({ progress }: { progress: BackfillProgress }) {
-  const { t } = useTranslation();
-  const percent = progress.total > 0 ? (progress.processed / progress.total) * 100 : 0;
-
+/** A light sweep runs over the wordmark whenever a sync brings new mail. */
+function SidebarTitle() {
+  const { sweepKey } = useSyncLine();
+  const [sweeping, setSweeping] = useState(false);
+  useEffect(() => {
+    if (sweepKey > 0 && !prefersReducedMotion()) setSweeping(true);
+  }, [sweepKey]);
   return (
-    <div className="px-2 ml-5 mb-2">
-      <p className="text-xs text-text-secondary truncate mb-1.5">
-        {t("sidebar.downloadingEmails", { processed: progress.processed, total: progress.total })}
-      </p>
-      <div className="relative h-1.5 rounded-full bg-border overflow-hidden">
-        <div
-          className="absolute h-full bg-linear-to-r from-accent to-purple-500 rounded-full"
-          style={{ width: `${percent}%`, transition: "width 0.5s ease-out" }}
-        />
-      </div>
-    </div>
+    <h1
+      key={sweepKey}
+      className={`text-lg font-bold text-text tracking-tight ${sweeping ? "title-sweep" : ""}`}
+      onAnimationEnd={() => setSweeping(false)}
+    >
+      Prudii Mail
+    </h1>
   );
 }
 
@@ -316,18 +280,21 @@ function UnreadBadge({ count, className = "" }: { count: number; className?: str
   const prevCount = useRef(count);
 
   useEffect(() => {
-    if (ref.current && prevCount.current !== count) {
-      gsap.fromTo(ref.current,
-        { scale: 1.4 },
-        { scale: 1, duration: 0.3, ease: "back.out(2)" }
-      );
-    }
+    const prev = prevCount.current;
     prevCount.current = count;
+    if (!ref.current || prev === count || prefersReducedMotion()) return;
+    // The new number rolls in from where it is heading: up for new mail, down as mail is read.
+    gsap.fromTo(ref.current,
+      { yPercent: count > prev ? 80 : -80, opacity: 0 },
+      { yPercent: 0, opacity: 1, duration: 0.4, ease: "power3.out" }
+    );
   }, [count]);
 
   return (
-    <span ref={ref} className={`text-xs font-bold text-accent tabular-nums ${className}`}>
-      {count}
+    <span className={`inline-flex overflow-hidden ${className}`}>
+      <span ref={ref} className="text-xs font-bold text-accent tabular-nums">
+        {count}
+      </span>
     </span>
   );
 }
@@ -345,7 +312,6 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
   const [accountMenu, setAccountMenu] = useState<{ x: number; y: number } | null>(null);
   const folderRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
-  const dotRef = useRef<HTMLSpanElement>(null);
   const selectedFolderId = useAppStore((s) => s.selectedFolderId);
   const setSelectedFolderId = useAppStore((s) => s.setSelectedFolderId);
   const setSelectedAccountId = useAppStore((s) => s.setSelectedAccountId);
@@ -358,6 +324,18 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
     (appSettings.show_all_unread_counts || folder.folder_type === "inbox");
   const syncProgress = useAppStore((s) => s.syncProgress[account.id]);
   const backfillProgress = useAppStore((s) => s.backfillProgress[account.id]);
+  const line = useSyncLine();
+  const lineEntry = line.state[account.id];
+  const trace = lineSegments(line.state, [account.id], line.now)[0] ?? null;
+  const lineRunning = trace?.state === "running";
+  const chip = lineChip(lineEntry, line.now);
+  const syncPercent = linePercentShown(lineEntry, line.now);
+  const backfillPercent = !trace && backfillProgress && backfillProgress.total > 0
+    ? Math.min(100, (backfillProgress.processed / backfillProgress.total) * 100)
+    : null;
+  const percentFormat = new Intl.NumberFormat(i18n.language, { style: "percent", maximumFractionDigits: 0 });
+  const syncStatus = syncProgress ? syncStatusKey(syncProgress.status) : null;
+  const syncDetail = syncProgress ? syncFolderLine(syncProgress) ?? (syncStatus ? t(syncStatus) : undefined) : undefined;
   const openAccountSettings = useAppStore((s) => s.openAccountSettings);
   const openMailExport = useAppStore((s) => s.openMailExport);
   const { data: folders } = useFolders(account.id);
@@ -478,6 +456,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
 
   function handleSync(e: React.MouseEvent) {
     e.stopPropagation();
+    line.revealNext();
     if (e.shiftKey) {
       handleForceResync();
     } else {
@@ -664,21 +643,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
     }
   }
 
-  const isSyncing = syncMutation.isPending || (syncProgress && syncProgress.status !== "done");
-
-  useEffect(() => {
-    if (!dotRef.current) return;
-    if (isSyncing && !prefersReducedMotion()) {
-      gsap.to(dotRef.current, {
-        scale: 1.4, opacity: 0.6, duration: 0.6,
-        ease: "power1.inOut", yoyo: true, repeat: -1,
-      });
-    } else {
-      gsap.killTweensOf(dotRef.current);
-      gsap.to(dotRef.current, { scale: 1, opacity: 1, duration: 0.3 });
-    }
-    return () => { if (dotRef.current) gsap.killTweensOf(dotRef.current); };
-  }, [isSyncing]);
+  const isSyncing = syncMutation.isPending || lineRunning;
 
   if (collapsed) {
     return (
@@ -693,7 +658,6 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
           title={account.display_name}
         >
           <span
-            ref={dotRef}
             className="w-3 h-3 rounded-full shrink-0"
             style={{ backgroundColor: account.color }}
           />
@@ -758,7 +722,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
             entries={[
               { kind: "header", label: account.email },
               { kind: "separator" },
-              { kind: "item", id: "sync", label: t("sidebar.accountMenu.sync"), icon: <RefreshCw className="w-4 h-4" />, onSelect: () => syncMutation.mutate(account.id) },
+              { kind: "item", id: "sync", label: t("sidebar.accountMenu.sync"), icon: <RefreshCw className="w-4 h-4" />, onSelect: () => { line.revealNext(); syncMutation.mutate(account.id); } },
               { kind: "item", id: "resync", label: t("sidebar.forceResyncTitle"), icon: <RotateCcw className="w-4 h-4" />, onSelect: () => { void handleForceResync(); } },
               { kind: "item", id: "export", label: t("mailExport.menuItem"), icon: <Download className="w-4 h-4" />, onSelect: () => openMailExport(account.id) },
               { kind: "item", id: "newFolder", label: t("sidebar.newFolder"), icon: <FolderPlus className="w-4 h-4" />, onSelect: () => setShowCreateDialog(true) },
@@ -775,7 +739,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
   return (
     <div className="mb-3">
       <div
-        className="flex items-center gap-2 group px-2 py-1"
+        className="relative flex items-center gap-2 group px-2 py-1"
         onContextMenu={(e) => { e.preventDefault(); setAccountMenu({ x: e.clientX, y: e.clientY }); }}
       >
         <button
@@ -788,7 +752,6 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
             className={`w-3 h-3 shrink-0 text-text-tertiary transition-transform duration-200 ${expanded ? "rotate-90" : ""}`}
           />
           <span
-            ref={dotRef}
             className="w-2 h-2 rounded-full shrink-0"
             style={{ backgroundColor: account.color }}
           />
@@ -800,9 +763,20 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
           <span title={t("sidebar.sync.error")} aria-label={t("sidebar.sync.error")} className="shrink-0">
             <AlertCircle className="w-3 h-3 text-danger" />
           </span>
-        ) : isSyncing ? (
-          <span title={t("sidebar.sync.syncing")} aria-label={t("sidebar.sync.syncing")} className="shrink-0">
-            <Loader2 className="w-3 h-3 text-accent animate-spin" />
+        ) : chip ? (
+          <span key={`${lineEntry?.ended}`} className="account-chip shrink-0" style={{ color: account.color }}>
+            {chip.kind === "new" ? `+${chip.count.toLocaleString(i18n.language)}` : "✓"}
+          </span>
+        ) : syncPercent !== null ? (
+          <span className="shrink-0 text-[11px] tabular-nums text-text-tertiary" title={syncDetail}>
+            {percentFormat.format(syncPercent / 100)}
+          </span>
+        ) : backfillPercent !== null && backfillProgress ? (
+          <span
+            className="shrink-0 text-[11px] tabular-nums text-text-tertiary"
+            title={t("sidebar.downloadingEmails", { processed: backfillProgress.processed, total: backfillProgress.total })}
+          >
+            {percentFormat.format(backfillPercent / 100)}
           </span>
         ) : null}
         <Tooltip label={t("sidebar.newFolder")} className="shrink-0">
@@ -818,14 +792,20 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
           onClick={handleSync}
           size={12}
         />
+        <span
+          aria-hidden="true"
+          className={`account-trace ${trace ? "is-on" : backfillPercent !== null ? "is-on is-quiet" : ""}`}
+          style={{ "--seg": account.color } as React.CSSProperties}
+        >
+          <span
+            className={`sync-seg ${trace?.state === "running" && trace.percent === null ? "indeterminate" : ""}`}
+            data-state={trace?.state ?? "running"}
+          >
+            <i style={{ width: `${trace ? trace.percent ?? 0 : backfillPercent ?? 0}%` }} />
+          </span>
+        </span>
       </div>
 
-      {syncProgress && (
-        <SyncProgressIndicator progress={syncProgress} />
-      )}
-      {backfillProgress && !syncProgress && (
-        <BackfillProgressIndicator progress={backfillProgress} />
-      )}
 
       <Collapse open={!!(expanded && folders)}>
         <div className="mt-0.5 space-y-0.5 px-px pb-1">
@@ -957,7 +937,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
           entries={[
             { kind: "header", label: account.email },
             { kind: "separator" },
-            { kind: "item", id: "sync", label: t("sidebar.accountMenu.sync"), icon: <RefreshCw className="w-4 h-4" />, onSelect: () => syncMutation.mutate(account.id) },
+            { kind: "item", id: "sync", label: t("sidebar.accountMenu.sync"), icon: <RefreshCw className="w-4 h-4" />, onSelect: () => { line.revealNext(); syncMutation.mutate(account.id); } },
             { kind: "item", id: "resync", label: t("sidebar.forceResyncTitle"), icon: <RotateCcw className="w-4 h-4" />, onSelect: () => { void handleForceResync(); } },
             { kind: "item", id: "export", label: t("mailExport.menuItem"), icon: <Download className="w-4 h-4" />, onSelect: () => openMailExport(account.id) },
             { kind: "item", id: "newFolder", label: t("sidebar.newFolder"), icon: <FolderPlus className="w-4 h-4" />, onSelect: () => setShowCreateDialog(true) },
@@ -1391,11 +1371,16 @@ export function Sidebar() {
   const setFolders = useAppStore((s) => s.setFolders);
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
-  const isAnySyncing = useAppStore((s) =>
-    Object.values(s.syncProgress).some((p) => p !== null)
-  );
+  const syncLine = useSyncLineSource();
   const { data: fetchedAccounts } = useAccounts();
   const syncAll = useSyncAll();
+  // Spins while the line shows a running account — not during a push sync too
+  // short to show, and not during the moments a finished sync stays listed.
+  const isAnySyncing = syncAll.isPending || Object.values(syncLine.state).some((e) => e.shown && e.outcome === "running");
+  const startSyncAll = () => {
+    syncLine.revealNext();
+    syncAll.mutate();
+  };
 
   useEffect(() => {
     if (fetchedAccounts) {
@@ -1437,16 +1422,20 @@ export function Sidebar() {
 
   if (renderCollapsed) {
     return (
+      <SyncLineContext.Provider value={syncLine}>
       <div className="flex flex-col h-full w-[52px] glass-sidebar relative isolate border-r border-border">
         <SidebarAmbient />
         <div className="p-2 flex flex-col items-center gap-2">
-          <AnimatedSyncButton
-            isSyncing={isAnySyncing}
-            onClick={() => syncAll.mutate()}
-            size={16}
-            alwaysVisible
-            disabled={accounts.length === 0}
-          />
+          <div className="relative w-full flex justify-center">
+            <AnimatedSyncButton
+              isSyncing={isAnySyncing}
+              onClick={startSyncAll}
+              size={16}
+              alwaysVisible
+              disabled={accounts.length === 0}
+            />
+            <SyncEdge accounts={accounts} className="absolute left-1 right-1 -bottom-1" />
+          </div>
           <ComposeButton collapsed />
         </div>
 
@@ -1483,27 +1472,28 @@ export function Sidebar() {
           </Tooltip>
         </div>
       </div>
+      </SyncLineContext.Provider>
     );
   }
 
   return (
+    <SyncLineContext.Provider value={syncLine}>
     <div className={`flex flex-col h-full glass-sidebar relative isolate border-r border-border transition-opacity duration-150 ${collapseTransition ? "opacity-0" : "opacity-100"}`}>
       <SidebarAmbient />
       <div className="p-3">
-        <div className="flex items-center justify-between mb-3">
-          <h1 className="text-lg font-bold text-text tracking-tight">
-            Prudii Mail
-          </h1>
+        <div className="relative flex items-center justify-between mb-3">
+          <SidebarTitle />
           <div className="flex items-center gap-1">
             <AnimatedSyncButton
               isSyncing={isAnySyncing}
-              onClick={() => syncAll.mutate()}
+              onClick={startSyncAll}
               size={16}
               alwaysVisible
               disabled={accounts.length === 0}
             />
             <ThemeToggle />
           </div>
+          <SyncEdge accounts={accounts} className="absolute left-0 right-0 -bottom-[7px]" />
         </div>
         <ComposeButton />
       </div>
@@ -1561,5 +1551,6 @@ export function Sidebar() {
         </div>
       </div>
     </div>
+    </SyncLineContext.Provider>
   );
 }
