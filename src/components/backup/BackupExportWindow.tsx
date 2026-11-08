@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Download, AlertTriangle, CheckCircle, Loader2 } from "../icons";
+import { Download, AlertTriangle, CheckCircle } from "../icons";
+import { LightThread } from "../motion/LightThread";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useTranslation } from "react-i18next";
@@ -126,7 +127,7 @@ export function BackupExportWindow() {
                 {error || progress?.status === "error" ? (
                   <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                 ) : (
-                  <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
+                  <LightThread form="mini" />
                 )}
                 <span className="truncate">{error ?? backupErrorText(progress?.message ?? "", t)}</span>
               </div>

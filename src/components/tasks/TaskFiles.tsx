@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { Loader2, FolderOpen, X, Plus } from "../icons";
+import { FolderOpen, X, Plus } from "../icons";
+import { LightThread } from "../motion/LightThread";
 import type { TaskAttachment } from "../../types";
 import type { useTaskAttachments } from "../../hooks/useTasks";
 import { useAppStore } from "../../stores/appStore";
@@ -55,8 +56,9 @@ export function TaskFiles({ attachments, api, dropActive = false }: TaskFilesPro
         title={t("tasks.attachments")}
         count={attachments.length}
         action={
-          <button onClick={() => api.add.mutate()} disabled={api.add.isPending} className={SECTION_ACTION}>
-            {api.add.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+          <button onClick={() => api.add.mutate()} disabled={api.add.isPending} aria-busy={api.add.isPending || undefined} className={`relative ${SECTION_ACTION}`}>
+            <Plus className={`w-3.5 h-3.5 ${api.add.isPending ? "opacity-45" : ""}`} />
+            {api.add.isPending && <LightThread form="edge" inset={4} />}
             {t("tasks.addFiles")}
           </button>
         }

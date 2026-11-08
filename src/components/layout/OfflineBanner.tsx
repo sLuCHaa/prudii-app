@@ -1,4 +1,5 @@
-import { WifiOff, RefreshCw, Loader2 } from "../icons";
+import { WifiOff, RefreshCw } from "../icons";
+import { LightThread } from "../motion/LightThread";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";
 import { checkConnectivity } from "../../lib/tauri";
@@ -28,7 +29,7 @@ export function OfflineBanner() {
     <div className="flex items-center justify-between gap-2 px-4 py-2 bg-warning/10 border-b border-warning/30 text-xs text-text">
       <div className="flex items-center gap-2">
         {checking ? (
-          <Loader2 className="w-3.5 h-3.5 text-warning animate-spin" />
+          <LightThread form="mini" tone="warning" />
         ) : (
           <WifiOff className="w-3.5 h-3.5 text-warning" />
         )}

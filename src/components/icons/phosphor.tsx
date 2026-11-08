@@ -41,7 +41,6 @@ import {
   CheckIcon,
   CircleDashedIcon,
   CircleIcon,
-  CircleNotchIcon,
   ClipboardTextIcon,
   ClockIcon,
   CloudIcon,
@@ -266,7 +265,6 @@ export const List = duotone(ListBulletsIcon, "List");
 export const ListChecks = duotone(ListChecksIcon, "ListChecks");
 export const ListOrdered = duotone(ListNumbersIcon, "ListOrdered");
 // Spinner ohne Duotone-Fläche: sonst dreht sich eine graue Scheibe statt eines Bogens.
-export const Loader2 = duotone(CircleNotchIcon, "Loader2", { weight: "regular" });
 export const Lock = duotone(LockIcon, "Lock");
 export const LogOut = duotone(SignOutIcon, "LogOut");
 export const Mail = duotone(EnvelopeSimpleIcon, "Mail");

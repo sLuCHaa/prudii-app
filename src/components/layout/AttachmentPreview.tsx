@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { X, Download, Mail, ChevronLeft, ChevronRight, FileText, Image, FileSpreadsheet, File, Loader2, FolderOpen } from "../icons";
+import { X, Download, Mail, ChevronLeft, ChevronRight, FileText, Image, FileSpreadsheet, File, FolderOpen } from "../icons";
+import { LightThread } from "../motion/LightThread";
 import { useTranslation } from "react-i18next";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { getAttachmentPreview } from "../../lib/tauri";
@@ -172,7 +173,7 @@ export function AttachmentPreview({
     // The on_download handler in lib.rs redirects the temp file away from Downloads
     if (category === "pdf") {
       if (loading) {
-        return <Loader2 className="w-6 h-6 text-accent animate-spin" />;
+        return <LightThread form="area" label={t("common.loading")} />;
       }
       if (failed || !pdfBlobUrl) {
         return (

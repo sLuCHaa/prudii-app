@@ -1,7 +1,8 @@
 import { Fragment, createContext, useContext, useEffect, useLayoutEffect, useState, useRef, useCallback, memo, useMemo } from "react";
 import { Tooltip } from "../ui/Tooltip";
 import { parseISO } from "date-fns";
-import { FileText, Image, Film, Music, File, Loader2, Download, ChevronDown, ChevronRight, ChevronUp, MessageSquare, Copy, Check, Code, Eye, FileCode, FileType, Printer, MailMinus, UserMinus, ImageOff, FileWarning, FolderOpen, ClipboardList, ClipboardPlus, Ellipsis, Archive, Paperclip, Forward, Reply, ReplyAll, StarIcon, TrashIcon } from "../icons";
+import { FileText, Image, Film, Music, File, Download, ChevronDown, ChevronRight, ChevronUp, MessageSquare, Copy, Check, Code, Eye, FileCode, FileType, Printer, MailMinus, UserMinus, ImageOff, FileWarning, FolderOpen, ClipboardList, ClipboardPlus, Ellipsis, Archive, Paperclip, Forward, Reply, ReplyAll, StarIcon, TrashIcon } from "../icons";
+import { LightThread } from "../motion/LightThread";
 import { SkeletonText } from "../ui/Skeleton";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -162,10 +163,12 @@ const AttachmentItem = memo(function AttachmentItem({
       <button
         onClick={handleSave}
         disabled={saving}
-        className="p-1 rounded hover:bg-hover transition-colors opacity-0 group-hover:opacity-100 text-text-tertiary hover:text-text disabled:opacity-50"
+        className="relative p-1 rounded hover:bg-hover transition-colors opacity-0 group-hover:opacity-100 text-text-tertiary hover:text-text"
         aria-label={t("mailDetail.saveAttachment")}
+        aria-busy={saving || undefined}
       >
-        {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+        <Download className={`w-3.5 h-3.5 ${saving ? "opacity-45" : ""}`} />
+        {saving && <LightThread form="edge" inset={3} />}
       </button>
       {attachment.local_path && (
         <Tooltip label={t(revealLabelKey({ isMac: isMacOS, isWindows }))}>
@@ -1363,10 +1366,12 @@ const ThreadAttachmentItem = memo(function ThreadAttachmentItem({ attachment, se
       <button
         onClick={handleSave}
         disabled={saving}
-        className="p-1 rounded hover:bg-hover transition-colors opacity-0 group-hover:opacity-100 text-text-tertiary hover:text-text disabled:opacity-50"
+        className="relative p-1 rounded hover:bg-hover transition-colors opacity-0 group-hover:opacity-100 text-text-tertiary hover:text-text"
         aria-label={t("mailDetail.saveAttachment")}
+        aria-busy={saving || undefined}
       >
-        {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+        <Download className={`w-3.5 h-3.5 ${saving ? "opacity-45" : ""}`} />
+        {saving && <LightThread form="edge" inset={3} />}
       </button>
       {attachment.local_path && (
         <Tooltip label={t(revealLabelKey({ isMac: isMacOS, isWindows }))}>
@@ -1444,7 +1449,7 @@ const ThreadAttachments = memo(function ThreadAttachments({ threadMails, loading
           {t("mailDetail.messagesWithAttachments", { count: totalCount })}
         </span>
         {!allBodiesLoaded && (
-          <Loader2 className="w-3 h-3 animate-spin text-text-tertiary" />
+          <LightThread form="mini" />
         )}
       </button>
 
@@ -1480,7 +1485,7 @@ const ThreadAttachmentsContent = memo(function ThreadAttachmentsContent({
       ))}
       {!allBodiesLoaded && (
         <div className="flex items-center gap-2 py-2 text-xs text-text-tertiary">
-          <Loader2 className="w-3 h-3 animate-spin" />
+          <LightThread form="mini" />
           <span>{t("mailDetail.loadingAttachments")}</span>
         </div>
       )}

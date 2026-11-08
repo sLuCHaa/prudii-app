@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { Download, Upload, HardDrive, AlertTriangle, CheckCircle, Loader2 } from "../icons";
+import { Download, Upload, HardDrive, AlertTriangle, CheckCircle } from "../icons";
+import { LightThread } from "../motion/LightThread";
 import { listen } from "@tauri-apps/api/event";
 import { Button } from "../ui/Button";
 import { createBackup, previewRestore, restoreBackup } from "../../lib/tauri";
@@ -136,7 +137,7 @@ export function BackupRestore() {
               ) : backupProgress.status === "error" ? (
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
               ) : (
-                <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
+                <LightThread form="mini" />
               )}
               <span className="truncate">{backupErrorText(backupProgress.message, t)}</span>
             </div>
@@ -180,7 +181,7 @@ export function BackupRestore() {
                   ) : restoreProgress.status === "error" ? (
                     <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                   ) : (
-                    <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
+                    <LightThread form="mini" />
                   )}
                   <span className="truncate">{backupErrorText(restoreProgress.message, t)}</span>
                 </div>

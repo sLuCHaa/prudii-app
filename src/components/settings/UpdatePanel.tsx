@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { getVersion } from "@tauri-apps/api/app";
-import { Download, CheckCircle, XCircle, RefreshCw, Loader2, ShieldAlert } from "../icons";
+import { Download, CheckCircle, XCircle, RefreshCw, ShieldAlert } from "../icons";
+import { LightThread } from "../motion/LightThread";
 import { Button } from "../ui/Button";
 import { SettingsGroup, SettingsBlock } from "./SettingsGroup";
 import { checkForUpdate, installUpdate, type Update } from "../../lib/updater";
@@ -98,7 +99,7 @@ export function UpdatePanel() {
 
       {status === "checking" && (
         <SettingsBlock className="flex items-center gap-2">
-          <Loader2 className="w-4 h-4 text-accent animate-spin" />
+          <LightThread form="mini" />
           <span className="text-sm text-text-secondary">{t("settings.update.checking")}</span>
         </SettingsBlock>
       )}
@@ -124,7 +125,7 @@ export function UpdatePanel() {
       {status === "downloading" && (
         <SettingsBlock className="space-y-2">
           <div className="flex items-center gap-2">
-            <Loader2 className="w-4 h-4 text-accent animate-spin" />
+            <LightThread form="mini" />
             <span className="text-sm text-text-secondary">{t("settings.update.downloading")}</span>
             <span className="text-xs text-text-tertiary ml-auto">{progressPct}%</span>
           </div>
@@ -139,7 +140,7 @@ export function UpdatePanel() {
 
       {status === "verifying" && (
         <SettingsBlock className="flex items-center gap-2">
-          <Loader2 className="w-4 h-4 text-accent animate-spin" />
+          <LightThread form="mini" />
           <span className="text-sm text-text-secondary">{t("settings.update.verifying")}</span>
         </SettingsBlock>
       )}

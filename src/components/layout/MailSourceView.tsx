@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { Check, ChevronRight, Copy, Loader2 } from "../icons";
+import { Check, ChevronRight, Copy } from "../icons";
+import { LightThread } from "../motion/LightThread";
 import { fetchMailSource } from "../../lib/tauri";
 import { splitMailSource, foldedBytes } from "../../lib/mailSource";
 import { formatFileSize } from "../../lib/fileSize";
@@ -49,8 +50,8 @@ export function MailSourceView({ mailId }: { mailId: string }) {
 
   if (state.status === "loading") {
     return (
-      <div className="flex items-center gap-2 py-8 justify-center text-xs text-text-tertiary">
-        <Loader2 className="w-4 h-4 animate-spin" />
+      <div className="flex flex-col items-center gap-3 py-8 justify-center text-xs text-text-tertiary">
+        <LightThread form="area" />
         {t("mailDetail.source.loading")}
       </div>
     );

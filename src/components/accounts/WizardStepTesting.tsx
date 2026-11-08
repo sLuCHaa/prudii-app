@@ -1,4 +1,5 @@
-import { Loader2, AlertCircle } from "../icons";
+import { AlertCircle } from "../icons";
+import { LightThread } from "../motion/LightThread";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { SyncProgress } from "../../types";
 import { mapImapError } from "../../lib/imapErrorMap";
@@ -39,7 +40,7 @@ export function WizardStepTesting({
     return (
       <div className="text-center py-6">
         <div className="w-16 h-16 rounded-full bg-accent-soft flex items-center justify-center mx-auto mb-4">
-          <Loader2 className="w-8 h-8 text-accent animate-spin" />
+          <LightThread form="area" width={36} />
         </div>
         <h3 className="text-lg font-semibold text-text mb-2">
           {t("wizard.waitingForAuth")}
@@ -101,7 +102,7 @@ export function WizardStepTesting({
           {syncProgress && inMailPhase(syncProgress) ? (
             <div className="flex flex-col items-center gap-3 py-8">
               <div className="w-16 h-16 rounded-full bg-accent-soft flex items-center justify-center">
-                <Loader2 className="w-8 h-8 text-accent animate-spin" />
+                <LightThread form="area" width={36} />
               </div>
               <div className="text-5xl font-bold tabular-nums">
                 <NumberTween from={0} to={run.mails} duration={400} />
@@ -127,7 +128,7 @@ export function WizardStepTesting({
           ) : (
             <>
               <div className="w-16 h-16 rounded-full bg-accent-soft flex items-center justify-center mx-auto mb-4">
-                <Loader2 className="w-8 h-8 text-accent animate-spin" />
+                <LightThread form="area" width={36} />
               </div>
               <h3 className="text-lg font-semibold text-text mb-2">
                 {statusKey ? t(statusKey) : testStatus}

@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useCallback, useState, useRef, useMemo, DragEvent } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Loader2, X, Mail as MailIcon, MailOpen, Check, Pin, Clock, CalendarClock, FileText, ShieldAlert, Folder, Archive, Paperclip, Inbox, MagnifierIcon, Send, Star, StarIcon, Trash2 } from "../icons";
+import { X, Mail as MailIcon, MailOpen, Check, Pin, Clock, CalendarClock, FileText, ShieldAlert, Folder, Archive, Paperclip, Inbox, MagnifierIcon, Send, Star, StarIcon, Trash2 } from "../icons";
+import { LightThread } from "../motion/LightThread";
 import { createPortal } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { FlagDots } from "../ui/FlagPicker";
@@ -791,7 +792,7 @@ function VirtualMailList({
                   className="flex justify-center py-3"
                 >
                   {isFetchingNextPage && (
-                    <Loader2 className="w-4 h-4 animate-spin text-text-tertiary" />
+                    <LightThread form="area" width={140} label={t("common.loading")} />
                   )}
                 </div>
               );
@@ -2154,7 +2155,7 @@ export function MailList() {
                     )}
                     {searchResults.isSearchingServer && (
                       <span className="inline-flex items-center gap-1 text-xs text-text-tertiary" role="status">
-                        <Loader2 className="w-3 h-3 animate-spin" />
+                        <LightThread form="mini" />
                         {t("search.searchingServer")}
                       </span>
                     )}

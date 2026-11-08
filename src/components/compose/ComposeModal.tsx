@@ -5,7 +5,8 @@ import { dateLocale } from "../../lib/dateUtils";
 import { PulseDot } from "../motion/PulseDot";
 import { GradientAvatar } from "../motion/GradientAvatar";
 import { SPRING_SNAPPY } from "../motion/tokens";
-import { X, Paperclip, Trash2, Send, File, FileText, Image, Film, Music, FileCode, FileSpreadsheet, Archive, Sparkles, Loader2, FileType, CalendarClock, ChevronDown, Undo2, Check, Eye } from "../icons";
+import { X, Paperclip, Trash2, Send, File, FileText, Image, Film, Music, FileCode, FileSpreadsheet, Archive, Sparkles, FileType, CalendarClock, ChevronDown, Undo2, Check, Eye } from "../icons";
+import { LightThread } from "../motion/LightThread";
 import { motion, AnimatePresence } from "motion/react";
 import { EditorContent } from "@tiptap/react";
 import TiptapImage from "@tiptap/extension-image";
@@ -345,7 +346,7 @@ function SendButton({ onSend, disabled, onPhaseChange }: { onSend: () => Promise
   // slides vertically — a calm crossfade between idle → loading → sent.
   const phases: { key: SendPhase; icon: ReactNode; label: string }[] = [
     { key: "idle", icon: <Send className="w-4 h-4" />, label: t("common.send") },
-    { key: "loading", icon: <Loader2 className="w-4 h-4 animate-spin" />, label: t("common.sending") },
+    { key: "loading", icon: <Send className="w-4 h-4 opacity-45" />, label: t("common.sending") },
     { key: "sent", icon: <Check className="w-4 h-4" />, label: t("common.sent") },
   ];
 
@@ -372,6 +373,7 @@ function SendButton({ onSend, disabled, onPhaseChange }: { onSend: () => Promise
           </motion.span>
         ))}
       </span>
+      <LightThread form="edge" tone="current" on={phase === "loading"} />
     </button>
   );
 }
@@ -1734,7 +1736,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
 
             {aiLoading && (
               <div className="flex items-center gap-2 px-4 py-3 border-b border-border-light bg-accent/5">
-                <Loader2 className="w-4 h-4 text-accent animate-spin" />
+                <LightThread form="mini" />
                 <span className="text-xs text-text-tertiary">{t("ai.generatingReplies")}</span>
               </div>
             )}
@@ -1783,7 +1785,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
                           >
                             <div className={`${preview ? "w-full h-20 overflow-hidden" : "w-10 h-10"} rounded-lg bg-surface flex items-center justify-center mb-2 ${failed ? "text-danger" : iconColor}`}>
                               {loading ? (
-                                <Loader2 className="w-5 h-5 animate-spin text-text-tertiary" />
+                                <LightThread form="area" width={28} label={t("common.loading")} />
                               ) : preview ? (
                                 <AttachmentThumb type={att.type} data={att.data} />
                               ) : (
@@ -1900,10 +1902,10 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
               />
               {appSettings.ai_enabled && originalMail && (mode === "reply" || mode === "replyAll") && (
                 <IconButton
-                  icon={aiLoading ? <Loader2 className="animate-spin" /> : <Sparkles />}
+                  icon={<Sparkles />}
                   aria-label={t("ai.suggestReply")}
                   onClick={handleAiSuggest}
-                  disabled={aiLoading}
+                  loading={aiLoading}
                   className={aiReplies.length > 0 ? "text-accent" : ""}
                 />
               )}

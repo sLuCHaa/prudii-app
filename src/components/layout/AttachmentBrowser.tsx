@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { Search, Download, Check, ArrowUpDown, ArrowUp, ArrowDown, FileText, Image, FileSpreadsheet, File, Loader2, Paperclip, Mail, ChevronDown, Sparkles, X, FolderOpen } from "../icons";
+import { Search, Download, Check, ArrowUpDown, ArrowUp, ArrowDown, FileText, Image, FileSpreadsheet, File, Paperclip, Mail, ChevronDown, Sparkles, X, FolderOpen } from "../icons";
+import { LightThread } from "../motion/LightThread";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";
 import { searchAttachments, countAttachments, bulkSaveAttachments, saveAttachment, startAttachmentDrag, aiSearchAttachments } from "../../lib/tauri";
@@ -587,7 +588,7 @@ export function AttachmentBrowser() {
 
       {aiSearching && (
         <div className="px-6 py-2.5 border-b border-accent/30 bg-accent/5 flex items-center gap-2">
-          <Loader2 className="w-4 h-4 text-accent animate-spin" />
+          <LightThread form="mini" />
           <span className="text-xs text-accent font-medium">{t("attachments.aiSearching")}</span>
         </div>
       )}
@@ -794,7 +795,7 @@ export function AttachmentBrowser() {
 
               {loadingMore && (
                 <div className="flex justify-center py-3">
-                  <Loader2 className="w-4 h-4 animate-spin text-text-tertiary" />
+                  <LightThread form="area" width={140} label={t("common.loading")} />
                 </div>
               )}
             </div>

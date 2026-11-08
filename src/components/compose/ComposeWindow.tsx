@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { X, Minus, Square, Copy, Pencil, Reply, ReplyAll, Forward } from "../icons";
+import { LightThread } from "../motion/LightThread";
 import { emit } from "@tauri-apps/api/event";
 import { getCurrentWindow, currentMonitor } from "@tauri-apps/api/window";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -324,8 +325,9 @@ export function ComposeWindow() {
               initData={initData}
             />
           ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="animate-pulse text-text-tertiary text-sm">{t("common.loading")}</div>
+            <div className="flex-1 flex flex-col items-center justify-center gap-3">
+              <LightThread form="area" />
+              <div className="text-text-tertiary text-sm">{t("common.loading")}</div>
             </div>
           )}
       </div>

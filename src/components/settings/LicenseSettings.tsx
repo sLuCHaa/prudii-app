@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Key, LogOut, Monitor, Users, ExternalLink, Copy, Check, Shield, AlertTriangle, RefreshCw } from "../icons";
+import { LightThread } from "../motion/LightThread";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { licenseLogin, licenseLogout, getLicenseInfo, verifyLicense, activateLicenseKey, getDeviceId } from "../../lib/tauri";
@@ -167,7 +168,7 @@ export function LicenseSettings() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin w-5 h-5 border-2 border-accent border-t-transparent rounded-full" />
+        <LightThread form="area" label={t("common.loading")} />
       </div>
     );
   }

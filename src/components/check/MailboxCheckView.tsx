@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Lock, Mail, MailMinus, Shield, ShieldAlert, UserMinus } from "../icons";
+import { Lock, Mail, MailMinus, Shield, ShieldAlert, UserMinus } from "../icons";
+import { LightThread } from "../motion/LightThread";
 import { useAppStore } from "../../stores/appStore";
 import { getNewsletterOverview, getTrackerReport } from "../../lib/tauri";
 import { runTrackerScan } from "../../lib/trackerScan";
@@ -186,7 +187,7 @@ export function MailboxCheckView() {
         </div>
         {scanning && (
           <span className="flex items-center gap-1.5 text-xs text-text-secondary" role="status">
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            <LightThread form="mini" />
             {t("mailboxCheck.scanning")}
           </span>
         )}
@@ -206,7 +207,7 @@ export function MailboxCheckView() {
 
           {state === "loading" && (
             <div className="flex justify-center py-16 text-text-tertiary" aria-busy="true">
-              <Loader2 className="w-5 h-5 animate-spin" />
+              <LightThread form="area" label={t("common.loading")} />
             </div>
           )}
 
@@ -324,15 +325,15 @@ export function MailboxCheckView() {
                                   type="button"
                                   disabled={busy}
                                   onClick={() => setPending({ row, mode: row.offer === "block" ? "block" : "unsubscribe" })}
-                                  className="inline-flex items-center gap-1.5 rounded-control border border-border px-3 py-1.5 text-sm text-text hover:bg-hover disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-accent"
+                                  className="relative inline-flex items-center gap-1.5 rounded-control border border-border px-3 py-1.5 text-sm text-text hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent"
+                                  aria-busy={busy || undefined}
                                 >
-                                  {busy ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                  ) : row.offer === "block" ? (
-                                    <UserMinus className="w-4 h-4" />
+                                  {row.offer === "block" ? (
+                                    <UserMinus className={`w-4 h-4 ${busy ? "opacity-45" : ""}`} />
                                   ) : (
-                                    <MailMinus className="w-4 h-4" />
+                                    <MailMinus className={`w-4 h-4 ${busy ? "opacity-45" : ""}`} />
                                   )}
+                                  {busy && <LightThread form="edge" />}
                                   {t(row.offer === "block" ? "unsubscribe.block" : "unsubscribe.title")}
                                 </button>
                               ) : null}
