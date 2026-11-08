@@ -6,7 +6,7 @@ import { useAppStore } from "../../stores/appStore";
 import { markAsRead, getMail } from "../../lib/tauri";
 import { MAIL_LINK_BRIDGE, MAIL_LINK_BRIDGE_CSP_HASH, relayBridgeKey, parseBridgeContextMenu, type BridgeContextMenu } from "../../lib/mailLinkBridge";
 import { openMailUrl } from "../../lib/trackingParams";
-import { invalidateMailListQueries, patchSearchRead } from "../../lib/mailQueries";
+import { invalidateMailListQueries, patchCachedMails } from "../../lib/mailQueries";
 import { MailBodyContextMenu } from "./MailBodyContextMenu";
 import { EmptyState } from "../ui/EmptyState";
 import { DaylightSky, useAtmosphereLine } from "../motion/DaylightSky";
@@ -301,7 +301,7 @@ export function MailDetail() {
           } else {
             setFallbackMail((prev) => prev ? { ...prev, is_read: true } : prev);
           }
-          patchSearchRead(queryClient, [mail.id], true);
+          patchCachedMails(queryClient, [mail.id], { is_read: true });
           invalidateMailQueries();
         })
         .catch((err) => addToast("error", t("errors.markRead"), err instanceof Error ? err.message : String(err)));

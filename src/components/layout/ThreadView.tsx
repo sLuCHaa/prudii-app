@@ -14,7 +14,7 @@ import { useAppStore } from "../../stores/appStore";
 import { ReadingAmbient } from "./ReadingAmbient";
 import { resolveInlineImages, removeUnresolvableImages, listedAttachments } from "../../lib/inlineImages";
 import { findMissingParts, stripMmlTags } from "../../lib/missingParts";
-import { invalidateMailListQueries, patchSearchRead } from "../../lib/mailQueries";
+import { invalidateMailListQueries, patchCachedMails } from "../../lib/mailQueries";
 import { ListStatusChip } from "./ListStatusChip";
 import { useListActions } from "../../hooks/useListActions";
 import { displayTrackerRecorder } from "../../lib/trackerScan";
@@ -677,8 +677,12 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
     e.stopPropagation();
     const prev = mail.is_starred;
     updateMail({ is_starred: !prev });
+    patchCachedMails(queryClient, [mail.id], { is_starred: !prev });
     toggleStarMutation.mutate(mail.id, {
-      onError: () => updateMail({ is_starred: prev }),
+      onError: () => {
+        updateMail({ is_starred: prev });
+        patchCachedMails(queryClient, [mail.id], { is_starred: prev });
+      },
     });
   }, [mail.id, mail.is_starred, updateMail, toggleStarMutation]);
 
@@ -1676,7 +1680,7 @@ export function ThreadView({ mail }: ThreadViewProps) {
       markAsRead(mail.id)
         .then(() => {
           setMails((prev) => prev.map((m) => (m.id === mail.id ? { ...m, is_read: true } : m)));
-          patchSearchRead(queryClient, [mail.id], true);
+          patchCachedMails(queryClient, [mail.id], { is_read: true });
           invalidateMailListQueries(queryClient);
         })
         .catch((err) => addToast("error", t("errors.markRead"), err instanceof Error ? err.message : String(err)));

@@ -57,7 +57,7 @@ import { anchorAt, type ScrollAnchor } from "../../lib/scrollAnchor";
 import { makeIsOutgoing } from "../../lib/outgoing";
 import { MailSortMenu } from "./MailSortMenu";
 import { runMailAction, toastError, causeMessage } from "../../lib/errorToast";
-import { invalidateMailListQueries, patchSearchRead } from "../../lib/mailQueries";
+import { invalidateMailListQueries, patchCachedMails } from "../../lib/mailQueries";
 import { accumulate, decide, isHorizontalIntent } from "../../lib/swipe";
 import { isListNavKey, nextCursor, pageSize, spanIds } from "../../lib/listKeys";
 import { MAIL_FLAG_COLORS } from "../../types";
@@ -531,6 +531,7 @@ function VirtualMailList({
   // Themed overlay scrollbar on the virtualized list (keeps listRef as the
   // scroll viewport, so the virtualizer and onScroll keep working).
   const { host: listHostRef } = useScroller(listRef, { virtualized: true });
+  const queryClient = useQueryClient();
 
   const virtualItems = useMemo<ListItem[]>(
     () => buildListItems(filteredMails, dateGroupLabels, showDateGroups),
@@ -1063,13 +1064,16 @@ function VirtualMailList({
                                 m.id === mail.id ? { ...m, is_starred: !prev } : m
                               )
                             );
+                            patchCachedMails(queryClient, [mail.id], { is_starred: !prev });
                             toggleStarMutation.mutate(mail.id, {
-                              onError: () =>
+                              onError: () => {
                                 setMails((prev_) =>
                                   prev_.map((m) =>
                                     m.id === mail.id ? { ...m, is_starred: prev } : m
                                   )
-                                ),
+                                );
+                                patchCachedMails(queryClient, [mail.id], { is_starred: prev });
+                              },
                             });
                           }}
                           className="w-7 h-7 rounded-md bg-surface hover:bg-hover border border-border flex items-center justify-center"
@@ -1638,7 +1642,7 @@ export function MailList() {
         : action === "star" ? { is_starred: true }
         : { is_starred: false };
       setMails((prev) => prev.map((m) => (idSet.has(m.id) ? { ...m, ...patch } : m)));
-      if (patch.is_read !== undefined) patchSearchRead(queryClient, ids, patch.is_read);
+      patchCachedMails(queryClient, ids, patch);
     }
     s.clearSelection();
     runMailAction(() => batchUpdateMails(ids, action), {
@@ -2047,7 +2051,7 @@ export function MailList() {
                 onClick={() => {
                   const ids = Array.from(selectedMailIds);
                   setMails((prev) => prev.map((m) => selectedMailIds.has(m.id) ? { ...m, is_read: true } : m));
-                  patchSearchRead(queryClient, ids, true);
+                  patchCachedMails(queryClient, ids, { is_read: true });
                   clearSelection();
                   runMailAction(() => batchUpdateMails(ids, "mark_read"), {
                     errorKey: "errors.markAllRead",
@@ -2065,7 +2069,7 @@ export function MailList() {
                 onClick={() => {
                   const ids = Array.from(selectedMailIds);
                   setMails((prev) => prev.map((m) => selectedMailIds.has(m.id) ? { ...m, is_read: false } : m));
-                  patchSearchRead(queryClient, ids, false);
+                  patchCachedMails(queryClient, ids, { is_read: false });
                   clearSelection();
                   runMailAction(() => batchUpdateMails(ids, "mark_unread"), {
                     errorKey: "errors.markAllRead",
@@ -2372,17 +2376,21 @@ export function MailList() {
           onToggleStar={(m) => {
             const prev = m.is_starred;
             setMails((prev_) => prev_.map((ml) => ml.id === m.id ? { ...ml, is_starred: !prev } : ml));
+            patchCachedMails(queryClient, [m.id], { is_starred: !prev });
             toggleStarMutation.mutate(m.id, {
-              onError: () => setMails((prev_) => prev_.map((ml) => ml.id === m.id ? { ...ml, is_starred: prev } : ml)),
+              onError: () => {
+                setMails((prev_) => prev_.map((ml) => ml.id === m.id ? { ...ml, is_starred: prev } : ml));
+                patchCachedMails(queryClient, [m.id], { is_starred: prev });
+              },
             });
           }}
           onToggleRead={(m) => {
             const prev = m.is_read;
             setMails((prev_) => prev_.map((ml) => ml.id === m.id ? { ...ml, is_read: !prev } : ml));
-            patchSearchRead(queryClient, [m.id], !prev);
+            patchCachedMails(queryClient, [m.id], { is_read: !prev });
             toggleRead(m.id).then(() => invalidateMailQueries()).catch(() => {
               setMails((prev_) => prev_.map((ml) => ml.id === m.id ? { ...ml, is_read: prev } : ml));
-              patchSearchRead(queryClient, [m.id], prev);
+              patchCachedMails(queryClient, [m.id], { is_read: prev });
             });
           }}
           onArchive={(m) => {

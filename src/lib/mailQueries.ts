@@ -1,5 +1,5 @@
-import type { QueryClient } from "@tanstack/react-query";
-import type { SearchResult } from "../types";
+import type { InfiniteData, QueryClient } from "@tanstack/react-query";
+import type { Mail, SearchResult } from "../types";
 
 /**
  * Every query that feeds a mail list, plus the folder counts.
@@ -32,11 +32,26 @@ export function invalidateMailListQueries(queryClient: QueryClient): void {
   }
 }
 
-/** Search results are not mail lists: their read marks follow the mails by hand. */
-export function patchSearchRead(queryClient: QueryClient, mailIds: readonly string[], isRead: boolean): void {
+export type MailFlagPatch = Partial<Pick<Mail, "is_read" | "is_starred">>;
+
+const LIST_KEYS = MAIL_LIST_QUERY_KEYS.filter((k) => k !== "folders" && k !== "category-counts");
+
+/**
+ * Carry an optimistic read/star change into every cached list and search, so
+ * switching to another view never shows (and animates) the old state first.
+ */
+export function patchCachedMails(queryClient: QueryClient, mailIds: readonly string[], patch: MailFlagPatch): void {
   const ids = new Set(mailIds);
-  const patch = (rows: SearchResult[] | undefined) =>
+  const patchMail = (m: Mail) => (ids.has(m.id) ? { ...m, ...patch } : m);
+  for (const key of LIST_KEYS) {
+    queryClient.setQueriesData<InfiniteData<Mail[]>>({ queryKey: [key] }, (data) =>
+      data?.pages ? { ...data, pages: data.pages.map((page) => page.map(patchMail)) } : data,
+    );
+  }
+  if (patch.is_read === undefined) return;
+  const isRead = patch.is_read;
+  const patchHit = (rows: SearchResult[] | undefined) =>
     rows?.map((r) => (ids.has(r.mail_id) && r.is_read !== isRead ? { ...r, is_read: isRead } : r));
-  queryClient.setQueriesData<SearchResult[]>({ queryKey: ["search"] }, patch);
-  queryClient.setQueriesData<SearchResult[]>({ queryKey: ["search-server"] }, patch);
+  queryClient.setQueriesData<SearchResult[]>({ queryKey: ["search"] }, patchHit);
+  queryClient.setQueriesData<SearchResult[]>({ queryKey: ["search-server"] }, patchHit);
 }
