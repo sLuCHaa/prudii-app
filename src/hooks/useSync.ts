@@ -74,5 +74,5 @@ export function useSearchMails(query: string, accountId?: string) {
   const serverHits = serverQuery === debouncedQuery ? server.data : undefined;
   const data = useMemo(() => mergeSearchResults(local.data, serverHits), [local.data, serverHits]);
 
-  return { data, isLoading: local.isLoading, isSearchingServer: server.isFetching };
+  return { data, isLoading: local.isLoading, isFetching: local.isFetching, isSearchingServer: server.isFetching };
 }

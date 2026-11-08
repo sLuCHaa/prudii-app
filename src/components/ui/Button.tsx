@@ -1,5 +1,5 @@
 import { cloneElement, isValidElement } from "react";
-import { Loader2 } from "../icons";
+import { LightThread } from "../motion/LightThread";
 
 export type ButtonVariant = "primary" | "danger" | "secondary" | "ghost" | "success" | "signal";
 export type ButtonSize = "sm" | "md" | "lg";
@@ -51,6 +51,18 @@ function pressStyle(variant: ButtonVariant, animated: boolean, isDisabled: boole
 
 const TRANSITION = "transition-[color,background-color,border-color,box-shadow,transform,filter] duration-150 ease-out";
 
+const FILLED_VARIANTS: ReadonlySet<ButtonVariant> = new Set(["primary", "danger", "success", "signal"]);
+
+// Loading is not disabled: the thread needs the button at full strength.
+function stateStyle(disabled: boolean | undefined, loading: boolean | undefined): string {
+  if (disabled) return "opacity-50 cursor-not-allowed";
+  return loading ? "cursor-wait" : "cursor-pointer";
+}
+
+function LoadingIcon({ icon }: { icon: React.ReactNode }) {
+  return icon ? <span className="inline-flex opacity-45">{icon}</span> : null;
+}
+
 // Helper to clone icon with proper size using inline styles (Tailwind can't process dynamic classes)
 function sizeIcon(icon: React.ReactNode, size: number): React.ReactNode {
   if (isValidElement(icon)) {
@@ -94,15 +106,17 @@ export function Button({
         ${sizeStyles.gap}
         ${fullWidth ? "w-full" : ""}
         ${pressStyle(variant, animated, Boolean(isDisabled))}
-        ${isDisabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
+        ${stateStyle(disabled, loading)}
         ${className}
       `}
+      aria-busy={loading || undefined}
       {...props}
     >
       {loading ? (
         <>
-          <Loader2 className="animate-spin" style={{ width: iconSize, height: iconSize }} />
+          <LoadingIcon icon={sizedIcon} />
           {children && <span>{children}</span>}
+          <LightThread form="edge" tone={FILLED_VARIANTS.has(variant) ? "current" : "accent"} />
         </>
       ) : (
         <>
@@ -145,18 +159,22 @@ export function IconButton({
     <button
       disabled={isDisabled}
       className={`
-        inline-flex items-center justify-center rounded-control border
+        relative inline-flex items-center justify-center rounded-control border
         ${TRANSITION}
         ${variant === "ghost" ? "border-transparent text-text-tertiary hover:text-text hover:bg-hover" : VARIANT_STYLES[variant]}
         ${SIZE_MAP[size]}
         ${pressStyle(variant, animated, Boolean(isDisabled))}
-        ${isDisabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
+        ${stateStyle(disabled, loading)}
         ${className}
       `}
+      aria-busy={loading || undefined}
       {...props}
     >
       {loading ? (
-        <Loader2 className="animate-spin" style={{ width: iconSize, height: iconSize }} />
+        <>
+          <LoadingIcon icon={sizedIcon} />
+          <LightThread form="edge" inset={6} tone={FILLED_VARIANTS.has(variant) ? "current" : "accent"} />
+        </>
       ) : (
         sizedIcon
       )}

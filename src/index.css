@@ -1421,6 +1421,8 @@ html[data-vibrancy].dark .glass-sidebar {
   --thread: var(--c-accent);
 }
 .light-thread[data-on="false"] { opacity: 0; }
+/* A hidden thread that stays mounted must not keep the page animating. */
+.light-thread[data-on="false"] > i { animation-play-state: paused; }
 .light-thread[data-tone="current"] { --thread: currentColor; }
 .light-thread[data-tone="warning"] { --thread: var(--c-warning); }
 .light-thread > i {

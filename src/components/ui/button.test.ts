@@ -61,4 +61,28 @@ describe("Button", () => {
   it("does not move while loading", () => {
     expect(html(createElement(Button, { variant: "primary", loading: true }, "X"))).toContain("tactile-static");
   });
+
+  it("a loading button keeps full strength", () => {
+    const h = html(createElement(Button, { loading: true }, "X"));
+    expect(h).not.toContain("opacity-50");
+    expect(h).toContain("disabled");
+    expect(h).toContain('aria-busy="true"');
+    expect(h).toContain('data-form="edge"');
+  });
+
+  it("a disabled button is still dimmed", () => {
+    expect(html(createElement(Button, { disabled: true }, "X"))).toContain("opacity-50");
+  });
+
+  it("a loading icon button keeps full strength", () => {
+    const h = html(createElement(IconButton, { loading: true, icon: createElement("svg"), "aria-label": "x" }));
+    expect(h).not.toContain("opacity-50");
+    expect(h).toContain('aria-busy="true"');
+    expect(h).toContain('data-form="edge"');
+    expect(h).toContain("--thread-inset:6px");
+  });
+
+  it("a disabled icon button is still dimmed", () => {
+    expect(html(createElement(IconButton, { disabled: true, icon: createElement("svg"), "aria-label": "x" }))).toContain("opacity-50");
+  });
 });
