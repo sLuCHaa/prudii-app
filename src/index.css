@@ -1436,7 +1436,39 @@ html[data-vibrancy].dark .glass-sidebar {
 .light-thread[data-form="mini"] { display: inline-block; vertical-align: middle; width: 18px; height: 2px; flex-shrink: 0; }
 @keyframes light-thread-in { from { opacity: 0; } }
 
+/* Mail row stripe. Rows sit on translateY, so animating transform or opacity
+   in them blurs the row text in WebKit; only geometry, colour and shadow move. */
+@property --star-a { syntax: '<number>'; inherits: false; initial-value: 0; }
+.mail-stripe > span { position: absolute; left: 0; top: 0; bottom: 0; width: 3px; border-radius: 0 3px 3px 0; }
+.mail-stripe-read { background: transparent; }
+.mail-stripe-read[data-unread="true"] { background: #3b82f6; }
+.mail-stripe-read[data-anim="out"] { animation: stripe-dot-out 0.5s ease forwards; }
+.mail-stripe-read[data-anim="in"] { animation: stripe-dot-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes stripe-dot-out {
+  0% { top: 0; bottom: 0; left: 0; width: 3px; border-radius: 0 3px 3px 0; background: #3b82f6; }
+  55% { top: calc(50% - 3.5px); bottom: calc(50% - 3.5px); left: -1px; width: 5px; border-radius: 3px; background: #3b82f6; }
+  100% { top: calc(50% - 3.5px); bottom: calc(50% - 3.5px); left: -1px; width: 5px; border-radius: 3px; background: rgb(59 130 246 / 0); }
+}
+@keyframes stripe-dot-in {
+  0% { top: calc(50% - 3.5px); bottom: calc(50% - 3.5px); left: -1px; width: 5px; border-radius: 3px; background: rgb(59 130 246 / 0); }
+  30% { top: calc(50% - 3.5px); bottom: calc(50% - 3.5px); left: -1px; width: 5px; border-radius: 3px; background: #3b82f6; }
+  100% { top: 0; bottom: 0; left: 0; width: 3px; border-radius: 0 3px 3px 0; background: #3b82f6; }
+}
+.mail-stripe-star {
+  --star-a: 0;
+  background: linear-gradient(180deg, rgb(251 191 36 / var(--star-a)), rgb(245 158 11 / var(--star-a)));
+  transition: --star-a 0.3s ease;
+}
+.mail-stripe-star[data-on="true"] { --star-a: 1; }
+.mail-stripe-star[data-anim="on"] { animation: stripe-glow 1s ease-out; }
+@keyframes stripe-glow { from { box-shadow: 0 0 12px 2px #fbbf24; } to { box-shadow: 0 0 0 0 rgb(251 191 36 / 0); } }
+.mail-read-text { transition: color 0.36s ease, font-weight 0s linear 0.2s; }
+
 @media (prefers-reduced-motion: reduce) {
+  .mail-stripe-read[data-anim], .mail-stripe-star[data-anim] { animation: none; }
+  .mail-stripe-read { transition: background-color 0.15s; }
+  .mail-stripe-star { transition-duration: 0.18s; }
+  .mail-read-text { transition: color 0.15s; }
   .light-thread > i { animation: none; left: 0; width: 100%; opacity: 0.5; }
   .sync-seg.indeterminate > i { animation: none; left: 0; width: 100% !important; opacity: 0.5; }
   .account-chip { animation-duration: 0.01ms; animation-fill-mode: none; }

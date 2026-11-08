@@ -112,8 +112,8 @@ describe("shape audit", () => {
   });
 
   it("keeps the unread stripe inside the rounded row", () => {
-    const stripes = classStrings().filter(({ file, cls }) => file === "layout/MailList.tsx" && cls.includes("w-[3px]"));
-    expect(stripes).toHaveLength(2);
+    const stripes = classStrings().filter(({ file, cls }) => file.startsWith("layout/Mail") && cls.includes("w-[3px]"));
+    expect(stripes.map(({ file }) => file)).toEqual(["layout/MailStripe.tsx"]);
     expect(stripes.filter(({ cls }) => !/\bleft-0\.5\b/.test(cls) || !/\btop-2\.5\b/.test(cls) || !/\bbottom-2\.5\b/.test(cls))).toEqual([]);
   });
 

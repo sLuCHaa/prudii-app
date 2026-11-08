@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useCallback, useState, useRef, useMemo, Dra
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { X, Mail as MailIcon, MailOpen, Check, Pin, Clock, CalendarClock, FileText, ShieldAlert, Folder, Archive, Paperclip, Inbox, MagnifierIcon, Send, Star, StarIcon, Trash2 } from "../icons";
 import { LightThread } from "../motion/LightThread";
+import { MailStripe } from "./MailStripe";
 import { createPortal } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { FlagDots } from "../ui/FlagPicker";
@@ -400,10 +401,7 @@ function SearchResultsList({ results, isLoading, selectedMailId, setSelectedMail
             selectedMailId === result.mail_id ? "tile-raised" : "hover:bg-hover"
           }`}
         >
-          <div
-            className="absolute left-0.5 top-2.5 bottom-2.5 w-[3px] rounded-r"
-            style={{ background: !result.is_read ? "#3b82f6" : "transparent" }}
-          />
+          <MailStripe unread={!result.is_read} starred={false} />
           <div className="flex items-start gap-3">
             <div className="shrink-0">
               <GradientAvatar
@@ -414,7 +412,7 @@ function SearchResultsList({ results, isLoading, selectedMailId, setSelectedMail
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between mb-0.5">
-                <span className={`text-sm truncate ${!result.is_read ? "font-semibold text-text" : "text-text-secondary"}`}>
+                <span className={`mail-read-text text-sm truncate ${!result.is_read ? "font-semibold text-text" : "text-text-secondary"}`}>
                   {result.from_name || result.from_email}
                 </span>
                 <div className="flex items-center gap-2 shrink-0 ml-2">
@@ -431,7 +429,7 @@ function SearchResultsList({ results, isLoading, selectedMailId, setSelectedMail
                   </span>
                 </div>
               </div>
-              <div className={`text-sm mb-0.5 truncate ${!result.is_read ? "font-medium text-text" : "text-text-secondary"}`}>
+              <div className={`mail-read-text text-sm mb-0.5 truncate ${!result.is_read ? "font-medium text-text" : "text-text-secondary"}`}>
                 {result.subject}
               </div>
               {result.snippet && (
@@ -934,19 +932,9 @@ function VirtualMailList({
                         : "bg-bg group-hover/mail:bg-hover"
                     }`}
                   >
-                  {/* Left stripe: gold = starred, blue = unread — fixed colors so the
-                      two are always clearly distinguishable (independent of theme/account color). */}
-                  <div
-                    aria-hidden
-                    className="absolute left-0.5 top-2.5 bottom-2.5 w-[3px] rounded-r"
-                    style={{
-                      background: mail.is_starred
-                        ? "linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%)"
-                        : !mail.is_read
-                          ? "#3b82f6"
-                          : "transparent",
-                    }}
-                  />
+                  {/* Gold = starred, blue = unread — fixed colors so the two stay
+                      distinguishable whatever the theme or account color. */}
+                  <MailStripe unread={!mail.is_read} starred={mail.is_starred} />
                   <div className="flex items-start gap-3">
                     {multiSelectMode ? (
                       <div
@@ -991,7 +979,7 @@ function VirtualMailList({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-baseline gap-2">
                         <span
-                          className={`flex-1 min-w-0 truncate text-sm ${
+                          className={`mail-read-text flex-1 min-w-0 truncate text-sm ${
                             !mail.is_read ? "font-semibold text-text" : "text-text-secondary"
                           }`}
                         >
@@ -1009,7 +997,7 @@ function VirtualMailList({
                       <div className="mt-0.5 flex items-center gap-2">
                         <span
                           data-subject
-                          className={`flex-1 min-w-0 truncate text-sm ${
+                          className={`mail-read-text flex-1 min-w-0 truncate text-sm ${
                             !mail.is_read ? "text-text" : "text-text-secondary"
                           }`}
                         >
