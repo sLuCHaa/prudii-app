@@ -1412,7 +1412,30 @@ html[data-vibrancy].dark .glass-sidebar {
 }
 @keyframes title-sweep { from { background-position: 100% 0; } to { background-position: 0 0; } }
 
+/* Loading indicator: the sync line's shimmer in three forms. It keeps its
+   place while fading, so showing or hiding it never moves anything. */
+.light-thread {
+  display: block; position: relative; border-radius: 9999px; pointer-events: none;
+  background: color-mix(in srgb, var(--c-text) 8%, transparent);
+  transition: opacity 0.22s ease; animation: light-thread-in 0.22s ease;
+  --thread: var(--c-accent);
+}
+.light-thread[data-on="false"] { opacity: 0; }
+.light-thread[data-tone="current"] { --thread: currentColor; }
+.light-thread[data-tone="warning"] { --thread: var(--c-warning); }
+.light-thread > i {
+  position: absolute; top: 0; bottom: 0; left: 0; width: 34%; border-radius: inherit;
+  background: linear-gradient(90deg, transparent, var(--thread), transparent);
+  box-shadow: 0 0 8px 0 var(--thread);
+  animation: sync-indeterminate 1s ease-in-out infinite alternate;
+}
+.light-thread[data-form="area"] { width: var(--thread-w, 150px); height: 3px; }
+.light-thread[data-form="edge"] { position: absolute; left: var(--thread-inset, 10px); right: var(--thread-inset, 10px); bottom: 3px; height: 2px; }
+.light-thread[data-form="mini"] { display: inline-block; vertical-align: middle; width: 18px; height: 2px; flex-shrink: 0; }
+@keyframes light-thread-in { from { opacity: 0; } }
+
 @media (prefers-reduced-motion: reduce) {
+  .light-thread > i { animation: none; left: 0; width: 100%; opacity: 0.5; }
   .sync-seg.indeterminate > i { animation: none; left: 0; width: 100% !important; opacity: 0.5; }
   .account-chip { animation-duration: 0.01ms; animation-fill-mode: none; }
   .sync-seg > i { transition: none; }
