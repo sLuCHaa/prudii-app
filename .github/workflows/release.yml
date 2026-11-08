@@ -137,6 +137,16 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
+      # WiX, NSIS und die AppImage-Werkzeuge kommen sonst bei jedem Build frisch von
+      # GitHub-Releases; ein 504 dort liess den 1.8.3-Release auf Linux und Windows scheitern.
+      - name: Cache bundler tools
+        if: matrix.platform == 'ubuntu-22.04' || matrix.platform == 'windows-latest'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ matrix.platform == 'windows-latest' && '~/AppData/Local/tauri' || '~/.cache/tauri' }}
+          key: tauri-bundler-tools-${{ matrix.name }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: tauri-bundler-tools-${{ matrix.name }}-
+
       # Schreibt den App-Store-Connect-API-Key (.p8) fuer die Notarisierung
       # aus dem Base64-Secret in eine Datei (nur macOS-Runner).
       - name: Prepare Apple notarization key (macOS)
