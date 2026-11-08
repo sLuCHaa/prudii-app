@@ -13,7 +13,7 @@ import { useAppStore } from "../../stores/appStore";
 import { ReadingAmbient } from "./ReadingAmbient";
 import { resolveInlineImages, removeUnresolvableImages, listedAttachments } from "../../lib/inlineImages";
 import { findMissingParts, stripMmlTags } from "../../lib/missingParts";
-import { invalidateMailListQueries } from "../../lib/mailQueries";
+import { invalidateMailListQueries, patchSearchRead } from "../../lib/mailQueries";
 import { ListStatusChip } from "./ListStatusChip";
 import { useListActions } from "../../hooks/useListActions";
 import { displayTrackerRecorder } from "../../lib/trackerScan";
@@ -1675,7 +1675,7 @@ export function ThreadView({ mail }: ThreadViewProps) {
       markAsRead(mail.id)
         .then(() => {
           setMails((prev) => prev.map((m) => (m.id === mail.id ? { ...m, is_read: true } : m)));
-
+          patchSearchRead(queryClient, [mail.id], true);
           invalidateMailListQueries(queryClient);
         })
         .catch((err) => addToast("error", t("errors.markRead"), err instanceof Error ? err.message : String(err)));
