@@ -1,8 +1,9 @@
 import { Fragment, createContext, useContext, useEffect, useLayoutEffect, useState, useRef, useCallback, memo, useMemo } from "react";
 import { Tooltip } from "../ui/Tooltip";
 import { parseISO } from "date-fns";
-import { FileText, Image, Film, Music, File, Download, ChevronDown, ChevronRight, ChevronUp, MessageSquare, Copy, Check, Code, Eye, FileCode, FileType, Printer, MailMinus, UserMinus, ImageOff, FileWarning, FolderOpen, ClipboardList, ClipboardPlus, Ellipsis, Archive, Paperclip, Forward, Reply, ReplyAll, StarIcon, TrashIcon } from "../icons";
+import { FileText, Image, Film, Music, File, Download, ChevronDown, ChevronRight, ChevronUp, MessageSquare, Copy, Check, Code, Eye, FileCode, FileType, Printer, MailMinus, UserMinus, ImageOff, FileWarning, FolderOpen, ClipboardList, ClipboardPlus, Ellipsis, Archive, Paperclip, Forward, Reply, ReplyAll, TrashIcon } from "../icons";
 import { LightThread } from "../motion/LightThread";
+import { StarToggleIcon } from "../motion/StarToggleIcon";
 import { SkeletonText } from "../ui/Skeleton";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -1014,7 +1015,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
         mail.is_starred ? "text-warning" : "text-text-tertiary"
       }`}
     >
-      <StarIcon size={14} color={mail.is_starred ? "var(--c-warning)" : "currentColor"} />
+      <StarToggleIcon starred={mail.is_starred} size={14} duotone hoverWiggle />
     </button>
   );
 

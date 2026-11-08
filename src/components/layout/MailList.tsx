@@ -3,6 +3,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { X, Mail as MailIcon, MailOpen, Check, Pin, Clock, CalendarClock, FileText, ShieldAlert, Folder, Archive, Paperclip, Inbox, MagnifierIcon, Send, Star, StarIcon, Trash2 } from "../icons";
 import { LightThread } from "../motion/LightThread";
 import { MailStripe } from "./MailStripe";
+import { StarToggleIcon } from "../motion/StarToggleIcon";
 import { createPortal } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { FlagDots } from "../ui/FlagPicker";
@@ -1074,7 +1075,7 @@ function VirtualMailList({
                           className="w-7 h-7 rounded-md bg-surface hover:bg-hover border border-border flex items-center justify-center"
                           aria-label={t("mailDetail.star")}
                         >
-                          <Star weight={mail.is_starred ? "fill" : undefined} className={`w-3.5 h-3.5 ${mail.is_starred ? "text-warning" : "text-text-secondary"}`} />
+                          <StarToggleIcon starred={mail.is_starred} size={14} className={mail.is_starred ? "text-warning" : "text-text-secondary"} />
                         </button>
                       </Tooltip>
                       <Tooltip label={t("mailDetail.trash")}>
