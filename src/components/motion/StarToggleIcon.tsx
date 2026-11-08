@@ -90,6 +90,7 @@ export function StarToggleIcon({ starred, size, duotone = false, hoverWiggle = f
         stroke="#fbbf24"
         strokeWidth={RING_STROKE_PX * unit}
         strokeOpacity={0}
+        pointerEvents="none"
       />
     </svg>
   );

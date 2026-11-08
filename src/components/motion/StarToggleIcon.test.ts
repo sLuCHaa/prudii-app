@@ -58,6 +58,11 @@ describe("StarToggleIcon", () => {
     root = createRoot(host);
   });
 
+  it("keeps the faded ring from catching clicks", () => {
+    render(true);
+    expect(host.querySelector("circle")!.getAttribute("pointer-events")).toBe("none");
+  });
+
   it("skips the spin with reduced motion", () => {
     reducedMotion(true);
     render(false);
