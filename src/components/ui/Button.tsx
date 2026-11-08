@@ -1,4 +1,4 @@
-import { cloneElement, isValidElement } from "react";
+import { cloneElement, isValidElement, useState } from "react";
 import { LightThread } from "../motion/LightThread";
 
 export type ButtonVariant = "primary" | "danger" | "secondary" | "ghost" | "success" | "signal";
@@ -53,21 +53,24 @@ const TRANSITION = "transition-[color,background-color,border-color,box-shadow,t
 
 const FILLED_VARIANTS: ReadonlySet<ButtonVariant> = new Set(["primary", "danger", "success", "signal"]);
 
-// Loading is not disabled: the thread needs the button at full strength.
+// A loading button stays inert but undimmed, so its thread shows at full strength.
 function stateStyle(disabled: boolean | undefined, loading: boolean | undefined): string {
   if (disabled) return "opacity-50 cursor-not-allowed";
   return loading ? "cursor-wait" : "cursor-pointer";
 }
 
-function LoadingIcon({ icon }: { icon: React.ReactNode }) {
-  return icon ? <span className="inline-flex opacity-45">{icon}</span> : null;
+// Mounted from the first load on, so the thread can fade out when loading ends.
+function useThreadMounted(loading: boolean | undefined): boolean {
+  const [mounted, setMounted] = useState(Boolean(loading));
+  if (loading && !mounted) setMounted(true);
+  return mounted;
 }
 
 // Helper to clone icon with proper size using inline styles (Tailwind can't process dynamic classes)
-function sizeIcon(icon: React.ReactNode, size: number): React.ReactNode {
+function sizeIcon(icon: React.ReactNode, size: number, dimmed = false): React.ReactNode {
   if (isValidElement(icon)) {
     return cloneElement(icon as React.ReactElement<{ style?: React.CSSProperties; size?: number; width?: number; height?: number }>, {
-      style: { width: size, height: size },
+      style: { width: size, height: size, opacity: dimmed ? 0.45 : undefined, transition: "opacity 0.22s ease" },
       size: size,
       width: size,
       height: size,
@@ -92,7 +95,8 @@ export function Button({
   const sizeStyles = SIZE_STYLES[size];
   const iconSize = ICON_SIZES[size];
   const isDisabled = disabled || loading;
-  const sizedIcon = icon ? sizeIcon(icon, iconSize) : null;
+  const sizedIcon = icon ? sizeIcon(icon, iconSize, loading) : null;
+  const threadMounted = useThreadMounted(loading);
 
   return (
     <button
@@ -112,19 +116,10 @@ export function Button({
       aria-busy={loading || undefined}
       {...props}
     >
-      {loading ? (
-        <>
-          <LoadingIcon icon={sizedIcon} />
-          {children && <span>{children}</span>}
-          <LightThread form="edge" tone={FILLED_VARIANTS.has(variant) ? "current" : "accent"} />
-        </>
-      ) : (
-        <>
-          {sizedIcon && iconPosition === "left" && sizedIcon}
-          {children && <span>{children}</span>}
-          {sizedIcon && iconPosition === "right" && sizedIcon}
-        </>
-      )}
+      {sizedIcon && iconPosition === "left" && sizedIcon}
+      {children && <span>{children}</span>}
+      {sizedIcon && iconPosition === "right" && sizedIcon}
+      {threadMounted && <LightThread form="edge" on={Boolean(loading)} tone={FILLED_VARIANTS.has(variant) ? "current" : "accent"} />}
     </button>
   );
 }
@@ -153,7 +148,8 @@ export function IconButton({
     lg: "p-2.5",
   };
 
-  const sizedIcon = sizeIcon(icon, iconSize);
+  const sizedIcon = sizeIcon(icon, iconSize, loading);
+  const threadMounted = useThreadMounted(loading);
 
   return (
     <button
@@ -170,14 +166,8 @@ export function IconButton({
       aria-busy={loading || undefined}
       {...props}
     >
-      {loading ? (
-        <>
-          <LoadingIcon icon={sizedIcon} />
-          <LightThread form="edge" inset={6} tone={FILLED_VARIANTS.has(variant) ? "current" : "accent"} />
-        </>
-      ) : (
-        sizedIcon
-      )}
+      {sizedIcon}
+      {threadMounted && <LightThread form="edge" inset={6} on={Boolean(loading)} tone={FILLED_VARIANTS.has(variant) ? "current" : "accent"} />}
     </button>
   );
 }

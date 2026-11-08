@@ -29,4 +29,4 @@ export function TaskSectionHead({
 }
 
 export const SECTION_ACTION =
-  "inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium text-accent hover:bg-accent/10 transition-colors disabled:opacity-50";
+  "inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium text-accent hover:bg-accent/10 transition-colors";

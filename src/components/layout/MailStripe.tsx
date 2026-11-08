@@ -1,11 +1,7 @@
 import { useState } from "react";
 import { stripeChange, type StripeChange, type StripeState } from "../../lib/stripeMotion";
 
-/**
- * The stripe at a mail row's left edge: blue while unread, gold while starred.
- * Only a change of a mounted row animates; rows scrolled into view show their
- * state at once. Out and in alternate, so each change restarts its keyframes.
- */
+// Only a change of a mounted row animates; alternating out/in restarts the keyframes.
 export function MailStripe({ unread, starred }: StripeState) {
   const [prev, setPrev] = useState<StripeState>({ unread, starred });
   const [anim, setAnim] = useState<StripeChange>({ read: null, star: null });

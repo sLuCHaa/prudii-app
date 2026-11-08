@@ -1433,7 +1433,7 @@ html[data-vibrancy].dark .glass-sidebar {
 }
 .light-thread[data-form="area"] { width: var(--thread-w, 150px); height: 3px; }
 .light-thread[data-form="edge"] { position: absolute; left: var(--thread-inset, 10px); right: var(--thread-inset, 10px); bottom: 3px; height: 2px; }
-.light-thread[data-form="mini"] { display: inline-block; vertical-align: middle; width: 18px; height: 2px; flex-shrink: 0; }
+.light-thread[data-form="mini"] { display: inline-block; vertical-align: middle; width: var(--thread-w, 18px); height: 2px; flex-shrink: 0; }
 @keyframes light-thread-in { from { opacity: 0; } }
 
 /* Mail row stripe. Rows sit on translateY, so animating transform or opacity

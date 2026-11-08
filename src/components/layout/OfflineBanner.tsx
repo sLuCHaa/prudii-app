@@ -29,7 +29,7 @@ export function OfflineBanner() {
     <div className="flex items-center justify-between gap-2 px-4 py-2 bg-warning/10 border-b border-warning/30 text-xs text-text">
       <div className="flex items-center gap-2">
         {checking ? (
-          <LightThread form="mini" tone="warning" />
+          <LightThread form="mini" tone="warning" width={14} />
         ) : (
           <WifiOff className="w-3.5 h-3.5 text-warning" />
         )}

@@ -137,7 +137,7 @@ export function BackupRestore() {
               ) : backupProgress.status === "error" ? (
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
               ) : (
-                <LightThread form="mini" />
+                <LightThread form="mini" width={14} />
               )}
               <span className="truncate">{backupErrorText(backupProgress.message, t)}</span>
             </div>
@@ -181,7 +181,7 @@ export function BackupRestore() {
                   ) : restoreProgress.status === "error" ? (
                     <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                   ) : (
-                    <LightThread form="mini" />
+                    <LightThread form="mini" width={14} />
                   )}
                   <span className="truncate">{backupErrorText(restoreProgress.message, t)}</span>
                 </div>

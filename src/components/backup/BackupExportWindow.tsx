@@ -127,7 +127,7 @@ export function BackupExportWindow() {
                 {error || progress?.status === "error" ? (
                   <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                 ) : (
-                  <LightThread form="mini" />
+                  <LightThread form="mini" width={14} />
                 )}
                 <span className="truncate">{error ?? backupErrorText(progress?.message ?? "", t)}</span>
               </div>

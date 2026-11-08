@@ -264,7 +264,6 @@ export const Link2 = duotone(LinkSimpleIcon, "Link2");
 export const List = duotone(ListBulletsIcon, "List");
 export const ListChecks = duotone(ListChecksIcon, "ListChecks");
 export const ListOrdered = duotone(ListNumbersIcon, "ListOrdered");
-// Spinner ohne Duotone-Fläche: sonst dreht sich eine graue Scheibe statt eines Bogens.
 export const Lock = duotone(LockIcon, "Lock");
 export const LogOut = duotone(SignOutIcon, "LogOut");
 export const Mail = duotone(EnvelopeSimpleIcon, "Mail");

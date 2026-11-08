@@ -1079,7 +1079,7 @@ function VirtualMailList({
                           className="w-7 h-7 rounded-md bg-surface hover:bg-hover border border-border flex items-center justify-center"
                           aria-label={t("mailDetail.star")}
                         >
-                          <StarToggleIcon starred={mail.is_starred} size={14} className={mail.is_starred ? "text-warning" : "text-text-secondary"} />
+                          <StarToggleIcon starred={mail.is_starred} size={14} duotone className={`transition-colors ${mail.is_starred ? "text-warning" : "text-text-secondary"}`} />
                         </button>
                       </Tooltip>
                       <Tooltip label={t("mailDetail.trash")}>

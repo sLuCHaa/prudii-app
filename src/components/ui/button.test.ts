@@ -1,6 +1,7 @@
-import { createElement } from "react";
+import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { createRoot } from "react-dom/client";
 import { Button, IconButton } from "./Button";
 
 const html = (el: React.ReactElement) => renderToStaticMarkup(el);
@@ -84,5 +85,20 @@ describe("Button", () => {
 
   it("a disabled icon button is still dimmed", () => {
     expect(html(createElement(IconButton, { disabled: true, icon: createElement("svg"), "aria-label": "x" }))).toContain("opacity-50");
+  });
+});
+
+describe("Button loading thread", () => {
+  it("fades the thread out instead of dropping it", () => {
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    act(() => root.render(createElement(Button, { loading: true }, "X")));
+    act(() => root.render(createElement(Button, { loading: false }, "X")));
+    expect(host.querySelector(".light-thread")?.getAttribute("data-on")).toBe("false");
+    act(() => root.unmount());
+  });
+
+  it("adds no thread to a button that never loaded", () => {
+    expect(html(createElement(Button, {}, "X"))).not.toContain("light-thread");
   });
 });

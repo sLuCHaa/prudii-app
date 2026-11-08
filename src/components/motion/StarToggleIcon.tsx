@@ -5,23 +5,22 @@ import { prefersReducedMotion } from "./tokens";
 
 const RING_RADIUS_PX = 11;
 const RING_STROKE_PX = 2;
+const CLICK_WINDOW_MS = 1000;
 
 interface StarToggleIconProps {
   starred: boolean;
   size: number;
-  /** Shows the duotone area while not starred, like the reading view's old icon. */
+  /** Shows the duotone area while not starred. */
   duotone?: boolean;
   hoverWiggle?: boolean;
   className?: string;
 }
 
-/**
- * A star that spins in with a gold ring when set. It moves SVG attributes, not
- * CSS transforms: mail rows sit on translateY, and a composited animation in
- * them blurs the row text in WebKit.
- */
+// SVG attributes, not CSS transforms: a composited animation blurs row text in WebKit.
 export function StarToggleIcon({ starred, size, duotone = false, hoverWiggle = false, className = "" }: StarToggleIconProps) {
+  const svgRef = useRef<SVGSVGElement>(null);
   const groupRef = useRef<SVGGElement>(null);
+  const clickedAt = useRef(-Infinity);
   const ringRef = useRef<SVGCircleElement>(null);
   const frame = useRef<number | null>(null);
   const shownStarred = useRef(starred);
@@ -43,9 +42,20 @@ export function StarToggleIcon({ starred, size, duotone = false, hoverWiggle = f
     frame.current = requestAnimationFrame(step);
   };
 
+  // Spin only where the star was clicked, not in every row a bulk change touches.
+  useEffect(() => {
+    const button = svgRef.current?.closest("button");
+    if (!button) return;
+    const arm = () => { clickedAt.current = performance.now(); };
+    button.addEventListener("click", arm);
+    return () => button.removeEventListener("click", arm);
+  }, []);
+
   useEffect(() => {
     if (shownStarred.current === starred) return;
     shownStarred.current = starred;
+    if (performance.now() - clickedAt.current > CLICK_WINDOW_MS) return;
+    clickedAt.current = -Infinity;
     play(starred ? "on" : "off");
   }, [starred]);
 
@@ -56,6 +66,7 @@ export function StarToggleIcon({ starred, size, duotone = false, hoverWiggle = f
   const filled = starred || hovered;
   return (
     <svg
+      ref={svgRef}
       xmlns="http://www.w3.org/2000/svg"
       width={size}
       height={size}

@@ -43,7 +43,7 @@ function valueAt(keys: readonly Key[], ms: number): number {
   return keys[keys.length - 1][1];
 }
 
-/** The star's pose `ms` into a motion; each keyframe segment eases out like the CSS mockup. */
+/** The star's pose `ms` into a motion; each keyframe segment eases out. */
 export function starFrame(kind: StarMotion, ms: number): StarFrame {
   const t = TRACKS[kind];
   const at = Math.min(Math.max(ms, 0), STAR_DURATION[kind]);

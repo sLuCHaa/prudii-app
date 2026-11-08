@@ -9,7 +9,9 @@ let raf: ReturnType<typeof vi.fn>;
 let caf: ReturnType<typeof vi.fn>;
 const realMatchMedia = window.matchMedia;
 
-const render = (starred: boolean) => act(() => root.render(createElement(StarToggleIcon, { starred, size: 14 })));
+const render = (starred: boolean) =>
+  act(() => root.render(createElement("button", { type: "button" }, createElement(StarToggleIcon, { starred, size: 14 }))));
+const click = () => act(() => { host.querySelector("button")!.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
 
 function reducedMotion(on: boolean) {
   window.matchMedia = ((query: string) => ({
@@ -44,14 +46,22 @@ describe("StarToggleIcon", () => {
     expect(raf).not.toHaveBeenCalled();
   });
 
-  it("starts a frame when starred changes", () => {
+  it("starts a frame when its button starred the mail", () => {
     render(false);
+    click();
     render(true);
     expect(raf).toHaveBeenCalled();
   });
 
+  it("stays still when the mail was starred elsewhere", () => {
+    render(false);
+    render(true);
+    expect(raf).not.toHaveBeenCalled();
+  });
+
   it("cancels the frame on unmount", () => {
     render(false);
+    click();
     render(true);
     act(() => root.unmount());
     expect(caf).toHaveBeenCalled();
@@ -66,6 +76,7 @@ describe("StarToggleIcon", () => {
   it("skips the spin with reduced motion", () => {
     reducedMotion(true);
     render(false);
+    click();
     render(true);
     expect(raf).not.toHaveBeenCalled();
     expect(host.querySelector(".star-toggle-fill")!.getAttribute("fill-opacity")).toBe("1");
