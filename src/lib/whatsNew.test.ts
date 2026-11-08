@@ -66,67 +66,14 @@ describe("pendingRelease", () => {
 });
 
 describe("RELEASES", () => {
-  it("has the 1.7.0 highlights with distinct keys", () => {
-    const r = RELEASES.find((x) => x.version === "1.7.0");
-    expect(r?.items.map((i) => i.key)).toEqual([
-      "whatsNew.v1_7_0.calendar",
-      "whatsNew.v1_7_0.subscriptions",
-      "whatsNew.v1_7_0.tasks",
+  it("shows 1.8.3 with only its own highlights", () => {
+    expect(RELEASES.map((r) => r.version)).toEqual(["1.8.3"]);
+    expect(RELEASES[0].items.map((i) => i.key)).toEqual([
+      "whatsNew.v1_8_3.thread",
+      "whatsNew.v1_8_3.star",
+      "whatsNew.v1_8_3.read",
+      "whatsNew.v1_8_3.trash",
     ]);
-  });
-
-  it("leads 1.7.1 with the new look and repeats the 1.7.0 highlights", () => {
-    const r = RELEASES.find((x) => x.version === "1.7.1");
-    expect(r?.items.map((i) => i.key)).toEqual([
-      "whatsNew.v1_7_1.look",
-      "whatsNew.v1_7_0.calendar",
-      "whatsNew.v1_7_0.subscriptions",
-      "whatsNew.v1_7_0.tasks",
-    ]);
-    expect(r?.items[0].icon).toBe("sparkles");
-  });
-
-  it("leads 1.7.10 with the new icons and repeats the 1.7.9 highlights", () => {
-    // Only the newest release shows after skipped versions, so 1.7.8 users
-    // would otherwise never hear about sorting and export.
-    const r = RELEASES.find((x) => x.version === "1.7.10");
-    expect(r?.items.map((i) => i.key)).toEqual([
-      "whatsNew.v1_7_10.icons",
-      "whatsNew.v1_7_9.sorting",
-      "whatsNew.v1_7_9.export",
-    ]);
-  });
-
-  it("leads 1.8.2 with search, the Spam/Trash counts and the sync line, and repeats the 1.8.1 highlights", () => {
-    const r = RELEASES.find((x) => x.version === "1.8.2");
-    expect(r?.items.map((i) => i.key)).toEqual([
-      "whatsNew.v1_8_2.search",
-      "whatsNew.v1_8_2.cleanup",
-      "whatsNew.v1_8_2.sync",
-      "whatsNew.v1_8_1.history",
-      "whatsNew.v1_8_1.signature",
-    ]);
-  });
-
-  it("leads 1.8.1 with the mail history and folded signatures and repeats the 1.8.0 highlights", () => {
-    const r = RELEASES.find((x) => x.version === "1.8.1");
-    expect(r?.items.map((i) => i.key)).toEqual([
-      "whatsNew.v1_8_1.history",
-      "whatsNew.v1_8_1.signature",
-      "whatsNew.v1_8_0.check",
-      "whatsNew.v1_8_0.unsubscribe",
-      "whatsNew.v1_8_0.free",
-    ]);
-  });
-
-  it("announces the signature right after pasted images in 1.7.3", () => {
-    const r = RELEASES.find((x) => x.version === "1.7.3");
-    expect(r?.items.map((i) => i.key)).toEqual([
-      "whatsNew.v1_7_3.images",
-      "whatsNew.v1_7_3.signature",
-      "whatsNew.v1_7_3.font",
-      "whatsNew.v1_7_3.typos",
-      "whatsNew.v1_7_0.calendar",
-    ]);
+    expect(RELEASES[0].items.map((i) => i.icon)).toEqual(["sparkles", "star", "mail", "trash"]);
   });
 });

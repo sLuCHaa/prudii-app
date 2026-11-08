@@ -1523,118 +1523,22 @@
     "title": "Nouveautés de Prudii {{version}}",
     "subtitle": "Voici ce qui a changé depuis votre dernière mise à jour.",
     "done": "Compris",
-    "v1_8_2": {
-      "search": {
-        "title": "La recherche trouve tout",
-        "text": "Pour Gmail et Outlook, la recherche trouve désormais aussi les mots des messages jamais ouverts. Prudii interroge la recherche de votre fournisseur et ajoute ses résultats, sans rien télécharger."
+    "v1_8_3": {
+      "thread": {
+        "title": "Chargement en lumière",
+        "text": "Là où Prudii travaille, un fin fil de lumière défile désormais comme la ligne de synchronisation, au lieu d'un cercle qui tourne. Au démarrage, la ligne affiche aussi chaque compte."
       },
-      "cleanup": {
-        "title": "Spam et corbeille en un coup d'œil",
-        "text": "La barre latérale indique combien de messages restent dans le spam et la corbeille, avec un bouton pour les vider sur place. Désactivable dans les paramètres."
+      "star": {
+        "title": "Des étoiles qui tournent",
+        "text": "Une étoile que vous ajoutez tourne pour se mettre en place, un anneau doré résonne un instant et la bande du message s'illumine."
       },
-      "sync": {
-        "title": "Synchronisation aux couleurs de vos comptes",
-        "text": "Une fine ligne de lumière sous le titre montre chaque compte qui se synchronise dans sa couleur, et les nouveaux messages glissent dans la liste. Plus rien ne saute."
-      }
-    },
-    "v1_8_1": {
-      "history": {
-        "title": "Les fils d'e-mails d'un coup d'œil",
-        "text": "Les e-mails transférés s'affichent désormais comme un historique continu, avec des dates homogènes et sans doubles barres de citation. Répondre et transférer apparaissent dès que vous survolez un e-mail."
+      "read": {
+        "title": "Lu en un coup d'œil",
+        "text": "Quand vous ouvrez un message, sa bande bleue se réduit à un point puis s'éteint. Les résultats de recherche montrent aussi tout de suite ce que vous avez lu."
       },
-      "signature": {
-        "title": "Signatures repliées",
-        "text": "Les grandes signatures avec logo se replient derrière un petit bouton pour laisser la place au message. Un clic suffit pour les afficher."
-      }
-    },
-    "v1_8_0": {
-      "check": {
-        "title": "Bilan de la boîte mail",
-        "text": "Voyez quelles newsletters vous lisez à peine et quels traqueurs Prudii a bloqués pour vous. Tout est calculé sur votre ordinateur ; à retrouver dans la barre latérale."
-      },
-      "unsubscribe": {
-        "title": "Un désabonnement qui tient",
-        "text": "Prudii essaie chaque moyen, puis vérifie que plus rien n'arrive. Ce qui arrive encore après 3 jours part directement à la corbeille."
-      },
-      "free": {
-        "title": "Tout est gratuit",
-        "text": "Rappel, modèles, règles, IA et comptes illimités sont désormais gratuits pour tous. Seules les fonctions d'équipe nécessitent une licence."
-      },
-      "images": {
-        "title": "Images malgré le suivi",
-        "text": "Si un message paraît cassé sans ses images, récupérez-les en un clic. Les pixels de suivi invisibles restent bloqués."
-      }
-    },
-    "v1_7_10": {
-      "icons": {
-        "title": "Nouvelles icônes, un seul style",
-        "text": "Toutes les icônes ont désormais la même forme sobre avec un léger remplissage, dans la barre d’outils, les menus et la barre latérale."
-      }
-    },
-    "v1_7_9": {
-      "sorting": {
-        "title": "Des e-mails qui se trient tout seuls",
-        "text": "Les nouveaux e-mails sont classés dans des catégories comme Personnel ou Newsletters, directement sur votre ordinateur. Vous pouvez le désactiver dans Paramètres → Tri."
-      },
-      "why": {
-        "title": "Toujours expliqué",
-        "text": "Cliquez sur une catégorie pour voir pourquoi un e-mail s'y trouve. Si ce n'est pas la bonne, déplacez-le au même endroit."
-      },
-      "export": {
-        "title": "Exportez vos e-mails",
-        "text": "Enregistrez tous vos e-mails sous forme de pages lisibles dans n'importe quel navigateur et de fichiers .eml d'origine, dans Paramètres → Données."
-      }
-    },
-    "v1_7_4": {
-      "look": {
-        "title": "Un style plus calme et plus clair",
-        "text": "Des gris neutres à la place du beige, en mode clair comme en mode sombre."
-      },
-      "recipients": {
-        "title": "À qui c'est parti",
-        "text": "Les messages envoyés dans la conversation indiquent désormais leurs destinataires."
-      },
-      "cards": {
-        "title": "Répondez directement à l'e-mail d'origine",
-        "text": "Les e-mails transférés apparaissent sous forme de cartes distinctes. Répondez-y directement à l'expéditeur d'origine, sans passer par les transferts intermédiaires."
-      }
-    },
-    "v1_7_3": {
-      "images": {
-        "title": "Coller des images",
-        "text": "Collez vos captures directement ; les photos partent réduites et sans localisation."
-      },
-      "signature": {
-        "title": "Signature dans son design d'origine",
-        "text": "Votre signature part telle que vous l'avez conçue ; elle se modifie dans les Paramètres."
-      },
-      "font": {
-        "title": "Nouvelle police",
-        "text": "Une police par défaut plus claire, et un trait de votre couleur d'accent avant la signature."
-      },
-      "typos": {
-        "title": "Moins de fautes de frappe",
-        "text": "Prudii repère les adresses mal saisies comme gmial.com."
-      }
-    },
-    "v1_7_1": {
-      "look": {
-        "title": "Nouveau look",
-        "text": "Des coins plus doux et des boutons qui s'enfoncent au clic."
-      }
-    },
-    "v1_7_0": {
-      "calendar": {
-        "title": "Calendrier",
-        "text": "Vues mois, semaine, jour et agenda avec rappels."
-      },
-      "subscriptions": {
-        "title": "Abonnements et import",
-        "text": "Importez votre export Google et vos liens webcal."
-      },
-      "tasks": {
-        "title": "Tâches dans le calendrier",
-        "text": "Les tâches à échéance à côté de vos événements."
+      "trash": {
+        "title": "Corbeille vidée d'un coup",
+        "text": "Gmail vide désormais la corbeille et le spam en une seule requête, et la synchronisation juste après ne bloque plus."
       }
     }
   },

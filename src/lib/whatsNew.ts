@@ -1,6 +1,6 @@
 export const SEEN_KEY = "prudii-whats-new-seen";
 
-export type WhatsNewIcon = "calendar" | "mail" | "rss" | "tasks" | "sparkles" | "image" | "type" | "tag" | "export" | "shield" | "unsubscribe" | "thread" | "signature" | "search" | "trash" | "sync";
+export type WhatsNewIcon = "calendar" | "mail" | "rss" | "tasks" | "sparkles" | "image" | "type" | "tag" | "export" | "shield" | "unsubscribe" | "thread" | "signature" | "search" | "trash" | "sync" | "star";
 export type WhatsNewTone = "blue" | "green" | "amber" | "violet";
 
 export interface WhatsNewItem {
@@ -15,85 +15,15 @@ export interface WhatsNewRelease {
   items: WhatsNewItem[];
 }
 
+// Only the newest entry is ever shown, so each lists just its own highlights.
 export const RELEASES: WhatsNewRelease[] = [
   {
-    version: "1.8.2",
+    version: "1.8.3",
     items: [
-      { icon: "search", tone: "blue", key: "whatsNew.v1_8_2.search" },
-      { icon: "trash", tone: "amber", key: "whatsNew.v1_8_2.cleanup" },
-      { icon: "sync", tone: "green", key: "whatsNew.v1_8_2.sync" },
-      { icon: "thread", tone: "violet", key: "whatsNew.v1_8_1.history" },
-      { icon: "signature", tone: "amber", key: "whatsNew.v1_8_1.signature" },
-    ],
-  },
-  {
-    version: "1.8.1",
-    items: [
-      { icon: "thread", tone: "violet", key: "whatsNew.v1_8_1.history" },
-      { icon: "signature", tone: "amber", key: "whatsNew.v1_8_1.signature" },
-      { icon: "shield", tone: "blue", key: "whatsNew.v1_8_0.check" },
-      { icon: "unsubscribe", tone: "green", key: "whatsNew.v1_8_0.unsubscribe" },
-      { icon: "sparkles", tone: "violet", key: "whatsNew.v1_8_0.free" },
-    ],
-  },
-  {
-    version: "1.8.0",
-    items: [
-      { icon: "shield", tone: "blue", key: "whatsNew.v1_8_0.check" },
-      { icon: "unsubscribe", tone: "green", key: "whatsNew.v1_8_0.unsubscribe" },
-      { icon: "sparkles", tone: "violet", key: "whatsNew.v1_8_0.free" },
-      { icon: "image", tone: "amber", key: "whatsNew.v1_8_0.images" },
-    ],
-  },
-  {
-    version: "1.7.10",
-    items: [
-      { icon: "sparkles", tone: "violet", key: "whatsNew.v1_7_10.icons" },
-      { icon: "tag", tone: "blue", key: "whatsNew.v1_7_9.sorting" },
-      { icon: "export", tone: "green", key: "whatsNew.v1_7_9.export" },
-    ],
-  },
-  {
-    version: "1.7.9",
-    items: [
-      { icon: "tag", tone: "blue", key: "whatsNew.v1_7_9.sorting" },
-      { icon: "sparkles", tone: "violet", key: "whatsNew.v1_7_9.why" },
-      { icon: "export", tone: "green", key: "whatsNew.v1_7_9.export" },
-    ],
-  },
-  {
-    version: "1.7.4",
-    items: [
-      { icon: "sparkles", tone: "blue", key: "whatsNew.v1_7_4.look" },
-      { icon: "mail", tone: "green", key: "whatsNew.v1_7_4.recipients" },
-      { icon: "mail", tone: "violet", key: "whatsNew.v1_7_4.cards" },
-    ],
-  },
-  {
-    version: "1.7.3",
-    items: [
-      { icon: "image", tone: "green", key: "whatsNew.v1_7_3.images" },
-      { icon: "sparkles", tone: "blue", key: "whatsNew.v1_7_3.signature" },
-      { icon: "type", tone: "violet", key: "whatsNew.v1_7_3.font" },
-      { icon: "mail", tone: "amber", key: "whatsNew.v1_7_3.typos" },
-      { icon: "calendar", tone: "blue", key: "whatsNew.v1_7_0.calendar" },
-    ],
-  },
-  {
-    version: "1.7.1",
-    items: [
-      { icon: "sparkles", tone: "green", key: "whatsNew.v1_7_1.look" },
-      { icon: "calendar", tone: "blue", key: "whatsNew.v1_7_0.calendar" },
-      { icon: "rss", tone: "amber", key: "whatsNew.v1_7_0.subscriptions" },
-      { icon: "tasks", tone: "violet", key: "whatsNew.v1_7_0.tasks" },
-    ],
-  },
-  {
-    version: "1.7.0",
-    items: [
-      { icon: "calendar", tone: "blue", key: "whatsNew.v1_7_0.calendar" },
-      { icon: "rss", tone: "amber", key: "whatsNew.v1_7_0.subscriptions" },
-      { icon: "tasks", tone: "violet", key: "whatsNew.v1_7_0.tasks" },
+      { icon: "sparkles", tone: "blue", key: "whatsNew.v1_8_3.thread" },
+      { icon: "star", tone: "amber", key: "whatsNew.v1_8_3.star" },
+      { icon: "mail", tone: "violet", key: "whatsNew.v1_8_3.read" },
+      { icon: "trash", tone: "green", key: "whatsNew.v1_8_3.trash" },
     ],
   },
 ];

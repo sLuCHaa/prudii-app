@@ -1523,118 +1523,22 @@
     "title": "Neu in Prudii {{version}}",
     "subtitle": "Das hat sich seit deinem letzten Update getan.",
     "done": "Verstanden",
-    "v1_8_2": {
-      "search": {
-        "title": "Die Suche findet jede Mail",
-        "text": "Bei Gmail und Outlook findet die Suche jetzt auch Wörter in Mails, die du nie geöffnet hast. Prudii fragt dazu die Suche deines Anbieters und ergänzt die Treffer, ohne etwas herunterzuladen."
+    "v1_8_3": {
+      "thread": {
+        "title": "Laden mit Licht",
+        "text": "Wo Prudii arbeitet, läuft jetzt ein feiner Lichtfaden wie bei der Abgleich-Linie statt eines drehenden Kreises. Beim Start zeigt die Linie außerdem jedes Konto."
       },
-      "cleanup": {
-        "title": "Spam und Papierkorb im Blick",
-        "text": "Die Seitenleiste zeigt, wie viele Mails noch in Spam und Papierkorb liegen, mit einem Knopf zum Leeren direkt daneben. In den Einstellungen lässt sich das abschalten."
+      "star": {
+        "title": "Stern mit Schwung",
+        "text": "Ein gesetzter Stern dreht sich ins Bild, ein goldener Ring hallt kurz nach, und der Streifen der Mail leuchtet auf."
       },
-      "sync": {
-        "title": "Abgleich in deinen Kontofarben",
-        "text": "Eine feine Lichtlinie unter dem Titel zeigt jedes Konto in seiner Farbe beim Abgleichen, und neue Mails gleiten in die Liste. Nichts springt mehr."
-      }
-    },
-    "v1_8_1": {
-      "history": {
-        "title": "Mail-Verläufe auf einen Blick",
-        "text": "Weitergeleitete Mails stehen jetzt als zusammenhängender Verlauf untereinander, mit einheitlichem Datum und ohne doppelte Zitatbalken. Antworten und Weiterleiten erscheinen, sobald du über eine Mail fährst."
+      "read": {
+        "title": "Gelesen auf einen Blick",
+        "text": "Öffnest du eine Mail, schrumpft ihr blauer Streifen zu einem Punkt und verlischt. Auch Suchergebnisse zeigen jetzt sofort, was du gelesen hast."
       },
-      "signature": {
-        "title": "Signaturen eingeklappt",
-        "text": "Große Signaturen mit Logo klappen sich hinter einen kleinen Knopf ein, damit der Text im Vordergrund steht. Ein Klick zeigt sie wieder an."
-      }
-    },
-    "v1_8_0": {
-      "check": {
-        "title": "Postfach-Check",
-        "text": "Sieh, welche Newsletter du kaum liest und welche Tracker Prudii für dich blockiert hat. Alles wird auf deinem Computer ausgewertet, zu finden in der Seitenleiste."
-      },
-      "unsubscribe": {
-        "title": "Abmelden, das wirklich wirkt",
-        "text": "Prudii probiert jeden Weg und prüft danach, ob wirklich nichts mehr kommt. Was nach 3 Tagen trotzdem eintrifft, landet automatisch im Papierkorb."
-      },
-      "free": {
-        "title": "Alles kostenlos",
-        "text": "Zurückstellen, Vorlagen, Regeln, KI und beliebig viele Konten sind jetzt für alle frei. Nur die Team-Funktionen brauchen eine Lizenz."
-      },
-      "images": {
-        "title": "Bilder trotz Tracking",
-        "text": "Sieht eine Mail ohne ihre Bilder kaputt aus, holst du sie mit einem Klick zurück. Unsichtbare Zählpixel bleiben trotzdem gesperrt."
-      }
-    },
-    "v1_7_10": {
-      "icons": {
-        "title": "Neue Icons, ein Stil",
-        "text": "Alle Symbole haben jetzt dieselbe ruhige Form mit leichter Fläche, in der Toolbar, in Menüs und in der Seitenleiste."
-      }
-    },
-    "v1_7_9": {
-      "sorting": {
-        "title": "Mails sortieren sich selbst",
-        "text": "Neue Mails landen in Kategorien wie Persönlich oder Newsletter, direkt auf deinem Computer. Abschalten kannst du das unter Einstellungen → Sortierung."
-      },
-      "why": {
-        "title": "Immer nachvollziehbar",
-        "text": "Ein Klick auf die Kategorie zeigt, warum eine Mail dort gelandet ist. Passt es nicht, verschiebst du sie gleich dort."
-      },
-      "export": {
-        "title": "Mails exportieren",
-        "text": "Sichere alle Mails als lesbare Seiten für den Browser und als .eml-Originale, unter Einstellungen → Daten."
-      }
-    },
-    "v1_7_4": {
-      "look": {
-        "title": "Ruhiger und klarer",
-        "text": "Neutrale Grautöne statt Beige, im hellen und im dunklen Modus."
-      },
-      "recipients": {
-        "title": "Empfänger auf einen Blick",
-        "text": "Im Chat-Verlauf zeigen deine gesendeten Nachrichten jetzt, an wen sie gingen."
-      },
-      "cards": {
-        "title": "Direkt der ursprünglichen Mail antworten",
-        "text": "Weitergeleitete Mails erscheinen als eigene Karten. Antworte dort direkt dem ursprünglichen Absender, ohne die Weiterleitungen dazwischen."
-      }
-    },
-    "v1_7_3": {
-      "images": {
-        "title": "Bilder einfügen",
-        "text": "Screenshots einfach einfügen; Fotos gehen verkleinert und ohne Standortdaten raus."
-      },
-      "signature": {
-        "title": "Signatur im Originaldesign",
-        "text": "Deine Signatur geht so raus, wie du sie gestaltet hast; bearbeitet wird sie in den Einstellungen."
-      },
-      "font": {
-        "title": "Neue Schrift",
-        "text": "Eine klarere Standardschrift, und ein Strich in deiner Akzentfarbe setzt die Signatur ab."
-      },
-      "typos": {
-        "title": "Weniger Tippfehler",
-        "text": "Prudii erkennt vertippte Adressen wie gmial.com."
-      }
-    },
-    "v1_7_1": {
-      "look": {
-        "title": "Neuer Look",
-        "text": "Weichere Ecken und Buttons, die sich beim Klicken eindrücken."
-      }
-    },
-    "v1_7_0": {
-      "calendar": {
-        "title": "Kalender",
-        "text": "Monat, Woche, Tag und Agenda mit Erinnerungen."
-      },
-      "subscriptions": {
-        "title": "Abos und Import",
-        "text": "Google-Export und webcal-Links übernehmen."
-      },
-      "tasks": {
-        "title": "Aufgaben im Kalender",
-        "text": "Fällige Aufgaben neben deinen Terminen."
+      "trash": {
+        "title": "Papierkorb in einem Rutsch",
+        "text": "Gmail leert Papierkorb und Spam jetzt mit einer einzigen Anfrage, und der Abgleich direkt danach hängt nicht mehr."
       }
     }
   },

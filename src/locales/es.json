@@ -1523,118 +1523,22 @@
     "title": "Novedades de Prudii {{version}}",
     "subtitle": "Esto es lo que ha cambiado desde tu última actualización.",
     "done": "Entendido",
-    "v1_8_2": {
-      "search": {
-        "title": "La búsqueda llega a todo",
-        "text": "En Gmail y Outlook, la búsqueda ahora también encuentra palabras en correos que nunca abriste. Prudii consulta la búsqueda de tu proveedor y añade sus resultados, sin descargar nada."
+    "v1_8_3": {
+      "thread": {
+        "title": "Cargar con luz",
+        "text": "Donde Prudii trabaja, ahora corre un fino hilo de luz como la línea de sincronización en lugar de un círculo que gira. Al iniciar, la línea muestra además todas las cuentas."
       },
-      "cleanup": {
-        "title": "Spam y Papelera a la vista",
-        "text": "La barra lateral muestra cuántos correos quedan en Spam y Papelera, con un botón para vaciarlos ahí mismo. Puedes desactivarlo en Ajustes."
+      "star": {
+        "title": "Estrellas con impulso",
+        "text": "Una estrella que marcas gira hasta su sitio, un anillo dorado resuena un instante y la franja del correo se ilumina."
       },
-      "sync": {
-        "title": "Sincronización con los colores de tus cuentas",
-        "text": "Una fina línea de luz bajo el título muestra cada cuenta sincronizando en su propio color, y el correo nuevo entra deslizándose en la lista. Ya nada salta."
-      }
-    },
-    "v1_8_1": {
-      "history": {
-        "title": "Cadenas de correos de un vistazo",
-        "text": "Los correos reenviados aparecen ahora como un historial continuo, con fechas uniformes y sin barras de cita duplicadas. Responder y reenviar aparecen al pasar el ratón sobre un correo."
+      "read": {
+        "title": "Leído de un vistazo",
+        "text": "Al abrir un correo, su franja azul se encoge hasta un punto y se apaga. Los resultados de búsqueda también muestran al instante lo que has leído."
       },
-      "signature": {
-        "title": "Firmas plegadas",
-        "text": "Las firmas grandes con logotipo se pliegan tras un pequeño botón para que el mensaje vaya primero. Un clic las vuelve a mostrar."
-      }
-    },
-    "v1_8_0": {
-      "check": {
-        "title": "Revisión del buzón",
-        "text": "Mira qué boletines casi no lees y qué rastreadores ha bloqueado Prudii por ti. Todo se calcula en tu equipo; la encontrarás en la barra lateral."
-      },
-      "unsubscribe": {
-        "title": "Bajas que funcionan",
-        "text": "Prudii prueba todas las vías y después comprueba que no llegue nada más. Lo que siga llegando pasados 3 días irá directamente a la papelera."
-      },
-      "free": {
-        "title": "Todo gratis",
-        "text": "Posponer, plantillas, reglas, IA y cuentas ilimitadas ahora son gratis para todos. Solo las funciones de equipo necesitan licencia."
-      },
-      "images": {
-        "title": "Imágenes pese al rastreo",
-        "text": "Si un correo se ve roto sin sus imágenes, recupéralas con un clic. Los píxeles de seguimiento invisibles siguen bloqueados."
-      }
-    },
-    "v1_7_10": {
-      "icons": {
-        "title": "Iconos nuevos, un solo estilo",
-        "text": "Todos los iconos tienen ahora la misma forma serena con un relleno suave, en la barra de herramientas, en los menús y en la barra lateral."
-      }
-    },
-    "v1_7_9": {
-      "sorting": {
-        "title": "El correo se ordena solo",
-        "text": "Los correos nuevos se clasifican en categorías como Personal o Boletines, directamente en tu ordenador. Puedes desactivarlo en Configuración → Clasificación."
-      },
-      "why": {
-        "title": "Siempre explicado",
-        "text": "Haz clic en una categoría para ver por qué un correo está ahí. Si no encaja, muévelo desde ahí mismo."
-      },
-      "export": {
-        "title": "Exporta tu correo",
-        "text": "Guarda todos tus correos como páginas legibles en cualquier navegador y como archivos .eml originales, en Configuración → Datos."
-      }
-    },
-    "v1_7_4": {
-      "look": {
-        "title": "Un aspecto más claro y sereno",
-        "text": "Grises neutros en lugar de beige, en modo claro y oscuro."
-      },
-      "recipients": {
-        "title": "A quién se envió",
-        "text": "Los mensajes enviados en la conversación ahora muestran a quién iban dirigidos."
-      },
-      "cards": {
-        "title": "Responde directamente al correo original",
-        "text": "Los correos reenviados aparecen como tarjetas propias. Responde ahí directamente al remitente original, sin los reenvíos intermedios."
-      }
-    },
-    "v1_7_3": {
-      "images": {
-        "title": "Pegar imágenes",
-        "text": "Pega capturas directamente; las fotos se envían más pequeñas y sin ubicación."
-      },
-      "signature": {
-        "title": "Firma con su diseño original",
-        "text": "Tu firma sale tal como la diseñaste; se edita en Configuración."
-      },
-      "font": {
-        "title": "Nueva fuente",
-        "text": "Una fuente predeterminada más clara y una línea en tu color de acento antes de la firma."
-      },
-      "typos": {
-        "title": "Menos erratas",
-        "text": "Prudii detecta direcciones mal escritas como gmial.com."
-      }
-    },
-    "v1_7_1": {
-      "look": {
-        "title": "Nuevo aspecto",
-        "text": "Esquinas más suaves y botones que se hunden al hacer clic."
-      }
-    },
-    "v1_7_0": {
-      "calendar": {
-        "title": "Calendario",
-        "text": "Vistas de mes, semana, día y agenda con recordatorios."
-      },
-      "subscriptions": {
-        "title": "Suscripciones e importación",
-        "text": "Importa tu exportación de Google y enlaces webcal."
-      },
-      "tasks": {
-        "title": "Tareas en el calendario",
-        "text": "Tareas pendientes junto a tus eventos."
+      "trash": {
+        "title": "Papelera vacía de una vez",
+        "text": "Gmail vacía ahora la Papelera y el Spam con una sola petición, y la sincronización justo después ya no se queda colgada."
       }
     }
   },

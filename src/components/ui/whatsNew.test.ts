@@ -6,7 +6,7 @@ import { DialogProvider, useDialog } from "./DialogProvider";
 import { WhatsNew } from "./WhatsNew";
 import { SEEN_KEY } from "../../lib/whatsNew";
 
-vi.mock("@tauri-apps/api/app", () => ({ getVersion: () => Promise.resolve("1.7.0") }));
+vi.mock("@tauri-apps/api/app", () => ({ getVersion: () => Promise.resolve("1.8.3") }));
 
 let root: Root;
 let host: HTMLDivElement;
@@ -23,7 +23,7 @@ function OpensConfirm() {
 
 beforeEach(() => {
   window.matchMedia = ((q: string) => ({ matches: q.includes("reduce"), media: q, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia;
-  localStorage.setItem(SEEN_KEY, "1.6.11");
+  localStorage.setItem(SEEN_KEY, "1.8.2");
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -51,7 +51,7 @@ describe("WhatsNew", () => {
     });
     await flush();
     expect(document.getElementById("whats-new-title")).not.toBeNull();
-    expect(localStorage.getItem(SEEN_KEY)).toBe("1.6.11");
+    expect(localStorage.getItem(SEEN_KEY)).toBe("1.8.2");
   });
 
   it("stays open on Escape and on a click beside it", async () => {
@@ -67,7 +67,7 @@ describe("WhatsNew", () => {
       backdrop.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(document.getElementById("whats-new-title")).not.toBeNull();
-    expect(localStorage.getItem(SEEN_KEY)).toBe("1.6.11");
+    expect(localStorage.getItem(SEEN_KEY)).toBe("1.8.2");
   });
 
   it("marks the version as seen when confirmed", async () => {
@@ -80,6 +80,6 @@ describe("WhatsNew", () => {
       button.click();
     });
     expect(document.getElementById("whats-new-title")).toBeNull();
-    expect(localStorage.getItem(SEEN_KEY)).toBe("1.7.0");
+    expect(localStorage.getItem(SEEN_KEY)).toBe("1.8.3");
   });
 });
