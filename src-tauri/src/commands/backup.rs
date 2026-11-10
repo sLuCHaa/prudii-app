@@ -324,53 +324,14 @@ fn do_create_backup_inner(
             total_steps,
         });
 
-        let accounts: Vec<serde_json::Value> = {
-            let conn = db.lock_db();
-            let mut stmt = conn.prepare(
-                "SELECT id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port,
-                        COALESCE(smtp_security, 'ssl'), auth_type,
-                        COALESCE(signature_html, ''), COALESCE(signature_text, ''),
-                        COALESCE(sync_interval_minutes, 0),
-                        COALESCE(signature_on_compose, 1), COALESCE(signature_on_reply, 1),
-                        COALESCE(load_external_images, 'always'),
-                        created_at, updated_at
-                 FROM accounts ORDER BY created_at ASC"
-            ).map_err(|e| e.to_string())?;
-
-            let rows = stmt.query_map([], |row| {
-                Ok(serde_json::json!({
-                    "id": row.get::<_, String>(0)?,
-                    "email": row.get::<_, String>(1)?,
-                    "display_name": row.get::<_, String>(2)?,
-                    "provider": row.get::<_, String>(3)?,
-                    "color": row.get::<_, String>(4)?,
-                    "imap_host": row.get::<_, String>(5)?,
-                    "imap_port": row.get::<_, i32>(6)?,
-                    "smtp_host": row.get::<_, String>(7)?,
-                    "smtp_port": row.get::<_, i32>(8)?,
-                    "smtp_security": row.get::<_, String>(9)?,
-                    "auth_type": row.get::<_, String>(10)?,
-                    "signature_html": row.get::<_, String>(11)?,
-                    "signature_text": row.get::<_, String>(12)?,
-                    "sync_interval_minutes": row.get::<_, i32>(13)?,
-                    "signature_on_compose": row.get::<_, bool>(14)?,
-                    "signature_on_reply": row.get::<_, bool>(15)?,
-                    "load_external_images": row.get::<_, String>(16)?,
-                    "created_at": row.get::<_, String>(17)?,
-                    "updated_at": row.get::<_, String>(18)?,
-                }))
-            })
-            .map_err(|e| e.to_string())?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| e.to_string())?;
-            rows
-        };
+        let accounts = account_rows(&db.lock_db())?;
 
         stats.account_count = accounts.len() as u64;
         let json = serde_json::to_string_pretty(&accounts).map_err(|e| e.to_string())?;
         zip.start_file("accounts.json", zip_options).map_err(|e| e.to_string())?;
         zip.write_all(json.as_bytes()).map_err(|e| e.to_string())?;
         export_unsubscriptions(&db, &mut zip, &zip_options)?;
+        export_signatures(&db, &mut zip, &zip_options)?;
 
         if options.include_credentials {
             let store = crate::credentials::KeyringStore;
@@ -1247,6 +1208,161 @@ pub(crate) fn import_sender_categories<R: Read + Seek>(
     Ok(())
 }
 
+/// The rows of `accounts.json`.
+pub(crate) fn account_rows(conn: &rusqlite::Connection) -> Result<Vec<serde_json::Value>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port,
+                    COALESCE(smtp_security, 'ssl'), auth_type, signature_id,
+                    COALESCE(sync_interval_minutes, 0),
+                    COALESCE(signature_on_compose, 1), COALESCE(signature_on_reply, 1),
+                    COALESCE(load_external_images, 'always'),
+                    created_at, updated_at
+             FROM accounts ORDER BY created_at ASC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, String>(0)?,
+                "email": row.get::<_, String>(1)?,
+                "display_name": row.get::<_, String>(2)?,
+                "provider": row.get::<_, String>(3)?,
+                "color": row.get::<_, String>(4)?,
+                "imap_host": row.get::<_, String>(5)?,
+                "imap_port": row.get::<_, i32>(6)?,
+                "smtp_host": row.get::<_, String>(7)?,
+                "smtp_port": row.get::<_, i32>(8)?,
+                "smtp_security": row.get::<_, String>(9)?,
+                "auth_type": row.get::<_, String>(10)?,
+                "signature_id": row.get::<_, Option<String>>(11)?,
+                "sync_interval_minutes": row.get::<_, i32>(12)?,
+                "signature_on_compose": row.get::<_, bool>(13)?,
+                "signature_on_reply": row.get::<_, bool>(14)?,
+                "load_external_images": row.get::<_, String>(15)?,
+                "created_at": row.get::<_, String>(16)?,
+                "updated_at": row.get::<_, String>(17)?,
+            }))
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+pub(crate) fn export_signatures<W: Write + Seek>(
+    db: &Database,
+    zip: &mut zip::ZipWriter<W>,
+    opts: &zip::write::SimpleFileOptions,
+) -> Result<(), String> {
+    let signatures = crate::commands::signatures::list_signatures_inner(&db.lock_db())?;
+    if signatures.is_empty() {
+        return Ok(());
+    }
+    let json = serde_json::to_string_pretty(&signatures).map_err(|e| e.to_string())?;
+    zip.start_file("signatures.json", *opts).map_err(|e| e.to_string())?;
+    zip.write_all(json.as_bytes()).map_err(|e| e.to_string())
+}
+
+/// Never deletes: accounts the archive does not touch may still use a local signature.
+pub(crate) fn import_signatures<R: Read + Seek>(
+    archive: &mut zip::ZipArchive<R>,
+    conn: &rusqlite::Connection,
+    is_replace: bool,
+) -> Result<(), String> {
+    let Ok(mut f) = archive.by_name("signatures.json") else {
+        return Ok(());
+    };
+    let mut s = String::new();
+    f.read_to_string(&mut s).map_err(|e| e.to_string())?;
+    let signatures: Vec<serde_json::Value> = serde_json::from_str(&s).map_err(|e| e.to_string())?;
+    let values = "(id, name, html, text, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, COALESCE(NULLIF(?5, ''), datetime('now')), COALESCE(NULLIF(?6, ''), datetime('now')))";
+    // An upsert, not INSERT OR REPLACE: the row keeps its place while accounts point at it.
+    let sql = if is_replace {
+        format!(
+            "INSERT INTO signatures {values}
+             ON CONFLICT(id) DO UPDATE SET name = excluded.name, html = excluded.html, text = excluded.text, updated_at = excluded.updated_at"
+        )
+    } else {
+        format!("INSERT OR IGNORE INTO signatures {values}")
+    };
+    for signature in &signatures {
+        let field = |key: &str| signature.get(key).and_then(|v| v.as_str()).unwrap_or("");
+        if field("id").is_empty() {
+            continue;
+        }
+        conn.execute(
+            &sql,
+            rusqlite::params![
+                field("id"),
+                field("name"),
+                crate::commands::signatures::clean_signature_html(field("html")),
+                field("text"),
+                field("created_at"),
+                field("updated_at"),
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Inserts one account of `accounts.json`; `false` when a merge skipped an address that exists.
+/// `adopt_signature` is for archives from before the signature list, whose accounts carry their own.
+pub(crate) fn import_backup_account(
+    conn: &rusqlite::Connection,
+    acc: &serde_json::Value,
+    is_replace: bool,
+    adopt_signature: bool,
+) -> Result<bool, String> {
+    let email = acc.get("email").and_then(|v| v.as_str()).unwrap_or("");
+    let id = acc.get("id").and_then(|v| v.as_str()).unwrap_or("");
+
+    if is_replace {
+        // Delete existing account with same email (CASCADE deletes folders/mails/attachments)
+        conn.execute("DELETE FROM accounts WHERE email = ?1", rusqlite::params![email])
+            .map_err(|e| e.to_string())?;
+    } else {
+        let exists: bool = conn
+            .query_row("SELECT COUNT(*) > 0 FROM accounts WHERE email = ?1", rusqlite::params![email], |row| row.get(0))
+            .unwrap_or(false);
+        if exists {
+            return Ok(false);
+        }
+    }
+
+    let signature_html = crate::commands::signatures::clean_signature_html(acc.get("signature_html").and_then(|v| v.as_str()).unwrap_or(""));
+    conn.execute(
+        "INSERT OR REPLACE INTO accounts (id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port, smtp_security, auth_type, signature_html, signature_text, sync_interval_minutes, signature_on_compose, signature_on_reply, load_external_images, created_at, updated_at, signature_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, (SELECT id FROM signatures WHERE id = ?20))",
+        rusqlite::params![
+            id,
+            email,
+            acc.get("display_name").and_then(|v| v.as_str()).unwrap_or(""),
+            acc.get("provider").and_then(|v| v.as_str()).unwrap_or("custom"),
+            acc.get("color").and_then(|v| v.as_str()).unwrap_or("#3b82f6"),
+            acc.get("imap_host").and_then(|v| v.as_str()).unwrap_or(""),
+            acc.get("imap_port").and_then(|v| v.as_i64()).unwrap_or(993),
+            acc.get("smtp_host").and_then(|v| v.as_str()).unwrap_or(""),
+            acc.get("smtp_port").and_then(|v| v.as_i64()).unwrap_or(587),
+            acc.get("smtp_security").and_then(|v| v.as_str()).unwrap_or("ssl"),
+            acc.get("auth_type").and_then(|v| v.as_str()).unwrap_or("password"),
+            signature_html,
+            acc.get("signature_text").and_then(|v| v.as_str()).unwrap_or(""),
+            acc.get("sync_interval_minutes").and_then(|v| v.as_i64()).unwrap_or(0),
+            acc.get("signature_on_compose").and_then(|v| v.as_bool()).unwrap_or(true),
+            acc.get("signature_on_reply").and_then(|v| v.as_bool()).unwrap_or(true),
+            acc.get("load_external_images").and_then(|v| v.as_str()).unwrap_or("always"),
+            acc.get("created_at").and_then(|v| v.as_str()).unwrap_or(""),
+            acc.get("updated_at").and_then(|v| v.as_str()).unwrap_or(""),
+            acc.get("signature_id").and_then(|v| v.as_str()),
+        ],
+    ).map_err(|e| e.to_string())?;
+    if adopt_signature {
+        crate::db::signatures::adopt_account_signature(conn, id).map_err(|e| e.to_string())?;
+    }
+    Ok(true)
+}
+
 const UNSUBSCRIPTION_COLUMNS: [&str; 14] = [
     "id", "account_id", "key_kind", "key_value", "display_name", "blocked", "methods_tried", "web_pending",
     "requested_at", "last_request_at", "sweep_after", "sorted_count", "last_sorted_at", "last_seen_at",
@@ -1752,6 +1868,7 @@ fn do_restore_backup_inner(
     }
 
     if manifest.includes.accounts {
+        import_signatures(&mut archive, &db.lock_db(), is_replace)?;
         if let Ok(mut f) = archive.by_name("accounts.json") {
             current_step += 1;
             emit_restore_progress(app, &BackupProgress {
@@ -1766,54 +1883,12 @@ fn do_restore_backup_inner(
             let accounts: Vec<serde_json::Value> = serde_json::from_str(&s).map_err(|e| e.to_string())?;
 
             let conn = db.lock_db();
+            let from_before_the_list = manifest.schema_version < crate::db::signatures::SINCE_SCHEMA;
             for acc in &accounts {
-                let email = acc.get("email").and_then(|v| v.as_str()).unwrap_or("");
-                let id = acc.get("id").and_then(|v| v.as_str()).unwrap_or("");
-
-                if is_replace {
-                    // Delete existing account with same email (CASCADE deletes folders/mails/attachments)
-                    conn.execute("DELETE FROM accounts WHERE email = ?1", rusqlite::params![email])
-                        .map_err(|e| e.to_string())?;
-                } else {
-                    // Merge: skip if email already exists
-                    let exists: bool = conn.query_row(
-                        "SELECT COUNT(*) > 0 FROM accounts WHERE email = ?1",
-                        rusqlite::params![email],
-                        |row| row.get(0),
-                    ).unwrap_or(false);
-                    if exists {
-                        continue;
-                    }
+                if import_backup_account(&conn, acc, is_replace, from_before_the_list)? {
+                    accounts_needing_passwords.push(acc.get("email").and_then(|v| v.as_str()).unwrap_or("").to_string());
+                    imported_account_ids.push(acc.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string());
                 }
-
-                conn.execute(
-                    "INSERT OR REPLACE INTO accounts (id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port, smtp_security, auth_type, signature_html, signature_text, sync_interval_minutes, signature_on_compose, signature_on_reply, load_external_images, created_at, updated_at)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
-                    rusqlite::params![
-                        id,
-                        email,
-                        acc.get("display_name").and_then(|v| v.as_str()).unwrap_or(""),
-                        acc.get("provider").and_then(|v| v.as_str()).unwrap_or("custom"),
-                        acc.get("color").and_then(|v| v.as_str()).unwrap_or("#3b82f6"),
-                        acc.get("imap_host").and_then(|v| v.as_str()).unwrap_or(""),
-                        acc.get("imap_port").and_then(|v| v.as_i64()).unwrap_or(993),
-                        acc.get("smtp_host").and_then(|v| v.as_str()).unwrap_or(""),
-                        acc.get("smtp_port").and_then(|v| v.as_i64()).unwrap_or(587),
-                        acc.get("smtp_security").and_then(|v| v.as_str()).unwrap_or("ssl"),
-                        acc.get("auth_type").and_then(|v| v.as_str()).unwrap_or("password"),
-                        acc.get("signature_html").and_then(|v| v.as_str()).unwrap_or(""),
-                        acc.get("signature_text").and_then(|v| v.as_str()).unwrap_or(""),
-                        acc.get("sync_interval_minutes").and_then(|v| v.as_i64()).unwrap_or(0),
-                        acc.get("signature_on_compose").and_then(|v| v.as_bool()).unwrap_or(true),
-                        acc.get("signature_on_reply").and_then(|v| v.as_bool()).unwrap_or(true),
-                        acc.get("load_external_images").and_then(|v| v.as_str()).unwrap_or("always"),
-                        acc.get("created_at").and_then(|v| v.as_str()).unwrap_or(""),
-                        acc.get("updated_at").and_then(|v| v.as_str()).unwrap_or(""),
-                    ],
-                ).map_err(|e| e.to_string())?;
-
-                accounts_needing_passwords.push(email.to_string());
-                imported_account_ids.push(id.to_string());
             }
         }
         import_unsubscriptions(&mut archive, &db.lock_db(), is_replace)?;
@@ -2986,5 +3061,111 @@ mod category_roundtrip {
             db.lock_db().query_row("SELECT COUNT(*), MAX(category) FROM mails WHERE id = 'm1'", [], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
         assert_eq!(count, 1);
         assert_eq!(category, None);
+    }
+}
+
+#[cfg(test)]
+mod signatures_roundtrip {
+    use super::*;
+    use crate::commands::accounts::list_accounts_inner;
+    use crate::commands::signatures::{list_signatures_inner, save_signature_inner};
+    use crate::test_support::temp_db;
+    use std::io::Cursor;
+
+    fn signatures_zip(db: &Database) -> zip::ZipArchive<Cursor<Vec<u8>>> {
+        let opts = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        export_signatures(db, &mut zip, &opts).unwrap();
+        zip::ZipArchive::new(Cursor::new(zip.finish().unwrap().into_inner())).unwrap()
+    }
+
+    fn old_account() -> serde_json::Value {
+        serde_json::json!({
+            "id": "a1", "email": "anna@studio-halde.example", "display_name": "Anna Weber", "provider": "custom",
+            "imap_host": "imap.studio-halde.example", "smtp_host": "smtp.studio-halde.example",
+            "signature_html": "<div>Anna Weber</div>", "signature_text": "Anna Weber"
+        })
+    }
+
+    #[test]
+    fn signatures_round_trip() {
+        let (db_a, db_b) = (temp_db(), temp_db());
+        let s = save_signature_inner(&db_a.lock_db(), None, "Studio Halde", "<div>Anna Weber</div>", "Anna Weber", &[]).unwrap();
+        import_signatures(&mut signatures_zip(&db_a), &db_b.lock_db(), false).unwrap();
+        let got = list_signatures_inner(&db_b.lock_db()).unwrap();
+        assert_eq!((got.len(), got[0].id.as_str(), got[0].html.as_str()), (1, s.id.as_str(), "<div>Anna Weber</div>"));
+    }
+
+    #[test]
+    fn a_merge_keeps_the_local_signature_and_a_replace_takes_the_backup() {
+        let (db_a, db_b) = (temp_db(), temp_db());
+        let s = save_signature_inner(&db_a.lock_db(), None, "Aus dem Backup", "<div>a</div>", "a", &[]).unwrap();
+        db_b.lock_db()
+            .execute("INSERT INTO signatures (id, name, html, text) VALUES (?1, 'Lokal', '<div>b</div>', 'b')", [&s.id])
+            .unwrap();
+        let name = |db: &Database| list_signatures_inner(&db.lock_db()).unwrap()[0].name.clone();
+        import_signatures(&mut signatures_zip(&db_a), &db_b.lock_db(), false).unwrap();
+        assert_eq!(name(&db_b), "Lokal");
+        import_signatures(&mut signatures_zip(&db_a), &db_b.lock_db(), true).unwrap();
+        assert_eq!(name(&db_b), "Aus dem Backup");
+    }
+
+    #[test]
+    fn a_replace_keeps_signatures_the_backup_does_not_know() {
+        let (db_a, db_b) = (temp_db(), temp_db());
+        save_signature_inner(&db_a.lock_db(), None, "Aus dem Backup", "<div>a</div>", "a", &[]).unwrap();
+        save_signature_inner(&db_b.lock_db(), None, "Nur lokal", "<div>b</div>", "b", &[]).unwrap();
+        import_signatures(&mut signatures_zip(&db_a), &db_b.lock_db(), true).unwrap();
+        assert_eq!(list_signatures_inner(&db_b.lock_db()).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn an_archive_without_signatures_imports_nothing() {
+        let (db_a, db_b) = (temp_db(), temp_db());
+        import_signatures(&mut signatures_zip(&db_a), &db_b.lock_db(), true).unwrap();
+        assert!(list_signatures_inner(&db_b.lock_db()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn an_old_backup_account_gets_its_signature_listed() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        assert!(import_backup_account(&conn, &old_account(), false, true).unwrap());
+        let acc = &list_accounts_inner(&conn).unwrap()[0];
+        assert_eq!(acc.signature_html, "<div>Anna Weber</div>");
+        assert_eq!(list_signatures_inner(&conn).unwrap()[0].name, "Anna Weber");
+    }
+
+    #[test]
+    fn importing_an_old_backup_twice_adds_one_entry() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        assert!(import_backup_account(&conn, &old_account(), false, true).unwrap());
+        assert!(!import_backup_account(&conn, &old_account(), false, true).unwrap());
+        assert_eq!(list_signatures_inner(&conn).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn a_new_backup_account_keeps_its_assignment_only_when_the_signature_exists() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        let s = save_signature_inner(&conn, None, "Studio Halde", "<div>x</div>", "x", &[]).unwrap();
+        let mut acc = old_account();
+        acc["signature_id"] = serde_json::json!(s.id);
+        import_backup_account(&conn, &acc, true, false).unwrap();
+        assert_eq!(list_accounts_inner(&conn).unwrap()[0].signature_id, Some(s.id));
+        acc["signature_id"] = serde_json::json!("gone");
+        import_backup_account(&conn, &acc, true, false).unwrap();
+        assert_eq!(list_accounts_inner(&conn).unwrap()[0].signature_id, None);
+    }
+
+    #[test]
+    fn exported_accounts_name_their_signature_and_leave_the_old_columns_out() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        import_backup_account(&conn, &old_account(), false, true).unwrap();
+        let exported = &account_rows(&conn).unwrap()[0];
+        assert_eq!(exported["signature_id"].as_str(), list_accounts_inner(&conn).unwrap()[0].signature_id.as_deref());
+        assert!(exported.get("signature_html").is_none() && exported.get("signature_text").is_none());
     }
 }

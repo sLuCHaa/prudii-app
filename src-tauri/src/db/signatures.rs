@@ -1,5 +1,8 @@
 use rusqlite::Connection;
 
+/// The schema version that introduced the signature list.
+pub(crate) const SINCE_SCHEMA: u32 = 48;
+
 /// Table, column and the one-time takeover of the per-account signatures.
 pub(crate) fn install(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute_batch(
