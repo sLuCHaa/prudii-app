@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
-import { invalidateMailListQueries, MAIL_LIST_QUERY_KEYS, patchCachedMails } from "./mailQueries";
+import { holdUntilMoved, invalidateMailListQueries, MAIL_LIST_QUERY_KEYS, patchCachedMails } from "./mailQueries";
+import { useAppStore } from "../stores/appStore";
 import type { Mail, SearchResult } from "../types";
 
 function record(): { seen: string[]; client: QueryClient } {
@@ -36,6 +37,59 @@ describe("invalidateMailListQueries", () => {
     const { seen, client } = record();
     invalidateMailListQueries(client);
     expect(seen).toEqual([...MAIL_LIST_QUERY_KEYS]);
+  });
+});
+
+const held = () => useAppStore.getState().unconfirmedMoveIds;
+const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+describe("holdUntilMoved", () => {
+  it("holds the mails while the server has not answered", async () => {
+    let confirm!: () => void;
+    const move = new Promise<void>((resolve) => { confirm = resolve; });
+    const done = holdUntilMoved(record().client, ["m1"], () => move);
+    await settled();
+    expect(held()).toEqual(["m1"]);
+    confirm();
+    await done;
+    expect(held()).toEqual([]);
+  });
+
+  it("releases the mails only once the refetch has landed", async () => {
+    let land!: () => void;
+    const refetch = new Promise<void>((resolve) => { land = resolve; });
+    const client = { invalidateQueries: () => refetch } as unknown as QueryClient;
+    const done = holdUntilMoved(client, ["m1"], async () => {});
+    await settled();
+    expect(held()).toEqual(["m1"]);
+    land();
+    await done;
+    expect(held()).toEqual([]);
+  });
+
+  it("refetches every list after the move", async () => {
+    const { seen, client } = record();
+    await holdUntilMoved(client, ["m1"], async () => {});
+    expect(seen).toEqual([...MAIL_LIST_QUERY_KEYS]);
+  });
+
+  it("releases the mails after a failed move and passes the failure on", async () => {
+    const { seen, client } = record();
+    await expect(holdUntilMoved(client, ["m1"], () => Promise.reject(new Error("offline")))).rejects.toThrow("offline");
+    expect(held()).toEqual([]);
+    expect(seen).toContain("mails");
+  });
+
+  it("keeps a second move held when the first one settles", async () => {
+    let confirm!: () => void;
+    const slow = new Promise<void>((resolve) => { confirm = resolve; });
+    const { client } = record();
+    const second = holdUntilMoved(client, ["m2"], () => slow);
+    await holdUntilMoved(client, ["m1"], async () => {});
+    expect(held()).toEqual(["m2"]);
+    confirm();
+    await second;
+    expect(held()).toEqual([]);
   });
 });
 

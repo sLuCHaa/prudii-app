@@ -178,6 +178,10 @@ interface AppState {
   // one id for a single delete, the whole selection for a bulk one.
   pendingRemoveIds: string[];
   setPendingRemoveIds: (ids: string[]) => void;
+  // Mails whose move the server has not confirmed: the cache still holds them.
+  unconfirmedMoveIds: string[];
+  holdMovedMails: (ids: string[]) => void;
+  releaseMovedMails: (ids: string[]) => void;
 
   syncProgress: Record<string, SyncProgress>;
   setSyncProgress: (accountId: string, progress: SyncProgress | null) => void;
@@ -469,6 +473,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Animation coordination
   pendingRemoveIds: [],
   setPendingRemoveIds: (pendingRemoveIds) => set({ pendingRemoveIds }),
+  unconfirmedMoveIds: [],
+  holdMovedMails: (ids) => set((state) => ({ unconfirmedMoveIds: [...state.unconfirmedMoveIds, ...ids] })),
+  releaseMovedMails: (ids) => set((state) => ({
+    unconfirmedMoveIds: state.unconfirmedMoveIds.filter((id) => !ids.includes(id)),
+  })),
 
   syncProgress: {},
   setSyncProgress: (accountId, progress) =>

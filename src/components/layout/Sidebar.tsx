@@ -13,7 +13,7 @@ import { useSyncAccount, useSyncAll } from "../../hooks/useSync";
 import { useRemoveAccount } from "../../hooks/useRemoveAccount";
 import { useOpenTaskCount } from "../../hooks/useTasks";
 import { useTeamSnapshot, useTeamAssignments } from "../../hooks/useTeam";
-import { invalidateMailListQueries } from "../../lib/mailQueries";
+import { holdUntilMoved, invalidateMailListQueries } from "../../lib/mailQueries";
 import { cleanupCount, formatCleanupCount, isCleanupFolder } from "../../lib/cleanupCount";
 import { openAssignedTo } from "../../lib/team";
 import { TeamSection } from "./TeamSection";
@@ -439,13 +439,8 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
     // The list's shared exit path: the row sweeps out, the rows below glide up, the selection moves on.
     useAppStore.getState().setPendingRemoveIds([mailId]);
 
-    moveMail(mailId, folder.id)
-      .then(() => {
-        queryClient.invalidateQueries({ queryKey: ["folders", account.id] });
-      })
+    holdUntilMoved(queryClient, [mailId], () => moveMail(mailId, folder.id))
       .catch(async (err) => {
-        // Revert by refetching
-        invalidateMailListQueries(queryClient);
         await dialog.alert({
           type: "danger",
           title: t("folder.moveFailed"),

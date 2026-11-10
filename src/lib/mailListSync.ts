@@ -37,3 +37,11 @@ export function keepRowsLeaving<T extends { id: string }>(
   }
   return out;
 }
+
+/** A move reaches the local database only once the server answered, so the cache can hold the mail past its sweep. */
+export function withoutUnconfirmedMoves<T extends { id: string }>(fetched: T[], movingIds: string[]): T[] {
+  if (movingIds.length === 0) return fetched;
+  const moving = new Set(movingIds);
+  const out = fetched.filter((m) => !moving.has(m.id));
+  return out.length === fetched.length ? fetched : out;
+}

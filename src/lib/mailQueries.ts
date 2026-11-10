@@ -1,5 +1,6 @@
 import type { InfiniteData, QueryClient } from "@tanstack/react-query";
 import type { Mail, SearchResult } from "../types";
+import { useAppStore } from "../stores/appStore";
 
 /**
  * Every query that feeds a mail list, plus the folder counts.
@@ -27,8 +28,21 @@ export const MAIL_LIST_QUERY_KEYS = [
  * still contains the mail, so the row reappears the moment its tween ends.
  */
 export function invalidateMailListQueries(queryClient: QueryClient): void {
-  for (const key of MAIL_LIST_QUERY_KEYS) {
-    queryClient.invalidateQueries({ queryKey: [key] });
+  void refetchMailLists(queryClient);
+}
+
+function refetchMailLists(queryClient: QueryClient): Promise<unknown> {
+  return Promise.all(MAIL_LIST_QUERY_KEYS.map((key) => queryClient.invalidateQueries({ queryKey: [key] })));
+}
+
+/** Released only after the refetch: any earlier and the list takes the rows back from a cache that still holds them. */
+export async function holdUntilMoved<T>(queryClient: QueryClient, mailIds: string[], move: () => Promise<T>): Promise<T> {
+  useAppStore.getState().holdMovedMails(mailIds);
+  try {
+    return await move();
+  } finally {
+    await refetchMailLists(queryClient);
+    useAppStore.getState().releaseMovedMails(mailIds);
   }
 }
 

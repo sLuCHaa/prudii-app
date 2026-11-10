@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { keepRowsLeaving } from "./mailListSync";
+import { keepRowsLeaving, withoutUnconfirmedMoves } from "./mailListSync";
 
 // keepRowsLeaving only ever reads `id`, so the rows stay minimal.
 const mail = (id: string) => ({ id });
@@ -70,5 +70,33 @@ describe("keepRowsLeaving", () => {
     const current = [mail("a"), mail("b"), mail("c")];
     const fetched = [mail("a"), mail("b")];
     expect(ids(keepRowsLeaving(current, fetched, ["b", "c"]))).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("withoutUnconfirmedMoves", () => {
+  it("keeps a moved row out after its sweep, although the cache still holds it", () => {
+    const cached = [mail("a"), mail("b"), mail("c")];
+    const afterSweep = [mail("a"), mail("c")];
+    expect(ids(keepRowsLeaving(afterSweep, withoutUnconfirmedMoves(cached, ["b"]), []))).toEqual(["a", "c"]);
+  });
+
+  it("leaves the row in place while it is still sweeping out", () => {
+    const current = [mail("a"), mail("b"), mail("c")];
+    expect(ids(keepRowsLeaving(current, withoutUnconfirmedMoves(current, ["b"]), ["b"]))).toEqual(["a", "b", "c"]);
+  });
+
+  it("brings the row back once a failed move releases it", () => {
+    const cached = [mail("a"), mail("b"), mail("c")];
+    expect(ids(keepRowsLeaving([mail("a"), mail("c")], withoutUnconfirmedMoves(cached, []), []))).toEqual(["a", "b", "c"]);
+  });
+
+  it("takes the fetched list as-is when no move is waiting", () => {
+    const fetched = [mail("a"), mail("b")];
+    expect(withoutUnconfirmedMoves(fetched, [])).toBe(fetched);
+  });
+
+  it("takes the fetched list as-is when the moved mail is not in it", () => {
+    const fetched = [mail("a"), mail("b")];
+    expect(withoutUnconfirmedMoves(fetched, ["elsewhere"])).toBe(fetched);
   });
 });

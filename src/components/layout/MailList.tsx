@@ -42,7 +42,7 @@ import { SWEEP_MAILS_EVENT, SWEEP_TWEEN, type SweepDetail } from "../motion/swee
 import { playRowShifts, snapshotRows } from "../motion/rowShift";
 import { launchSubjectFly } from "../motion/subjectFly";
 import { flyIntoDropTarget } from "../motion/dropFlight";
-import { keepRowsLeaving } from "../../lib/mailListSync";
+import { keepRowsLeaving, withoutUnconfirmedMoves } from "../../lib/mailListSync";
 import { moveTargets } from "../../lib/moveTargets";
 import { ContextMenu } from "../ui/ContextMenu";
 import { Tooltip } from "../ui/Tooltip";
@@ -57,7 +57,7 @@ import { anchorAt, type ScrollAnchor } from "../../lib/scrollAnchor";
 import { makeIsOutgoing } from "../../lib/outgoing";
 import { MailSortMenu } from "./MailSortMenu";
 import { runMailAction, toastError, causeMessage } from "../../lib/errorToast";
-import { invalidateMailListQueries, patchCachedMails } from "../../lib/mailQueries";
+import { holdUntilMoved, invalidateMailListQueries, patchCachedMails } from "../../lib/mailQueries";
 import { accumulate, decide, isHorizontalIntent } from "../../lib/swipe";
 import { isListNavKey, nextCursor, pageSize, spanIds } from "../../lib/listKeys";
 import { MAIL_FLAG_COLORS } from "../../types";
@@ -1210,6 +1210,7 @@ export function MailList() {
   const searchOpen = useAppStore((s) => s.searchOpen);
   const setSearchOpen = useAppStore((s) => s.setSearchOpen);
   const searchQuery = useAppStore((s) => s.searchQuery);
+  const unconfirmedMoveIds = useAppStore((s) => s.unconfirmedMoveIds);
   // Full-text search spans all accounts and folders — don't scope to selected account
   const searchResults = useSearchMails(searchOpen ? searchQuery : "");
   const queryClient = useQueryClient();
@@ -1403,11 +1404,12 @@ export function MailList() {
   const dataViewRef = useRef<string | null>(null);
   const shiftFromRef = useRef<{ tops: Map<string, number>; at: number; fadeNew: boolean } | null>(null);
 
-  // Keyed on fetchedMails and pendingRemoveIds ONLY: further deps would re-run
+  // Keyed on fetchedMails and the two id lists ONLY: further deps would re-run
   // setMails on every selection change and revert optimistic removals to the
   // stale query data. pendingRemoveIds belongs here because a delete's refetch
   // lands mid-sweep — keepRowsLeaving holds those rows until the tween ends,
-  // and clearing the ids re-runs this to apply the settled list.
+  // and clearing the ids re-runs this to apply the settled list. A move's
+  // refetch lands after the sweep instead, hence unconfirmedMoveIds.
   useEffect(() => {
     // Same view: new mail at the top glides the rows down instead of pushing them in one frame.
     const sameView = dataViewRef.current === viewKey;
@@ -1415,8 +1417,8 @@ export function MailList() {
     if (sameView && listRef.current && !prefersReducedMotion()) {
       shiftFromRef.current = { tops: snapshotRows(listRef.current), at: performance.now(), fadeNew: true };
     }
-    setMails(keepRowsLeaving(useAppStore.getState().mails, fetchedMails, pendingRemoveIds));
-  }, [fetchedMails, setMails, pendingRemoveIds]);
+    setMails(keepRowsLeaving(useAppStore.getState().mails, withoutUnconfirmedMoves(fetchedMails, unconfirmedMoveIds), pendingRemoveIds));
+  }, [fetchedMails, setMails, pendingRemoveIds, unconfirmedMoveIds]);
 
   // A restored selection may point at a mail that has since moved out of this
   // folder — validate once data is loaded. Skipped during search (selects
@@ -1620,12 +1622,10 @@ export function MailList() {
   const handleMove = useCallback((mail: Mail, destFolderId: string) => {
     // Same exit as archive and delete: the row sweeps out before the refetch.
     setPendingRemoveIds([mail.id]);
-    runMailAction(() => moveMail(mail.id, destFolderId), {
+    runMailAction(() => holdUntilMoved(queryClient, [mail.id], () => moveMail(mail.id, destFolderId)), {
       errorKey: "errors.move",
-      invalidate: invalidateMailQueries,
-      onPendingClear: () => setPendingRemoveIds([]),
     });
-  }, [setPendingRemoveIds, invalidateMailQueries]);
+  }, [setPendingRemoveIds, queryClient]);
 
   const runBulkAction = useCallback((action: BulkMailAction) => {
     const s = useAppStore.getState();
@@ -1651,28 +1651,30 @@ export function MailList() {
     });
   }, [setMails, invalidateMailQueries, queryClient]);
 
-  const runBulkPerMail = useCallback((fn: (id: string) => Promise<unknown>, errorKey: string) => {
+  const runBulkPerMail = useCallback((fn: (id: string) => Promise<unknown>, errorKey: string, awaitsServer = false) => {
     const s = useAppStore.getState();
     const ids = Array.from(s.selectedMailIds);
     if (ids.length === 0) return;
     s.setPendingRemoveIds(ids);
     s.clearSelection();
-    runMailAction(async () => {
+    const batch = async () => {
       const results = await Promise.allSettled(ids.map(fn));
       const firstFailure = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
       if (firstFailure) throw firstFailure.reason;
-    }, {
-      errorKey,
-      invalidate: invalidateMailQueries,
-    });
-  }, [invalidateMailQueries]);
+    };
+    if (awaitsServer) {
+      runMailAction(() => holdUntilMoved(queryClient, ids, batch), { errorKey });
+    } else {
+      runMailAction(batch, { errorKey, invalidate: invalidateMailQueries });
+    }
+  }, [invalidateMailQueries, queryClient]);
 
   const handleBulkSnooze = useCallback((until: string) => {
     runBulkPerMail((id) => snoozeMail(id, until), "errors.snooze");
   }, [runBulkPerMail]);
 
   const handleBulkMove = useCallback((destFolderId: string) => {
-    runBulkPerMail((id) => moveMail(id, destFolderId), "errors.move");
+    runBulkPerMail((id) => moveMail(id, destFolderId), "errors.move", true);
   }, [runBulkPerMail]);
 
   /**
