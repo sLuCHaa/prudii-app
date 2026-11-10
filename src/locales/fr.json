@@ -541,6 +541,8 @@
       "showAllUnreadCountsDesc": "Afficher les badges de messages non lus sur tous les dossiers, pas seulement la boîte de réception",
       "showCleanupCounts": "Afficher ce qui reste dans le spam et la corbeille",
       "showCleanupCountsDesc": "Indique dans la barre latérale combien de messages restent dans le spam et la corbeille, avec un bouton pour les vider",
+      "hideStarredInInbox": "Masquer les e-mails suivis dans la boîte de réception",
+      "hideStarredInInboxDesc": "Les e-mails marqués d’une étoile n’apparaissent alors que sous « Suivis ». Sur le serveur, ils restent dans la boîte de réception.",
       "notifications": "Notifications bureau",
       "notificationsDesc": "Afficher une notification quand de nouveaux emails arrivent lors de la synchronisation",
       "notificationSound": "Son de notification",

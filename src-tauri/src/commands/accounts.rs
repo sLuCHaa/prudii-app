@@ -366,10 +366,16 @@ pub fn list_folders(
 
 /// Command body, separated so integration tests can run it against a fixture DB.
 pub fn list_folders_inner(conn: &rusqlite::Connection, account_id: &str) -> Result<Vec<Folder>, String> {
+    // The inbox counter follows what the inbox lists: without the starred mails it leaves to the Starred view.
+    let unread = if crate::inbox_view::hides_starred(conn) {
+        "CASE WHEN folder_type = 'inbox' THEN MAX(0, unread_count - (SELECT COUNT(*) FROM mails WHERE mails.folder_id = folders.id AND mails.is_read = 0 AND mails.is_starred = 1)) ELSE unread_count END"
+    } else {
+        "unread_count"
+    };
     let mut stmt = conn
-        .prepare(
-            "SELECT id, account_id, name, folder_type, path, unread_count, total_count, COALESCE(is_local, 0) as is_local, COALESCE(color, '') as color FROM folders WHERE account_id = ?1 ORDER BY is_local ASC, CASE folder_type WHEN 'inbox' THEN 1 WHEN 'sent' THEN 2 WHEN 'drafts' THEN 3 WHEN 'archive' THEN 4 WHEN 'spam' THEN 5 WHEN 'trash' THEN 6 ELSE 7 END, name ASC",
-        )
+        .prepare(&format!(
+            "SELECT id, account_id, name, folder_type, path, {unread}, total_count, COALESCE(is_local, 0) as is_local, COALESCE(color, '') as color FROM folders WHERE account_id = ?1 ORDER BY is_local ASC, CASE folder_type WHEN 'inbox' THEN 1 WHEN 'sent' THEN 2 WHEN 'drafts' THEN 3 WHEN 'archive' THEN 4 WHEN 'spam' THEN 5 WHEN 'trash' THEN 6 ELSE 7 END, name ASC",
+        ))
         .map_err(|e| e.to_string())?;
 
     let folders = stmt

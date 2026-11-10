@@ -541,6 +541,8 @@
       "showAllUnreadCountsDesc": "Anzahl ungelesener E-Mails für alle Ordner anzeigen, nicht nur für den Posteingang",
       "showCleanupCounts": "Inhalt von Spam und Papierkorb anzeigen",
       "showCleanupCountsDesc": "Zeigt in der Seitenleiste, wie viele E-Mails noch in Spam und Papierkorb liegen, mit einem Knopf zum Leeren",
+      "hideStarredInInbox": "Markierte Mails im Posteingang ausblenden",
+      "hideStarredInInboxDesc": "Mit Stern markierte E-Mails stehen dann nur noch unter „Markiert“. Auf dem Server bleiben sie im Posteingang.",
       "notifications": "Desktop-Benachrichtigungen",
       "notificationsDesc": "Benachrichtigung anzeigen, wenn neue E-Mails beim Sync eintreffen",
       "notificationSound": "Benachrichtigungston",

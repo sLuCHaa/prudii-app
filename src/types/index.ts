@@ -141,6 +141,8 @@ export interface AppSettings {
   thread_view: ThreadViewMode;
   sorting_enabled: boolean;
   hidden_categories: string[];
+  /** Starred mails are listed under Starred only; on the server they stay in the inbox. */
+  hide_starred_in_inbox: boolean;
 }
 
 export interface CategoryReason {

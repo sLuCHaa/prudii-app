@@ -550,6 +550,8 @@
       "showAllUnreadCountsDesc": "Display unread count badges on all folders, not just Inbox",
       "showCleanupCounts": "Show what's left in Spam and Trash",
       "showCleanupCountsDesc": "Show in the sidebar how many mails are still in Spam and Trash, with a button to empty them",
+      "hideStarredInInbox": "Hide starred mails in the inbox",
+      "hideStarredInInboxDesc": "Starred emails are then listed under “Starred” only. On the server they stay in the inbox.",
       "notifications": "Desktop notifications",
       "notificationsDesc": "Show a notification when new emails arrive during sync",
       "notificationSound": "Notification sound",

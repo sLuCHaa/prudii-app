@@ -155,6 +155,8 @@ pub struct AppSettings {
     pub sorting_enabled: bool,
     #[serde(default)]
     pub hidden_categories: Vec<String>,
+    #[serde(default)]
+    pub hide_starred_in_inbox: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -541,6 +541,8 @@
       "showAllUnreadCountsDesc": "Mostrar insignias con el número de no leídos en todas las carpetas, no solo en la bandeja de entrada",
       "showCleanupCounts": "Mostrar lo que queda en Spam y Papelera",
       "showCleanupCountsDesc": "Muestra en la barra lateral cuántos correos quedan en Spam y Papelera, con un botón para vaciarlos",
+      "hideStarredInInbox": "Ocultar los correos destacados en la bandeja de entrada",
+      "hideStarredInInboxDesc": "Los correos con estrella aparecen entonces solo en «Destacados». En el servidor siguen en la bandeja de entrada.",
       "notifications": "Notificaciones de escritorio",
       "notificationsDesc": "Mostrar una notificación cuando lleguen correos nuevos durante la sincronización",
       "notificationSound": "Sonido de notificación",

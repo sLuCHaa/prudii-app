@@ -22,7 +22,8 @@ pub fn list_category_mails(
     super::catch_panic(|| {
         let limit = limit.unwrap_or(500).min(2000);
         let offset = offset.unwrap_or(0);
-        let extra = filter_clause(&folder_filter, "m.");
+        let conn = db.read_db();
+        let extra = format!("{}{}", filter_clause(&folder_filter, "m."), crate::inbox_view::star_clause(&conn, folder_filter.as_deref(), "m."));
         let folder_clause = if folder_id.is_some() { " AND m.folder_id = ?4" } else { "" };
         let sql = format!(
             "SELECT {} FROM mails m JOIN folders f ON m.folder_id = f.id
@@ -32,7 +33,6 @@ pub fn list_category_mails(
             mail_columns("m.", false),
             crate::db::mail_sort::order_clause(sort.as_deref(), "m.", true),
         );
-        let conn = db.read_db();
         let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
         let mails = match &folder_id {
             Some(id) => stmt.query_map(rusqlite::params![category, limit, offset, id], map_mail_row),

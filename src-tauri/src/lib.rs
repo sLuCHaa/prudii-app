@@ -13,6 +13,7 @@ pub mod export;
 pub mod gmail;
 pub mod idle;
 pub mod imap;
+pub mod inbox_view;
 pub mod menu_labels;
 pub mod models;
 pub mod notifications;

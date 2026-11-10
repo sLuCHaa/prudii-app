@@ -20,7 +20,7 @@ import { TaskPickerDialog } from "../tasks/TaskPickerDialog";
 import { CreateTaskFromMail } from "../tasks/CreateTaskFromMail";
 import { CategoryChip } from "../categories/CategoryChip";
 import { useCategoryMails, useSetMailCategory } from "../../hooks/useCategories";
-import { useMails, useFilteredMails, useAllInboxMails, useCombinedFolderMails, useSnoozedMails, useToggleStar, useTogglePin, useToggleMailFlag, useFolders } from "../../hooks/useAccounts";
+import { useMails, useFilteredMails, useAllInboxMails, useCombinedFolderMails, useSnoozedMails, useToggleStar, useTogglePin, useToggleMailFlag, useFolders, starLeavesCurrentView } from "../../hooks/useAccounts";
 import { useTeamSnapshot, useTeamAssignments, useAssignedMails, useAssignMail, useSetAssignmentStatus, useUnassignMail } from "../../hooks/useTeam";
 import { indexAssignments, openAssignedTo } from "../../lib/team";
 import { AssigneeChip } from "../ui/AssigneeChip";
@@ -1684,7 +1684,7 @@ export function MailList() {
     const ids = Array.from(s.selectedMailIds);
     if (ids.length === 0) return;
     const idSet = s.selectedMailIds;
-    if (action === "archive" || action === "trash") {
+    if (action === "archive" || action === "trash" || (action === "star" && starLeavesCurrentView())) {
       // The sweep effect owns the removal so the rows cascade out first.
       s.setPendingRemoveIds(ids);
     } else {

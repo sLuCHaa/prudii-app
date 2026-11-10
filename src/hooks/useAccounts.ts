@@ -1,9 +1,10 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { listAccounts, createAccount, deleteAccount, listFolders, listMails, listFilteredMails, listAllInboxMails, listCombinedFolderMails, listSnoozedMails, listAttachments, toggleStar, togglePin, toggleMailFlag, listRules, createRule, updateRule, deleteRule, applyRulesNow } from "../lib/tauri";
 import type { CreateAccountRequest, CreateRuleRequest, Mail, MailFlag, MailRule } from "../types";
-import type { MailFilter } from "../stores/appStore";
+import { useAppStore, type MailFilter } from "../stores/appStore";
 import type { MailSort } from "../lib/mailSort";
 import { invalidateMailListQueries } from "../lib/mailQueries";
+import { leavesViewWhenStarred } from "../lib/starredInbox";
 
 const PAGE_SIZE = 100;
 
@@ -128,11 +129,27 @@ export function useAttachments(mailId: string | null) {
   });
 }
 
+/** Whether starring a mail takes it out of the list that is open right now. */
+export function starLeavesCurrentView(): boolean {
+  const s = useAppStore.getState();
+  return leavesViewWhenStarred({
+    hideStarredInInbox: s.appSettings.hide_starred_in_inbox,
+    showAllInboxes: s.showAllInboxes,
+    activeCategory: s.activeCategory,
+    activeFilter: s.activeFilter,
+    folderFilter: s.folderFilter,
+    searchOpen: s.searchOpen,
+    selectedFolderId: s.selectedFolderId,
+    folders: s.folders,
+  });
+}
+
 export function useToggleStar() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (mailId: string) => toggleStar(mailId),
-    onSuccess: () => {
+    onSuccess: (starred, mailId) => {
+      if (starred && starLeavesCurrentView()) useAppStore.getState().setPendingRemoveIds([mailId]);
       // Invalidate all mail queries so starred state is consistent everywhere
       invalidateMailListQueries(queryClient);
     },

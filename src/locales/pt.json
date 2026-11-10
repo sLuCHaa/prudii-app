@@ -550,6 +550,8 @@
       "showAllUnreadCountsDesc": "Exibir contador de não lidas em todas as pastas, não apenas na Caixa de Entrada",
       "showCleanupCounts": "Mostrar o que resta no Spam e na Lixeira",
       "showCleanupCountsDesc": "Mostra na barra lateral quantos e-mails ainda estão no Spam e na Lixeira, com um botão para os esvaziar",
+      "hideStarredInInbox": "Ocultar e-mails com estrela na caixa de entrada",
+      "hideStarredInInboxDesc": "Os e-mails com estrela aparecem então apenas em “Com Estrela”. No servidor continuam na caixa de entrada.",
       "notifications": "Notificações da área de trabalho",
       "notificationsDesc": "Mostrar uma notificação quando novos emails chegarem durante a sincronização",
       "notificationSound": "Som de notificação",

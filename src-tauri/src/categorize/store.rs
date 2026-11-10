@@ -322,13 +322,14 @@ pub fn category_info(conn: &Connection, mail_id: &str) -> rusqlite::Result<Optio
 }
 
 pub fn category_counts(conn: &Connection) -> rusqlite::Result<Vec<CategoryCount>> {
-    conn.prepare(
+    conn.prepare(&format!(
         "SELECT m.folder_id, m.category, SUM(CASE WHEN m.is_read = 0 THEN 1 ELSE 0 END), COUNT(*)
          FROM mails m JOIN folders f ON m.folder_id = f.id
          WHERE f.folder_type = 'inbox' AND m.category IS NOT NULL AND m.category != ''
-           AND (m.snoozed_until IS NULL OR m.snoozed_until = '' OR m.snoozed_until <= datetime('now'))
+           AND (m.snoozed_until IS NULL OR m.snoozed_until = '' OR m.snoozed_until <= datetime('now')){}
          GROUP BY m.folder_id, m.category ORDER BY m.folder_id, m.category",
-    )?
+        crate::inbox_view::star_clause(conn, None, "m."),
+    ))?
     .query_map([], |r| Ok(CategoryCount { folder_id: r.get(0)?, category: r.get(1)?, unread: r.get(2)?, total: r.get(3)? }))?
     .collect()
 }

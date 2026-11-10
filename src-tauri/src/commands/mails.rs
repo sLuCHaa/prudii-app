@@ -315,7 +315,11 @@ pub(crate) fn map_mail_row(row: &rusqlite::Row) -> rusqlite::Result<Mail> {
 pub fn list_mails_inner(conn: &rusqlite::Connection, folder_id: &str, limit: Option<u32>, offset: Option<u32>, folder_filter: &Option<String>, sort: Option<&str>) -> Result<Vec<Mail>, String> {
     let limit = limit.unwrap_or(500).min(2000);
     let offset = offset.unwrap_or(0);
-    let extra = filter_clause(folder_filter, "");
+    let is_inbox = conn
+        .query_row("SELECT folder_type = 'inbox' FROM folders WHERE id = ?1", rusqlite::params![folder_id], |row| row.get::<_, bool>(0))
+        .unwrap_or(false);
+    let stars = if is_inbox { crate::inbox_view::star_clause(conn, folder_filter.as_deref(), "") } else { String::new() };
+    let extra = format!("{}{}", filter_clause(folder_filter, ""), stars);
     let cols = mail_columns("", false);
     let sql = format!("SELECT {cols} FROM mails WHERE folder_id = ?1 AND (snoozed_until IS NULL OR snoozed_until = '' OR snoozed_until <= datetime('now')){} ORDER BY {} LIMIT ?2 OFFSET ?3", extra, crate::db::mail_sort::order_clause(sort, "mails.", true));
     let mut stmt = conn
@@ -336,8 +340,8 @@ pub fn list_all_inbox_mails(db: State<'_, Database>, limit: Option<u32>, offset:
     super::catch_panic(|| {
     let limit = limit.unwrap_or(500).min(2000);
     let offset = offset.unwrap_or(0);
-    let extra = filter_clause(&folder_filter, "m.");
     let conn = db.read_db();
+    let extra = format!("{}{}", filter_clause(&folder_filter, "m."), crate::inbox_view::star_clause(&conn, folder_filter.as_deref(), "m."));
     let cols = mail_columns("m.", false);
     let sql = format!("SELECT {cols}
              FROM mails m

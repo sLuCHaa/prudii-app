@@ -60,6 +60,7 @@ pub fn get_app_settings(db: State<'_, Database>) -> Result<AppSettings, String> 
                 .get("hidden_categories")
                 .and_then(|v| serde_json::from_str(v).ok())
                 .unwrap_or_default(),
+            hide_starred_in_inbox: get_bool(crate::inbox_view::SETTING, false),
         })
     })
 }
@@ -95,6 +96,7 @@ pub fn update_app_settings(
         set_setting(&conn, "transparent_sidebar", settings.transparent_sidebar)?;
         set_setting(&conn, "strip_tracking_params", settings.strip_tracking_params)?;
         set_setting(&conn, "use_system_font", settings.use_system_font)?;
+        set_setting(&conn, crate::inbox_view::SETTING, settings.hide_starred_in_inbox)?;
 
         conn.execute(
             "INSERT OR REPLACE INTO app_settings (key, value) VALUES (?1, ?2)",

@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { motion } from "motion/react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useModalExit } from "../motion/modalExit";
-import { X, Sun, Moon, Monitor, Trash2, ChevronRight, ArrowLeft, Save, RefreshCw, Server, Palette, Clock, FolderOpen, Power, AppWindow, Globe, Bell, Volume2, Image, Settings2, Users, Database, Filter, Info, Sparkles, Mail, Key, FileType, Send, Download, Eye, EyeOff, Plus, PanelLeft, Shield, Type, CalendarDays, Tags, Lock, Pencil } from "../icons";
+import { X, Sun, Moon, Monitor, Trash2, ChevronRight, ArrowLeft, Save, RefreshCw, Server, Palette, Clock, FolderOpen, Power, AppWindow, Globe, Bell, Volume2, Image, Settings2, Users, Database, Filter, Info, Sparkles, Mail, Key, FileType, Send, Download, Eye, EyeOff, Plus, PanelLeft, Shield, Star, Type, CalendarDays, Tags, Lock, Pencil } from "../icons";
+import { invalidateMailListQueries } from "../../lib/mailQueries";
 import { CalendarSettingsPanel } from "../calendar/CalendarSettings";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -631,6 +632,7 @@ export function SettingsPanel() {
       await updateAppSettings(settingsToSave);
       setAppSettings(settingsToSave);
       if (sortingTurnedOn) runCategorization(queryClient).catch(() => {});
+      if (settingsToSave.hide_starred_in_inbox !== appSettings.hide_starred_in_inbox) invalidateMailListQueries(queryClient);
       setSettingsSaved(true);
     } catch (err) {
       addToast("error", t("errors.settingsSave"), err instanceof Error ? err.message : String(err));
@@ -830,6 +832,13 @@ export function SettingsPanel() {
                         title={t("settings.appSettings.showCleanupCounts")}
                         description={t("settings.appSettings.showCleanupCountsDesc")}
                         control={<Switch checked={localSettings.show_cleanup_counts} onChange={(v) => updateLocalSetting("show_cleanup_counts", v)} />}
+                      />
+
+                      <SettingsRow
+                        icon={<Star className="w-4 h-4 text-text-tertiary shrink-0" />}
+                        title={t("settings.appSettings.hideStarredInInbox")}
+                        description={t("settings.appSettings.hideStarredInInboxDesc")}
+                        control={<Switch checked={localSettings.hide_starred_in_inbox} onChange={(v) => updateLocalSetting("hide_starred_in_inbox", v)} />}
                       />
 
                       <SettingsRow
