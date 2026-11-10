@@ -468,6 +468,7 @@
     "discardMessage": "Tus cambios aún no se han guardado. ¿Descartarlos?",
     "mailtoFailed": "No se pudo cambiar la aplicación de correo predeterminada",
     "tabs": {
+      "signatures": "Firmas",
     "calendar": "Calendario",
       "sorting": "Clasificación",
       "general": "General",
@@ -1218,6 +1219,27 @@
     "mailScheduled": "Correo programado",
     "failedTitle": "Error en el envío programado",
     "failedMessage": "No se pudo enviar el correo programado \"{{subject}}\" después de 3 intentos."
+  },
+  "signatures": {
+    "title": "Firmas",
+    "description": "Una firma se puede asignar a varias cuentas. Los cambios se aplican a todas las cuentas que la usan.",
+    "new": "Nueva firma",
+    "edit": "Editar firma",
+    "name": "Nombre",
+    "nameRequired": "Ponle un nombre a la firma.",
+    "unassigned": "No asignada a ninguna cuenta",
+    "usedBy": "Usada por",
+    "usedByDesc": "Un cambio en esta firma se aplica a todas las cuentas marcadas.",
+    "usesOther": "usa «{{name}}»",
+    "duplicate": "Duplicar",
+    "copyName": "{{name}} (copia)",
+    "delete": "Eliminar firma",
+    "deleteConfirm": "«{{name}}» se eliminará permanentemente.",
+    "deleteConfirmUsed": "«{{name}}» se eliminará permanentemente. Estas cuentas se quedarán sin firma: {{accounts}}",
+    "empty": "Aún no hay firmas. Crea una para comenzar.",
+    "saveFailed": "No se pudo guardar la firma",
+    "deleteFailed": "No se pudo eliminar la firma",
+    "duplicateFailed": "No se pudo duplicar la firma"
   },
   "templates": {
     "title": "Plantillas de correo",

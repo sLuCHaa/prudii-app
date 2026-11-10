@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { motion } from "motion/react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useModalExit } from "../motion/modalExit";
-import { X, Sun, Moon, Monitor, Trash2, ChevronRight, ArrowLeft, Save, RefreshCw, Server, Palette, Clock, FolderOpen, Power, AppWindow, Globe, Bell, Volume2, Image, Settings2, Users, Database, Filter, Info, Sparkles, Mail, Key, FileType, Send, Download, Eye, EyeOff, Plus, PanelLeft, Shield, Type, CalendarDays, Tags, Lock } from "../icons";
+import { X, Sun, Moon, Monitor, Trash2, ChevronRight, ArrowLeft, Save, RefreshCw, Server, Palette, Clock, FolderOpen, Power, AppWindow, Globe, Bell, Volume2, Image, Settings2, Users, Database, Filter, Info, Sparkles, Mail, Key, FileType, Send, Download, Eye, EyeOff, Plus, PanelLeft, Shield, Type, CalendarDays, Tags, Lock, Pencil } from "../icons";
 import { CalendarSettingsPanel } from "../calendar/CalendarSettings";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -22,6 +22,7 @@ import { AiSettings } from "./AiSettings";
 import { SortingSettings } from "./SortingSettings";
 import { PrivacySettings } from "./PrivacySettings";
 import { LicenseSettings } from "./LicenseSettings";
+import { SignaturesPanel } from "./SignaturesPanel";
 import { TemplatesPanel } from "./TemplatesPanel";
 import { UpdatePanel } from "./UpdatePanel";
 import { VacationSection } from "./VacationSection";
@@ -37,12 +38,13 @@ import type { Account, SmtpSecurity } from "../../types";
 
 type ThemeMode = "light" | "dark" | "system";
 type SettingsView = "main" | "account";
-type SettingsTab = "general" | "privacy" | "accounts" | "calendar" | "rules" | "sorting" | "templates" | "backup" | "ai" | "license" | "update" | "info";
+type SettingsTab = "general" | "privacy" | "accounts" | "signatures" | "calendar" | "rules" | "sorting" | "templates" | "backup" | "ai" | "license" | "update" | "info";
 
 const SETTINGS_TABS: { id: SettingsTab; labelKey: string; icon: typeof Settings2 }[] = [
   { id: "general", labelKey: "settings.tabs.general", icon: Settings2 },
   { id: "privacy", labelKey: "settings.tabs.privacy", icon: Shield },
   { id: "accounts", labelKey: "settings.tabs.accounts", icon: Users },
+  { id: "signatures", labelKey: "settings.tabs.signatures", icon: Pencil },
   { id: "calendar", labelKey: "settings.tabs.calendar", icon: CalendarDays },
   { id: "rules", labelKey: "settings.tabs.rules", icon: Filter },
   { id: "sorting", labelKey: "settings.tabs.sorting", icon: Tags },
@@ -534,7 +536,19 @@ export function SettingsPanel() {
     return (SETTINGS_TABS.some((tab) => tab.id === last) ? last : "general") as SettingsTab;
   });
 
-  function setActiveTab(tab: SettingsTab) {
+  function confirmDiscard() {
+    return dialog.danger({
+      title: t("settings.discardTitle"),
+      message: t("settings.discardMessage"),
+      confirmLabel: t("common.discard"),
+      cancelLabel: t("common.cancel"),
+    });
+  }
+
+  async function setActiveTab(tab: SettingsTab) {
+    // The signature draft lives in its panel and would vanish with the tab.
+    if (activeTab === "signatures" && tab !== "signatures" && signaturesDirty && !(await confirmDiscard())) return;
+    if (tab !== "signatures") setSignatureToOpen(null);
     setActiveTabState(tab);
     useAppStore.getState().setSettingsLastTab(tab);
   }
@@ -546,6 +560,9 @@ export function SettingsPanel() {
   const [languagePref, setLanguagePref] = useState(getLanguagePreference());
   const [isDefaultMailApp, setIsDefaultMailApp] = useState(false);
   const accountDirtyRef = useRef(false);
+  const [signaturesDirty, setSignaturesDirty] = useState(false);
+  const [signatureToOpen, setSignatureToOpen] = useState<string | null>(null);
+  const signaturesSaveRef = useRef<(() => Promise<boolean>) | null>(null);
 
   // Reset content scroll when switching tabs — otherwise a short tab can
   // render pre-scrolled after leaving a long one.
@@ -577,16 +594,8 @@ export function SettingsPanel() {
   }, [settingsTargetTab]);
 
   async function requestClose() {
-    const dirty = !settingsSaved || accountDirtyRef.current;
-    if (dirty) {
-      const confirmed = await dialog.danger({
-        title: t("settings.discardTitle"),
-        message: t("settings.discardMessage"),
-        confirmLabel: t("common.discard"),
-        cancelLabel: t("common.cancel"),
-      });
-      if (!confirmed) return;
-    }
+    const dirty = !settingsSaved || accountDirtyRef.current || signaturesDirty;
+    if (dirty && !(await confirmDiscard())) return;
     setShowSettings(false);
   }
 
@@ -632,6 +641,11 @@ export function SettingsPanel() {
     } catch (err) {
       addToast("error", t("errors.settingsSave"), err instanceof Error ? err.message : String(err));
     }
+  }
+
+  async function handleSaveAll() {
+    if (!settingsSaved) await handleSaveAppSettings();
+    if (signaturesDirty) await signaturesSaveRef.current?.();
   }
 
   const composeTypo = composeTypography(localSettings.compose_font, localSettings.compose_font_size);
@@ -687,8 +701,8 @@ export function SettingsPanel() {
             <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
               <h2 className="text-lg font-semibold text-text">{t("settings.title")}</h2>
               <div className="flex items-center gap-2">
-                {!settingsSaved && (
-                  <Button size="sm" variant="primary" onClick={handleSaveAppSettings}>
+                {(!settingsSaved || signaturesDirty) && (
+                  <Button size="sm" variant="primary" onClick={handleSaveAll}>
                     {t("common.save")}
                   </Button>
                 )}
@@ -1031,6 +1045,10 @@ export function SettingsPanel() {
                       </SettingsBlock>
                     )}
                   </SettingsGroup>
+                )}
+
+                {activeTab === "signatures" && (
+                  <SignaturesPanel initialSignatureId={signatureToOpen} onDirtyChange={setSignaturesDirty} saveRef={signaturesSaveRef} />
                 )}
 
                 {activeTab === "calendar" && <CalendarSettingsPanel />}

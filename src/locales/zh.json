@@ -467,6 +467,7 @@
     "discardMessage": "您的更改尚未保存。要放弃吗？",
     "mailtoFailed": "无法更改默认邮件应用",
     "tabs": {
+      "signatures": "签名",
     "calendar": "日历",
       "sorting": "排序",
       "general": "通用",
@@ -1217,6 +1218,27 @@
     "mailScheduled": "邮件已安排",
     "failedTitle": "定时发送失败",
     "failedMessage": "定时邮件\"{{subject}}\"在3次尝试后发送失败。"
+  },
+  "signatures": {
+    "title": "签名",
+    "description": "一个签名可以分配给多个账户。更改会应用到所有使用它的账户。",
+    "new": "新建签名",
+    "edit": "编辑签名",
+    "name": "名称",
+    "nameRequired": "请为签名命名。",
+    "unassigned": "未分配给任何账户",
+    "usedBy": "使用此签名的账户",
+    "usedByDesc": "对此签名的更改会应用到所有勾选的账户。",
+    "usesOther": "正在使用“{{name}}”",
+    "duplicate": "复制",
+    "copyName": "{{name}}（副本）",
+    "delete": "删除签名",
+    "deleteConfirm": "“{{name}}”将被永久删除。",
+    "deleteConfirmUsed": "“{{name}}”将被永久删除。以下账户之后将没有签名：{{accounts}}",
+    "empty": "还没有签名。创建一个开始使用。",
+    "saveFailed": "无法保存签名",
+    "deleteFailed": "无法删除签名",
+    "duplicateFailed": "无法复制签名"
   },
   "templates": {
     "title": "邮件模板",

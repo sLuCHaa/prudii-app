@@ -468,6 +468,7 @@
     "discardMessage": "Deine Änderungen wurden noch nicht gespeichert. Verwerfen?",
     "mailtoFailed": "Standard-Mail-App konnte nicht geändert werden",
     "tabs": {
+      "signatures": "Signaturen",
     "calendar": "Kalender",
       "sorting": "Sortierung",
       "general": "Allgemein",
@@ -1218,6 +1219,27 @@
     "mailScheduled": "E-Mail geplant",
     "failedTitle": "Geplanter Versand fehlgeschlagen",
     "failedMessage": "Die geplante E-Mail \"{{subject}}\" konnte nach 3 Versuchen nicht gesendet werden."
+  },
+  "signatures": {
+    "title": "Signaturen",
+    "description": "Eine Signatur kann mehreren Konten zugewiesen werden. Änderungen gelten für alle Konten, die sie verwenden.",
+    "new": "Neue Signatur",
+    "edit": "Signatur bearbeiten",
+    "name": "Name",
+    "nameRequired": "Gib der Signatur einen Namen.",
+    "unassigned": "Keinem Konto zugewiesen",
+    "usedBy": "Verwendet von",
+    "usedByDesc": "Eine Änderung an dieser Signatur gilt für alle angehakten Konten.",
+    "usesOther": "nutzt „{{name}}“",
+    "duplicate": "Duplizieren",
+    "copyName": "{{name}} (Kopie)",
+    "delete": "Signatur löschen",
+    "deleteConfirm": "„{{name}}“ wird dauerhaft gelöscht.",
+    "deleteConfirmUsed": "„{{name}}“ wird dauerhaft gelöscht. Diese Konten haben danach keine Signatur: {{accounts}}",
+    "empty": "Noch keine Signaturen. Lege eine an, um loszulegen.",
+    "saveFailed": "Signatur konnte nicht gespeichert werden",
+    "deleteFailed": "Signatur konnte nicht gelöscht werden",
+    "duplicateFailed": "Signatur konnte nicht dupliziert werden"
   },
   "templates": {
     "title": "E-Mail-Vorlagen",

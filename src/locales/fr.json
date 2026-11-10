@@ -468,6 +468,7 @@
     "discardMessage": "Vos modifications n'ont pas encore été enregistrées. Les abandonner ?",
     "mailtoFailed": "Impossible de changer l'application de messagerie par défaut",
     "tabs": {
+      "signatures": "Signatures",
     "calendar": "Calendrier",
       "sorting": "Tri",
       "general": "Général",
@@ -1218,6 +1219,27 @@
     "mailScheduled": "E-mail programmé",
     "failedTitle": "Échec de l'envoi programmé",
     "failedMessage": "Impossible d'envoyer l'e-mail programmé \"{{subject}}\" après 3 tentatives."
+  },
+  "signatures": {
+    "title": "Signatures",
+    "description": "Une signature peut être attribuée à plusieurs comptes. Les modifications s'appliquent à tous les comptes qui l'utilisent.",
+    "new": "Nouvelle signature",
+    "edit": "Modifier la signature",
+    "name": "Nom",
+    "nameRequired": "Donnez un nom à la signature.",
+    "unassigned": "Attribuée à aucun compte",
+    "usedBy": "Utilisée par",
+    "usedByDesc": "Une modification de cette signature s'applique à tous les comptes cochés.",
+    "usesOther": "utilise « {{name}} »",
+    "duplicate": "Dupliquer",
+    "copyName": "{{name}} (copie)",
+    "delete": "Supprimer la signature",
+    "deleteConfirm": "« {{name}} » sera définitivement supprimée.",
+    "deleteConfirmUsed": "« {{name}} » sera définitivement supprimée. Ces comptes n'auront plus de signature : {{accounts}}",
+    "empty": "Pas encore de signatures. Créez-en une pour commencer.",
+    "saveFailed": "Impossible d'enregistrer la signature",
+    "deleteFailed": "Impossible de supprimer la signature",
+    "duplicateFailed": "Impossible de dupliquer la signature"
   },
   "templates": {
     "title": "Modèles d'e-mail",

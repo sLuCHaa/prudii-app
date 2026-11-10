@@ -468,6 +468,7 @@
     "discardMessage": "Your changes have not been saved yet. Discard them?",
     "mailtoFailed": "Could not change default mail app",
     "tabs": {
+      "signatures": "Signatures",
     "calendar": "Calendar",
       "sorting": "Sorting",
       "general": "General",
@@ -1218,6 +1219,27 @@
     "mailScheduled": "Email scheduled",
     "failedTitle": "Scheduled Send Failed",
     "failedMessage": "Failed to send scheduled email \"{{subject}}\" after 3 attempts."
+  },
+  "signatures": {
+    "title": "Signatures",
+    "description": "A signature can be assigned to several accounts. Changes apply to every account that uses it.",
+    "new": "New signature",
+    "edit": "Edit signature",
+    "name": "Name",
+    "nameRequired": "Give the signature a name.",
+    "unassigned": "Not assigned to any account",
+    "usedBy": "Used by",
+    "usedByDesc": "A change to this signature applies to every ticked account.",
+    "usesOther": "uses “{{name}}”",
+    "duplicate": "Duplicate",
+    "copyName": "{{name}} (copy)",
+    "delete": "Delete signature",
+    "deleteConfirm": "“{{name}}” will be deleted permanently.",
+    "deleteConfirmUsed": "“{{name}}” will be deleted permanently. These accounts will have no signature afterwards: {{accounts}}",
+    "empty": "No signatures yet. Create one to get started.",
+    "saveFailed": "The signature could not be saved",
+    "deleteFailed": "The signature could not be deleted",
+    "duplicateFailed": "The signature could not be duplicated"
   },
   "templates": {
     "title": "Email Templates",

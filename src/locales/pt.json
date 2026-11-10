@@ -468,6 +468,7 @@
     "discardMessage": "Suas alterações ainda não foram salvas. Descartá-las?",
     "mailtoFailed": "Não foi possível alterar o app de e-mail padrão",
     "tabs": {
+      "signatures": "Assinaturas",
     "calendar": "Calendário",
       "sorting": "Classificação",
       "general": "Geral",
@@ -1218,6 +1219,27 @@
     "mailScheduled": "E-mail agendado",
     "failedTitle": "Falha no envio agendado",
     "failedMessage": "Não foi possível enviar o e-mail agendado \"{{subject}}\" após 3 tentativas."
+  },
+  "signatures": {
+    "title": "Assinaturas",
+    "description": "Uma assinatura pode ser atribuída a várias contas. As alterações valem para todas as contas que a usam.",
+    "new": "Nova assinatura",
+    "edit": "Editar assinatura",
+    "name": "Nome",
+    "nameRequired": "Dê um nome à assinatura.",
+    "unassigned": "Não atribuída a nenhuma conta",
+    "usedBy": "Usada por",
+    "usedByDesc": "Uma alteração nesta assinatura vale para todas as contas marcadas.",
+    "usesOther": "usa “{{name}}”",
+    "duplicate": "Duplicar",
+    "copyName": "{{name}} (cópia)",
+    "delete": "Excluir assinatura",
+    "deleteConfirm": "“{{name}}” será excluída permanentemente.",
+    "deleteConfirmUsed": "“{{name}}” será excluída permanentemente. Estas contas ficarão sem assinatura: {{accounts}}",
+    "empty": "Nenhuma assinatura ainda. Crie uma para começar.",
+    "saveFailed": "Não foi possível salvar a assinatura",
+    "deleteFailed": "Não foi possível excluir a assinatura",
+    "duplicateFailed": "Não foi possível duplicar a assinatura"
   },
   "templates": {
     "title": "Modelos de e-mail",
