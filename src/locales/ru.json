@@ -75,7 +75,12 @@
       "settings": "Настройки аккаунта…"
     },
     "collapseAccount": "Свернуть аккаунт",
-    "expandAccount": "Развернуть аккаунт"
+    "expandAccount": "Развернуть аккаунт",
+    "ownFolders": "Папки",
+    "flagColors": "Цвета",
+    "showCategories": "Показать категории",
+    "hideCategories": "Скрыть категории",
+    "tools": { "tasks": "Задачи", "calendar": "Календарь", "attachments": "Вложения", "check": "Проверка" }
   },
   "attachments": {
     "search": "Поиск вложений...",
@@ -903,6 +908,8 @@
     "emptiedMessage_other": "{{count}} писем было удалено.",
     "deleteFolder": "Удалить папку",
     "deleteFolderConfirm": "Точно удалить \"{{name}}\"? Все письма в этой папке будут удалены навсегда.",
+    "searchFolders": "Поиск папки",
+    "noFolderFound": "Папка не найдена",
     "cannotMove": "Нельзя переместить",
     "cannotMoveDesc": "Письма можно перемещать только между папками одного аккаунта.",
     "moveFailed": "Не удалось переместить",

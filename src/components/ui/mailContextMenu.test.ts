@@ -229,6 +229,20 @@ describe("MailContextMenu move to folder", () => {
     act(() => item("folder.types.sent")!.click());
     expect(moved).toEqual(["f-sent"]);
   });
+
+  const menuLabels = () =>
+    Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).map((b) => b.textContent?.trim());
+
+  it("lists the move directly below reply and forward", () => {
+    render({ onMove: noop, moveFolders: FOLDERS });
+    const labels = menuLabels();
+    expect(labels.indexOf(i18n.t("rules.moveToFolder"))).toBe(labels.indexOf(i18n.t("mailDetail.forward")) + 1);
+  });
+
+  it("lists the move first for a selection", () => {
+    render({ selectedCount: 2, onBulkAction: noop, onBulkMove: noop, moveFolders: FOLDERS });
+    expect(menuLabels()[0]).toBe(i18n.t("rules.moveToFolder"));
+  });
 });
 
 describe("MailContextMenu team assignment", () => {

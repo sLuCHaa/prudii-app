@@ -75,7 +75,12 @@
       "settings": "Account settings…"
     },
     "collapseAccount": "Collapse account",
-    "expandAccount": "Expand account"
+    "expandAccount": "Expand account",
+    "ownFolders": "Folders",
+    "flagColors": "Colors",
+    "showCategories": "Show categories",
+    "hideCategories": "Hide categories",
+    "tools": { "tasks": "Tasks", "calendar": "Calendar", "attachments": "Files", "check": "Check" }
   },
   "attachments": {
     "search": "Search attachments...",
@@ -887,6 +892,8 @@
     "emptiedMessage_other": "{{count}} emails were deleted.",
     "deleteFolder": "Delete Folder",
     "deleteFolderConfirm": "Are you sure you want to delete \"{{name}}\"? All emails in this folder will be permanently deleted.",
+    "searchFolders": "Search folders",
+    "noFolderFound": "No folder found",
     "cannotMove": "Cannot Move",
     "cannotMoveDesc": "Mails can only be moved between folders of the same account.",
     "moveFailed": "Move Failed",

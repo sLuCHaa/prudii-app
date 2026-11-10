@@ -75,7 +75,12 @@
       "settings": "Definições da conta…"
     },
     "collapseAccount": "Recolher conta",
-    "expandAccount": "Expandir conta"
+    "expandAccount": "Expandir conta",
+    "ownFolders": "Pastas",
+    "flagColors": "Cores",
+    "showCategories": "Mostrar categorias",
+    "hideCategories": "Ocultar categorias",
+    "tools": { "tasks": "Tarefas", "calendar": "Calendário", "attachments": "Anexos", "check": "Revisão" }
   },
   "attachments": {
     "search": "Pesquisar anexos...",
@@ -887,6 +892,8 @@
     "emptiedMessage_other": "{{count}} emails foram excluídos.",
     "deleteFolder": "Excluir Pasta",
     "deleteFolderConfirm": "Tem certeza de que deseja excluir \"{{name}}\"? Todos os emails nesta pasta serão excluídos permanentemente.",
+    "searchFolders": "Procurar pasta",
+    "noFolderFound": "Nenhuma pasta encontrada",
     "cannotMove": "Não é Possível Mover",
     "cannotMoveDesc": "Emails só podem ser movidos entre pastas da mesma conta.",
     "moveFailed": "Falha ao Mover",

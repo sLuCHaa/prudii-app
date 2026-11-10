@@ -1,8 +1,7 @@
 import { Fragment, useEffect, useState, useRef } from "react";
 import { CategorySidebarEntries } from "../categories/CategorySidebarEntries";
 import { createPortal } from "react-dom";
-import { FileText, AlertOctagon, Folder, Plus, ChevronDown, ChevronRight, FolderPlus, Download, Pencil, HardDrive, Cloud, X, Check, Clock, CalendarClock, PanelLeftClose, PanelLeftOpen, AlertCircle, Palette, RefreshCw, RotateCcw, Settings, ClipboardList, UserCheck, CalendarDays, Archive, Paperclip, Flag, Inbox, Send, Shield, Star, StarIcon, Trash2, TrashIcon } from "../icons";
-import { useTodayCount } from "../../hooks/useCalendar";
+import { FileText, AlertOctagon, Folder, Plus, ChevronDown, ChevronRight, FolderPlus, Download, Pencil, HardDrive, Cloud, X, Check, Clock, CalendarClock, PanelLeftClose, PanelLeftOpen, AlertCircle, Palette, RefreshCw, RotateCcw, Settings, UserCheck, Archive, Flag, Inbox, Send, Star, StarIcon, Trash2, TrashIcon } from "../icons";
 import gsap from "gsap";
 import { prefersReducedMotion } from "../motion/tokens";
 import { DROP_FLIGHT_MS, noteDropTarget } from "../motion/dropFlight";
@@ -11,13 +10,11 @@ import { useAccounts, useFolders, prefetchFolderMails } from "../../hooks/useAcc
 import { parseMailSort } from "../../lib/mailSort";
 import { useSyncAccount, useSyncAll } from "../../hooks/useSync";
 import { useRemoveAccount } from "../../hooks/useRemoveAccount";
-import { useOpenTaskCount } from "../../hooks/useTasks";
 import { useTeamSnapshot, useTeamAssignments } from "../../hooks/useTeam";
 import { holdUntilMoved, invalidateMailListQueries } from "../../lib/mailQueries";
 import { cleanupCount, formatCleanupCount, isCleanupFolder } from "../../lib/cleanupCount";
 import { openAssignedTo } from "../../lib/team";
 import { TeamSection } from "./TeamSection";
-import { CreateTaskFromMail } from "../tasks/CreateTaskFromMail";
 import { ComposeButton } from "../compose/ComposeButton";
 import { ThemeToggle } from "../ui/ThemeToggle";
 import { AnimatedSyncButton } from "../ui/AnimatedSyncButton";
@@ -42,6 +39,9 @@ import { lineChip, linePercentShown, lineSegments, type LineSegment } from "../.
 import { SyncLineContext, useSyncLine, useSyncLineSource } from "../../hooks/useSyncLine";
 import { isMailDrag, readMailDrag } from "../../lib/mailDrag";
 import { Tooltip } from "../ui/Tooltip";
+import { SidebarTools } from "./SidebarTools";
+import { accountCategoriesStartOpen, categoriesFoldKey, isFoldOpen, ownFoldersFoldKey, splitFolders } from "../../lib/sidebarFolds";
+import { visibleCategories } from "../../lib/categories";
 
 // Throttles on-demand syncs of Gmail's "All Mail" archive folder (excluded from
 // routine sync) so opening it repeatedly doesn't re-trigger a full folder sync.
@@ -339,6 +339,16 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
   const openAccountSettings = useAppStore((s) => s.openAccountSettings);
   const openMailExport = useAppStore((s) => s.openMailExport);
   const { data: folders } = useFolders(account.id);
+  const { standard: standardFolders, own: ownFolders } = splitFolders(folders ?? []);
+  const accountCount = useAppStore((s) => s.accounts.length);
+  const sidebarFolds = useAppStore((s) => s.sidebarFolds);
+  const toggleSidebarFold = useAppStore((s) => s.toggleSidebarFold);
+  const ownFoldKey = ownFoldersFoldKey(account.id);
+  const ownOpen = isFoldOpen(sidebarFolds, ownFoldKey, true);
+  const categoriesKey = categoriesFoldKey(account.id);
+  const categoriesStartOpen = accountCategoriesStartOpen(accountCount);
+  const categoriesOpen = isFoldOpen(sidebarFolds, categoriesKey, categoriesStartOpen);
+  const hasCategories = appSettings.sorting_enabled && visibleCategories(appSettings.hidden_categories).length > 0;
   const syncMutation = useSyncAccount();
   const removeAccount = useRemoveAccount();
   const queryClient = useQueryClient();
@@ -731,6 +741,121 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
     );
   }
 
+  const renderFolder = (folder: FolderT) => {
+    const leftover = cleanupCount(folder, appSettings.show_cleanup_counts);
+    const emptyLabel = folder.folder_type === "trash" ? t("folder.emptyTrash") : t("folder.emptySpam");
+    const foldsCategories = folder.folder_type === "inbox" && hasCategories;
+    return (
+    <Fragment key={folder.id}>
+    {renamingFolder?.id === folder.id ? (
+      <div className="flex items-center gap-1 px-1">
+        <input
+          type="text"
+          value={renameValue}
+          onChange={(e) => setRenameValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleRename();
+            if (e.key === "Escape") { setRenamingFolder(null); setRenameValue(""); }
+          }}
+          autoFocus
+          className="flex-1 px-2 py-0.5 rounded border border-accent bg-bg-secondary text-text text-sm"
+        />
+        <button onClick={handleRename} className="p-1 text-success hover:bg-hover rounded">
+          <Check className="w-3.5 h-3.5" />
+        </button>
+        <button onClick={() => { setRenamingFolder(null); setRenameValue(""); }} className="p-1 text-text-tertiary hover:bg-hover rounded">
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    ) : (
+      <div className="relative">
+      <CardButton
+        ref={(el) => setFolderRef(folder.id, el)}
+        selected={selectedFolderId === folder.id && !activeCategory}
+        onClick={() => handleFolderOpen(folder)}
+        onMouseEnter={() => warmFolder(folder.id)}
+        onMouseLeave={coolFolder}
+        onContextMenu={(e) => handleFolderContextMenu(e, folder)}
+        onDragOver={(e) => handleDragOver(e, folder)}
+        onDragLeave={(e) => handleDragLeave(e, folder)}
+        onDrop={(e) => handleDrop(e, folder)}
+        className={`rounded-md text-sm py-1 px-2 ${
+          dragOverFolderId === folder.id
+            ? "bg-accent/20 ring-2 ring-accent ring-inset text-accent folder-drop-target"
+            : ""
+        }`}
+        leading={
+          <span
+            className={`flex items-center justify-center w-6 h-6 rounded-full transition-colors ${
+              folder.color ? "text-white" : ""
+            }`}
+            style={folder.color ? {
+              backgroundColor: FOLDER_COLORS.find(c => c.id === folder.color)?.bg || folder.color
+            } : undefined}
+          >
+            {FOLDER_ICONS[folder.folder_type as FolderType] || FOLDER_ICONS.custom}
+          </span>
+        }
+        trailing={
+          <>
+            {folder.is_local && (
+              <span title={t("folder.localFolder")}>
+                <HardDrive className="w-3 h-3 text-text-tertiary" />
+              </span>
+            )}
+            {showsUnread(folder) && (
+              <UnreadBadge count={folder.unread_count} />
+            )}
+            {leftover > 0 && (
+              <span className="inline-flex items-center gap-1 align-middle">
+                <span className="text-[11px] font-semibold tabular-nums leading-4 text-text-secondary bg-bg-tertiary rounded-full px-1.5">
+                  {formatCleanupCount(leftover, i18n.language)}
+                </span>
+                {/* Room for the empty button, which sits over the row as its own button. */}
+                <span className="inline-block w-5 h-5" aria-hidden="true" />
+              </span>
+            )}
+            {foldsCategories && <span className="inline-block w-5 h-5" aria-hidden="true" />}
+          </>
+        }
+      >
+        {t(`folder.types.${folder.folder_type}`, { defaultValue: folder.name })}
+      </CardButton>
+      {foldsCategories && (
+        <FoldToggle
+          open={categoriesOpen}
+          onToggle={() => toggleSidebarFold(categoriesKey, categoriesStartOpen)}
+          label={t(categoriesOpen ? "sidebar.hideCategories" : "sidebar.showCategories")}
+          className="right-2"
+        />
+      )}
+      {leftover > 0 && (
+        <button
+          type="button"
+          onClick={() => void emptyFolder(folder)}
+          onDragOver={(e) => handleDragOver(e, folder)}
+          onDragLeave={(e) => handleDragLeave(e, folder)}
+          onDrop={(e) => handleDrop(e, folder)}
+          title={emptyLabel}
+          aria-label={emptyLabel}
+          className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded text-text-tertiary hover:text-danger hover:bg-danger/10 focus-visible:text-danger transition-colors"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      )}
+      </div>
+    )}
+    {foldsCategories && (
+      <Collapse open={categoriesOpen} className="-mx-px">
+        <div className="px-px pb-1">
+          <CategorySidebarEntries inboxFolderId={folder.id} accountId={account.id} />
+        </div>
+      </Collapse>
+    )}
+    </Fragment>
+    );
+  };
+
   return (
     <div className="mb-3">
       <div
@@ -804,104 +929,24 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
 
       <Collapse open={!!(expanded && folders)}>
         <div className="mt-0.5 space-y-0.5 px-px pb-1">
-          {(folders ?? []).map((folder) => {
-            const leftover = cleanupCount(folder, appSettings.show_cleanup_counts);
-            const emptyLabel = folder.folder_type === "trash" ? t("folder.emptyTrash") : t("folder.emptySpam");
-            return (
-            <Fragment key={folder.id}>
-            {renamingFolder?.id === folder.id ? (
-              <div className="flex items-center gap-1 px-1">
-                <input
-                  type="text"
-                  value={renameValue}
-                  onChange={(e) => setRenameValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleRename();
-                    if (e.key === "Escape") { setRenamingFolder(null); setRenameValue(""); }
-                  }}
-                  autoFocus
-                  className="flex-1 px-2 py-0.5 rounded border border-accent bg-bg-secondary text-text text-sm"
-                />
-                <button onClick={handleRename} className="p-1 text-success hover:bg-hover rounded">
-                  <Check className="w-3.5 h-3.5" />
-                </button>
-                <button onClick={() => { setRenamingFolder(null); setRenameValue(""); }} className="p-1 text-text-tertiary hover:bg-hover rounded">
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ) : (
-              <div className="relative">
-              <CardButton
-                ref={(el) => setFolderRef(folder.id, el)}
-                selected={selectedFolderId === folder.id && !activeCategory}
-                onClick={() => handleFolderOpen(folder)}
-                onMouseEnter={() => warmFolder(folder.id)}
-                onMouseLeave={coolFolder}
-                onContextMenu={(e) => handleFolderContextMenu(e, folder)}
-                onDragOver={(e) => handleDragOver(e, folder)}
-                onDragLeave={(e) => handleDragLeave(e, folder)}
-                onDrop={(e) => handleDrop(e, folder)}
-                className={`rounded-md text-sm py-1 px-2 ${
-                  dragOverFolderId === folder.id
-                    ? "bg-accent/20 ring-2 ring-accent ring-inset text-accent folder-drop-target"
-                    : ""
-                }`}
-                leading={
-                  <span
-                    className={`flex items-center justify-center w-6 h-6 rounded-full transition-colors ${
-                      folder.color ? "text-white" : ""
-                    }`}
-                    style={folder.color ? {
-                      backgroundColor: FOLDER_COLORS.find(c => c.id === folder.color)?.bg || folder.color
-                    } : undefined}
-                  >
-                    {FOLDER_ICONS[folder.folder_type as FolderType] || FOLDER_ICONS.custom}
-                  </span>
-                }
-                trailing={
-                  <>
-                    {folder.is_local && (
-                      <span title={t("folder.localFolder")}>
-                        <HardDrive className="w-3 h-3 text-text-tertiary" />
-                      </span>
-                    )}
-                    {showsUnread(folder) && (
-                      <UnreadBadge count={folder.unread_count} />
-                    )}
-                    {leftover > 0 && (
-                      <span className="inline-flex items-center gap-1 align-middle">
-                        <span className="text-[11px] font-semibold tabular-nums leading-4 text-text-secondary bg-bg-tertiary rounded-full px-1.5">
-                          {formatCleanupCount(leftover, i18n.language)}
-                        </span>
-                        {/* Room for the empty button, which sits over the row as its own button. */}
-                        <span className="inline-block w-5 h-5" aria-hidden="true" />
-                      </span>
-                    )}
-                  </>
-                }
+          {standardFolders.map(renderFolder)}
+          {ownFolders.length > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={() => toggleSidebarFold(ownFoldKey, true)}
+                onDragEnter={(e) => { if (!ownOpen && isMailDrag(e.dataTransfer)) toggleSidebarFold(ownFoldKey, true); }}
+                aria-expanded={ownOpen}
+                className="flex items-center gap-1.5 w-full px-2 pt-2 pb-1 rounded-md text-[11px] font-semibold uppercase tracking-wider text-text-tertiary hover:text-text-secondary transition-colors"
               >
-                {t(`folder.types.${folder.folder_type}`, { defaultValue: folder.name })}
-              </CardButton>
-              {leftover > 0 && (
-                <button
-                  type="button"
-                  onClick={() => void emptyFolder(folder)}
-                  onDragOver={(e) => handleDragOver(e, folder)}
-                  onDragLeave={(e) => handleDragLeave(e, folder)}
-                  onDrop={(e) => handleDrop(e, folder)}
-                  title={emptyLabel}
-                  aria-label={emptyLabel}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded text-text-tertiary hover:text-danger hover:bg-danger/10 focus-visible:text-danger transition-colors"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              )}
-              </div>
-            )}
-            {folder.folder_type === "inbox" && <CategorySidebarEntries inboxFolderId={folder.id} accountId={account.id} />}
-            </Fragment>
-            );
-          })}
+                <ChevronRight className={`w-3 h-3 shrink-0 transition-transform duration-200 ${ownOpen ? "rotate-90" : ""}`} />
+                {t("sidebar.ownFolders")}
+              </button>
+              <Collapse open={ownOpen} className="-mx-px">
+                <div className="space-y-0.5 px-px pb-1 pl-3">{ownFolders.map(renderFolder)}</div>
+              </Collapse>
+            </>
+          )}
         </div>
       </Collapse>
 
@@ -1110,6 +1155,38 @@ function CombinedFoldersSection({ collapsed }: { collapsed: boolean }) {
   );
 }
 
+function FoldToggle({ open, onToggle, label, className = "" }: { open: boolean; onToggle: () => void; label: string; className?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onToggle(); }}
+      aria-expanded={open}
+      aria-label={label}
+      title={label}
+      className={`absolute top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded text-text-tertiary hover:text-text hover:bg-hover transition-colors ${className}`}
+    >
+      <ChevronRight className={`w-3 h-3 transition-transform duration-200 ${open ? "rotate-90" : ""}`} />
+    </button>
+  );
+}
+
+function RailButton({ label, icon, isActive, count, onClick }: { label: string; icon: React.ReactNode; isActive: boolean; count?: number; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`relative flex items-center justify-center w-full py-1 rounded-md transition-colors ${
+        isActive ? "folder-active" : "text-text-secondary hover:bg-hover"
+      }`}
+      title={label}
+    >
+      {icon}
+      {count !== undefined && count > 0 && (
+        <span className="absolute top-0.5 right-1.5 w-1.5 h-1.5 rounded-full bg-accent" />
+      )}
+    </button>
+  );
+}
+
 function ViewsSection({ collapsed }: { collapsed: boolean }) {
   const { t } = useTranslation();
   const activeFilter = useAppStore((s) => s.activeFilter);
@@ -1121,49 +1198,19 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
   const setShowSnoozed = useAppStore((s) => s.setShowSnoozed);
   const showScheduled = useAppStore((s) => s.showScheduled);
   const setShowScheduled = useAppStore((s) => s.setShowScheduled);
-  const showAttachmentBrowser = useAppStore((s) => s.showAttachmentBrowser);
-  const setShowAttachmentBrowser = useAppStore((s) => s.setShowAttachmentBrowser);
-  const showMailboxCheck = useAppStore((s) => s.showMailboxCheck);
-  const setShowMailboxCheck = useAppStore((s) => s.setShowMailboxCheck);
-  const showTasks = useAppStore((s) => s.showTasks);
-  const setShowTasks = useAppStore((s) => s.setShowTasks);
-  const showCalendar = useAppStore((s) => s.showCalendar);
-  const setShowCalendar = useAppStore((s) => s.setShowCalendar);
-  const { data: todayCount = 0 } = useTodayCount();
   const accounts = useAppStore((s) => s.accounts);
-  const { data: openTaskCount = 0 } = useOpenTaskCount();
   const showAssigned = useAppStore((s) => s.showAssigned);
   const setShowAssigned = useAppStore((s) => s.setShowAssigned);
+  const sortingEnabled = useAppStore((s) => s.appSettings.sorting_enabled);
+  const hiddenCategories = useAppStore((s) => s.appSettings.hidden_categories);
+  const sidebarFolds = useAppStore((s) => s.sidebarFolds);
+  const toggleSidebarFold = useAppStore((s) => s.toggleSidebarFold);
   const { snapshot } = useTeamSnapshot();
   const assignments = useTeamAssignments(!!snapshot);
   const assignedCount = snapshot ? openAssignedTo(assignments, snapshot.team.me).length : 0;
-  const [taskFromMailId, setTaskFromMailId] = useState<string | null>(null);
 
   const [snoozedCount, setSnoozedCount] = useState(0);
   const [scheduledCount, setScheduledCount] = useState(0);
-  const [tasksDropActive, setTasksDropActive] = useState(false);
-
-  function handleTasksDragOver(e: React.DragEvent) {
-    if (!isMailDrag(e.dataTransfer)) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "copy";
-    if (!tasksDropActive) setTasksDropActive(true);
-  }
-
-  // Only clear once the pointer actually leaves the entry — dragleave also
-  // fires when moving over a child element (icon/badge), same as folders.
-  function handleTasksDragLeave(e: React.DragEvent) {
-    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
-    setTasksDropActive(false);
-  }
-
-  function handleTasksDrop(e: React.DragEvent) {
-    if (!isMailDrag(e.dataTransfer)) return;
-    e.preventDefault();
-    setTasksDropActive(false);
-    const dragged = readMailDrag(e.dataTransfer);
-    if (dragged) setTaskFromMailId(dragged.mailId);
-  }
 
   useEffect(() => {
     countSnoozedMails().then(setSnoozedCount).catch((e) => console.error("[countSnoozedMails]", e));
@@ -1186,10 +1233,6 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
     isActive: boolean;
     count?: number;
     show?: boolean;
-    onDragOver?: (e: React.DragEvent) => void;
-    onDragLeave?: (e: React.DragEvent) => void;
-    onDrop?: (e: React.DragEvent) => void;
-    dropActive?: boolean;
   }[] = [
     {
       id: "all-inboxes",
@@ -1232,84 +1275,34 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
       count: assignedCount,
       show: !!snapshot,
     },
-    {
-      id: "tasks",
-      label: t("sidebar.tasks"),
-      icon: <ClipboardList className="w-4 h-4" />,
-      onClick: () => setShowTasks(!showTasks),
-      isActive: showTasks,
-      count: openTaskCount,
-      show: true,
-      onDragOver: handleTasksDragOver,
-      onDragLeave: handleTasksDragLeave,
-      onDrop: handleTasksDrop,
-      dropActive: tasksDropActive,
-    },
-    {
-      id: "calendar",
-      label: t("sidebar.calendar"),
-      icon: <CalendarDays className="w-4 h-4" />,
-      onClick: () => setShowCalendar(!showCalendar),
-      isActive: showCalendar,
-      count: todayCount,
-      show: true,
-    },
-    {
-      id: "attachments",
-      label: t("sidebar.attachments"),
-      icon: <Paperclip className="w-4 h-4" />,
-      onClick: () => setShowAttachmentBrowser(!showAttachmentBrowser),
-      isActive: showAttachmentBrowser,
-      show: true,
-    },
-    {
-      id: "check",
-      label: t("sidebar.mailboxCheck"),
-      icon: <Shield className="w-4 h-4" />,
-      onClick: () => setShowMailboxCheck(!showMailboxCheck),
-      isActive: showMailboxCheck,
-      show: true,
-    },
-    ...Object.entries(MAIL_FLAG_COLORS).map(([flag, { bg, nameKey }]) => ({
-      id: flag,
-      label: t(nameKey),
-      icon: <Flag className="w-4 h-4" style={{ color: bg, fill: bg }} />,
-      onClick: () => setActiveFilter(activeFilter === flag ? null : flag as MailFlag),
-      isActive: activeFilter === flag,
-      show: true,
-    })),
   ].filter(v => v.show !== false);
+
+  const flags = Object.entries(MAIL_FLAG_COLORS) as [MailFlag, (typeof MAIL_FLAG_COLORS)[MailFlag]][];
+  const toggleFlag = (flag: MailFlag) => setActiveFilter(activeFilter === flag ? null : flag);
 
   if (collapsed) {
     return (
       <div className="mb-2 space-y-0.5">
         {views.map((view) => (
-          <button
-            key={view.id}
-            onClick={view.onClick}
-            onDragOver={view.onDragOver}
-            onDragLeave={view.onDragLeave}
-            onDrop={view.onDrop}
-            className={`relative flex items-center justify-center w-full py-1 rounded-md transition-colors ${
-              view.dropActive
-                ? "bg-accent/10 ring-1 ring-accent/40"
-                : view.isActive ? "folder-active" : "text-text-secondary hover:bg-hover"
-            }`}
-            title={view.dropActive ? t("tasks.dropToCreate") : view.label}
-          >
-            {view.icon}
-            {view.count !== undefined && view.count > 0 && (
-              <span className="absolute top-0.5 right-1.5 w-1.5 h-1.5 rounded-full bg-accent" />
-            )}
-          </button>
+          <RailButton key={view.id} label={view.label} icon={view.icon} isActive={view.isActive} count={view.count} onClick={view.onClick} />
         ))}
-
-        {taskFromMailId && (
-          <CreateTaskFromMail mailId={taskFromMailId} onDone={() => setTaskFromMailId(null)} />
-        )}
+        <SidebarTools rail />
+        {flags.map(([flag, { bg, nameKey }]) => (
+          <RailButton
+            key={flag}
+            label={t(nameKey)}
+            icon={<Flag className="w-4 h-4" style={{ color: bg, fill: bg }} />}
+            isActive={activeFilter === flag}
+            onClick={() => toggleFlag(flag)}
+          />
+        ))}
       </div>
     );
   }
+
+  const categoriesKey = categoriesFoldKey(null);
+  const categoriesOpen = isFoldOpen(sidebarFolds, categoriesKey, true);
+  const hasCategories = sortingEnabled && visibleCategories(hiddenCategories).length > 0;
 
   return (
     <div className="mb-3">
@@ -1322,35 +1315,70 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
       </div>
 
       <div className="mt-0.5 space-y-0.5">
-        {views.map((view) => (
-          <Fragment key={view.id}>
-          <button
-            onClick={view.onClick}
-            onDragOver={view.onDragOver}
-            onDragLeave={view.onDragLeave}
-            onDrop={view.onDrop}
-            title={view.dropActive ? t("tasks.dropToCreate") : undefined}
-            className={`flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm transition-colors ${
-              view.dropActive
-                ? "bg-accent/10 ring-1 ring-accent/40"
-                : view.isActive
-                ? "folder-active"
-                : "text-text-secondary hover:bg-hover hover:text-text"
-            }`}
-          >
-            <span className="shrink-0">{view.icon}</span>
-            <span className="flex-1 truncate text-left">{view.label}</span>
-            {view.count !== undefined && view.count > 0 && (
-              <UnreadBadge count={view.count} />
-            )}
-          </button>
-          {view.id === "all-inboxes" && <CategorySidebarEntries inboxFolderId={null} />}
-          </Fragment>
-        ))}
+        {views.map((view) => {
+          const foldsCategories = view.id === "all-inboxes" && hasCategories;
+          return (
+            <Fragment key={view.id}>
+              <div className="relative">
+                <button
+                  onClick={view.onClick}
+                  className={`flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm transition-colors ${foldsCategories ? "pr-9" : ""} ${
+                    view.isActive
+                      ? "folder-active"
+                      : "text-text-secondary hover:bg-hover hover:text-text"
+                  }`}
+                >
+                  <span className="shrink-0">{view.icon}</span>
+                  <span className="flex-1 truncate text-left">{view.label}</span>
+                  {view.count !== undefined && view.count > 0 && (
+                    <UnreadBadge count={view.count} />
+                  )}
+                </button>
+                {foldsCategories && (
+                  <FoldToggle
+                    open={categoriesOpen}
+                    onToggle={() => toggleSidebarFold(categoriesKey, true)}
+                    label={t(categoriesOpen ? "sidebar.hideCategories" : "sidebar.showCategories")}
+                    className="right-2"
+                  />
+                )}
+              </div>
+              {foldsCategories && (
+                <Collapse open={categoriesOpen} className="-mx-px">
+                  <div className="px-px pb-1">
+                    <CategorySidebarEntries inboxFolderId={null} />
+                  </div>
+                </Collapse>
+              )}
+            </Fragment>
+          );
+        })}
 
-        {taskFromMailId && (
-          <CreateTaskFromMail mailId={taskFromMailId} onDone={() => setTaskFromMailId(null)} />
-        )}
+        <div className="flex items-center gap-3 w-full px-3 py-1.5 text-sm text-text-secondary">
+          <span className="shrink-0"><Flag className="w-4 h-4" /></span>
+          <span className="flex-1 min-w-0 truncate">{t("sidebar.flagColors")}</span>
+          <span className="flex shrink-0">
+            {flags.map(([flag, { bg, nameKey }]) => {
+              const active = activeFilter === flag;
+              return (
+                <button
+                  key={flag}
+                  type="button"
+                  onClick={() => toggleFlag(flag)}
+                  aria-pressed={active}
+                  aria-label={t(nameKey)}
+                  title={t(nameKey)}
+                  className="group w-4 h-6 flex items-center justify-center"
+                >
+                  <span
+                    className={`w-2.5 h-2.5 rounded-full transition-transform ${active ? "" : "group-hover:scale-125"}`}
+                    style={{ backgroundColor: bg, outline: active ? `1.5px solid ${bg}` : undefined, outlineOffset: 1.5 }}
+                  />
+                </button>
+              );
+            })}
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -1521,6 +1549,8 @@ export function Sidebar() {
           </div>
         )}
       </Scroller>
+
+      <SidebarTools />
 
       <div className="p-3 border-t border-border">
         <MailExportProgress className="mb-3" />

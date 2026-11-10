@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useCallback, useState, useRef, useMemo, DragEvent } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { X, Mail as MailIcon, MailOpen, Check, Pin, Clock, CalendarClock, FileText, ShieldAlert, Folder, Archive, Paperclip, Inbox, MagnifierIcon, Send, Star, StarIcon, Trash2 } from "../icons";
+import { X, Mail as MailIcon, MailOpen, Check, Pin, Clock, CalendarClock, FileText, ShieldAlert, Folder, FolderInput, Archive, Paperclip, Inbox, MagnifierIcon, Send, Star, StarIcon, Trash2 } from "../icons";
 import { LightThread } from "../motion/LightThread";
 import { MailStripe } from "./MailStripe";
 import { StarToggleIcon } from "../motion/StarToggleIcon";
@@ -45,6 +45,7 @@ import { flyIntoDropTarget } from "../motion/dropFlight";
 import { keepRowsLeaving, withoutUnconfirmedMoves } from "../../lib/mailListSync";
 import { moveTargets } from "../../lib/moveTargets";
 import { ContextMenu } from "../ui/ContextMenu";
+import { FolderPicker, FOLDER_PICKER_WIDTH } from "../ui/FolderPicker";
 import { Tooltip } from "../ui/Tooltip";
 import { SNOOZE_PRESETS, toSnoozeStamp } from "../../lib/snooze";
 
@@ -463,6 +464,8 @@ interface VirtualMailListProps {
   isOutgoing: (mail: Mail) => boolean;
   snoozeMenuMailId: string | null;
   openSnoozeMenu: (e: React.MouseEvent, mail: Mail) => void;
+  moveMenuMailId: string | null;
+  openMoveMenu: (e: React.MouseEvent, mail: Mail) => void;
   hasNextPage: boolean | undefined;
   isFetchingNextPage: boolean;
   handleListScroll: (e: React.UIEvent<HTMLDivElement>) => void;
@@ -508,6 +511,8 @@ function VirtualMailList({
   isOutgoing,
   snoozeMenuMailId,
   openSnoozeMenu,
+  moveMenuMailId,
+  openMoveMenu,
   hasNextPage,
   isFetchingNextPage,
   handleListScroll,
@@ -1099,6 +1104,21 @@ function VirtualMailList({
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </Tooltip>
+                      <Tooltip label={t("rules.moveToFolder")}>
+                        <button
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openMoveMenu(e, mail);
+                          }}
+                          className={`w-7 h-7 rounded-md hover:bg-hover border border-border flex items-center justify-center text-text-secondary ${
+                            moveMenuMailId === mail.id ? "bg-hover" : "bg-surface"
+                          }`}
+                          aria-label={t("rules.moveToFolder")}
+                        >
+                          <FolderInput className="w-3.5 h-3.5" />
+                        </button>
+                      </Tooltip>
                       <Tooltip label={t("snooze.snooze")}>
                         <button
                           // Kept from the document-level mousedown that ContextMenu closes
@@ -1221,6 +1241,7 @@ export function MailList() {
   const setMailCategory = useSetMailCategory();
   const [contextMenu, setContextMenu] = useState<{ mail: Mail; x: number; y: number; bulk: boolean } | null>(null);
   const [snoozeMenu, setSnoozeMenu] = useState<{ mail: Mail; x: number; y: number } | null>(null);
+  const [moveMenu, setMoveMenu] = useState<{ mail: Mail; x: number; y: number } | null>(null);
   const [inboxZeroFlight, setInboxZeroFlight] = useState(false);
   const [draggingMail, setDraggingMail] = useState<Mail | null>(null);
   // Drag position lives in refs, written straight onto the preview node —
@@ -1582,6 +1603,23 @@ export function MailList() {
         : { mail, x: anchor.right - SNOOZE_MENU_WIDTH, y: anchor.bottom + 4 },
     );
   }, []);
+
+  const openMoveMenu = useCallback((e: React.MouseEvent, mail: Mail) => {
+    const anchor = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setMoveMenu((prev) =>
+      prev?.mail.id === mail.id
+        ? null
+        : { mail, x: anchor.right - FOLDER_PICKER_WIDTH, y: anchor.bottom + 4 },
+    );
+  }, []);
+  const pickerFoldersQuery = useFolders(moveMenu?.mail.account_id ?? null);
+  const pickerFolders = useMemo(
+    () => moveTargets(pickerFoldersQuery.data ?? [], moveMenu?.mail.folder_id ?? null),
+    [pickerFoldersQuery.data, moveMenu?.mail.folder_id]
+  );
+  const pickerAccountLabel = useAppStore(
+    (st) => st.accounts.find((a) => a.id === moveMenu?.mail.account_id)?.email,
+  );
 
   // Move targets for bulk move: only when all selected mails share one account.
   const selectedMailObjects = useMemo(
@@ -2297,6 +2335,8 @@ export function MailList() {
               isOutgoing={isOutgoing}
               snoozeMenuMailId={snoozeMenu?.mail.id ?? null}
               openSnoozeMenu={openSnoozeMenu}
+              moveMenuMailId={moveMenu?.mail.id ?? null}
+              openMoveMenu={openMoveMenu}
               hasNextPage={hasNextPage}
               isFetchingNextPage={isFetchingNextPage}
               handleListScroll={handleListScroll}
@@ -2345,6 +2385,17 @@ export function MailList() {
               });
             },
           }))}
+        />
+      )}
+
+      {moveMenu && (
+        <FolderPicker
+          folders={pickerFolders}
+          accountLabel={pickerAccountLabel}
+          x={moveMenu.x}
+          y={moveMenu.y}
+          onPick={(folderId) => handleMove(moveMenu.mail, folderId)}
+          onClose={() => setMoveMenu(null)}
         />
       )}
 

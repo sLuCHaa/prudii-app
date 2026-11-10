@@ -175,6 +175,15 @@ export function MailContextMenu({
     { kind: "item", id: "reply", label: t("mailDetail.reply"), icon: <Reply className="w-4 h-4" />, onSelect: () => onReply(mail) },
     { kind: "item", id: "replyAll", label: t("compose.replyAll"), icon: <ReplyAll className="w-4 h-4" />, onSelect: () => onReplyAll(mail) },
     { kind: "item", id: "forward", label: t("mailDetail.forward"), icon: <Forward className="w-4 h-4" />, onSelect: () => onForward(mail) },
+    ...(onMove && hasMoveTargets
+      ? [{
+          kind: "item" as const,
+          id: "move",
+          label: t("rules.moveToFolder"),
+          icon: <FolderInput className="w-4 h-4" />,
+          submenu: moveSubmenu((destFolderId) => onMove(mail, destFolderId)),
+        }]
+      : []),
     { kind: "separator" },
     { kind: "item", id: "createTask", label: t("tasks.createFromMail"), icon: <ClipboardList className="w-4 h-4" />, onSelect: () => onCreateTask(mail) },
     { kind: "item", id: "addToTask", label: t("tasks.addToTask"), icon: <ClipboardPlus className="w-4 h-4" />, onSelect: () => onAddToTask(mail) },
@@ -218,15 +227,6 @@ export function MailContextMenu({
     ...(onSnooze ? [{ kind: "item" as const, id: "snooze", label: t("snooze.snooze"), icon: <Clock className="w-4 h-4" />, submenu: snooze((until) => onSnooze(mail, until)) }] : []),
     ...(assignEntries.length > 0 ? [{ kind: "separator" as const }, ...assignEntries] : []),
     { kind: "separator" },
-    ...(onMove && hasMoveTargets
-      ? [{
-          kind: "item" as const,
-          id: "move",
-          label: t("rules.moveToFolder"),
-          icon: <FolderInput className="w-4 h-4" />,
-          submenu: moveSubmenu((destFolderId) => onMove(mail, destFolderId)),
-        }]
-      : []),
     { kind: "item", id: "archive", label: t("mailDetail.archive"), icon: <Archive className="w-4 h-4" />, onSelect: () => onArchive(mail) },
     { kind: "item", id: "trash", label: t("mailDetail.trash"), icon: <Trash2 className="w-4 h-4" />, danger: true, onSelect: () => onTrash(mail) },
   ];
@@ -234,6 +234,18 @@ export function MailContextMenu({
   const bulk: MenuEntry[] = [
     { kind: "header", label: `${selectedCount} ${t("mailList.selectedSuffix")}` },
     { kind: "separator" },
+    ...(onBulkMove && hasMoveTargets
+      ? [
+          {
+            kind: "item" as const,
+            id: "move",
+            label: t("rules.moveToFolder"),
+            icon: <FolderInput className="w-4 h-4" />,
+            submenu: moveSubmenu(onBulkMove),
+          },
+          { kind: "separator" as const },
+        ]
+      : []),
     { kind: "item", id: "markRead", label: t("mailDetail.markRead"), icon: <MailOpen className="w-4 h-4" />, onSelect: () => onBulkAction!("mark_read") },
     { kind: "item", id: "markUnread", label: t("mailDetail.markUnread"), icon: <MailIcon className="w-4 h-4" />, onSelect: () => onBulkAction!("mark_unread") },
     { kind: "separator" },
@@ -253,15 +265,6 @@ export function MailContextMenu({
         }]
       : []),
     ...(onBulkSnooze ? [{ kind: "item" as const, id: "snooze", label: t("snooze.snooze"), icon: <Clock className="w-4 h-4" />, submenu: snooze(onBulkSnooze) }] : []),
-    ...(onBulkMove && hasMoveTargets
-      ? [{
-          kind: "item" as const,
-          id: "move",
-          label: t("rules.moveToFolder"),
-          icon: <FolderInput className="w-4 h-4" />,
-          submenu: moveSubmenu(onBulkMove),
-        }]
-      : []),
     { kind: "separator" },
     { kind: "item", id: "archive", label: t("mailDetail.archive"), icon: <Archive className="w-4 h-4" />, onSelect: () => onBulkAction!("archive") },
     { kind: "item", id: "trash", label: t("mailDetail.trash"), icon: <Trash2 className="w-4 h-4" />, danger: true, onSelect: () => onBulkAction!("trash") },

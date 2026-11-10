@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { moveTargets } from "./moveTargets";
+import { matchFolders, moveTargets } from "./moveTargets";
 import type { Folder } from "../types";
 
 function folder(id: string, folder_type: Folder["folder_type"] = "custom", account_id = "a1"): Folder {
@@ -54,5 +54,38 @@ describe("moveTargets", () => {
     // Two accounts can both have an "Archive"; only the mail's own folder drops out.
     const folders = [folder("a1-archive", "archive", "a1"), folder("a2-archive", "archive", "a2")];
     expect(ids(moveTargets(folders, "a1-archive"))).toEqual(["a2-archive"]);
+  });
+});
+
+describe("matchFolders", () => {
+  const byName = (f: Folder) => f.name;
+  const folders = [folder("Angebote 2026"), folder("Aufträge"), folder("Planung"), folder("INBOX", "inbox")];
+
+  it("keeps every folder while nothing is typed", () => {
+    expect(matchFolders(folders, "", byName)).toBe(folders);
+    expect(matchFolders(folders, "   ", byName)).toBe(folders);
+  });
+
+  it("finds a folder by any part of its name, whatever the case", () => {
+    expect(ids(matchFolders(folders, "GEBO", byName))).toEqual(["Angebote 2026"]);
+  });
+
+  it("ignores umlauts and accents on both sides", () => {
+    expect(ids(matchFolders(folders, "auftrage", byName))).toEqual(["Aufträge"]);
+    expect(ids(matchFolders([folder("Auftrage")], "aufträge", byName))).toEqual(["Auftrage"]);
+  });
+
+  it("searches the label the user sees, not the server's name", () => {
+    const shown = (f: Folder) => (f.folder_type === "inbox" ? "Posteingang" : f.name);
+    expect(ids(matchFolders(folders, "post", shown))).toEqual(["INBOX"]);
+    expect(matchFolders(folders, "inbox", shown)).toEqual([]);
+  });
+
+  it("ignores spaces around what was typed", () => {
+    expect(ids(matchFolders(folders, "  plan ", byName))).toEqual(["Planung"]);
+  });
+
+  it("keeps the order of the folders", () => {
+    expect(ids(matchFolders(folders, "a", byName))).toEqual(["Angebote 2026", "Aufträge", "Planung"]);
   });
 });

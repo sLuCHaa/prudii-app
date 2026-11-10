@@ -75,7 +75,12 @@
       "settings": "Kontoeinstellungen…"
     },
     "collapseAccount": "Konto einklappen",
-    "expandAccount": "Konto ausklappen"
+    "expandAccount": "Konto ausklappen",
+    "ownFolders": "Ordner",
+    "flagColors": "Farben",
+    "showCategories": "Kategorien anzeigen",
+    "hideCategories": "Kategorien ausblenden",
+    "tools": { "tasks": "Aufgaben", "calendar": "Kalender", "attachments": "Anhänge", "check": "Check" }
   },
   "attachments": {
     "search": "Anhänge durchsuchen...",
@@ -887,6 +892,8 @@
     "emptiedMessage_other": "{{count}} E-Mails wurden gelöscht.",
     "deleteFolder": "Ordner löschen",
     "deleteFolderConfirm": "Möchtest du \"{{name}}\" wirklich löschen? Alle E-Mails in diesem Ordner werden unwiderruflich gelöscht.",
+    "searchFolders": "Ordner suchen",
+    "noFolderFound": "Kein Ordner gefunden",
     "cannotMove": "Verschieben nicht möglich",
     "cannotMoveDesc": "E-Mails können nur zwischen Ordnern desselben Kontos verschoben werden.",
     "moveFailed": "Verschieben fehlgeschlagen",

@@ -75,7 +75,12 @@
       "settings": "Ajustes de la cuenta…"
     },
     "collapseAccount": "Contraer cuenta",
-    "expandAccount": "Expandir cuenta"
+    "expandAccount": "Expandir cuenta",
+    "ownFolders": "Carpetas",
+    "flagColors": "Colores",
+    "showCategories": "Mostrar categorías",
+    "hideCategories": "Ocultar categorías",
+    "tools": { "tasks": "Tareas", "calendar": "Calendario", "attachments": "Adjuntos", "check": "Revisión" }
   },
   "attachments": {
     "search": "Buscar adjuntos...",
@@ -887,6 +892,8 @@
     "emptiedMessage_other": "Se eliminaron {{count}} correos.",
     "deleteFolder": "Eliminar carpeta",
     "deleteFolderConfirm": "¿Estás seguro de que quieres eliminar \"{{name}}\"? Todos los correos en esta carpeta se eliminarán permanentemente.",
+    "searchFolders": "Buscar carpeta",
+    "noFolderFound": "No se encontró ninguna carpeta",
     "cannotMove": "No se puede mover",
     "cannotMoveDesc": "Los correos solo se pueden mover entre carpetas de la misma cuenta.",
     "moveFailed": "Error al mover",

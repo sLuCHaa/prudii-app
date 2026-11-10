@@ -15,3 +15,12 @@ import type { Folder } from "../types";
 export function moveTargets(folders: Folder[], sourceFolderId: string | null): Folder[] {
   return folders.filter((f) => f.id !== sourceFolderId && f.folder_type !== "drafts");
 }
+
+const plain = (text: string) => text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+
+/** `labelOf` is the name as displayed: standard folders are shown translated, not by their server name. */
+export function matchFolders(folders: Folder[], typed: string, labelOf: (folder: Folder) => string): Folder[] {
+  const needle = plain(typed.trim());
+  if (!needle) return folders;
+  return folders.filter((f) => plain(labelOf(f)).includes(needle));
+}

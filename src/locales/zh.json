@@ -75,7 +75,12 @@
       "settings": "账户设置…"
     },
     "collapseAccount": "折叠账户",
-    "expandAccount": "展开账户"
+    "expandAccount": "展开账户",
+    "ownFolders": "文件夹",
+    "flagColors": "颜色",
+    "showCategories": "显示分类",
+    "hideCategories": "隐藏分类",
+    "tools": { "tasks": "任务", "calendar": "日历", "attachments": "附件", "check": "检查" }
   },
   "attachments": {
     "search": "搜索附件...",
@@ -886,6 +891,8 @@
     "emptiedMessage_other": "已删除 {{count}} 封邮件。",
     "deleteFolder": "删除文件夹",
     "deleteFolderConfirm": "确定要删除\"{{name}}\"吗？此文件夹中的所有邮件将被永久删除。",
+    "searchFolders": "搜索文件夹",
+    "noFolderFound": "未找到文件夹",
     "cannotMove": "无法移动",
     "cannotMoveDesc": "邮件只能在同一账户的文件夹之间移动。",
     "moveFailed": "移动失败",

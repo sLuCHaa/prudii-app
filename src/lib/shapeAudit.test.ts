@@ -130,7 +130,7 @@ describe("shape audit", () => {
 
   it("leaves room for the tile shadow inside collapsing folder lists", () => {
     const wrappers = sourceOf("layout/Sidebar.tsx").match(/<Collapse[^>]*>\s*<div className="[^"]*"/g) ?? [];
-    expect(wrappers).toHaveLength(3);
+    expect(wrappers).toHaveLength(6);
     expect(wrappers.filter((w) => !/\bpx-px\b/.test(w) || !/\bpb-1\b/.test(w))).toEqual([]);
   });
 

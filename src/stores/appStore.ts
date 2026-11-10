@@ -10,6 +10,7 @@ import type { MailSort } from "../lib/mailSort";
 import type { CalendarViewKind, EventDraft, EventEditorTarget } from "../types/calendar";
 import { isoDate } from "../lib/calendar/dates";
 import { REVEAL_WINDOW_MS } from "../lib/syncLine";
+import { SIDEBAR_FOLDS_KEY, readFolds, toggleFold, type SidebarFolds } from "../lib/sidebarFolds";
 
 export interface ComposeSnapshot {
   to: string[];
@@ -280,6 +281,8 @@ interface AppState {
   toggleSidebar: () => void;
   accountExpandedStates: Record<string, boolean>;
   toggleAccountExpanded: (accountId: string) => void;
+  sidebarFolds: SidebarFolds;
+  toggleSidebarFold: (key: string, openByDefault: boolean) => void;
 
   themeMode: ThemeMode;
   darkMode: boolean;
@@ -639,6 +642,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     const next = { ...state.accountExpandedStates, [accountId]: !current };
     localStorage.setItem("prudii-account-expanded", JSON.stringify(next));
     return { accountExpandedStates: next };
+  }),
+  sidebarFolds: (() => {
+    try { return readFolds(localStorage.getItem(SIDEBAR_FOLDS_KEY)); } catch { return {}; }
+  })(),
+  toggleSidebarFold: (key, openByDefault) => set((state) => {
+    const next = toggleFold(state.sidebarFolds, key, openByDefault);
+    storeValue(SIDEBAR_FOLDS_KEY, JSON.stringify(next));
+    return { sidebarFolds: next };
   }),
 
   themeMode: initialThemeMode,

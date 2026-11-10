@@ -75,7 +75,12 @@
       "settings": "Réglages du compte…"
     },
     "collapseAccount": "Réduire le compte",
-    "expandAccount": "Développer le compte"
+    "expandAccount": "Développer le compte",
+    "ownFolders": "Dossiers",
+    "flagColors": "Couleurs",
+    "showCategories": "Afficher les catégories",
+    "hideCategories": "Masquer les catégories",
+    "tools": { "tasks": "Tâches", "calendar": "Calendrier", "attachments": "Fichiers", "check": "Bilan" }
   },
   "attachments": {
     "search": "Rechercher des pièces jointes...",
@@ -887,6 +892,8 @@
     "emptiedMessage_other": "{{count}} emails ont été supprimés.",
     "deleteFolder": "Supprimer le dossier",
     "deleteFolderConfirm": "Es-tu sûr de vouloir supprimer \"{{name}}\" ? Tous les emails de ce dossier seront définitivement supprimés.",
+    "searchFolders": "Rechercher un dossier",
+    "noFolderFound": "Aucun dossier trouvé",
     "cannotMove": "Déplacement impossible",
     "cannotMoveDesc": "Les emails ne peuvent être déplacés qu'entre dossiers du même compte.",
     "moveFailed": "Échec du déplacement",
