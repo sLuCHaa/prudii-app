@@ -894,6 +894,10 @@
     "deleteFolder": "Supprimer le dossier",
     "deleteFolderConfirm": "Es-tu sûr de vouloir supprimer \"{{name}}\" ? Tous les emails de ce dossier seront définitivement supprimés.",
     "searchFolders": "Rechercher un dossier",
+    "copyTo": "Copier vers {{account}}",
+    "copyToOtherAccount": "Copier vers un autre compte",
+    "copied": "Copié vers {{folder}}",
+    "trashOriginal": "Mettre l’original à la corbeille",
     "noFolderFound": "Aucun dossier trouvé",
     "cannotMove": "Déplacement impossible",
     "cannotMoveDesc": "Les emails ne peuvent être déplacés qu'entre dossiers du même compte.",
@@ -1366,6 +1370,7 @@
     "markAllRead": "Échec du marquage de tout comme lu",
     "batchUpdate": "Action échouée",
     "move": "Échec du déplacement du courrier",
+    "copy": "Échec de la copie",
     "countFolderMails": "Impossible de charger le nombre de courriers — veuillez réessayer",
     "cause": {
       "network": "Connexion perdue",

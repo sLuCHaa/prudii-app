@@ -626,18 +626,11 @@ impl ImapClient {
         &mut self,
         mailbox: &str,
         flags: Option<&str>,
-        _date: Option<&str>,
+        date: Option<&str>,
         data: &[u8],
     ) -> Result<()> {
         let tag = self.next_tag();
-        let flags_part = flags.map(|f| format!(" {}", f)).unwrap_or_default();
-        let cmd = format!(
-            "{} APPEND {}{} {{{}}}\r\n",
-            tag,
-            quote(mailbox),
-            flags_part,
-            data.len()
-        );
+        let cmd = append_command(&tag, mailbox, flags, date, data.len());
         self.send_raw(cmd.as_bytes()).await?;
 
         // Wait for continuation
@@ -702,6 +695,13 @@ impl ImapClient {
 }
 
 /// Quote a string for IMAP (escapes \ and ")
+/// `date` is the internal date the server files the message under; without it the server takes the upload time.
+fn append_command(tag: &str, mailbox: &str, flags: Option<&str>, date: Option<&str>, size: usize) -> String {
+    let flags_part = flags.map(|f| format!(" {}", f)).unwrap_or_default();
+    let date_part = date.map(|d| format!(" \"{}\"", d)).unwrap_or_default();
+    format!("{} APPEND {}{}{} {{{}}}\r\n", tag, quote(mailbox), flags_part, date_part, size)
+}
+
 fn quote(s: &str) -> String {
     let escaped = s.replace('\\', "\\\\").replace('"', "\\\"");
     format!("\"{}\"", escaped)
@@ -911,6 +911,27 @@ mod tests {
     // Characterisation tests for the two hand-rolled wire parsers: they carry no
     // coverage of their own, so any rewrite of their prefix handling needs these
     // to prove the byte offsets still line up.
+
+    #[test]
+    fn append_command_names_only_the_mailbox_and_the_size_by_default() {
+        assert_eq!(append_command("A1", "Sent", None, None, 7), "A1 APPEND \"Sent\" {7}\r\n");
+    }
+
+    #[test]
+    fn append_command_carries_flags_and_the_original_date() {
+        assert_eq!(
+            append_command("A1", "Angebote", Some("(\\Seen)"), Some("23-Jul-2026 19:11:00 +0000"), 42),
+            "A1 APPEND \"Angebote\" (\\Seen) \"23-Jul-2026 19:11:00 +0000\" {42}\r\n"
+        );
+    }
+
+    #[test]
+    fn append_command_puts_the_date_right_after_the_mailbox_without_flags() {
+        assert_eq!(
+            append_command("A1", "Angebote", None, Some("03-Jul-2026 09:05:00 +0200"), 1),
+            "A1 APPEND \"Angebote\" \"03-Jul-2026 09:05:00 +0200\" {1}\r\n"
+        );
+    }
 
     #[test]
     fn parses_a_quoted_delimiter_and_name() {

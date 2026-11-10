@@ -43,7 +43,9 @@ import { playRowShifts, snapshotRows } from "../motion/rowShift";
 import { launchSubjectFly } from "../motion/subjectFly";
 import { flyIntoDropTarget } from "../motion/dropFlight";
 import { keepRowsLeaving, withoutUnconfirmedMoves } from "../../lib/mailListSync";
-import { moveTargets } from "../../lib/moveTargets";
+import { moveTargets, type CopyGroup } from "../../lib/moveTargets";
+import { useCopyGroups } from "../../hooks/useCopyGroups";
+import { copyToOtherAccount } from "../../lib/copyMail";
 import { ContextMenu } from "../ui/ContextMenu";
 import { FolderPicker, FOLDER_PICKER_WIDTH } from "../ui/FolderPicker";
 import { Tooltip } from "../ui/Tooltip";
@@ -1620,6 +1622,17 @@ export function MailList() {
   const pickerAccountLabel = useAppStore(
     (st) => st.accounts.find((a) => a.id === moveMenu?.mail.account_id)?.email,
   );
+  const pickerCopyGroups = useCopyGroups(moveMenu?.mail.account_id ?? null);
+
+  const handleCopy = useCallback((mail: Mail, destFolderId: string, groups: CopyGroup[]) => {
+    for (const group of groups) {
+      const dest = group.folders.find((f) => f.id === destFolderId);
+      if (dest) {
+        void copyToOtherAccount(queryClient, mail, dest, group.account);
+        return;
+      }
+    }
+  }, [queryClient]);
 
   // Move targets for bulk move: only when all selected mails share one account.
   const selectedMailObjects = useMemo(
@@ -1656,6 +1669,7 @@ export function MailList() {
   const menuAccountLabel = useAppStore(
     (st) => st.accounts.find((a) => a.id === menuMail?.account_id)?.email,
   );
+  const menuCopyGroups = useCopyGroups(menuMail?.account_id ?? null);
 
   const handleMove = useCallback((mail: Mail, destFolderId: string) => {
     // Same exit as archive and delete: the row sweeps out before the refetch.
@@ -2392,9 +2406,14 @@ export function MailList() {
         <FolderPicker
           folders={pickerFolders}
           accountLabel={pickerAccountLabel}
+          groups={pickerCopyGroups.map((g) => ({ label: t("folder.copyTo", { account: g.account.email }), folders: g.folders }))}
           x={moveMenu.x}
           y={moveMenu.y}
-          onPick={(folderId) => handleMove(moveMenu.mail, folderId)}
+          onPick={(folderId) =>
+            pickerFolders.some((f) => f.id === folderId)
+              ? handleMove(moveMenu.mail, folderId)
+              : handleCopy(moveMenu.mail, folderId, pickerCopyGroups)
+          }
           onClose={() => setMoveMenu(null)}
         />
       )}
@@ -2484,6 +2503,8 @@ export function MailList() {
           onMove={contextMenu.bulk ? undefined : handleMove}
           moveFolders={contextMenu.bulk ? bulkMoveFolders : menuMoveFolders}
           moveAccountLabel={contextMenu.bulk ? undefined : menuAccountLabel}
+          onCopy={contextMenu.bulk ? undefined : (m, destFolderId) => handleCopy(m, destFolderId, menuCopyGroups)}
+          copyGroups={contextMenu.bulk ? undefined : menuCopyGroups.map((g) => ({ label: g.account.email, folders: g.folders }))}
           teamMembers={contextMenu.bulk || !contextMenu.mail.message_id ? undefined : teamSnapshot?.members}
           meId={teamSnapshot?.team.me}
           assignment={assignmentsByMessageId.get(contextMenu.mail.message_id) ?? null}

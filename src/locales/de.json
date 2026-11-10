@@ -894,6 +894,10 @@
     "deleteFolder": "Ordner löschen",
     "deleteFolderConfirm": "Möchtest du \"{{name}}\" wirklich löschen? Alle E-Mails in diesem Ordner werden unwiderruflich gelöscht.",
     "searchFolders": "Ordner suchen",
+    "copyTo": "Kopieren nach {{account}}",
+    "copyToOtherAccount": "In anderes Konto kopieren",
+    "copied": "Kopiert nach {{folder}}",
+    "trashOriginal": "Original in den Papierkorb",
     "noFolderFound": "Kein Ordner gefunden",
     "cannotMove": "Verschieben nicht möglich",
     "cannotMoveDesc": "E-Mails können nur zwischen Ordnern desselben Kontos verschoben werden.",
@@ -1366,6 +1370,7 @@
     "markAllRead": "Alle als gelesen markieren fehlgeschlagen",
     "batchUpdate": "Aktion fehlgeschlagen",
     "move": "Verschieben fehlgeschlagen",
+    "copy": "Kopieren fehlgeschlagen",
     "countFolderMails": "Mail-Anzahl konnte nicht geladen werden — bitte erneut versuchen",
     "cause": {
       "network": "Verbindung verloren",

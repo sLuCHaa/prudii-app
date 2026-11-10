@@ -2136,11 +2136,19 @@ pub async fn empty_folder_on_server(
 }
 
 /// Append a message (draft) to a folder on the IMAP server.
+/// A stored mail date in the form APPEND takes as internal date, e.g. `23-Jul-2026 19:11:00 +0000`.
+pub fn internal_date(stored: &str) -> Option<String> {
+    chrono::DateTime::parse_from_rfc3339(stored)
+        .ok()
+        .map(|date| date.format("%d-%b-%Y %H:%M:%S %z").to_string())
+}
+
 pub async fn append_to_folder(
     session: &mut ImapSession,
     folder_path: &str,
     message: &[u8],
     flags: &[&str],
+    internal_date: Option<&str>,
 ) -> Result<()> {
     let flags_str = if flags.is_empty() {
         None
@@ -2148,10 +2156,31 @@ pub async fn append_to_folder(
         Some(format!("({})", flags.join(" ")))
     };
 
-    session.append(folder_path, flags_str.as_deref(), None, message).await
+    session.append(folder_path, flags_str.as_deref(), internal_date, message).await
         .context(format!("Failed to append message to {}", folder_path))?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod internal_date_tests {
+    use super::internal_date;
+
+    #[test]
+    fn writes_a_stored_date_the_way_append_expects_it() {
+        assert_eq!(internal_date("2026-07-23T19:11:00Z").as_deref(), Some("23-Jul-2026 19:11:00 +0000"));
+    }
+
+    #[test]
+    fn keeps_the_offset_and_pads_the_day() {
+        assert_eq!(internal_date("2026-07-03T09:05:00+02:00").as_deref(), Some("03-Jul-2026 09:05:00 +0200"));
+    }
+
+    #[test]
+    fn has_no_date_for_text_that_is_not_one() {
+        assert_eq!(internal_date(""), None);
+        assert_eq!(internal_date("gestern"), None);
+    }
 }
 
 #[cfg(test)]

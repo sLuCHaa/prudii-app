@@ -1098,6 +1098,7 @@ pub fn run() {
             commands::mails::mark_as_read,
             commands::mails::trash_mail,
             commands::mails::move_mail,
+            commands::mails::copy_mail_to_folder,
             commands::mails::archive_mail,
             commands::mails::get_thread_mails,
             commands::mails::set_mail_flags,

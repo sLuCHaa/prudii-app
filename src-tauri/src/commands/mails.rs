@@ -2219,6 +2219,95 @@ fn move_mail_locally(db: &Database, mail_id: &str, dest_folder_id: &str) -> Resu
     Ok(())
 }
 
+pub(crate) const COPY_NEEDS_SERVER_FOLDER: &str = "A mail can only be copied into a server folder of another account.";
+pub(crate) const COPY_TARGET_UNSUPPORTED: &str = "Copying into this kind of account is not supported yet.";
+
+#[derive(Debug, PartialEq)]
+pub(crate) struct CopyPlan {
+    pub dest_account_id: String,
+    pub dest_path: String,
+    pub flags: Vec<&'static str>,
+    pub internal_date: Option<String>,
+}
+
+/// Checked before anything is fetched or sent, so a refused copy costs no round trip.
+pub(crate) fn copy_plan(db: &Database, mail_id: &str, dest_folder_id: &str) -> Result<CopyPlan, String> {
+    let conn = db.lock_db();
+    let (dest_account_id, dest_path, dest_type, dest_is_local): (String, String, String, bool) = conn.query_row(
+        "SELECT account_id, path, COALESCE(folder_type, 'custom'), COALESCE(is_local, 0) FROM folders WHERE id = ?1",
+        rusqlite::params![dest_folder_id],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get::<_, i32>(3)? != 0)),
+    ).map_err(|e| format!("Destination folder not found: {}", e))?;
+    let (source_account_id, is_read, is_starred, date): (String, bool, bool, String) = conn.query_row(
+        "SELECT account_id, COALESCE(is_read, 0), COALESCE(is_starred, 0), COALESCE(date, '') FROM mails WHERE id = ?1",
+        rusqlite::params![mail_id],
+        |row| Ok((row.get(0)?, row.get::<_, i32>(1)? != 0, row.get::<_, i32>(2)? != 0, row.get(3)?)),
+    ).map_err(|e| format!("Mail not found: {}", e))?;
+
+    if dest_is_local || dest_type == "drafts" || dest_account_id == source_account_id {
+        return Err(COPY_NEEDS_SERVER_FOLDER.to_string());
+    }
+    let (provider, auth_type): (String, String) = conn.query_row(
+        "SELECT COALESCE(provider, ''), COALESCE(auth_type, '') FROM accounts WHERE id = ?1",
+        rusqlite::params![dest_account_id],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    ).map_err(|e| format!("Account not found: {}", e))?;
+    if !matches!(api_type_of(&provider, &auth_type), ApiType::Imap) {
+        return Err(COPY_TARGET_UNSUPPORTED.to_string());
+    }
+
+    let mut flags = Vec::new();
+    if is_read {
+        flags.push("\\Seen");
+    }
+    if is_starred {
+        flags.push("\\Flagged");
+    }
+    Ok(CopyPlan { dest_account_id, dest_path, flags, internal_date: imap::internal_date(&date) })
+}
+
+/// Copy a mail into a folder of another account: its source is fetched from
+/// the account it lies in and uploaded to the other one. The original stays.
+#[tauri::command]
+pub async fn copy_mail_to_folder(
+    db: State<'_, Database>,
+    pool: State<'_, ImapPool>,
+    mail_id: String,
+    dest_folder_id: String,
+) -> Result<(), String> {
+    let plan = copy_plan(&db, &mail_id, &dest_folder_id)?;
+    let source = crate::export::source::fetch_raw_message(&db, &pool, &mail_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let (imap_host, imap_port, email, auth_type, provider): (String, i32, String, String, String) = {
+        let conn = db.lock_db();
+        conn.query_row(
+            "SELECT imap_host, imap_port, email, auth_type, provider FROM accounts WHERE id = ?1",
+            rusqlite::params![plan.dest_account_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
+        )
+        .map_err(|e| format!("Account not found: {}", e))?
+    };
+
+    let credential = credentials::resolve_credential(&plan.dest_account_id, &auth_type, &provider)
+        .await
+        .map_err(|e| format!("No credentials: {}", e))?;
+
+    let mut session = pool.get_session(&plan.dest_account_id, &imap_host, imap_port as u16, &email, &credential, &auth_type)
+        .await
+        .map_err(|e| format!("IMAP connection failed: {}", e))?;
+
+    let result = imap::append_to_folder(&mut session, &plan.dest_path, &source, &plan.flags, plan.internal_date.as_deref()).await;
+
+    match &result {
+        Ok(_) => pool.return_session(&plan.dest_account_id, session).await,
+        Err(_) => { let _ = session.logout().await; pool.release(&plan.dest_account_id); }
+    }
+
+    result.map_err(|e| format!("Failed to copy mail to the other account: {}", e))
+}
+
 /// Move a mail to a different folder (both locally and on server).
 /// The server operation runs first; local DB is only updated on success.
 /// Local-only folders are handled entirely in the DB.
@@ -4791,5 +4880,120 @@ mod body_cache_tests {
         assert!(!body_cache_usable(&conn, &id));
         conn.execute("INSERT INTO attachments (id, mail_id, filename) VALUES ('a1', ?1, 'rechnung.pdf')", [&id]).unwrap();
         assert!(body_cache_usable(&conn, &id));
+    }
+}
+
+#[cfg(test)]
+mod copy_tests {
+    use super::*;
+    use crate::test_support::{seed_account, seed_folder, seed_mail, temp_db, SeedMail};
+
+    fn mail_in_own_account(conn: &rusqlite::Connection) -> (String, String) {
+        let account = seed_account(conn, "anna@studio-halde.example");
+        let inbox = seed_folder(conn, &account, "inbox");
+        let mail = seed_mail(conn, &SeedMail { account_id: &account, folder_id: &inbox, from_email: "post@kunde.example", date: "2026-07-23T19:11:00Z", ..Default::default() });
+        (account, mail)
+    }
+
+    fn folder_in_other_account(conn: &rusqlite::Connection, folder_type: &str) -> (String, String) {
+        let other = seed_account(conn, "info@studio-halde.example");
+        let folder = seed_folder(conn, &other, folder_type);
+        (other, folder)
+    }
+
+    #[test]
+    fn plans_a_copy_into_a_folder_of_another_account() {
+        let db = temp_db();
+        let (other, offers, mail) = {
+            let conn = db.lock_db();
+            let (_, mail) = mail_in_own_account(&conn);
+            conn.execute("UPDATE mails SET is_read = 1, is_starred = 1 WHERE id = ?1", [&mail]).unwrap();
+            let (other, offers) = folder_in_other_account(&conn, "custom");
+            conn.execute("UPDATE folders SET path = 'Angebote' WHERE id = ?1", [&offers]).unwrap();
+            (other, offers, mail)
+        };
+
+        let plan = copy_plan(&db, &mail, &offers).unwrap();
+        assert_eq!(plan.dest_account_id, other);
+        assert_eq!(plan.dest_path, "Angebote");
+        assert_eq!(plan.flags, vec!["\\Seen", "\\Flagged"]);
+        assert_eq!(plan.internal_date.as_deref(), Some("23-Jul-2026 19:11:00 +0000"));
+    }
+
+    #[test]
+    fn an_unread_mail_without_a_star_carries_no_flags() {
+        let db = temp_db();
+        let (offers, mail) = {
+            let conn = db.lock_db();
+            let (_, mail) = mail_in_own_account(&conn);
+            (folder_in_other_account(&conn, "custom").1, mail)
+        };
+
+        assert!(copy_plan(&db, &mail, &offers).unwrap().flags.is_empty());
+    }
+
+    #[test]
+    fn refuses_a_local_folder() {
+        let db = temp_db();
+        let (local, mail) = {
+            let conn = db.lock_db();
+            let (_, mail) = mail_in_own_account(&conn);
+            let (_, local) = folder_in_other_account(&conn, "custom");
+            conn.execute("UPDATE folders SET is_local = 1 WHERE id = ?1", [&local]).unwrap();
+            (local, mail)
+        };
+
+        assert_eq!(copy_plan(&db, &mail, &local), Err(COPY_NEEDS_SERVER_FOLDER.to_string()));
+    }
+
+    #[test]
+    fn refuses_the_drafts_of_another_account() {
+        let db = temp_db();
+        let (drafts, mail) = {
+            let conn = db.lock_db();
+            let (_, mail) = mail_in_own_account(&conn);
+            (folder_in_other_account(&conn, "drafts").1, mail)
+        };
+
+        assert_eq!(copy_plan(&db, &mail, &drafts), Err(COPY_NEEDS_SERVER_FOLDER.to_string()));
+    }
+
+    #[test]
+    fn refuses_a_folder_of_the_mails_own_account() {
+        let db = temp_db();
+        let (archive, mail) = {
+            let conn = db.lock_db();
+            let (account, mail) = mail_in_own_account(&conn);
+            (seed_folder(&conn, &account, "archive"), mail)
+        };
+
+        assert_eq!(copy_plan(&db, &mail, &archive), Err(COPY_NEEDS_SERVER_FOLDER.to_string()));
+    }
+
+    #[test]
+    fn refuses_an_account_that_takes_no_imap_upload() {
+        let db = temp_db();
+        let (inbox, mail) = {
+            let conn = db.lock_db();
+            let (_, mail) = mail_in_own_account(&conn);
+            let (other, inbox) = folder_in_other_account(&conn, "inbox");
+            conn.execute("UPDATE accounts SET provider = 'google', auth_type = 'oauth' WHERE id = ?1", [&other]).unwrap();
+            (inbox, mail)
+        };
+
+        assert_eq!(copy_plan(&db, &mail, &inbox), Err(COPY_TARGET_UNSUPPORTED.to_string()));
+    }
+
+    #[test]
+    fn reports_an_unknown_mail_or_folder() {
+        let db = temp_db();
+        let (offers, mail) = {
+            let conn = db.lock_db();
+            let (_, mail) = mail_in_own_account(&conn);
+            (folder_in_other_account(&conn, "custom").1, mail)
+        };
+
+        assert!(copy_plan(&db, "nope", &offers).is_err());
+        assert!(copy_plan(&db, &mail, "nope").is_err());
     }
 }

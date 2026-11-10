@@ -1,4 +1,4 @@
-import { Reply, ReplyAll, Forward, Star, StarOff, Mail as MailIcon, MailOpen, Archive, Trash2, Pin, PinOff, Clock, FolderInput, ClipboardList, ClipboardPlus, CalendarPlus, Flag, FlagOff, Users, UserMinus, CheckCircle2, RotateCcw, Tag } from "../icons";
+import { Reply, ReplyAll, Forward, Star, StarOff, Mail as MailIcon, MailOpen, Archive, Trash2, Pin, PinOff, Clock, Copy, FolderInput, ClipboardList, ClipboardPlus, CalendarPlus, Flag, FlagOff, Users, UserMinus, CheckCircle2, RotateCcw, Tag } from "../icons";
 import { useTranslation } from "react-i18next";
 import { MAIL_FLAG_COLORS, type Mail, type Folder, type MailFlag, type Assignment, type TeamMember } from "../../types";
 import { useAppStore } from "../../stores/appStore";
@@ -48,6 +48,9 @@ interface MailContextMenuProps {
   moveFolders?: Folder[];
   /** Named above the move targets, so it is never a guess which account they belong to. */
   moveAccountLabel?: string;
+  /** Copy this mail into a folder of another account; one group per account. */
+  onCopy?: (mail: Mail, destFolderId: string) => void;
+  copyGroups?: { label: string; folders: Folder[] }[];
   /** Team assignment (shared mailbox); the entries appear only with members and onAssign. */
   teamMembers?: TeamMember[];
   meId?: string;
@@ -86,6 +89,8 @@ export function MailContextMenu({
   onMove,
   moveFolders,
   moveAccountLabel,
+  onCopy,
+  copyGroups,
   teamMembers,
   meId,
   assignment,
@@ -140,6 +145,26 @@ export function MailContextMenu({
 
   const hasMoveTargets = !!moveFolders && moveFolders.length > 0;
 
+  const copyEntries: MenuEntry[] = onCopy && copyGroups && copyGroups.length > 0
+    ? [
+        ...(hasMoveTargets ? [{ kind: "separator" as const }] : []),
+        { kind: "header" as const, label: t("folder.copyToOtherAccount") },
+        ...copyGroups.map((group, i): MenuEntry => ({
+          kind: "item",
+          id: `copy-account-${i}`,
+          label: group.label,
+          icon: <Copy className="w-4 h-4" />,
+          submenu: group.folders.map((f): MenuEntry => ({
+            kind: "item",
+            id: `copy-${f.id}`,
+            label: folderLabel(f),
+            icon: <FolderInput className="w-4 h-4" />,
+            onSelect: () => onCopy(mail, f.id),
+          })),
+        })),
+      ]
+    : [];
+
   const assignees = sortRoster((teamMembers ?? []).filter((m) => m.status === "active" && m.user_id), meId ?? "");
   const assignSubmenu = (): MenuEntry[] =>
     assignees.map((m) => ({
@@ -175,13 +200,13 @@ export function MailContextMenu({
     { kind: "item", id: "reply", label: t("mailDetail.reply"), icon: <Reply className="w-4 h-4" />, onSelect: () => onReply(mail) },
     { kind: "item", id: "replyAll", label: t("compose.replyAll"), icon: <ReplyAll className="w-4 h-4" />, onSelect: () => onReplyAll(mail) },
     { kind: "item", id: "forward", label: t("mailDetail.forward"), icon: <Forward className="w-4 h-4" />, onSelect: () => onForward(mail) },
-    ...(onMove && hasMoveTargets
+    ...(onMove && (hasMoveTargets || copyEntries.length > 0)
       ? [{
           kind: "item" as const,
           id: "move",
           label: t("rules.moveToFolder"),
           icon: <FolderInput className="w-4 h-4" />,
-          submenu: moveSubmenu((destFolderId) => onMove(mail, destFolderId)),
+          submenu: [...(hasMoveTargets ? moveSubmenu((destFolderId) => onMove(mail, destFolderId)) : []), ...copyEntries],
         }]
       : []),
     { kind: "separator" },

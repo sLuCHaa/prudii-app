@@ -247,6 +247,11 @@ export async function moveMail(mailId: string, destFolderId: string): Promise<vo
   return invoke("move_mail", { mailId, destFolderId });
 }
 
+/** Into a folder of another account; the original stays where it is. */
+export async function copyMailToFolder(mailId: string, destFolderId: string): Promise<void> {
+  return invoke("copy_mail_to_folder", { mailId, destFolderId });
+}
+
 export async function archiveMail(mailId: string): Promise<void> {
   return invoke("archive_mail", { mailId });
 }

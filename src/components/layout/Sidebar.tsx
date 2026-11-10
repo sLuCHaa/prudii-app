@@ -40,6 +40,8 @@ import { SyncLineContext, useSyncLine, useSyncLineSource } from "../../hooks/use
 import { isMailDrag, readMailDrag } from "../../lib/mailDrag";
 import { Tooltip } from "../ui/Tooltip";
 import { SidebarTools } from "./SidebarTools";
+import { takesCopy } from "../../lib/moveTargets";
+import { copyToOtherAccount } from "../../lib/copyMail";
 import { accountCategoriesStartOpen, categoriesFoldKey, isFoldOpen, ownFoldersFoldKey, splitFolders } from "../../lib/sidebarFolds";
 import { visibleCategories } from "../../lib/categories";
 
@@ -437,6 +439,11 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
     const { mailId, accountId: mailAccountId } = dragged;
 
     if (mailAccountId !== account.id) {
+      if (takesCopy(account, folder)) {
+        noteDropTarget(folderEl);
+        void copyToOtherAccount(queryClient, { id: mailId }, folder, account);
+        return;
+      }
       await dialog.alert({
         type: "danger",
         title: t("folder.cannotMove"),

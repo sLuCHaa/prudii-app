@@ -122,6 +122,42 @@ describe("FolderPicker", () => {
     expect(closed).toBe(1);
   });
 
+  const INFO = [folder("i-inbox", "INBOX", "inbox"), folder("i-offers", "Angebote Kunden")];
+  const GROUPS = [{ label: "Kopieren nach info@studio-halde.example", folders: INFO }];
+
+  it("lists another account's folders under their own heading", () => {
+    render({ groups: GROUPS });
+    expect(options()).toEqual([i18n.t("folder.types.archive"), "Angebote", "Planung", i18n.t("folder.types.inbox"), "Angebote Kunden"]);
+    expect(document.body.textContent).toContain("Kopieren nach info@studio-halde.example");
+  });
+
+  it("searches the folders of every account", () => {
+    render({ groups: GROUPS });
+    type("angeb");
+    expect(options()).toEqual(["Angebote", "Angebote Kunden"]);
+  });
+
+  it("drops the heading of an account without a match", () => {
+    render({ groups: GROUPS });
+    type("plan");
+    expect(document.body.textContent).not.toContain("Kopieren nach info@studio-halde.example");
+  });
+
+  it("walks through every account with the arrow keys", () => {
+    const picked: string[] = [];
+    render({ groups: GROUPS, onPick: (id) => picked.push(id) });
+    press("ArrowUp");
+    press("Enter");
+    expect(picked).toEqual(["i-offers"]);
+  });
+
+  it("reports a folder picked in another account", () => {
+    const picked: string[] = [];
+    render({ groups: GROUPS, onPick: (id) => picked.push(id) });
+    act(() => document.querySelectorAll<HTMLElement>('[role="option"]')[3].click());
+    expect(picked).toEqual(["i-inbox"]);
+  });
+
   it("closes on a click outside", () => {
     let closed = 0;
     render({ onClose: () => { closed += 1; } });

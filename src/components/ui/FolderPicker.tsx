@@ -8,16 +8,23 @@ import type { Folder } from "../../types";
 
 export const FOLDER_PICKER_WIDTH = 240;
 
+export interface FolderGroup {
+  label: string;
+  folders: Folder[];
+}
+
 interface FolderPickerProps {
   folders: Folder[];
   accountLabel?: string;
+  /** Further folder lists below the main one, each under its own heading. */
+  groups?: FolderGroup[];
   x: number;
   y: number;
   onPick: (folderId: string) => void;
   onClose: () => void;
 }
 
-export function FolderPicker({ folders, accountLabel, x, y, onPick, onClose }: FolderPickerProps) {
+export function FolderPicker({ folders, accountLabel, groups, x, y, onPick, onClose }: FolderPickerProps) {
   const { t } = useTranslation();
   const rootRef = useRef<HTMLDivElement>(null);
   const [typed, setTyped] = useState("");
@@ -25,7 +32,10 @@ export function FolderPicker({ folders, accountLabel, x, y, onPick, onClose }: F
   const [pos, setPos] = useState({ left: x, top: y });
 
   const labelOf = (f: Folder) => t(`folder.types.${f.folder_type}`, { defaultValue: f.name });
-  const shown = matchFolders(folders, typed, labelOf);
+  const sections = [{ label: accountLabel, folders }, ...(groups ?? [])]
+    .map((section) => ({ label: section.label, folders: matchFolders(section.folders, typed, labelOf) }))
+    .filter((section) => section.folders.length > 0);
+  const shown = sections.flatMap((section) => section.folders);
 
   useLayoutEffect(() => {
     const el = rootRef.current;
@@ -91,26 +101,36 @@ export function FolderPicker({ folders, accountLabel, x, y, onPick, onClose }: F
           className="flex-1 min-w-0 bg-transparent text-sm text-text placeholder:text-text-tertiary outline-none"
         />
       </label>
-      {accountLabel && (
-        <div className="px-3 py-1.5 text-xs font-semibold text-text-tertiary truncate">{accountLabel}</div>
-      )}
       <div role="listbox" aria-label={t("rules.moveToFolder")} className="max-h-[min(50vh,320px)] overflow-y-auto">
-        {shown.map((folder, i) => (
-          <button
-            key={folder.id}
-            type="button"
-            role="option"
-            aria-selected={i === active}
-            data-index={i}
-            tabIndex={-1}
-            onMouseEnter={() => setActive(i)}
-            onClick={() => pick(folder)}
-            className={`w-full flex items-center gap-3 px-3 py-1.5 text-sm text-text transition-colors outline-none ${i === active ? "bg-hover" : ""}`}
-          >
-            <span className="text-text-tertiary w-4 flex justify-center"><FolderInput className="w-4 h-4" /></span>
-            <span className="flex-1 text-left truncate">{labelOf(folder)}</span>
-          </button>
-        ))}
+        {sections.map((section, s) => {
+          const first = sections.slice(0, s).reduce((count, earlier) => count + earlier.folders.length, 0);
+          return (
+            <div key={section.label ?? ""} role="group" aria-label={section.label}>
+              {section.label && (
+                <div className="px-3 py-1.5 text-xs font-semibold text-text-tertiary truncate">{section.label}</div>
+              )}
+              {section.folders.map((folder, k) => {
+                const i = first + k;
+                return (
+                  <button
+                    key={folder.id}
+                    type="button"
+                    role="option"
+                    aria-selected={i === active}
+                    data-index={i}
+                    tabIndex={-1}
+                    onMouseEnter={() => setActive(i)}
+                    onClick={() => pick(folder)}
+                    className={`w-full flex items-center gap-3 px-3 py-1.5 text-sm text-text transition-colors outline-none ${i === active ? "bg-hover" : ""}`}
+                  >
+                    <span className="text-text-tertiary w-4 flex justify-center"><FolderInput className="w-4 h-4" /></span>
+                    <span className="flex-1 text-left truncate">{labelOf(folder)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })}
         {shown.length === 0 && (
           <div className="px-3 py-2 text-sm text-text-tertiary">{t("folder.noFolderFound")}</div>
         )}

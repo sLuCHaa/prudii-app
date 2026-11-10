@@ -894,6 +894,10 @@
     "deleteFolder": "Excluir Pasta",
     "deleteFolderConfirm": "Tem certeza de que deseja excluir \"{{name}}\"? Todos os emails nesta pasta serão excluídos permanentemente.",
     "searchFolders": "Procurar pasta",
+    "copyTo": "Copiar para {{account}}",
+    "copyToOtherAccount": "Copiar para outra conta",
+    "copied": "Copiado para {{folder}}",
+    "trashOriginal": "Mover o original para o lixo",
     "noFolderFound": "Nenhuma pasta encontrada",
     "cannotMove": "Não é Possível Mover",
     "cannotMoveDesc": "Emails só podem ser movidos entre pastas da mesma conta.",
@@ -1366,6 +1370,7 @@
     "markAllRead": "Falha ao marcar todos como lidos",
     "batchUpdate": "Ação falhou",
     "move": "Falha ao mover o e-mail",
+    "copy": "Falha ao copiar",
     "countFolderMails": "Não foi possível carregar a contagem de e-mails — tente novamente",
     "cause": {
       "network": "Conexão perdida",

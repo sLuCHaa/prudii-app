@@ -245,6 +245,40 @@ describe("MailContextMenu move to folder", () => {
   });
 });
 
+describe("MailContextMenu copy to another account", () => {
+  const OWN = [folder("f-proj", "Projekte")];
+  const GROUPS = [{ label: "info@studio-halde.example", folders: [folder("i-offers", "Angebote")] }];
+  const byText = (text: string) =>
+    Array.from(document.querySelectorAll<HTMLElement>("button")).find((b) => b.textContent?.trim() === text);
+
+  it("offers the other accounts inside the move entry", () => {
+    render({ onMove: noop, moveFolders: OWN, onCopy: noop, copyGroups: GROUPS });
+    openSubmenu("rules.moveToFolder");
+    expect(document.body.textContent).toContain(i18n.t("folder.copyToOtherAccount"));
+    expect(byText("info@studio-halde.example")).toBeTruthy();
+  });
+
+  it("reports the folder picked in another account", () => {
+    const copied: [string, string][] = [];
+    render({ onMove: noop, moveFolders: OWN, onCopy: (m, dest) => copied.push([m.id, dest]), copyGroups: GROUPS });
+    openSubmenu("rules.moveToFolder");
+    act(() => byText("info@studio-halde.example")!.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })));
+    act(() => byText("Angebote")!.click());
+    expect(copied).toEqual([["m1", "i-offers"]]);
+  });
+
+  it("still shows the entry when the own account has no other folder", () => {
+    render({ onMove: noop, moveFolders: [], onCopy: noop, copyGroups: GROUPS });
+    expect(item("rules.moveToFolder")).toBeTruthy();
+  });
+
+  it("keeps a selection to moving", () => {
+    render({ selectedCount: 2, onBulkAction: noop, onBulkMove: noop, moveFolders: OWN, onCopy: noop, copyGroups: GROUPS });
+    openSubmenu("rules.moveToFolder");
+    expect(document.body.textContent).not.toContain(i18n.t("folder.copyToOtherAccount"));
+  });
+});
+
 describe("MailContextMenu team assignment", () => {
   const member = (user_id: string, email: string, online = false): TeamMember => ({
     id: user_id, user_id, email, name: "", role: "member", status: "active", online, last_seen: "",

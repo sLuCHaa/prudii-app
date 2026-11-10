@@ -893,6 +893,10 @@
     "deleteFolder": "删除文件夹",
     "deleteFolderConfirm": "确定要删除\"{{name}}\"吗？此文件夹中的所有邮件将被永久删除。",
     "searchFolders": "搜索文件夹",
+    "copyTo": "复制到 {{account}}",
+    "copyToOtherAccount": "复制到其他账户",
+    "copied": "已复制到 {{folder}}",
+    "trashOriginal": "将原件移到废纸篓",
     "noFolderFound": "未找到文件夹",
     "cannotMove": "无法移动",
     "cannotMoveDesc": "邮件只能在同一账户的文件夹之间移动。",
@@ -1364,6 +1368,7 @@
     "markAllRead": "全部标记为已读失败",
     "batchUpdate": "操作失败",
     "move": "移动邮件失败",
+    "copy": "复制失败",
     "countFolderMails": "无法加载邮件数量 — 请重试",
     "cause": {
       "network": "连接已断开",

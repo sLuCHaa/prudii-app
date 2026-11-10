@@ -894,6 +894,10 @@
     "deleteFolder": "Delete Folder",
     "deleteFolderConfirm": "Are you sure you want to delete \"{{name}}\"? All emails in this folder will be permanently deleted.",
     "searchFolders": "Search folders",
+    "copyTo": "Copy to {{account}}",
+    "copyToOtherAccount": "Copy to another account",
+    "copied": "Copied to {{folder}}",
+    "trashOriginal": "Move original to trash",
     "noFolderFound": "No folder found",
     "cannotMove": "Cannot Move",
     "cannotMoveDesc": "Mails can only be moved between folders of the same account.",
@@ -1366,6 +1370,7 @@
     "markAllRead": "Failed to mark all as read",
     "batchUpdate": "Action failed",
     "move": "Failed to move mail",
+    "copy": "Copy failed",
     "countFolderMails": "Could not load mail count — please try again",
     "cause": {
       "network": "Connection lost",

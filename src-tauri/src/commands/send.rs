@@ -319,7 +319,7 @@ async fn save_sent_copy(
         if let Some((sent_id, sent_path)) = sent_folder {
             let sent_save_result = match pool.get_session_max_wait_guarded(&account_id, &imap_host, imap_port, &email, &credential, &auth_type, crate::pool::APPEND_WAIT).await {
                 Ok((mut session, _guard)) => {
-                    match imap::append_to_folder(&mut session, &sent_path, &message_bytes, &["\\Seen"]).await {
+                    match imap::append_to_folder(&mut session, &sent_path, &message_bytes, &["\\Seen"], None).await {
                         Ok(_) => {
                             pool.return_session(&account_id, session).await;
                             // Insert the sent copy locally so it appears immediately,
@@ -628,7 +628,7 @@ pub async fn save_draft(db: State<'_, Database>, pool: State<'_, ImapPool>, requ
         .await
         .map_err(|e| format!("Failed to get IMAP session: {}", e))?;
 
-    match imap::append_to_folder(&mut session, &drafts_folder_path, &message_bytes, &["\\Draft", "\\Seen"]).await {
+    match imap::append_to_folder(&mut session, &drafts_folder_path, &message_bytes, &["\\Draft", "\\Seen"], None).await {
         Ok(_) => pool.return_session(&request.account_id, session).await,
         Err(e) => {
             let _ = session.logout().await;

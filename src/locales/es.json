@@ -894,6 +894,10 @@
     "deleteFolder": "Eliminar carpeta",
     "deleteFolderConfirm": "¿Estás seguro de que quieres eliminar \"{{name}}\"? Todos los correos en esta carpeta se eliminarán permanentemente.",
     "searchFolders": "Buscar carpeta",
+    "copyTo": "Copiar a {{account}}",
+    "copyToOtherAccount": "Copiar a otra cuenta",
+    "copied": "Copiado a {{folder}}",
+    "trashOriginal": "Mover el original a la papelera",
     "noFolderFound": "No se encontró ninguna carpeta",
     "cannotMove": "No se puede mover",
     "cannotMoveDesc": "Los correos solo se pueden mover entre carpetas de la misma cuenta.",
@@ -1366,6 +1370,7 @@
     "markAllRead": "Error al marcar todos como leídos",
     "batchUpdate": "Acción fallida",
     "move": "Error al mover el correo",
+    "copy": "Error al copiar",
     "countFolderMails": "No se pudo cargar el recuento de correos — inténtalo de nuevo",
     "cause": {
       "network": "Conexión perdida",

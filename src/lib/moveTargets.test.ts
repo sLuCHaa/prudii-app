@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { matchFolders, moveTargets } from "./moveTargets";
-import type { Folder } from "../types";
+import { copyTargets, matchFolders, moveTargets } from "./moveTargets";
+import type { Account, Folder } from "../types";
 
 function folder(id: string, folder_type: Folder["folder_type"] = "custom", account_id = "a1"): Folder {
   return {
@@ -87,5 +87,53 @@ describe("matchFolders", () => {
 
   it("keeps the order of the folders", () => {
     expect(ids(matchFolders(folders, "a", byName))).toEqual(["Angebote 2026", "Aufträge", "Planung"]);
+  });
+});
+
+describe("copyTargets", () => {
+  const account = (id: string, provider: Account["provider"] = "custom", auth_type = "password") =>
+    ({ id, email: `${id}@studio-halde.example`, provider, auth_type }) as Account;
+  const local = (id: string, account_id: string): Folder => ({ ...folder(id, "custom", account_id), is_local: true });
+
+  const FOLDERS: Record<string, Folder[]> = {
+    anna: [folder("anna-inbox", "inbox", "anna")],
+    info: [folder("info-inbox", "inbox", "info"), folder("info-drafts", "drafts", "info"), folder("Angebote", "custom", "info"), local("Ablage", "info")],
+    gmail: [folder("gmail-inbox", "inbox", "gmail")],
+    live: [folder("live-inbox", "inbox", "live")],
+    gapp: [folder("gapp-inbox", "inbox", "gapp")],
+  };
+  const foldersOf = (id: string) => FOLDERS[id] ?? [];
+  const groups = (accounts: Account[], source: string | null) =>
+    copyTargets(accounts, source, foldersOf).map((g) => [g.account.id, ids(g.folders)]);
+
+  it("offers the server folders of the other accounts", () => {
+    expect(groups([account("anna"), account("info")], "anna")).toEqual([["info", ["info-inbox", "Angebote"]]]);
+  });
+
+  it("leaves out local folders and drafts", () => {
+    const [info] = copyTargets([account("anna"), account("info")], "anna", foldersOf);
+    expect(ids(info.folders)).not.toContain("info-drafts");
+    expect(ids(info.folders)).not.toContain("Ablage");
+  });
+
+  it("leaves out accounts signed in through Google or Microsoft", () => {
+    const accounts = [account("anna"), account("gmail", "google", "oauth"), account("live", "microsoft", "oauth")];
+    expect(groups(accounts, "anna")).toEqual([]);
+  });
+
+  it("keeps a Google account that is connected over IMAP", () => {
+    expect(groups([account("anna"), account("gapp", "google", "password")], "anna")).toEqual([["gapp", ["gapp-inbox"]]]);
+  });
+
+  it("takes any account as the source", () => {
+    expect(groups([account("gmail", "google", "oauth"), account("info")], "gmail")).toEqual([["info", ["info-inbox", "Angebote"]]]);
+  });
+
+  it("skips an account whose folders have not loaded", () => {
+    expect(groups([account("anna"), account("unknown")], "anna")).toEqual([]);
+  });
+
+  it("offers nothing without a source account", () => {
+    expect(groups([account("anna"), account("info")], null)).toEqual([]);
   });
 });
