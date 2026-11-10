@@ -46,7 +46,7 @@ import { useTranslation } from "react-i18next";
 import i18next from "i18next";
 import type { BackfillProgress, BackupProgress, Folder, SyncProgress } from "./types";
 import { isMacOS } from "./lib/platform";
-import { MAIL_LIST_QUERY_KEYS, invalidateMailListQueries } from "./lib/mailQueries";
+import { MAIL_LIST_QUERY_KEYS, invalidateRestoredData } from "./lib/mailQueries";
 import { MENU_ACTIONS, resolveGlobalShortcut } from "./lib/shortcuts";
 import type { GlobalAction } from "./lib/shortcuts";
 
@@ -249,8 +249,7 @@ function AppInner() {
   useEffect(() => {
     const unlisten = listen<BackupProgress>("restore-progress", (event) => {
       if (event.payload.status === "done") {
-        queryClient.invalidateQueries({ queryKey: ["accounts"] });
-        invalidateMailListQueries(queryClient);
+        invalidateRestoredData(queryClient);
         getAppSettings()
           .then((s) => {
             if (s.sorting_enabled) return runCategorization(queryClient);

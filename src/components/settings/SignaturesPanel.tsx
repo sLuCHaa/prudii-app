@@ -30,8 +30,10 @@ export function SignaturesPanel({ initialSignatureId, onDirtyChange, saveRef }: 
   const { data: accounts } = useAccounts();
 
   const [draft, setDraft] = useState<SignatureDraft | null>(null);
+  const [touched, setTouched] = useState(false);
   const [nameMissing, setNameMissing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const saving = useRef<Promise<boolean> | null>(null);
 
   const opened = useRef(false);
   useEffect(() => {
@@ -42,7 +44,27 @@ export function SignaturesPanel({ initialSignatureId, onDirtyChange, saveRef }: 
   }, [signatures, accounts, initialSignatureId]);
 
   const stored = draft?.id ? (signatures?.find((s) => s.id === draft.id) ?? null) : null;
-  const dirty = draft !== null && isDraftDirty(draft, stored, accounts ?? []);
+  const dirty = touched && draft !== null && isDraftDirty(draft, stored, accounts ?? []);
+
+  // An untouched draft follows the stored data: a refetch (after a restore, say)
+  // must not look like an edit that Save would then write back.
+  useEffect(() => {
+    if (!opened.current || touched || !signatures || !accounts || !draft?.id) return;
+    const current = signatures.find((s) => s.id === draft.id);
+    if (!current) setDraft(signatures[0] ? draftOf(signatures[0], accounts) : null);
+    else if (isDraftDirty(draft, current, accounts)) setDraft(draftOf(current, accounts));
+  }, [signatures, accounts, touched, draft]);
+
+  function show(next: SignatureDraft | null) {
+    setTouched(false);
+    setNameMissing(false);
+    setDraft(next);
+  }
+
+  function edit(change: Partial<SignatureDraft>) {
+    setTouched(true);
+    setDraft((d) => d && { ...d, ...change });
+  }
 
   useEffect(() => {
     onDirtyChange(dirty);
@@ -59,25 +81,35 @@ export function SignaturesPanel({ initialSignatureId, onDirtyChange, saveRef }: 
     };
   }, [queryClient]);
 
-  const save = useCallback(async (): Promise<boolean> => {
-    if (!draft) return true;
+  const save = useCallback((): Promise<boolean> => {
+    // A second click while the first save runs would insert a new signature twice.
+    if (saving.current) return saving.current;
+    if (!draft) return Promise.resolve(true);
     const name = draft.name.trim();
     if (!name) {
       setNameMissing(true);
-      return false;
+      return Promise.resolve(false);
     }
-    setBusy(true);
-    try {
-      const saved = await saveSignature({ ...draft, name });
-      const fresh = await refresh();
-      setDraft(draftOf(saved, fresh.accounts));
-      return true;
-    } catch (err) {
-      addToast("error", t("signatures.saveFailed"), message(err));
-      return false;
-    } finally {
-      setBusy(false);
-    }
+    const run = (async () => {
+      setBusy(true);
+      try {
+        const saved = await saveSignature({ ...draft, name });
+        const fresh = await refresh();
+        setTouched(false);
+        setDraft(draftOf(saved, fresh.accounts));
+        return true;
+      } catch (err) {
+        addToast("error", t("signatures.saveFailed"), message(err));
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    })();
+    saving.current = run;
+    void run.finally(() => {
+      if (saving.current === run) saving.current = null;
+    });
+    return run;
   }, [draft, refresh, addToast, t]);
 
   useEffect(() => {
@@ -102,8 +134,7 @@ export function SignaturesPanel({ initialSignatureId, onDirtyChange, saveRef }: 
       });
       if (!discard) return;
     }
-    setNameMissing(false);
-    setDraft(draftOf(signature, accounts ?? []));
+    show(draftOf(signature, accounts ?? []));
   }
 
   async function handleDuplicate() {
@@ -112,7 +143,7 @@ export function SignaturesPanel({ initialSignatureId, onDirtyChange, saveRef }: 
     try {
       const copy = await duplicateSignature(stored.id, t("signatures.copyName", { name: stored.name }));
       const fresh = await refresh();
-      setDraft(draftOf(copy, fresh.accounts));
+      show(draftOf(copy, fresh.accounts));
     } catch (err) {
       addToast("error", t("signatures.duplicateFailed"), message(err));
     } finally {
@@ -137,8 +168,7 @@ export function SignaturesPanel({ initialSignatureId, onDirtyChange, saveRef }: 
     try {
       await deleteSignature(stored.id);
       const fresh = await refresh();
-      setNameMissing(false);
-      setDraft(fresh.signatures[0] ? draftOf(fresh.signatures[0], fresh.accounts) : null);
+      show(fresh.signatures[0] ? draftOf(fresh.signatures[0], fresh.accounts) : null);
     } catch (err) {
       addToast("error", t("signatures.deleteFailed"), message(err));
     } finally {
@@ -147,7 +177,8 @@ export function SignaturesPanel({ initialSignatureId, onDirtyChange, saveRef }: 
   }
 
   function toggleAccount(accountId: string, ticked: boolean) {
-    setDraft((d) => d && { ...d, accountIds: ticked ? [...d.accountIds, accountId] : d.accountIds.filter((id) => id !== accountId) });
+    if (!draft) return;
+    edit({ accountIds: ticked ? [...draft.accountIds, accountId] : draft.accountIds.filter((id) => id !== accountId) });
   }
 
   if (!signatures || !accounts) return null;
@@ -222,9 +253,8 @@ export function SignaturesPanel({ initialSignatureId, onDirtyChange, saveRef }: 
                 type="text"
                 value={draft.name}
                 onChange={(e) => {
-                  const name = e.target.value;
                   setNameMissing(false);
-                  setDraft((d) => d && { ...d, name });
+                  edit({ name: e.target.value });
                 }}
                 aria-invalid={nameMissing}
                 className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm focus:border-accent"
@@ -236,7 +266,7 @@ export function SignaturesPanel({ initialSignatureId, onDirtyChange, saveRef }: 
                 key={draft.id ?? "new"}
                 htmlValue={draft.html}
                 textValue={draft.text}
-                onChange={(html, text) => setDraft((d) => d && { ...d, html, text })}
+                onChange={(html, text) => edit({ html, text })}
               />
             </SettingsBlock>
           </SettingsGroup>

@@ -32,6 +32,13 @@ export function invalidateMailListQueries(queryClient: QueryClient): void {
   }
 }
 
+/** Everything a restore may have replaced. */
+export function invalidateRestoredData(queryClient: QueryClient): void {
+  queryClient.invalidateQueries({ queryKey: ["accounts"] });
+  queryClient.invalidateQueries({ queryKey: ["signatures"] });
+  invalidateMailListQueries(queryClient);
+}
+
 export type MailFlagPatch = Partial<Pick<Mail, "is_read" | "is_starred">>;
 
 const LIST_KEYS = MAIL_LIST_QUERY_KEYS.filter((k) => k !== "folders" && k !== "category-counts");

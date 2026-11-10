@@ -163,6 +163,16 @@ describe("SignaturesPanel", () => {
     expect(host.textContent).toContain(i18n.t("signatures.nameRequired"));
   });
 
+  it("saves after a refused attempt once the name is there", async () => {
+    await render();
+    type(nameInput()!, "   ");
+    expect(await runSave()).toBe(false);
+    type(nameInput()!, "Büro");
+    save.mockResolvedValue(sig("s1", "Büro"));
+    expect(await runSave()).toBe(true);
+    expect(save).toHaveBeenCalledTimes(1);
+  });
+
   it("reports unsaved changes and clears them once saved", async () => {
     await render();
     expect(onDirtyChange).not.toHaveBeenCalledWith(true);
@@ -265,6 +275,58 @@ describe("SignaturesPanel", () => {
     act(() => buttonNamed(i18n.t("signatures.new"))!.click());
     await flush();
     expect(nameInput()!.value).toBe("");
+  });
+
+  const editor = () => host.querySelector<HTMLTextAreaElement>("[data-testid='sig-editor']")!;
+  const restored = () => [sig("s2", "Privat"), { ...sig("s1", "Studio Halde"), html: "<div>Aus dem Backup</div>" }];
+  async function listChanges(next: Signature[]) {
+    list.mockResolvedValue(next);
+    await act(async () => {
+      await queryClient.invalidateQueries({ queryKey: ["signatures"] });
+    });
+    await flush();
+  }
+
+  it("follows a list that changes underneath an untouched draft", async () => {
+    await render();
+    await listChanges(restored());
+    expect(editor().value).toBe("<div>Aus dem Backup</div>");
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("keeps the edits when the list changes underneath them", async () => {
+    await render();
+    type(nameInput()!, "Büro");
+    await listChanges(restored());
+    expect(nameInput()!.value).toBe("Büro");
+    expect(editor().value).toBe("<div>Studio Halde</div>");
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+  });
+
+  it("moves on when the open signature disappears", async () => {
+    await render();
+    await listChanges([sig("s2", "Privat")]);
+    expect(nameInput()!.value).toBe("Privat");
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("saves once when asked twice", async () => {
+    await render();
+    act(() => buttonNamed(i18n.t("signatures.new"))!.click());
+    await flush();
+    type(nameInput()!, "Büro");
+    let release!: (saved: Signature) => void;
+    save.mockReturnValue(new Promise<Signature>((resolve) => { release = resolve; }));
+    let both!: Promise<boolean[]>;
+    act(() => {
+      both = Promise.all([saveRef.current!(), saveRef.current!()]);
+    });
+    release(sig("s9", "Büro"));
+    await act(async () => {
+      expect(await both).toEqual([true, true]);
+    });
+    await flush();
+    expect(save).toHaveBeenCalledTimes(1);
   });
 
   it("clears its save hook and its dirty flag when it goes away", async () => {
