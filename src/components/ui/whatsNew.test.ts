@@ -6,7 +6,7 @@ import { DialogProvider, useDialog } from "./DialogProvider";
 import { WhatsNew } from "./WhatsNew";
 import { SEEN_KEY } from "../../lib/whatsNew";
 
-vi.mock("@tauri-apps/api/app", () => ({ getVersion: () => Promise.resolve("1.8.3") }));
+vi.mock("@tauri-apps/api/app", () => ({ getVersion: () => Promise.resolve("1.9.0") }));
 
 let root: Root;
 let host: HTMLDivElement;
@@ -80,6 +80,6 @@ describe("WhatsNew", () => {
       button.click();
     });
     expect(document.getElementById("whats-new-title")).toBeNull();
-    expect(localStorage.getItem(SEEN_KEY)).toBe("1.8.3");
+    expect(localStorage.getItem(SEEN_KEY)).toBe("1.9.0");
   });
 });

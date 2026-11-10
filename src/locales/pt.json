@@ -1567,22 +1567,26 @@
     "title": "Novidades do Prudii {{version}}",
     "subtitle": "Veja o que mudou desde a sua última atualização.",
     "done": "Entendi",
-    "v1_8_3": {
+    "v1_9_0": {
+      "sidebar": {
+        "title": "Uma barra lateral mais organizada",
+        "text": "Tarefas, Calendário, Anexos e Revisão da caixa de entrada agora ficam em uma barra embaixo, e as cores cabem em uma única linha. As categorias e as suas próprias pastas podem ser recolhidas."
+      },
+      "move": {
+        "title": "Mais rápido para a pasta",
+        "text": "Cada linha de e-mail tem um botão de pasta que abre a lista de pastas com busca, e “Mover para pasta” fica mais acima no menu de contexto. Os e-mails também podem ser copiados para pastas de outras contas IMAP."
+      },
       "thread": {
-        "title": "Carregar com luz",
-        "text": "Onde o Prudii está trabalhando, agora corre um fino fio de luz como a linha de sincronização, em vez de um círculo girando. Ao iniciar, a linha também mostra todas as contas."
+        "title": "Conversas entre contas",
+        "text": "Se você responder de outra conta, a resposta aparece mesmo assim na conversa, com o nome dessa conta. Vale para contas conectadas por IMAP."
       },
-      "star": {
-        "title": "Estrelas com giro",
-        "text": "Uma estrela que você marca gira até o lugar, um anel dourado ecoa por um instante e a faixa do e-mail se ilumina."
+      "signatures": {
+        "title": "Assinaturas em lista",
+        "text": "Crie uma assinatura uma vez e atribua a quantas contas quiser. As suas assinaturas atuais foram mantidas."
       },
-      "read": {
-        "title": "Lido num relance",
-        "text": "Ao abrir um e-mail, a faixa azul encolhe até virar um ponto e se apaga. Os resultados da pesquisa também mostram na hora o que você já leu."
-      },
-      "trash": {
-        "title": "Lixeira esvaziada de uma vez",
-        "text": "O Gmail agora esvazia a Lixeira e o Spam com uma única solicitação, e a sincronização logo em seguida não trava mais."
+      "options": {
+        "title": "Duas novas configurações",
+        "text": "A escrita pode abrir ancorada na janela principal, e os e-mails com estrela podem ser ocultados na caixa de entrada. Você ativa as duas nas configurações do app."
       }
     }
   },

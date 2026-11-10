@@ -18,12 +18,13 @@ export interface WhatsNewRelease {
 // Only the newest entry is ever shown, so each lists just its own highlights.
 export const RELEASES: WhatsNewRelease[] = [
   {
-    version: "1.8.3",
+    version: "1.9.0",
     items: [
-      { icon: "sparkles", tone: "blue", key: "whatsNew.v1_8_3.thread" },
-      { icon: "star", tone: "amber", key: "whatsNew.v1_8_3.star" },
-      { icon: "mail", tone: "violet", key: "whatsNew.v1_8_3.read" },
-      { icon: "trash", tone: "green", key: "whatsNew.v1_8_3.trash" },
+      { icon: "sparkles", tone: "blue", key: "whatsNew.v1_9_0.sidebar" },
+      { icon: "export", tone: "green", key: "whatsNew.v1_9_0.move" },
+      { icon: "thread", tone: "amber", key: "whatsNew.v1_9_0.thread" },
+      { icon: "signature", tone: "violet", key: "whatsNew.v1_9_0.signatures" },
+      { icon: "star", tone: "blue", key: "whatsNew.v1_9_0.options" },
     ],
   },
 ];

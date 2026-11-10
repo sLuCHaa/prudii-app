@@ -1567,22 +1567,26 @@
     "title": "Neu in Prudii {{version}}",
     "subtitle": "Das hat sich seit deinem letzten Update getan.",
     "done": "Verstanden",
-    "v1_8_3": {
+    "v1_9_0": {
+      "sidebar": {
+        "title": "Aufgeräumte Seitenleiste",
+        "text": "Aufgaben, Kalender, Anhänge und Postfach-Check sitzen jetzt als Leiste unten, die Farbmarkierungen in einer Zeile. Kategorien und eigene Ordner lassen sich einklappen."
+      },
+      "move": {
+        "title": "Schneller in den Ordner",
+        "text": "In jeder Mailzeile öffnet ein Ordner-Symbol die Ordnerliste mit Suche, und im Rechtsklick-Menü steht „In Ordner verschieben“ weiter oben. Mails lassen sich auch in Ordner anderer IMAP-Konten kopieren."
+      },
       "thread": {
-        "title": "Laden mit Licht",
-        "text": "Wo Prudii arbeitet, läuft jetzt ein feiner Lichtfaden wie bei der Abgleich-Linie statt eines drehenden Kreises. Beim Start zeigt die Linie außerdem jedes Konto."
+        "title": "Unterhaltungen über Konten hinweg",
+        "text": "Antwortest du aus einem anderen Konto, erscheint die Antwort trotzdem im Verlauf, mit dem Namen des Kontos. Das gilt für Konten, die über IMAP verbunden sind."
       },
-      "star": {
-        "title": "Stern mit Schwung",
-        "text": "Ein gesetzter Stern dreht sich ins Bild, ein goldener Ring hallt kurz nach, und der Streifen der Mail leuchtet auf."
+      "signatures": {
+        "title": "Signaturen als Liste",
+        "text": "Signaturen legst du einmal an und weist sie beliebig vielen Konten zu. Deine bisherigen Signaturen sind übernommen."
       },
-      "read": {
-        "title": "Gelesen auf einen Blick",
-        "text": "Öffnest du eine Mail, schrumpft ihr blauer Streifen zu einem Punkt und verlischt. Auch Suchergebnisse zeigen jetzt sofort, was du gelesen hast."
-      },
-      "trash": {
-        "title": "Papierkorb in einem Rutsch",
-        "text": "Gmail leert Papierkorb und Spam jetzt mit einer einzigen Anfrage, und der Abgleich direkt danach hängt nicht mehr."
+      "options": {
+        "title": "Zwei neue Einstellungen",
+        "text": "Das Verfassen kann angedockt im Hauptfenster öffnen, und markierte Mails lassen sich im Posteingang ausblenden. Beides schaltest du in den App-Einstellungen ein."
       }
     }
   },

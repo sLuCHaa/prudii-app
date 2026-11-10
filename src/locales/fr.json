@@ -1567,22 +1567,26 @@
     "title": "Nouveautés de Prudii {{version}}",
     "subtitle": "Voici ce qui a changé depuis votre dernière mise à jour.",
     "done": "Compris",
-    "v1_8_3": {
+    "v1_9_0": {
+      "sidebar": {
+        "title": "Une barre latérale plus claire",
+        "text": "Tâches, Calendrier, Pièces jointes et Bilan de la boîte mail se trouvent désormais dans une barre en bas, et les couleurs tiennent sur une seule ligne. Les catégories et vos propres dossiers peuvent être repliés."
+      },
+      "move": {
+        "title": "Plus vite dans le bon dossier",
+        "text": "Chaque ligne de message a un bouton dossier qui ouvre la liste des dossiers avec une recherche, et « Déplacer vers dossier » se trouve plus haut dans le menu contextuel. Les messages peuvent aussi être copiés dans les dossiers d'autres comptes IMAP."
+      },
       "thread": {
-        "title": "Chargement en lumière",
-        "text": "Là où Prudii travaille, un fin fil de lumière défile désormais comme la ligne de synchronisation, au lieu d'un cercle qui tourne. Au démarrage, la ligne affiche aussi chaque compte."
+        "title": "Des conversations d'un compte à l'autre",
+        "text": "Quand vous répondez depuis un autre compte, la réponse apparaît quand même dans la conversation, avec le nom de ce compte. Cela vaut pour les comptes connectés en IMAP."
       },
-      "star": {
-        "title": "Des étoiles qui tournent",
-        "text": "Une étoile que vous ajoutez tourne pour se mettre en place, un anneau doré résonne un instant et la bande du message s'illumine."
+      "signatures": {
+        "title": "Les signatures en liste",
+        "text": "Créez une signature une fois et attribuez-la à autant de comptes que vous voulez. Vos signatures existantes ont été reprises."
       },
-      "read": {
-        "title": "Lu en un coup d'œil",
-        "text": "Quand vous ouvrez un message, sa bande bleue se réduit à un point puis s'éteint. Les résultats de recherche montrent aussi tout de suite ce que vous avez lu."
-      },
-      "trash": {
-        "title": "Corbeille vidée d'un coup",
-        "text": "Gmail vide désormais la corbeille et le spam en une seule requête, et la synchronisation juste après ne bloque plus."
+      "options": {
+        "title": "Deux nouveaux réglages",
+        "text": "La rédaction peut s'ouvrir ancrée dans la fenêtre principale, et les messages suivis peuvent être masqués dans la boîte de réception. Vous activez les deux dans les paramètres de l'application."
       }
     }
   },

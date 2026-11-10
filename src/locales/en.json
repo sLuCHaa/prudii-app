@@ -1567,22 +1567,26 @@
     "title": "New in Prudii {{version}}",
     "subtitle": "Here’s what changed since your last update.",
     "done": "Got it",
-    "v1_8_3": {
+    "v1_9_0": {
+      "sidebar": {
+        "title": "A tidier sidebar",
+        "text": "Tasks, Calendar, Attachments and Inbox check now sit in a bar at the bottom, and the color flags share a single line. Categories and your own folders can be folded away."
+      },
+      "move": {
+        "title": "Faster into the right folder",
+        "text": "Every mail row has a folder button that opens the folder list with a search field, and “Move to folder” sits higher in the context menu. Mails can also be copied into folders of other IMAP accounts."
+      },
       "thread": {
-        "title": "Loading with light",
-        "text": "Wherever Prudii is working, a thin thread of light now runs like the sync line instead of a spinning circle. At startup the line also shows every account."
+        "title": "Conversations across accounts",
+        "text": "When you reply from another account, the reply still appears in the conversation, with the name of that account. This works for accounts connected over IMAP."
       },
-      "star": {
-        "title": "Stars with a spin",
-        "text": "A star you set spins into place, a gold ring echoes briefly and the mail's stripe lights up."
+      "signatures": {
+        "title": "Signatures as a list",
+        "text": "Create a signature once and assign it to as many accounts as you like. Your existing signatures have been carried over."
       },
-      "read": {
-        "title": "Read at a glance",
-        "text": "When you open a mail, its blue stripe shrinks to a dot and fades. Search results now also show right away what you have read."
-      },
-      "trash": {
-        "title": "Trash emptied in one go",
-        "text": "Gmail now empties Trash and Spam with a single request, and the sync right after no longer stalls."
+      "options": {
+        "title": "Two new settings",
+        "text": "Compose can open docked inside the main window, and starred mails can be hidden in the inbox. You switch both on in the app settings."
       }
     }
   },

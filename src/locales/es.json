@@ -1567,22 +1567,26 @@
     "title": "Novedades de Prudii {{version}}",
     "subtitle": "Esto es lo que ha cambiado desde tu última actualización.",
     "done": "Entendido",
-    "v1_8_3": {
+    "v1_9_0": {
+      "sidebar": {
+        "title": "Una barra lateral más ordenada",
+        "text": "Tareas, Calendario, Adjuntos y Revisión del buzón están ahora en una barra abajo, y los colores caben en una sola línea. Las categorías y tus propias carpetas se pueden plegar."
+      },
+      "move": {
+        "title": "Más rápido a la carpeta",
+        "text": "Cada fila de correo tiene un botón de carpeta que abre la lista de carpetas con búsqueda, y «Mover a carpeta» está más arriba en el menú contextual. Los correos también se pueden copiar a carpetas de otras cuentas IMAP."
+      },
       "thread": {
-        "title": "Cargar con luz",
-        "text": "Donde Prudii trabaja, ahora corre un fino hilo de luz como la línea de sincronización en lugar de un círculo que gira. Al iniciar, la línea muestra además todas las cuentas."
+        "title": "Conversaciones entre cuentas",
+        "text": "Si respondes desde otra cuenta, la respuesta aparece igualmente en la conversación, con el nombre de esa cuenta. Funciona con las cuentas conectadas por IMAP."
       },
-      "star": {
-        "title": "Estrellas con impulso",
-        "text": "Una estrella que marcas gira hasta su sitio, un anillo dorado resuena un instante y la franja del correo se ilumina."
+      "signatures": {
+        "title": "Firmas en una lista",
+        "text": "Crea una firma una vez y asígnala a todas las cuentas que quieras. Tus firmas anteriores se han conservado."
       },
-      "read": {
-        "title": "Leído de un vistazo",
-        "text": "Al abrir un correo, su franja azul se encoge hasta un punto y se apaga. Los resultados de búsqueda también muestran al instante lo que has leído."
-      },
-      "trash": {
-        "title": "Papelera vacía de una vez",
-        "text": "Gmail vacía ahora la Papelera y el Spam con una sola petición, y la sincronización justo después ya no se queda colgada."
+      "options": {
+        "title": "Dos ajustes nuevos",
+        "text": "La redacción puede abrirse acoplada en la ventana principal, y los correos destacados se pueden ocultar en la bandeja de entrada. Activas ambos en la configuración de la app."
       }
     }
   },
