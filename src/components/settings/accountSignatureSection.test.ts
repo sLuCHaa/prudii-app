@@ -96,6 +96,12 @@ describe("AccountSignatureSection", () => {
     expect(select().value).toBe("s1");
   });
 
+  it("lists names with umlauts where the alphabet puts them", async () => {
+    vi.mocked(listSignatures).mockResolvedValue([...SIGNATURES, sig("s3", "Ärzte")]);
+    await render("a1", "s1");
+    expect(Array.from(select().options).slice(1).map((o) => o.textContent)).toEqual(["Ärzte", "Privat", "Studio Halde"]);
+  });
+
   it("reports the chosen signature, and null for none", async () => {
     await render("a1", "s1");
     choose("s2");

@@ -120,6 +120,22 @@ describe("SignaturesPanel", () => {
     expect(row("Privat").textContent).not.toContain("Anna Weber");
   });
 
+  it("lists names with umlauts where the alphabet puts them", async () => {
+    await render({ signatures: [sig("s2", "Privat"), sig("s1", "Studio Halde"), sig("s3", "Ärzte")], initial: null });
+    expect(rows().map((r) => r.querySelector("span")!.textContent)).toEqual(["Ärzte", "Privat", "Studio Halde"]);
+    expect(nameInput()!.value).toBe("Ärzte");
+  });
+
+  it("opens the first listed signature after a delete", async () => {
+    await render({ signatures: [sig("s2", "Privat"), sig("s1", "Studio Halde"), sig("s3", "Ärzte")] });
+    danger.mockResolvedValue(true);
+    remove.mockResolvedValue(undefined);
+    list.mockResolvedValue([sig("s2", "Privat"), sig("s3", "Ärzte")]);
+    act(() => buttonNamed(i18n.t("common.delete"))!.click());
+    await flush();
+    expect(nameInput()!.value).toBe("Ärzte");
+  });
+
   it("marks a signature nobody uses", async () => {
     await render({ signatures: [...SIGNATURES, sig("s3", "Unbenutzt")] });
     expect(row("Unbenutzt").textContent).toContain(i18n.t("signatures.unassigned"));

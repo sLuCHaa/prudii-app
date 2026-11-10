@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Copy, Plus, Trash2 } from "../icons";
-import { deleteSignature, duplicateSignature, listSignatures, saveSignature } from "../../lib/tauri";
-import { draftOf, isDraftDirty, usesOther, type SignatureDraft } from "../../lib/signatures";
+import { deleteSignature, duplicateSignature, saveSignature } from "../../lib/tauri";
+import { draftOf, isDraftDirty, sortSignatures, usesOther, type SignatureDraft } from "../../lib/signatures";
 import { useAccounts } from "../../hooks/useAccounts";
+import { useSignatures } from "../../hooks/useSignatures";
 import { useAppStore } from "../../stores/appStore";
 import { Button } from "../ui/Button";
 import { useDialog } from "../ui/DialogProvider";
@@ -22,11 +23,11 @@ export interface SignaturesPanelProps {
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
 export function SignaturesPanel({ initialSignatureId, onDirtyChange, saveRef }: SignaturesPanelProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const dialog = useDialog();
   const queryClient = useQueryClient();
   const addToast = useAppStore((s) => s.addToast);
-  const { data: signatures } = useQuery({ queryKey: ["signatures"], queryFn: listSignatures });
+  const { data: signatures } = useSignatures();
   const { data: accounts } = useAccounts();
 
   const [draft, setDraft] = useState<SignatureDraft | null>(null);
@@ -76,10 +77,10 @@ export function SignaturesPanel({ initialSignatureId, onDirtyChange, saveRef }: 
       queryClient.invalidateQueries({ queryKey: ["accounts"] }),
     ]);
     return {
-      signatures: queryClient.getQueryData<Signature[]>(["signatures"]) ?? [],
+      signatures: sortSignatures(queryClient.getQueryData<Signature[]>(["signatures"]) ?? [], i18n.language),
       accounts: queryClient.getQueryData<Account[]>(["accounts"]) ?? [],
     };
-  }, [queryClient]);
+  }, [queryClient, i18n.language]);
 
   const save = useCallback((): Promise<boolean> => {
     // A second click while the first save runs would insert a new signature twice.

@@ -10,6 +10,12 @@ export interface SignatureDraft {
 
 type Assigned = Pick<Account, "id" | "signature_id">;
 
+/** By name as the language orders it: SQLite's own comparison puts "Ärzte" after "Zebra". */
+export function sortSignatures(signatures: Signature[], locale: string): Signature[] {
+  const collator = new Intl.Collator(locale, { sensitivity: "base", numeric: true });
+  return [...signatures].sort((a, b) => collator.compare(a.name, b.name));
+}
+
 /** The editable copy of a stored signature; `null` gives the empty form for a new one. */
 export function draftOf(signature: Signature | null, accounts: Assigned[]): SignatureDraft {
   if (!signature) return { id: null, name: "", html: "", text: "", accountIds: [] };

@@ -1,6 +1,21 @@
 import { describe, it, expect } from "vitest";
-import { draftOf, isDraftDirty, usesOther } from "./signatures";
+import { draftOf, isDraftDirty, sortSignatures, usesOther } from "./signatures";
 import type { Signature } from "../types";
+
+describe("signature order", () => {
+  const named = (name: string): Signature => ({ id: name, name, html: "", text: "", created_at: "", updated_at: "" });
+
+  it("sorts umlauts with their base letter and ignores case", () => {
+    const sorted = sortSignatures(["Zebra", "Ärzte", "anna", "Österreich", "Privat"].map(named), "de");
+    expect(sorted.map((s) => s.name)).toEqual(["anna", "Ärzte", "Österreich", "Privat", "Zebra"]);
+  });
+
+  it("puts numbers in numeric order and leaves the given list untouched", () => {
+    const given = ["Büro 10", "Büro 2"].map(named);
+    expect(sortSignatures(given, "de").map((s) => s.name)).toEqual(["Büro 2", "Büro 10"]);
+    expect(given.map((s) => s.name)).toEqual(["Büro 10", "Büro 2"]);
+  });
+});
 
 const S: Signature = { id: "s1", name: "Studio Halde", html: "<div>Anna Weber</div>", text: "Anna Weber", created_at: "", updated_at: "" };
 const accounts = [

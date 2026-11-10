@@ -1,8 +1,7 @@
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
 import { Edit3 } from "../icons";
-import { listSignatures } from "../../lib/tauri";
 import { useAccounts } from "../../hooks/useAccounts";
+import { useSignatures } from "../../hooks/useSignatures";
 import { Button } from "../ui/Button";
 import { Switch } from "../ui/Switch";
 import { SettingsBlock, SettingsRow } from "./SettingsGroup";
@@ -31,7 +30,7 @@ export function AccountSignatureSection({
   onEdit,
 }: AccountSignatureSectionProps) {
   const { t } = useTranslation();
-  const { data: signatures = [] } = useQuery({ queryKey: ["signatures"], queryFn: listSignatures });
+  const { data: signatures = [] } = useSignatures();
   const { data: accounts = [] } = useAccounts();
 
   const chosen = signatures.find((s) => s.id === signatureId) ?? null;
