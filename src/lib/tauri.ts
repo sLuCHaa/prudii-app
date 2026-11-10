@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { BundleImportResult, Calendar, CalendarPatch, CalendarSettings, EditScope, EventDetail, EventInput, EventPatch, EventTimes, ImportResult, InvitationView, Occurrence, RespondInvitationArgs, SubscribeResult } from "../types/calendar";
-import type { Account, AiResponse, Assignment, Attachment, AttachmentWithContext, AppConfig, AppSettings, BackupOptions, BulkSaveResult, CategoryCount, ChecklistItem, Contact, ContactDomain, CreateAccountRequest, CreateRuleRequest, CreateTaskInput, EmailTemplate, ExportLabels, ExportOptions, Folder, LicenseInfo, ListStatus, Mail, NewsletterOverview, MailCategoryInfo, MailRule, OAuthResult, OllamaStatus, RestorePreview, ScheduledMail, SearchResult, SenderRule, SendMailRequest, SieveSupport, Task, TaskAttachment, TaskDetail, StoredBody, TaskStatus, TeamSnapshot, TrackerRecord, TrackerReport, UnsubscribeOutcome, UpdateTaskPatch, VacationSettings, VacationState } from "../types";
+import type { Account, AiResponse, Assignment, Attachment, AttachmentWithContext, AppConfig, AppSettings, BackupOptions, BulkSaveResult, CategoryCount, ChecklistItem, Contact, ContactDomain, CreateAccountRequest, CreateRuleRequest, CreateTaskInput, EmailTemplate, ExportLabels, ExportOptions, Folder, LicenseInfo, ListStatus, Mail, NewsletterOverview, MailCategoryInfo, MailRule, OAuthResult, OllamaStatus, RestorePreview, ScheduledMail, SearchResult, SenderRule, SendMailRequest, SieveSupport, Signature, Task, TaskAttachment, TaskDetail, StoredBody, TaskStatus, TeamSnapshot, TrackerRecord, TrackerReport, UnsubscribeOutcome, UpdateTaskPatch, VacationSettings, VacationState } from "../types";
 import { prefers24HourClock } from "./localeDefaults";
 
 export async function listAccounts(): Promise<Account[]> {
@@ -27,6 +27,28 @@ export async function updateAccountSignature(
   signatureOnReply: boolean,
 ): Promise<void> {
   return invoke("update_account_signature", { accountId, signatureHtml, signatureText, signatureOnCompose, signatureOnReply });
+}
+
+export async function listSignatures(): Promise<Signature[]> {
+  return invoke("list_signatures");
+}
+
+export async function saveSignature(input: {
+  id: string | null;
+  name: string;
+  html: string;
+  text: string;
+  accountIds: string[];
+}): Promise<Signature> {
+  return invoke("save_signature", input);
+}
+
+export async function duplicateSignature(id: string, copyName: string): Promise<Signature> {
+  return invoke("duplicate_signature", { id, copyName });
+}
+
+export async function deleteSignature(id: string): Promise<void> {
+  return invoke("delete_signature", { id });
 }
 
 export async function updateAccountSyncInterval(

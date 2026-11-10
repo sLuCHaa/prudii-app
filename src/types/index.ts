@@ -13,12 +13,23 @@ export interface Account {
   smtp_port: number;
   smtp_security: SmtpSecurity;
   auth_type: string;
+  signature_id: string | null;
+  /** Content of the assigned signature; empty when the account has none. */
   signature_html: string;
   signature_text: string;
   signature_on_compose: boolean;
   signature_on_reply: boolean;
   sync_interval_minutes: number;
   load_external_images: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Signature {
+  id: string;
+  name: string;
+  html: string;
+  text: string;
   created_at: string;
   updated_at: string;
 }
