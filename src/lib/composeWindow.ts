@@ -7,6 +7,7 @@ import i18n from "./i18n";
 import { useAppStore } from "../stores/appStore";
 import { pickComposePosition } from "./composePosition";
 import { MAX_COMPOSE_WINDOWS, composeLabels, oldestComposeLabel } from "./composeLimit";
+import { backgroundFor, composeWindowOptions, type ComposeGeometry } from "./composeWindowOptions";
 import type { ComposeInitData } from "../components/compose/ComposeModal";
 
 let composeCounter = 0;
@@ -22,51 +23,10 @@ let spare: SpareWindow | null = null;
 let spareTimer: ReturnType<typeof setTimeout> | null = null;
 const SPARE_REFILL_MS = 2000;
 
-interface ComposeGeometry {
-  w: number;
-  h: number;
-  x?: number;
-  y?: number;
-}
-
 function nextLabel(): string {
   // Timestamp keeps labels unique even after a main-window reload resets the
   // counter — a reused label of a still-open window makes creation fail.
   return `compose-${Date.now()}-${++composeCounter}`;
-}
-
-function backgroundFor(dark: boolean): [number, number, number, number] {
-  return dark ? [18, 18, 20, 255] : [255, 255, 255, 255];
-}
-
-function windowOptions(dark: boolean, g: ComposeGeometry) {
-  return {
-    url: "index.html?compose=true",
-    title: "Compose",
-    width: g.w,
-    height: g.h,
-    minWidth: 500,
-    minHeight: 400,
-    x: g.x,
-    y: g.y,
-    center: g.x === undefined,
-    // macOS: native decorations with overlay title bar (traffic lights over
-    // our custom bar, real rounded corners). Windows/Linux: frameless.
-    decorations: isMacOS,
-    ...(isMacOS
-      ? {
-          titleBarStyle: "overlay" as const,
-          hiddenTitle: true,
-          trafficLightPosition: new LogicalPosition(12, 16),
-        }
-      : {}),
-    // Native window background matching the theme, so the window never flashes
-    // WebView2's white default before the web content paints.
-    backgroundColor: backgroundFor(dark),
-    maximizable: true,
-    visible: false,
-    dragDropEnabled: false,
-  };
 }
 
 /** Compose windows on screen; hidden ones are the spare or still loading. */
@@ -234,7 +194,7 @@ export async function openComposeWindow(data: ComposeInitData): Promise<void> {
       });
     });
 
-    const webview = new WebviewWindow(label, windowOptions(data.darkMode, geometry));
+    const webview = new WebviewWindow(label, composeWindowOptions(data.darkMode, geometry, isMacOS));
 
     webview.once("tauri://destroyed", () => {
       if (readyUnlisten) { readyUnlisten(); readyUnlisten = null; }
@@ -298,7 +258,7 @@ async function prepareSpare(): Promise<void> {
   };
   try {
     const geometry = await composeGeometry();
-    entry.win = new WebviewWindow(entry.label, windowOptions(useAppStore.getState().darkMode, geometry));
+    entry.win = new WebviewWindow(entry.label, composeWindowOptions(useAppStore.getState().darkMode, geometry, isMacOS));
     entry.win.once("tauri://destroyed", drop);
     entry.win.once("tauri://error", drop);
   } catch {
