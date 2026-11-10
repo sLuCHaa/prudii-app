@@ -315,6 +315,7 @@
     "archiveConversation": "Архивировать переписку",
     "deleteConversation": "Удалить переписку",
     "latest": "Последнее",
+    "inAccount": "В аккаунте {{account}}",
     "you": "Вы",
     "showAllRecipients": "Показать всех получателей",
     "showQuoted": "Показать историю",

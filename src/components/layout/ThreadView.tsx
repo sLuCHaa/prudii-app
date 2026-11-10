@@ -55,7 +55,8 @@ import { LinkedTaskChip } from "../tasks/MailTaskChip";
 import { TaskPickerDialog } from "../tasks/TaskPickerDialog";
 import { CreateTaskFromMail } from "../tasks/CreateTaskFromMail";
 import { InvitationCard } from "../calendar/InvitationCard";
-import type { Mail, Attachment, MailAddress } from "../../types";
+import type { Mail, Attachment, MailAddress, Account as AccountT } from "../../types";
+import { otherAccount } from "../../lib/threadAccounts";
 import { useTranslation } from "react-i18next";
 import { ImageLightbox, type ImageLightboxItem } from "./ImageLightbox";
 import { formatFileSize } from "../../lib/fileSize";
@@ -597,6 +598,7 @@ interface MessageCardProps {
   defaultExpanded: boolean;
   chat?: boolean;
   own?: boolean;
+  fromAccount?: AccountT | null;
   onCollapse?: (mailId: string) => void;
   onReply: (mail: Mail) => void;
   onReplyAll: (mail: Mail) => void;
@@ -606,7 +608,22 @@ interface MessageCardProps {
   onUpdateMail?: (mailId: string, updates: Partial<Mail>) => void;
 }
 
-const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defaultExpanded, chat, own, onCollapse, onReply, onReplyAll, onForward, onIframeRef, onLinkClick, onUpdateMail }: MessageCardProps) {
+function AccountChip({ account }: { account: AccountT }) {
+  const { t } = useTranslation();
+  const label = t("mailDetail.inAccount", { account: account.email });
+  return (
+    <span
+      title={label}
+      aria-label={label}
+      className="inline-flex items-center gap-1 min-w-0 max-w-[160px] px-1.5 py-0.5 text-[11px] font-medium rounded-sm bg-bg-tertiary text-text-secondary shrink-0"
+    >
+      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: account.color }} />
+      <span className="truncate">{account.display_name}</span>
+    </span>
+  );
+}
+
+const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defaultExpanded, chat, own, fromAccount, onCollapse, onReply, onReplyAll, onForward, onIframeRef, onLinkClick, onUpdateMail }: MessageCardProps) {
   const { t } = useTranslation();
   const highlight = useContext(SearchHighlightContext);
   const queryClient = useQueryClient();
@@ -1084,6 +1101,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
                 </button>
               </Tooltip>
             )}
+            {fromAccount && <AccountChip account={fromAccount} />}
             <span aria-hidden="true">·</span>
             <span className="shrink-0">{formattedDate}</span>
           </div>
@@ -1211,6 +1229,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
                 {t("mailDetail.latest")}
               </span>
             )}
+            {fromAccount && <AccountChip account={fromAccount} />}
             {mail.has_attachments && (
               <Paperclip className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
             )}
@@ -1526,6 +1545,7 @@ function ThreadMessages({
   threadMails,
   isSingleMail,
   selectedMailId,
+  openedAccountId,
   chat,
   isOwn,
   onCollapse,
@@ -1538,6 +1558,7 @@ function ThreadMessages({
   threadMails: Mail[];
   isSingleMail: boolean;
   selectedMailId?: string;
+  openedAccountId: string;
   chat: boolean;
   isOwn: (mail: Mail) => boolean;
   onCollapse: (mailId: string) => void;
@@ -1548,6 +1569,7 @@ function ThreadMessages({
   onUpdateMail: (mailId: string, updates: Partial<Mail>) => void;
 }) {
   const messagesRef = useRef<HTMLDivElement>(null);
+  const accounts = useAppStore((s) => s.accounts);
 
   if (chat && !isSingleMail) {
     const newest = new Set(threadMails.slice(0, CHAT_EXPANDED_NEWEST).map((m) => m.id));
@@ -1564,6 +1586,7 @@ function ThreadMessages({
                 defaultExpanded={newest.has(m.id) || m.id === selectedMailId || !m.is_read}
                 chat
                 own={own}
+                fromAccount={otherAccount(m, openedAccountId, accounts)}
                 onCollapse={onCollapse}
                 onReply={onReply}
                 onReplyAll={onReplyAll}
@@ -1597,6 +1620,7 @@ function ThreadMessages({
               isLatest={index === 0}
               defaultExpanded={isSingleMail || index === 0 || m.id === selectedMailId}
               singleMail={isSingleMail}
+              fromAccount={otherAccount(m, openedAccountId, accounts)}
               onCollapse={onCollapse}
               onReply={onReply}
               onReplyAll={onReplyAll}
@@ -2090,6 +2114,7 @@ export function ThreadView({ mail }: ThreadViewProps) {
                       threadMails={threadMails}
                       isSingleMail={isSingleMail}
                       selectedMailId={mail.id}
+                      openedAccountId={mail.account_id}
                       chat={chatView}
                       isOwn={isOwn}
                       onCollapse={revealMessageStart}

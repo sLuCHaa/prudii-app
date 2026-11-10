@@ -2516,6 +2516,20 @@ pub fn get_thread_mails_inner(conn: &rusqlite::Connection, mail_id: &str) -> Res
     const MAX_ROUNDS: usize = 6;
     const MAX_RELATED: usize = 500;
 
+    // One query per account keeps every lookup on the (account_id, …) indexes.
+    // The opened mail's account goes first: of a mail lying in two accounts,
+    // the dedup below keeps the first copy it sees.
+    let mut accounts: Vec<String> = vec![account_id.clone()];
+    {
+        let mut others = conn.prepare("SELECT id FROM accounts WHERE id != ?1").map_err(|e| e.to_string())?;
+        let ids = others
+            .query_map(rusqlite::params![account_id], |row| row.get::<_, String>(0))
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        accounts.extend(ids);
+    }
+
     let mut frontier = related_ids.clone();
     for _ in 0..MAX_ROUNDS {
         if frontier.is_empty() || related_ids.len() >= MAX_RELATED {
@@ -2528,22 +2542,26 @@ pub fn get_thread_mails_inner(conn: &rusqlite::Connection, mail_id: &str) -> Res
             thread_link_filter(frontier.len(), frontier.len() + 1, "")
         );
         let mut step = conn.prepare(&step_sql).map_err(|e| e.to_string())?;
-        let mut step_params: Vec<&dyn rusqlite::ToSql> =
-            frontier.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
-        step_params.push(&account_id);
+        let mut rows: Vec<(String, String, String, String)> = Vec::new();
+        for account in &accounts {
+            let mut step_params: Vec<&dyn rusqlite::ToSql> =
+                frontier.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
+            step_params.push(account);
 
-        let rows = step
-            .query_map(step_params.as_slice(), |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, String>(2)?,
-                    row.get::<_, String>(3)?,
-                ))
-            })
-            .map_err(|e| e.to_string())?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| e.to_string())?;
+            let found = step
+                .query_map(step_params.as_slice(), |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                    ))
+                })
+                .map_err(|e| e.to_string())?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?;
+            rows.extend(found);
+        }
 
         let mut next: Vec<String> = Vec::new();
         for (mid, irt, tid, refs) in rows {
@@ -2566,7 +2584,7 @@ pub fn get_thread_mails_inner(conn: &rusqlite::Connection, mail_id: &str) -> Res
         frontier = next;
     }
 
-    // Match message_id, in_reply_to, and thread_id within the same account via
+    // Match message_id, in_reply_to, and thread_id, one account at a time, via
     // the bracket-normalized generated columns (indexed — see db/mod.rs). The
     // old REPLACE()-in-WHERE variant full-scanned the table three times per
     // click, plus a full-account GROUP BY to collapse cross-folder duplicates;
@@ -2583,21 +2601,27 @@ pub fn get_thread_mails_inner(conn: &rusqlite::Connection, mail_id: &str) -> Res
 
     let mut stmt = conn.prepare(&simple_query).map_err(|e| e.to_string())?;
 
-    let mut params: Vec<&dyn rusqlite::ToSql> = related_ids.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
-    params.push(&account_id);
+    let mut mails: Vec<Mail> = Vec::new();
+    for account in &accounts {
+        let mut params: Vec<&dyn rusqlite::ToSql> = related_ids.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
+        params.push(account);
 
-    let mails = stmt
-        .query_map(params.as_slice(), map_mail_row)
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
+        let found = stmt
+            .query_map(params.as_slice(), map_mail_row)
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        mails.extend(found);
+    }
 
     // If we found no mails (shouldn't happen), return the single mail
     if mails.is_empty() {
         return query_single_mail(conn, mail_id).map(|m| vec![m]);
     }
 
-    let result = dedup_mails(mails);
+    let mut result = dedup_mails(mails);
+    // Stable, so of two copies with the same date the opened account's stays ahead.
+    result.sort_by(|a, b| a.date.cmp(&b.date));
     let mut result = dedupe_thread_copies(result);
 
     // Safety net: ensure the clicked mail is always included in the thread.
@@ -4452,19 +4476,67 @@ mod thread_tests {
         assert_eq!(thread_ids(&db, "ccc"), vec!["ccc"]);
     }
 
+    fn insert_in_second_account(db: &Database, id: &str, msg_id: &str, in_reply_to: &str, subject: &str, date: &str) {
+        let conn = db.lock_db();
+        let thread_id = if in_reply_to.is_empty() { msg_id } else { in_reply_to };
+        conn.execute(
+            "INSERT INTO mails (id, account_id, folder_id, message_id, subject, from_name, from_email,
+                                date, thread_id, in_reply_to, \"references\")
+             VALUES (?1, 'acc2', 'f2', ?2, ?3, 'S', 's@example.com', ?4, ?5, ?6, '')",
+            params![id, msg_id, subject, date, thread_id, in_reply_to],
+        ).unwrap();
+    }
+
     #[test]
-    fn stays_inside_the_account() {
+    fn follows_a_reply_sent_from_another_account() {
         let db = temp_db();
         insert(&db, "a", "mid-a", "", "", "Anfrage");
-        {
-            let conn = db.lock_db();
-            conn.execute(
-                "INSERT INTO mails (id, account_id, folder_id, message_id, subject, from_name, from_email,
-                                    date, thread_id, in_reply_to, \"references\")
-                 VALUES ('other', 'acc2', 'f2', 'mid-other', 'Re: Anfrage', 'S', 's@example.com',
-                         '2026-01-02T00:00:00Z', 'mid-a', 'mid-a', '')", []).unwrap();
-        }
+        insert_in_second_account(&db, "other", "mid-other", "mid-a", "Re: Anfrage", "2026-01-02T00:00:00Z");
+
+        assert_eq!(thread_ids(&db, "a"), vec!["a", "other"]);
+        assert_eq!(thread_ids(&db, "other"), vec!["a", "other"]);
+    }
+
+    #[test]
+    fn follows_the_answer_that_arrives_in_the_other_account() {
+        let db = temp_db();
+        insert(&db, "a", "mid-a", "", "", "Anfrage");
+        insert_in_second_account(&db, "other", "mid-other", "mid-a", "Re: Anfrage", "2026-01-02T00:00:00Z");
+        insert_in_second_account(&db, "answer", "mid-answer", "mid-other", "Re: Anfrage", "2026-01-03T00:00:00Z");
+
+        assert_eq!(thread_ids(&db, "a"), vec!["a", "answer", "other"]);
+    }
+
+    #[test]
+    fn leaves_the_other_accounts_unrelated_mail_out() {
+        let db = temp_db();
+        insert(&db, "a", "mid-a", "", "", "Anfrage");
+        insert_in_second_account(&db, "zz", "mid-z", "", "Anfrage", "2026-01-02T00:00:00Z");
+
         assert_eq!(thread_ids(&db, "a"), vec!["a"]);
+        assert_eq!(thread_ids(&db, "zz"), vec!["zz"]);
+    }
+
+    #[test]
+    fn shows_a_mail_lying_in_both_accounts_once_from_the_opened_one() {
+        let db = temp_db();
+        insert(&db, "a", "mid-a", "", "", "Anfrage");
+        insert_in_second_account(&db, "twin", "mid-a", "", "Anfrage", "2026-01-01T00:00:00Z");
+
+        assert_eq!(thread_ids(&db, "a"), vec!["a"]);
+        assert_eq!(thread_ids(&db, "twin"), vec!["twin"]);
+    }
+
+    #[test]
+    fn keeps_the_conversation_in_date_order_across_accounts() {
+        let db = temp_db();
+        insert(&db, "a", "mid-a", "", "", "Anfrage");
+        insert_in_second_account(&db, "other", "mid-other", "mid-a", "Re: Anfrage", "2026-01-02T00:00:00Z");
+        insert(&db, "ccc", "mid-c", "mid-other", "", "Re: Anfrage");
+
+        let conn = db.lock_db();
+        let ids: Vec<String> = get_thread_mails_inner(&conn, "a").unwrap().into_iter().map(|m| m.id).collect();
+        assert_eq!(ids, vec!["a", "other", "ccc"]);
     }
 
     /// A malformed chain that points at itself must not spin the expansion.

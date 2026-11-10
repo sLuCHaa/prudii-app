@@ -311,6 +311,7 @@
     "archiveConversation": "Archivar conversación",
     "deleteConversation": "Eliminar conversación",
     "latest": "Más reciente",
+    "inAccount": "En la cuenta {{account}}",
     "you": "Tú",
     "showAllRecipients": "Mostrar todos los destinatarios",
     "showQuoted": "Mostrar historial",

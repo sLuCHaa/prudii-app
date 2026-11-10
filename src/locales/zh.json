@@ -310,6 +310,7 @@
     "archiveConversation": "归档会话",
     "deleteConversation": "删除会话",
     "latest": "最新",
+    "inAccount": "位于账户 {{account}}",
     "you": "我",
     "showAllRecipients": "显示所有收件人",
     "showQuoted": "显示历史记录",
