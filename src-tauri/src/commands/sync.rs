@@ -1446,7 +1446,7 @@ pub async fn sync_account(
     let account: Account = {
         let conn = db.lock_db();
         conn.query_row(
-            "SELECT id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port, COALESCE(smtp_security, 'ssl') as smtp_security, auth_type, COALESCE(signature_html, '') as signature_html, COALESCE(signature_text, '') as signature_text, COALESCE(sync_interval_minutes, 0) as sync_interval_minutes, COALESCE(signature_on_compose, 1) as signature_on_compose, COALESCE(signature_on_reply, 1) as signature_on_reply, COALESCE(load_external_images, 'always') as load_external_images, created_at, updated_at FROM accounts WHERE id = ?1",
+            "SELECT id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port, COALESCE(smtp_security, 'ssl') as smtp_security, auth_type, '' as signature_html, '' as signature_text, COALESCE(sync_interval_minutes, 0) as sync_interval_minutes, COALESCE(signature_on_compose, 1) as signature_on_compose, COALESCE(signature_on_reply, 1) as signature_on_reply, COALESCE(load_external_images, 'always') as load_external_images, created_at, updated_at FROM accounts WHERE id = ?1",
             rusqlite::params![account_id],
             |row| {
                 Ok(Account {
@@ -1461,6 +1461,7 @@ pub async fn sync_account(
                     smtp_port: row.get(8)?,
                     smtp_security: row.get(9)?,
                     auth_type: row.get(10)?,
+                    signature_id: None,
                     signature_html: row.get(11)?,
                     signature_text: row.get(12)?,
                     sync_interval_minutes: row.get(13)?,
@@ -1513,13 +1514,13 @@ pub async fn sync_folder(
         let conn = db.lock_db();
         conn.query_row(
             // Same columns as sync_account (sync.rs:1293).
-            "SELECT id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port, COALESCE(smtp_security, 'ssl') as smtp_security, auth_type, COALESCE(signature_html, '') as signature_html, COALESCE(signature_text, '') as signature_text, COALESCE(sync_interval_minutes, 0) as sync_interval_minutes, COALESCE(signature_on_compose, 1) as signature_on_compose, COALESCE(signature_on_reply, 1) as signature_on_reply, COALESCE(load_external_images, 'always') as load_external_images, created_at, updated_at FROM accounts WHERE id = ?1",
+            "SELECT id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port, COALESCE(smtp_security, 'ssl') as smtp_security, auth_type, '' as signature_html, '' as signature_text, COALESCE(sync_interval_minutes, 0) as sync_interval_minutes, COALESCE(signature_on_compose, 1) as signature_on_compose, COALESCE(signature_on_reply, 1) as signature_on_reply, COALESCE(load_external_images, 'always') as load_external_images, created_at, updated_at FROM accounts WHERE id = ?1",
             rusqlite::params![account_id],
             |row| Ok(Account {
                 id: row.get(0)?, email: row.get(1)?, display_name: row.get(2)?, provider: row.get(3)?,
                 color: row.get(4)?, imap_host: row.get(5)?, imap_port: row.get(6)?, smtp_host: row.get(7)?,
                 smtp_port: row.get(8)?, smtp_security: row.get(9)?, auth_type: row.get(10)?,
-                signature_html: row.get(11)?, signature_text: row.get(12)?, sync_interval_minutes: row.get(13)?,
+                signature_id: None, signature_html: row.get(11)?, signature_text: row.get(12)?, sync_interval_minutes: row.get(13)?,
                 signature_on_compose: row.get(14)?, signature_on_reply: row.get(15)?, load_external_images: row.get(16)?,
                 created_at: row.get(17)?, updated_at: row.get(18)?,
             }),
@@ -1590,7 +1591,7 @@ async fn spawn_account_syncs(app: AppHandle, db: &Database, only_automatic: bool
     let accounts: Vec<Account> = {
         let conn = db.lock_db();
         let mut stmt = conn
-            .prepare("SELECT id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port, COALESCE(smtp_security, 'ssl') as smtp_security, auth_type, COALESCE(signature_html, '') as signature_html, COALESCE(signature_text, '') as signature_text, COALESCE(sync_interval_minutes, 0) as sync_interval_minutes, COALESCE(signature_on_compose, 1) as signature_on_compose, COALESCE(signature_on_reply, 1) as signature_on_reply, COALESCE(load_external_images, 'always') as load_external_images, created_at, updated_at FROM accounts ORDER BY created_at ASC")
+            .prepare("SELECT id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port, COALESCE(smtp_security, 'ssl') as smtp_security, auth_type, '' as signature_html, '' as signature_text, COALESCE(sync_interval_minutes, 0) as sync_interval_minutes, COALESCE(signature_on_compose, 1) as signature_on_compose, COALESCE(signature_on_reply, 1) as signature_on_reply, COALESCE(load_external_images, 'always') as load_external_images, created_at, updated_at FROM accounts ORDER BY created_at ASC")
             .map_err(|e| e.to_string())?;
         let result = stmt
             .query_map([], |row| {
@@ -1606,6 +1607,7 @@ async fn spawn_account_syncs(app: AppHandle, db: &Database, only_automatic: bool
                     smtp_port: row.get(8)?,
                     smtp_security: row.get(9)?,
                     auth_type: row.get(10)?,
+                    signature_id: None,
                     signature_html: row.get(11)?,
                     signature_text: row.get(12)?,
                     sync_interval_minutes: row.get(13)?,
@@ -1716,7 +1718,7 @@ pub async fn backfill_bodies(
     let account: Account = {
         let conn = db.lock_db();
         conn.query_row(
-            "SELECT id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port, COALESCE(smtp_security, 'ssl') as smtp_security, auth_type, COALESCE(signature_html, '') as signature_html, COALESCE(signature_text, '') as signature_text, COALESCE(sync_interval_minutes, 0) as sync_interval_minutes, COALESCE(signature_on_compose, 1) as signature_on_compose, COALESCE(signature_on_reply, 1) as signature_on_reply, COALESCE(load_external_images, 'always') as load_external_images, created_at, updated_at FROM accounts WHERE id = ?1",
+            "SELECT id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port, COALESCE(smtp_security, 'ssl') as smtp_security, auth_type, '' as signature_html, '' as signature_text, COALESCE(sync_interval_minutes, 0) as sync_interval_minutes, COALESCE(signature_on_compose, 1) as signature_on_compose, COALESCE(signature_on_reply, 1) as signature_on_reply, COALESCE(load_external_images, 'always') as load_external_images, created_at, updated_at FROM accounts WHERE id = ?1",
             rusqlite::params![account_id],
             |row| {
                 Ok(Account {
@@ -1731,6 +1733,7 @@ pub async fn backfill_bodies(
                     smtp_port: row.get(8)?,
                     smtp_security: row.get(9)?,
                     auth_type: row.get(10)?,
+                    signature_id: None,
                     signature_html: row.get(11)?,
                     signature_text: row.get(12)?,
                     sync_interval_minutes: row.get(13)?,

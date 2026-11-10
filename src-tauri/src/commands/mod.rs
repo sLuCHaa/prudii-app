@@ -18,6 +18,7 @@ pub mod rules;
 pub mod send;
 pub mod settings;
 pub mod sieve;
+pub mod signatures;
 pub mod sync;
 pub mod tasks;
 pub mod team;

@@ -13,12 +13,24 @@ pub struct Account {
     pub smtp_port: i32,
     pub smtp_security: String, // "ssl" or "starttls"
     pub auth_type: String,
+    pub signature_id: Option<String>,
+    /// Content of the assigned signature, empty when the account has none.
     pub signature_html: String,
     pub signature_text: String,
     pub signature_on_compose: bool,
     pub signature_on_reply: bool,
     pub sync_interval_minutes: i32,
     pub load_external_images: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Signature {
+    pub id: String,
+    pub name: String,
+    pub html: String,
+    pub text: String,
     pub created_at: String,
     pub updated_at: String,
 }

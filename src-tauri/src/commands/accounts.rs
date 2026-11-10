@@ -40,7 +40,7 @@ pub fn list_accounts(db: State<'_, Database>) -> Result<Vec<Account>, String> {
 pub fn list_accounts_inner(conn: &rusqlite::Connection) -> Result<Vec<Account>, String> {
     let mut stmt = conn
         .prepare(
-            "SELECT id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port, COALESCE(smtp_security, 'ssl') as smtp_security, auth_type, COALESCE(signature_html, '') as signature_html, COALESCE(signature_text, '') as signature_text, COALESCE(signature_on_compose, 1) as signature_on_compose, COALESCE(signature_on_reply, 1) as signature_on_reply, COALESCE(sync_interval_minutes, 0) as sync_interval_minutes, COALESCE(load_external_images, 'always') as load_external_images, created_at, updated_at FROM accounts ORDER BY created_at ASC",
+            "SELECT a.id, a.email, a.display_name, a.provider, a.color, a.imap_host, a.imap_port, a.smtp_host, a.smtp_port, COALESCE(a.smtp_security, 'ssl') as smtp_security, a.auth_type, COALESCE(s.html, '') as signature_html, COALESCE(s.text, '') as signature_text, COALESCE(a.signature_on_compose, 1) as signature_on_compose, COALESCE(a.signature_on_reply, 1) as signature_on_reply, COALESCE(a.sync_interval_minutes, 0) as sync_interval_minutes, COALESCE(a.load_external_images, 'always') as load_external_images, a.created_at, a.updated_at, s.id as signature_id FROM accounts a LEFT JOIN signatures s ON s.id = a.signature_id ORDER BY a.created_at ASC",
         )
         .map_err(|e| e.to_string())?;
 
@@ -58,6 +58,7 @@ pub fn list_accounts_inner(conn: &rusqlite::Connection) -> Result<Vec<Account>, 
                 smtp_port: row.get(8)?,
                 smtp_security: row.get(9)?,
                 auth_type: row.get(10)?,
+                signature_id: row.get(19)?,
                 signature_html: row.get(11)?,
                 signature_text: row.get(12)?,
                 signature_on_compose: row.get::<_, i32>(13)? != 0,
@@ -162,6 +163,7 @@ pub fn create_account(
         smtp_port: request.smtp_port,
         smtp_security: request.smtp_security,
         auth_type: request.auth_type,
+        signature_id: None,
         signature_html: String::new(),
         signature_text: String::new(),
         signature_on_compose: true,
@@ -209,46 +211,18 @@ pub fn store_account_password(
 pub fn update_account_signature(
     db: State<'_, Database>,
     account_id: String,
-    signature_html: String,
-    signature_text: String,
+    signature_id: Option<String>,
     signature_on_compose: bool,
     signature_on_reply: bool,
 ) -> Result<(), String> {
     super::catch_panic(|| {
-        let conn = db.lock_db();
-        let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
-
-        // Sanitize signature HTML: strip scripts, event handlers, iframes, etc.
-        let clean_html = ammonia::Builder::new()
-            .tags(std::collections::HashSet::from([
-                "div", "span", "p", "br", "hr",
-                "b", "i", "u", "s", "em", "strong", "small", "sub", "sup",
-                "h1", "h2", "h3", "h4", "h5", "h6",
-                "ul", "ol", "li",
-                "table", "thead", "tbody", "tr", "th", "td",
-                "img", "a", "font", "blockquote", "pre", "code",
-            ]))
-            .tag_attributes(std::collections::HashMap::from([
-                ("a", std::collections::HashSet::from(["href", "target"])),
-                ("img", std::collections::HashSet::from(["src", "alt", "width", "height"])),
-                ("font", std::collections::HashSet::from(["color", "face", "size"])),
-                ("td", std::collections::HashSet::from(["colspan", "rowspan", "align", "valign"])),
-                ("th", std::collections::HashSet::from(["colspan", "rowspan", "align", "valign"])),
-                ("table", std::collections::HashSet::from(["border", "cellpadding", "cellspacing"])),
-            ]))
-            .generic_attributes(std::collections::HashSet::from(["style", "class", "id"]))
-            .url_schemes(std::collections::HashSet::from(["http", "https", "mailto", "data"]))
-            .link_rel(Some("noopener noreferrer"))
-            .clean(&signature_html)
-            .to_string();
-
-        conn.execute(
-            "UPDATE accounts SET signature_html = ?1, signature_text = ?2, signature_on_compose = ?3, signature_on_reply = ?4, updated_at = ?5 WHERE id = ?6",
-            rusqlite::params![clean_html, signature_text, signature_on_compose as i32, signature_on_reply as i32, now, account_id],
+        super::signatures::set_account_signature_inner(
+            &db.lock_db(),
+            &account_id,
+            signature_id.as_deref(),
+            signature_on_compose,
+            signature_on_reply,
         )
-        .map_err(|e| format!("Failed to update signature: {}", e))?;
-
-        Ok(())
     })
 }
 
