@@ -134,6 +134,11 @@ describe("shape audit", () => {
     expect(wrappers.filter((w) => !/\bpx-px\b/.test(w) || !/\bpb-1\b/.test(w))).toEqual([]);
   });
 
+  it("keeps an opaque backdrop behind the view fade", () => {
+    const wrapper = /<div className="([^"]*)">\s*<motion\.div\s+key=\{mainView\}/.exec(sourceOf("layout/AppLayout.tsx"));
+    expect(wrapper?.[1].split(" ")).toContain("bg-bg");
+  });
+
   it("uses composable shadows on the reading card", () => {
     const card = classStrings().find(({ file, cls }) => file.endsWith("ThreadView.tsx") && cls.includes("bg-surface border border-border rounded-xl"));
     expect(card?.cls).toContain("shadow-card-soft");

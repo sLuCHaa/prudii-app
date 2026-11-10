@@ -233,6 +233,8 @@ export function AppLayout() {
               />
             )}
 
+            {/* With vibrancy the shell is transparent, so a view fading in from nothing would show the window material. */}
+            <div className="flex flex-1 min-w-0 bg-bg">
             <motion.div
               key={mainView}
               initial={reduceMotion ? false : { opacity: 0 }}
@@ -279,6 +281,7 @@ export function AppLayout() {
                 </>
               )}
             </motion.div>
+            </div>
           </div>
         )}
       </div>
