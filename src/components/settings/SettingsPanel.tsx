@@ -14,7 +14,7 @@ import { useRemoveAccount } from "../../hooks/useRemoveAccount";
 import { useScroller } from "../../hooks/useScroller";
 import { updateAccountSignature, updateAccountSyncInterval, updateAccountSettings, storeAccountPassword, syncAccount, getAppSettings, updateAppSettings, registerMailtoHandler, unregisterMailtoHandler, isMailtoHandler } from "../../lib/tauri";
 import { changeLanguage, getLanguagePreference, type AppLanguage } from "../../lib/i18n";
-import { SignatureEditor } from "./SignatureEditor";
+import { AccountSignatureSection } from "./AccountSignatureSection";
 import { BackupRestore } from "./BackupRestore";
 import { MailExportSection } from "./MailExportSection";
 import { RulesPanel } from "./RulesPanel";
@@ -122,10 +122,12 @@ const ACCOUNT_COLORS = [
 function AccountSettings({
   account,
   onBack,
+  onEditSignature,
   dirtyRef,
 }: {
   account: Account;
   onBack: () => void;
+  onEditSignature: (signatureId: string) => void;
   dirtyRef: React.MutableRefObject<boolean>;
 }) {
   const { t } = useTranslation();
@@ -143,8 +145,7 @@ function AccountSettings({
   const [smtpSecurity, setSmtpSecurity] = useState<SmtpSecurity>(account.smtp_security);
   const [loadExternalImages, setLoadExternalImages] = useState(account.load_external_images || "always");
 
-  const [signatureHtml, setSignatureHtml] = useState(account.signature_html);
-  const [signatureText, setSignatureText] = useState(account.signature_text);
+  const [signatureId, setSignatureId] = useState(account.signature_id);
   const [signatureOnCompose, setSignatureOnCompose] = useState(account.signature_on_compose);
   const [signatureOnReply, setSignatureOnReply] = useState(account.signature_on_reply);
   const [syncInterval, setSyncInterval] = useState(account.sync_interval_minutes);
@@ -166,8 +167,7 @@ function AccountSettings({
     smtpPort: account.smtp_port,
     smtpSecurity: account.smtp_security,
     loadExternalImages: account.load_external_images || "always",
-    signatureHtml: account.signature_html,
-    signatureText: account.signature_text,
+    signatureId: account.signature_id,
     signatureOnCompose: account.signature_on_compose,
     signatureOnReply: account.signature_on_reply,
     syncInterval: account.sync_interval_minutes,
@@ -175,7 +175,7 @@ function AccountSettings({
 
   const isDirty = password.trim() !== "" || JSON.stringify({
     displayName, color, imapHost, imapPort, smtpHost, smtpPort, smtpSecurity,
-    loadExternalImages, signatureHtml, signatureText, signatureOnCompose,
+    loadExternalImages, signatureId, signatureOnCompose,
     signatureOnReply, syncInterval,
   }) !== snapshot.current;
 
@@ -183,17 +183,22 @@ function AccountSettings({
   dirtyRef.current = isDirty;
   useEffect(() => () => { dirtyRef.current = false; }, [dirtyRef]);
 
+  async function leaveConfirmed() {
+    if (!isDirty) return true;
+    return dialog.danger({
+      title: t("settings.discardTitle"),
+      message: t("settings.discardMessage"),
+      confirmLabel: t("common.discard"),
+      cancelLabel: t("common.cancel"),
+    });
+  }
+
   async function requestBack() {
-    if (isDirty) {
-      const confirmed = await dialog.danger({
-        title: t("settings.discardTitle"),
-        message: t("settings.discardMessage"),
-        confirmLabel: t("common.discard"),
-        cancelLabel: t("common.cancel"),
-      });
-      if (!confirmed) return;
-    }
-    onBack();
+    if (await leaveConfirmed()) onBack();
+  }
+
+  async function requestEditSignature(id: string) {
+    if (await leaveConfirmed()) onEditSignature(id);
   }
 
   const isOAuth = account.provider === "google" || account.provider === "microsoft";
@@ -220,13 +225,13 @@ function AccountSettings({
         useAppStore.getState().revealSyncLine();
         syncAccount(account.id).catch(console.error);
       }
-      await updateAccountSignature(account.id, signatureHtml, signatureText, signatureOnCompose, signatureOnReply);
+      await updateAccountSignature(account.id, signatureId, signatureOnCompose, signatureOnReply);
       await updateAccountSyncInterval(account.id, syncInterval);
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       setSaved(true);
       snapshot.current = JSON.stringify({
         displayName, color, imapHost, imapPort, smtpHost, smtpPort, smtpSecurity,
-        loadExternalImages, signatureHtml, signatureText, signatureOnCompose,
+        loadExternalImages, signatureId, signatureOnCompose,
         signatureOnReply, syncInterval,
       });
       setTimeout(() => setSaved(false), 2000);
@@ -235,12 +240,6 @@ function AccountSettings({
     } finally {
       setSaving(false);
     }
-  }
-
-  function handleSignatureChange(html: string, text: string) {
-    setSignatureHtml(html);
-    setSignatureText(text);
-    setSaved(false);
   }
 
   function handleSyncIntervalChange(value: number) {
@@ -451,20 +450,15 @@ function AccountSettings({
             </SettingsGroup>
 
             <SettingsGroup title={t("settings.account.signature")}>
-              <SettingsBlock description={t("settings.account.signatureDesc")}>
-                <SignatureEditor
-                  htmlValue={signatureHtml}
-                  textValue={signatureText}
-                  onChange={handleSignatureChange}
-                />
-              </SettingsBlock>
-              <SettingsRow
-                title={t("settings.account.signatureOnCompose")}
-                control={<Switch checked={signatureOnCompose} onChange={(v) => { setSignatureOnCompose(v); setSaved(false); }} />}
-              />
-              <SettingsRow
-                title={t("settings.account.signatureOnReply")}
-                control={<Switch checked={signatureOnReply} onChange={(v) => { setSignatureOnReply(v); setSaved(false); }} />}
+              <AccountSignatureSection
+                accountId={account.id}
+                signatureId={signatureId}
+                onSignatureChange={(id) => { setSignatureId(id); setSaved(false); }}
+                onCompose={signatureOnCompose}
+                onReply={signatureOnReply}
+                onComposeChange={(v) => { setSignatureOnCompose(v); setSaved(false); }}
+                onReplyChange={(v) => { setSignatureOnReply(v); setSaved(false); }}
+                onEdit={requestEditSignature}
               />
             </SettingsGroup>
           </div>
@@ -680,6 +674,12 @@ export function SettingsPanel() {
     refetchAccounts();
   }
 
+  function handleEditSignature(signatureId: string) {
+    handleBack();
+    setSignatureToOpen(signatureId);
+    void setActiveTab("signatures");
+  }
+
   return (
     <motion.div
       exit={modalExit.overlay}
@@ -695,7 +695,7 @@ export function SettingsPanel() {
         className="bg-surface rounded-xl w-full max-w-6xl mx-4 overflow-hidden h-[80vh] flex flex-col shadow-[var(--shadow-lg)] inset-shadow-edge modal-panel-enter"
       >
         {view === "account" && selectedAccount ? (
-          <AccountSettings account={selectedAccount} onBack={handleBack} dirtyRef={accountDirtyRef} />
+          <AccountSettings account={selectedAccount} onBack={handleBack} onEditSignature={handleEditSignature} dirtyRef={accountDirtyRef} />
         ) : (
           <>
             <div className="flex items-center justify-between p-4 border-b border-border shrink-0">

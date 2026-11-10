@@ -21,12 +21,11 @@ export async function deleteAccount(accountId: string): Promise<void> {
 
 export async function updateAccountSignature(
   accountId: string,
-  signatureHtml: string,
-  signatureText: string,
+  signatureId: string | null,
   signatureOnCompose: boolean,
   signatureOnReply: boolean,
 ): Promise<void> {
-  return invoke("update_account_signature", { accountId, signatureHtml, signatureText, signatureOnCompose, signatureOnReply });
+  return invoke("update_account_signature", { accountId, signatureId, signatureOnCompose, signatureOnReply });
 }
 
 export async function listSignatures(): Promise<Signature[]> {

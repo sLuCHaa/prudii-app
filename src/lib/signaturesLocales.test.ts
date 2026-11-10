@@ -45,6 +45,11 @@ describe("signature list translations", () => {
       expect(missing(settings.tabs, ["signatures"])).toEqual([]);
     });
 
+    it(`${lang} has the texts for picking a signature in an account`, () => {
+      expect(missing(settings.account, ["signatureSelect", "signatureNone", "signatureSharedWith", "signatureEditInTab"])).toEqual([]);
+      expect((settings.account as Record<string, string>).signatureSharedWith ?? "").toContain("{{accounts}}");
+    });
+
     it(`${lang} keeps the placeholders`, () => {
       const block = root.signatures as Record<string, string>;
       for (const key of ["usesOther", "copyName", "deleteConfirm", "deleteConfirmUsed"]) {
