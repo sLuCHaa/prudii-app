@@ -27,8 +27,8 @@ pub fn start_idle(
     imap_host: String,
     imap_port: u16,
     email: String,
-    credential: String,
     auth_type: String,
+    provider: String,
 ) {
     // Check-and-claim atomically. If another IDLE is already running we
     // bail out without constructing a guard (no claim made).
@@ -50,8 +50,25 @@ pub fn start_idle(
     let aid_for_registry = account_id.clone();
     crate::task_registry::spawn_for_account(&aid_for_registry, async move {
         let _idle_guard = idle_guard;
-        idle_loop(&app, &account_id, &imap_host, imap_port, &email, &credential, &auth_type).await;
+        idle_loop(&app, &account_id, &imap_host, imap_port, &email, &auth_type, &provider).await;
     });
+}
+
+static RETRY_NOW: std::sync::LazyLock<tokio::sync::Notify> =
+    std::sync::LazyLock::new(tokio::sync::Notify::new);
+
+/// Ends a running reconnect backoff, so a new password is tried at once.
+pub fn retry_now() {
+    RETRY_NOW.notify_waiters();
+}
+
+async fn backoff(retry_count: &mut u32) {
+    let delay = std::cmp::min(30 * (*retry_count + 1), 300); // max 5min backoff
+    *retry_count += 1;
+    tokio::select! {
+        _ = tokio::time::sleep(std::time::Duration::from_secs(delay as u64)) => {}
+        _ = RETRY_NOW.notified() => {}
+    }
 }
 
 async fn idle_loop(
@@ -60,23 +77,26 @@ async fn idle_loop(
     imap_host: &str,
     imap_port: u16,
     email: &str,
-    credential: &str,
     auth_type: &str,
+    provider: &str,
 ) {
     let mut retry_count = 0u32;
 
     loop {
-        // Connect (dedicated connection, separate from pool)
-        let session = match imap::connect_with_auth(imap_host, imap_port, email, auth_type, credential).await {
+        // Connect (dedicated connection, separate from pool). The credential is
+        // read per attempt, so a changed password reaches the running watcher.
+        let connected = match crate::credentials::resolve_credential(account_id, auth_type, provider).await {
+            Ok(credential) => imap::connect_with_auth(imap_host, imap_port, email, auth_type, &credential).await,
+            Err(e) => Err(e),
+        };
+        let session = match connected {
             Ok(s) => {
                 retry_count = 0;
                 s
             }
             Err(e) => {
                 log::warn!("IDLE: Connect failed for {}: {}", account_id, e);
-                let delay = std::cmp::min(30 * (retry_count + 1), 300); // max 5min backoff
-                retry_count += 1;
-                tokio::time::sleep(std::time::Duration::from_secs(delay as u64)).await;
+                backoff(&mut retry_count).await;
                 continue;
             }
         };
@@ -88,9 +108,7 @@ async fn idle_loop(
             }
             Err(e) => {
                 log::warn!("IDLE: Session error for {}: {}", account_id, e);
-                let delay = std::cmp::min(30 * (retry_count + 1), 300);
-                retry_count += 1;
-                tokio::time::sleep(std::time::Duration::from_secs(delay as u64)).await;
+                backoff(&mut retry_count).await;
             }
         }
     }
@@ -246,5 +264,28 @@ async fn run_idle_session(
                     .context("Failed to re-select INBOX after timeout")?;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn a_retry_request_ends_the_backoff_early() {
+        let waiting = tokio::spawn(async {
+            let mut retries = 0;
+            backoff(&mut retries).await;
+            retries
+        });
+        let woken = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            while !waiting.is_finished() {
+                retry_now();
+                tokio::task::yield_now().await;
+            }
+        })
+        .await;
+        assert!(woken.is_ok(), "the 30s backoff was not cut short");
+        assert_eq!(waiting.await.unwrap(), 1);
     }
 }

@@ -200,6 +200,7 @@ pub fn store_account_password(
     if let Err(e) = credentials::store_password(&account_id, &password) {
         log::warn!("[accounts] Password for {} not persisted, session cache only: {}", account_id, e);
     }
+    crate::idle::retry_now();
 
     Ok(())
 }

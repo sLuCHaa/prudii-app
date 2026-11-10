@@ -496,6 +496,16 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn a_changed_password_is_what_the_next_login_resolves() {
+        let id = uuid::Uuid::new_v4().to_string();
+        let _ = store_password(&id, "old-secret");
+        assert_eq!(resolve_credential(&id, "password", "custom").await.unwrap(), "old-secret");
+        let _ = store_password(&id, "new-secret");
+        assert_eq!(resolve_credential(&id, "password", "custom").await.unwrap(), "new-secret");
+        let _ = delete_password(&id);
+    }
+
     #[test]
     fn link_storage_requires_the_database_copy() {
         assert!(require_db_copy(true).is_ok());

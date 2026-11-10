@@ -12,7 +12,7 @@ import { useShallow } from "zustand/react/shallow";
 import { useAccounts } from "../../hooks/useAccounts";
 import { useRemoveAccount } from "../../hooks/useRemoveAccount";
 import { useScroller } from "../../hooks/useScroller";
-import { updateAccountSignature, updateAccountSyncInterval, updateAccountSettings, storeAccountPassword, getAppSettings, updateAppSettings, registerMailtoHandler, unregisterMailtoHandler, isMailtoHandler } from "../../lib/tauri";
+import { updateAccountSignature, updateAccountSyncInterval, updateAccountSettings, storeAccountPassword, syncAccount, getAppSettings, updateAppSettings, registerMailtoHandler, unregisterMailtoHandler, isMailtoHandler } from "../../lib/tauri";
 import { changeLanguage, getLanguagePreference, type AppLanguage } from "../../lib/i18n";
 import { SignatureEditor } from "./SignatureEditor";
 import { BackupRestore } from "./BackupRestore";
@@ -214,6 +214,9 @@ function AccountSettings({
       if (password.trim()) {
         await storeAccountPassword(account.id, password);
         setPassword("");
+        // Without a sync the account keeps its error marker until the next interval.
+        useAppStore.getState().revealSyncLine();
+        syncAccount(account.id).catch(console.error);
       }
       await updateAccountSignature(account.id, signatureHtml, signatureText, signatureOnCompose, signatureOnReply);
       await updateAccountSyncInterval(account.id, syncInterval);

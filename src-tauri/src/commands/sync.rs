@@ -875,8 +875,8 @@ async fn do_sync_account_inner(app: &AppHandle, account: Account, account_id: &s
             account.imap_host.clone(),
             account.imap_port as u16,
             account.email.clone(),
-            credential.to_string(),
             auth_type.to_string(),
+            account.provider.clone(),
         );
     }
 }
