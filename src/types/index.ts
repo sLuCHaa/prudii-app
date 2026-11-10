@@ -143,6 +143,8 @@ export interface AppSettings {
   hidden_categories: string[];
   /** Starred mails are listed under Starred only; on the server they stay in the inbox. */
   hide_starred_in_inbox: boolean;
+  /** Compose opens docked in the main window instead of in a window of its own. */
+  compose_docked: boolean;
 }
 
 export interface CategoryReason {

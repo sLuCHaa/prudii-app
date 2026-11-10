@@ -136,6 +136,7 @@
   },
   "compose": {
     "compose": "Rédiger",
+    "dock": { "collapse": "Réduire", "expand": "Développer", "popOut": "Ouvrir dans sa propre fenêtre" },
     "newMessage": "Nouveau message",
     "openFailedTitle": "Impossible d'ouvrir la fenêtre de rédaction",
     "restoreDraftsTitle": "Restaurer les brouillons non envoyés ?",
@@ -543,6 +544,8 @@
       "showCleanupCountsDesc": "Indique dans la barre latérale combien de messages restent dans le spam et la corbeille, avec un bouton pour les vider",
       "hideStarredInInbox": "Masquer les e-mails suivis dans la boîte de réception",
       "hideStarredInInboxDesc": "Les e-mails marqués d’une étoile n’apparaissent alors que sous « Suivis ». Sur le serveur, ils restent dans la boîte de réception.",
+      "composeDocked": "Rédiger dans la fenêtre principale",
+      "composeDockedDesc": "Les nouveaux e-mails et les réponses s’ouvrent dans un panneau ancré en bas à droite au lieu d’une fenêtre séparée.",
       "notifications": "Notifications bureau",
       "notificationsDesc": "Afficher une notification quand de nouveaux emails arrivent lors de la synchronisation",
       "notificationSound": "Son de notification",

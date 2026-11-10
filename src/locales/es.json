@@ -136,6 +136,7 @@
   },
   "compose": {
     "compose": "Redactar",
+    "dock": { "collapse": "Contraer", "expand": "Expandir", "popOut": "Abrir en su propia ventana" },
     "newMessage": "Nuevo mensaje",
     "openFailedTitle": "No se pudo abrir la ventana de redacción",
     "restoreDraftsTitle": "¿Restaurar borradores no enviados?",
@@ -543,6 +544,8 @@
       "showCleanupCountsDesc": "Muestra en la barra lateral cuántos correos quedan en Spam y Papelera, con un botón para vaciarlos",
       "hideStarredInInbox": "Ocultar los correos destacados en la bandeja de entrada",
       "hideStarredInInboxDesc": "Los correos con estrella aparecen entonces solo en «Destacados». En el servidor siguen en la bandeja de entrada.",
+      "composeDocked": "Redactar en la ventana principal",
+      "composeDockedDesc": "Los correos nuevos y las respuestas se abren en un panel acoplado abajo a la derecha en lugar de en una ventana propia.",
       "notifications": "Notificaciones de escritorio",
       "notificationsDesc": "Mostrar una notificación cuando lleguen correos nuevos durante la sincronización",
       "notificationSound": "Sonido de notificación",

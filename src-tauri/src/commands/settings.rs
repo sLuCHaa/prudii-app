@@ -61,6 +61,7 @@ pub fn get_app_settings(db: State<'_, Database>) -> Result<AppSettings, String> 
                 .and_then(|v| serde_json::from_str(v).ok())
                 .unwrap_or_default(),
             hide_starred_in_inbox: get_bool(crate::inbox_view::SETTING, false),
+            compose_docked: get_bool("compose_docked", false),
         })
     })
 }
@@ -97,6 +98,7 @@ pub fn update_app_settings(
         set_setting(&conn, "strip_tracking_params", settings.strip_tracking_params)?;
         set_setting(&conn, "use_system_font", settings.use_system_font)?;
         set_setting(&conn, crate::inbox_view::SETTING, settings.hide_starred_in_inbox)?;
+        set_setting(&conn, "compose_docked", settings.compose_docked)?;
 
         conn.execute(
             "INSERT OR REPLACE INTO app_settings (key, value) VALUES (?1, ?2)",

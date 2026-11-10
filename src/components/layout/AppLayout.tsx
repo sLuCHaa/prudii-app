@@ -18,6 +18,9 @@ import { WhatsNew } from "../ui/WhatsNew";
 import { WelcomeScreen } from "../accounts/WelcomeScreen";
 import { useAppStore } from "../../stores/appStore";
 import { openComposeWindow, scheduleSpareCompose } from "../../lib/composeWindow";
+import { composeTarget } from "../../lib/composePlacement";
+import { ComposeDock } from "../compose/ComposeDock";
+import type { ComposeInitData } from "../compose/ComposeModal";
 import { useAccounts } from "../../hooks/useAccounts";
 import { useNativeShell } from "../../hooks/useNativeShell";
 
@@ -59,11 +62,16 @@ export function AppLayout() {
     scheduleSpareCompose(4000);
   }, []);
 
+  const [dockedCompose, setDockedCompose] = useState<ComposeInitData | null>(null);
+  const dockBusy = useRef(false);
+  dockBusy.current = dockedCompose !== null;
+  const closeDockedCompose = useCallback(() => setDockedCompose(null), []);
+
   // ONLY depends on composeOpen — all other values read imperatively from store.
   useEffect(() => {
     if (!composeOpen) return;
     const s = useAppStore.getState();
-    openComposeWindow({
+    const data: ComposeInitData = {
       mode: s.composeMode,
       originalMail: s.composeMail,
       accounts: accounts ?? [],
@@ -73,7 +81,9 @@ export function AppLayout() {
       mailtoParams: s.composeMailtoParams,
       aiReplyText: s.composeAiReplyText,
       snapshot: s.undoSend.composeSnapshot,
-    });
+    };
+    if (composeTarget(s.appSettings.compose_docked, dockBusy.current) === "dock") setDockedCompose(data);
+    else openComposeWindow(data);
     // Consume-once: while the undo countdown is active the snapshot must stay
     // (it backs the failure recovery), but once a window has been opened with
     // it, a later plain compose must not inherit the stale content.
@@ -273,6 +283,7 @@ export function AppLayout() {
         )}
       </div>
 
+      {dockedCompose && <ComposeDock data={dockedCompose} onClosed={closeDockedCompose} />}
       <AnimatePresence>{showAccountWizard && <AccountWizard />}</AnimatePresence>
       <AnimatePresence>{showSettings && <SettingsPanel />}</AnimatePresence>
       {accounts !== undefined && <WhatsNew hasAccounts={accounts.length > 0} />}

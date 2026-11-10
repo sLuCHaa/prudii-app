@@ -712,6 +712,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     sorting_enabled: true,
     hidden_categories: [],
     hide_starred_in_inbox: false,
+    compose_docked: false,
   },
   appSettingsLoaded: false,
   setAppSettings: (appSettings) => {

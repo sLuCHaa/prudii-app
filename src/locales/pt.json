@@ -136,6 +136,7 @@
   },
   "compose": {
     "compose": "Escrever",
+    "dock": { "collapse": "Recolher", "expand": "Expandir", "popOut": "Abrir na sua própria janela" },
     "newMessage": "Nova Mensagem",
     "openFailedTitle": "Não foi possível abrir a janela de composição",
     "restoreDraftsTitle": "Restaurar rascunhos não enviados?",
@@ -552,6 +553,8 @@
       "showCleanupCountsDesc": "Mostra na barra lateral quantos e-mails ainda estão no Spam e na Lixeira, com um botão para os esvaziar",
       "hideStarredInInbox": "Ocultar e-mails com estrela na caixa de entrada",
       "hideStarredInInboxDesc": "Os e-mails com estrela aparecem então apenas em “Com Estrela”. No servidor continuam na caixa de entrada.",
+      "composeDocked": "Escrever na janela principal",
+      "composeDockedDesc": "Novos e-mails e respostas abrem num painel ancorado em baixo à direita em vez de numa janela própria.",
       "notifications": "Notificações da área de trabalho",
       "notificationsDesc": "Mostrar uma notificação quando novos emails chegarem durante a sincronização",
       "notificationSound": "Som de notificação",

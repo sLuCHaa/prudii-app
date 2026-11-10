@@ -136,6 +136,7 @@
   },
   "compose": {
     "compose": "Compose",
+    "dock": { "collapse": "Collapse", "expand": "Expand", "popOut": "Open in its own window" },
     "newMessage": "New Message",
     "openFailedTitle": "Could not open the compose window",
     "restoreDraftsTitle": "Restore unsent drafts?",
@@ -552,6 +553,8 @@
       "showCleanupCountsDesc": "Show in the sidebar how many mails are still in Spam and Trash, with a button to empty them",
       "hideStarredInInbox": "Hide starred mails in the inbox",
       "hideStarredInInboxDesc": "Starred emails are then listed under “Starred” only. On the server they stay in the inbox.",
+      "composeDocked": "Compose inside the main window",
+      "composeDockedDesc": "New mails and replies open as a docked panel at the bottom right instead of in a window of their own.",
       "notifications": "Desktop notifications",
       "notificationsDesc": "Show a notification when new emails arrive during sync",
       "notificationSound": "Notification sound",

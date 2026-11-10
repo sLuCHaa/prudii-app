@@ -136,6 +136,7 @@
   },
   "compose": {
     "compose": "Verfassen",
+    "dock": { "collapse": "Einklappen", "expand": "Ausklappen", "popOut": "In eigenes Fenster lösen" },
     "newMessage": "Neue Nachricht",
     "openFailedTitle": "Verfassen-Fenster konnte nicht geöffnet werden",
     "restoreDraftsTitle": "Ungesendete Entwürfe wiederherstellen?",
@@ -543,6 +544,8 @@
       "showCleanupCountsDesc": "Zeigt in der Seitenleiste, wie viele E-Mails noch in Spam und Papierkorb liegen, mit einem Knopf zum Leeren",
       "hideStarredInInbox": "Markierte Mails im Posteingang ausblenden",
       "hideStarredInInboxDesc": "Mit Stern markierte E-Mails stehen dann nur noch unter „Markiert“. Auf dem Server bleiben sie im Posteingang.",
+      "composeDocked": "Im Hauptfenster verfassen",
+      "composeDockedDesc": "Neue Mails und Antworten öffnen als angedocktes Feld unten rechts statt in einem eigenen Fenster.",
       "notifications": "Desktop-Benachrichtigungen",
       "notificationsDesc": "Benachrichtigung anzeigen, wenn neue E-Mails beim Sync eintreffen",
       "notificationSound": "Benachrichtigungston",

@@ -842,6 +842,13 @@ export function SettingsPanel() {
                       />
 
                       <SettingsRow
+                        icon={<AppWindow className="w-4 h-4 text-text-tertiary shrink-0" />}
+                        title={t("settings.appSettings.composeDocked")}
+                        description={t("settings.appSettings.composeDockedDesc")}
+                        control={<Switch checked={localSettings.compose_docked} onChange={(v) => updateLocalSetting("compose_docked", v)} />}
+                      />
+
+                      <SettingsRow
                         icon={<Bell className="w-4 h-4 text-text-tertiary shrink-0" />}
                         title={t("settings.appSettings.notifications")}
                         description={t("settings.appSettings.notificationsDesc")}

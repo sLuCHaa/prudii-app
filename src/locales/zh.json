@@ -136,6 +136,7 @@
   },
   "compose": {
     "compose": "撰写",
+    "dock": { "collapse": "折叠", "expand": "展开", "popOut": "在单独窗口中打开" },
     "newMessage": "新邮件",
     "openFailedTitle": "无法打开撰写窗口",
     "restoreDraftsTitle": "恢复未发送的草稿？",
@@ -551,6 +552,8 @@
       "showCleanupCountsDesc": "在侧边栏中显示垃圾邮件和垃圾箱里还有多少封邮件，并提供清空按钮",
       "hideStarredInInbox": "在收件箱中隐藏已加星标的邮件",
       "hideStarredInInboxDesc": "已加星标的邮件只显示在“已加星标”中。在服务器上它们仍留在收件箱。",
+      "composeDocked": "在主窗口中撰写",
+      "composeDockedDesc": "新邮件和回复以停靠在右下角的面板打开，而不是单独的窗口。",
       "notifications": "桌面通知",
       "notificationsDesc": "同步期间收到新邮件时显示通知",
       "notificationSound": "通知声音",

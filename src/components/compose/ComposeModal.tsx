@@ -269,6 +269,8 @@ export interface ComposeInitData {
 export interface ComposeFormHandle {
   /** Trigger the discard check (shows draft dialog if there's content, else closes) */
   requestClose: () => void;
+  /** What is on the form right now, to carry it into another window. */
+  snapshot: () => ComposeSnapshot | null;
 }
 
 export interface ComposeFormProps {
@@ -278,6 +280,8 @@ export interface ComposeFormProps {
   originalMail?: Mail | null;
   /** When provided, these override the store-based data (used in separate window) */
   initData?: ComposeInitData | null;
+  /** Set when the form sits docked in the main window, which has keys of its own: the form's keys only count inside this element. */
+  dockRoot?: React.RefObject<HTMLElement | null>;
 }
 
 type SendPhase = "idle" | "loading" | "sent";
@@ -378,7 +382,7 @@ function SendButton({ onSend, disabled, onPhaseChange }: { onSend: () => Promise
   );
 }
 
-export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(function ComposeForm({ isOpen, onClose, mode, originalMail, initData }, ref) {
+export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(function ComposeForm({ isOpen, onClose, mode, originalMail, initData, dockRoot }, ref) {
   const { t } = useTranslation();
   const { host: scrollHostRef, viewport: scrollRef } = useScroller<HTMLDivElement>(undefined, { immediate: true });
 
@@ -573,6 +577,27 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     autosaveDirty.current = true;
   }, [to, cc, bcc, subject, attachments, fromAccountId, quote, quoteRemoved]);
 
+  const buildSnapshot = (quoteEdit: string | null): ComposeSnapshot => {
+    const quotedHtml = outgoingQuoteHtml(quoteEdit);
+    const { bodyHtml, bodyText } = buildOutgoingBody(quotedHtml);
+    return {
+      to: [...to],
+      cc: [...cc],
+      bcc: [...bcc],
+      subject,
+      bodyHtml,
+      bodyText,
+      fromAccountId: fromAccountId ?? "",
+      attachments: attachments
+        .filter((att) => att.status === "ready")
+        .map((att) => ({ name: att.name, size: att.size, type: att.type, data: att.data })),
+      quotedHtml: quotedHtml || undefined,
+    };
+  };
+  const currentSnapshot = () => (editor ? buildSnapshot(quoteEditing ? readQuoteEdit() : null) : null);
+  const currentSnapshotRef = useRef(currentSnapshot);
+  currentSnapshotRef.current = currentSnapshot;
+
   useEffect(() => {
     if (!initData) return; // only real compose windows persist autosaves
     const label = getCurrentWindow().label;
@@ -588,21 +613,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         to.length > 0 || cc.length > 0 || bcc.length > 0 || attachments.length > 0;
       if (!hasContent) return;
       autosaveDirty.current = false;
-      const quotedHtml = outgoingQuoteHtml(quoteEdit);
-      const { bodyHtml, bodyText } = buildOutgoingBody(quotedHtml);
-      const snapshot: ComposeSnapshot = {
-        to: [...to],
-        cc: [...cc],
-        bcc: [...bcc],
-        subject,
-        bodyHtml,
-        bodyText,
-        fromAccountId: fromAccountId ?? "",
-        attachments: attachments
-          .filter((att) => att.status === "ready")
-          .map((att) => ({ name: att.name, size: att.size, type: att.type, data: att.data })),
-        quotedHtml: quotedHtml || undefined,
-      };
+      const snapshot = buildSnapshot(quoteEdit);
       const payload = JSON.stringify({ mode, originalMail: originalMail ?? null, snapshot });
       saveComposeAutosave(label, payload)
         .then(() => setLastSavedAt(new Date()))
@@ -1320,12 +1331,13 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         setSendError(err instanceof Error ? err.message : String(err));
         setSendResetKey((k) => k + 1);
       }).finally(() => setSending(false));
-    } else if (initData) {
+    } else if (initData && !dockRoot) {
       // Compose window mode — emit to main window for undo-send, then close
       emit("undo-send-start", { request, mode, originalMail: originalMail ?? null, snapshot });
       onClose();
     } else {
       startUndoSend(request, mode, originalMail ?? null, snapshot);
+      if (dockRoot) onClose();
     }
 
     return true;
@@ -1342,6 +1354,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   const escBlockedRef = useRef(false);
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      if (dockRoot && !dockRoot.current?.contains(e.target as Node)) return;
       if (e.key === "Escape") {
         if (escBlockedRef.current) return;
         e.preventDefault();
@@ -1473,7 +1486,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   handleDiscardRef.current = handleDiscardClick;
 
   // Expose requestClose so ComposeWindow can trigger the discard check
-  useImperativeHandle(ref, () => ({ requestClose: handleDiscardClick }), [editor, subject, to, cc, bcc, attachments]);
+  useImperativeHandle(ref, () => ({ requestClose: handleDiscardClick, snapshot: () => currentSnapshotRef.current() }), [editor, subject, to, cc, bcc, attachments]);
 
   async function handleSaveDraft() {
     if (!fromAccountId || !editor) return;
