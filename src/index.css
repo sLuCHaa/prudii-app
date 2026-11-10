@@ -1168,6 +1168,8 @@ html[data-vibrancy].dark .glass-sidebar {
     align-items: center;
     justify-content: center;
     gap: 6px;
+    /* Equal shares in a track sized by its content are narrower than a two-word label. */
+    white-space: nowrap;
     padding: 6px 12px;
     border-radius: var(--radius-sm);
     color: var(--c-text-secondary);

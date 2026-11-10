@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -40,6 +42,12 @@ describe("SegmentedControl", () => {
     expect(h.match(/aria-pressed="true"/g)?.length).toBe(1);
     expect(h).toMatch(/aria-pressed="true"[^>]*>B</);
     expect(h).not.toMatch(/aria-pressed="true"[^>]*>A</);
+  });
+
+  it("keeps a label of several words on one line", () => {
+    const css = readFileSync(resolve(__dirname, "../../index.css"), "utf8");
+    const rule = css.slice(css.indexOf(".segmented-item {"));
+    expect(rule.slice(0, rule.indexOf("}"))).toContain("white-space: nowrap");
   });
 
   it("reports the clicked option", () => {
