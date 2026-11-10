@@ -1,11 +1,12 @@
 pub mod mail_sort;
+pub(crate) mod signatures;
 
 use anyhow::Result;
 use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
-pub(crate) const SCHEMA_VERSION: u32 = 47;
+pub(crate) const SCHEMA_VERSION: u32 = 48;
 
 pub struct Database {
     pub conn: Mutex<Connection>,
@@ -755,6 +756,10 @@ impl Database {
             "DROP INDEX IF EXISTS idx_mails_unclassified",
         ] {
             let _ = conn.execute_batch(sql);
+        }
+
+        if let Err(e) = signatures::install(&conn) {
+            log::error!("DB v48: signature list not installed: {}", e);
         }
 
         // Only bump version AFTER all migrations have run

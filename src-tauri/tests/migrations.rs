@@ -213,7 +213,7 @@ fn calendar_tables_exist_with_unique_slots_and_cascade() {
     let conn = db.lock_db();
 
     let version: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
-    assert_eq!(version, 47);
+    assert_eq!(version, 48);
 
     conn.execute("INSERT INTO calendars (id, name, color) VALUES ('c1', 'Cal', '#3b82f6')", []).unwrap();
     let insert = |id: &str, rid: Option<&str>| {
@@ -253,7 +253,7 @@ fn subscription_columns_are_added_to_existing_calendars() {
     let db = Database::new(dir.clone()).unwrap();
     let conn = db.lock_db();
     let version: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
-    assert_eq!(version, 47);
+    assert_eq!(version, 48);
     let (muted, refresh): (i64, Option<i64>) =
         conn.query_row("SELECT reminders_muted, refresh_minutes FROM calendars WHERE id = 'c1'", [], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
     assert_eq!((muted, refresh), (0, None));
@@ -276,7 +276,7 @@ fn invite_columns_are_added_to_existing_mails() {
     let db = Database::new(dir.clone()).unwrap();
     let conn = db.lock_db();
     let version: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
-    assert_eq!(version, 47);
+    assert_eq!(version, 48);
     let cols: Vec<String> = conn
         .prepare("SELECT name FROM pragma_table_info('mails')")
         .unwrap()
@@ -394,6 +394,75 @@ fn upgrade_from_45_adds_category_schema() {
     let category: Option<String> = conn.query_row("SELECT category FROM mails WHERE id = 'm1'", [], |r| r.get(0)).unwrap();
     assert_eq!(category, None);
 
+    drop(conn);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+fn forge_47_with_signatures(dir: &std::path::Path) {
+    let db = Database::new(dir.to_path_buf()).unwrap();
+    let conn = db.lock_db();
+    conn.execute_batch(
+        "ALTER TABLE accounts DROP COLUMN signature_id;
+         DROP TABLE signatures;
+         INSERT INTO accounts (id, email, display_name, provider, imap_host, smtp_host, signature_html, signature_text) VALUES
+           ('a1', 'anna@studio-halde.example', 'Anna Weber', 'custom', 'imap.studio-halde.example', 'smtp.studio-halde.example', '<div>Anna Weber</div>', 'Anna Weber'),
+           ('a2', 'info@studio-halde.example', 'Studio Halde Info', 'custom', 'imap.studio-halde.example', 'smtp.studio-halde.example', '<div>Anna Weber</div>', 'Anna Weber'),
+           ('a3', 'anna.weber@post.example', 'Privat', 'custom', 'imap.post.example', 'smtp.post.example', '', '');",
+    )
+    .unwrap();
+    conn.pragma_update(None, "user_version", 47u32).unwrap();
+}
+
+#[test]
+fn upgrade_from_47_moves_account_signatures_into_the_list() {
+    let dir = temp_dir("signature-upgrade");
+    forge_47_with_signatures(&dir);
+    let db = Database::new(dir.clone()).unwrap();
+    let conn = db.lock_db();
+    let names: Vec<String> = conn
+        .prepare("SELECT name FROM signatures ORDER BY name")
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    assert_eq!(names, ["Anna Weber", "Studio Halde Info"], "equal signatures are not merged");
+    let assigned: Vec<Option<String>> = conn
+        .prepare("SELECT signature_id FROM accounts ORDER BY id")
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    assert!(assigned[0].is_some() && assigned[1].is_some() && assigned[0] != assigned[1]);
+    assert_eq!(assigned[2], None);
+    let html: String = conn
+        .query_row("SELECT s.html FROM signatures s JOIN accounts a ON a.signature_id = s.id WHERE a.id = 'a1'", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(html, "<div>Anna Weber</div>");
+    drop(conn);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_downgrade_and_second_upgrade_leave_the_list_alone() {
+    let dir = temp_dir("signature-reupgrade");
+    forge_47_with_signatures(&dir);
+    {
+        let db = Database::new(dir.clone()).unwrap();
+        let conn = db.lock_db();
+        conn.execute_batch(
+            "DELETE FROM signatures WHERE id = (SELECT signature_id FROM accounts WHERE id = 'a1');
+             UPDATE accounts SET signature_id = NULL WHERE id = 'a1';",
+        )
+        .unwrap();
+        conn.pragma_update(None, "user_version", 47u32).unwrap();
+    }
+    let db = Database::new(dir.clone()).unwrap();
+    let conn = db.lock_db();
+    let count: i64 = conn.query_row("SELECT COUNT(*) FROM signatures", [], |r| r.get(0)).unwrap();
+    let a1: Option<String> = conn.query_row("SELECT signature_id FROM accounts WHERE id = 'a1'", [], |r| r.get(0)).unwrap();
+    assert_eq!((count, a1), (1, None));
     drop(conn);
     let _ = std::fs::remove_dir_all(&dir);
 }
