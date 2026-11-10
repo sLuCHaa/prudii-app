@@ -1,4 +1,4 @@
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension};
 
 /// The schema version that introduced the signature list.
 pub(crate) const SINCE_SCHEMA: u32 = 48;
@@ -45,11 +45,29 @@ pub(crate) fn adopt_account_signature(conn: &Connection, account_id: &str) -> ru
     }
     let html = if markup_shows { html } else { markup_from_text(&text) };
     let name = if name.trim().is_empty() { email.as_str() } else { name.trim() };
-    let id = uuid::Uuid::new_v4().to_string();
-    conn.execute(
-        "INSERT INTO signatures (id, name, html, text) VALUES (?1, ?2, ?3, ?4)",
-        rusqlite::params![id, name, html, text],
-    )?;
+    // Restoring the same old backup again finds the entry it left behind; an entry
+    // another account uses is never shared this way.
+    let left_behind: Option<String> = conn
+        .query_row(
+            "SELECT s.id FROM signatures s
+             WHERE s.name = ?1 AND s.html = ?2 AND s.text = ?3
+               AND NOT EXISTS (SELECT 1 FROM accounts a WHERE a.signature_id = s.id)
+             LIMIT 1",
+            rusqlite::params![name, html, text],
+            |r| r.get(0),
+        )
+        .optional()?;
+    let id = match left_behind {
+        Some(id) => id,
+        None => {
+            let id = uuid::Uuid::new_v4().to_string();
+            conn.execute(
+                "INSERT INTO signatures (id, name, html, text) VALUES (?1, ?2, ?3, ?4)",
+                rusqlite::params![id, name, html, text],
+            )?;
+            id
+        }
+    };
     conn.execute("UPDATE accounts SET signature_id = ?1 WHERE id = ?2", rusqlite::params![id, account_id])?;
     Ok(true)
 }
@@ -152,6 +170,41 @@ mod tests {
         assert!(adopt_account_signature(&db.lock_db(), &id).unwrap());
         assert!(!adopt_account_signature(&db.lock_db(), &id).unwrap());
         assert_eq!(entries(&db).len(), 1);
+    }
+
+    #[test]
+    fn an_unassigned_entry_with_the_same_content_is_taken_again() {
+        let db = temp_db();
+        let first = account(&db, "Anna Weber", "<div>Anna Weber</div>", "Anna Weber");
+        adopt_account_signature(&db.lock_db(), &first).unwrap();
+        db.lock_db().execute("DELETE FROM accounts WHERE id = ?1", [&first]).unwrap();
+        let again = account(&db, "Anna Weber", "<div>Anna Weber</div>", "Anna Weber");
+        assert!(adopt_account_signature(&db.lock_db(), &again).unwrap());
+        assert_eq!(entries(&db).len(), 1);
+        let assigned: Option<String> =
+            db.lock_db().query_row("SELECT signature_id FROM accounts WHERE id = ?1", [&again], |r| r.get(0)).unwrap();
+        assert!(assigned.is_some());
+    }
+
+    #[test]
+    fn an_entry_that_was_changed_since_is_not_taken_again() {
+        let db = temp_db();
+        let first = account(&db, "Anna Weber", "<div>Anna Weber</div>", "Anna Weber");
+        adopt_account_signature(&db.lock_db(), &first).unwrap();
+        db.lock_db().execute_batch("DELETE FROM accounts; UPDATE signatures SET html = '<div>Anna W.</div>';").unwrap();
+        let again = account(&db, "Anna Weber", "<div>Anna Weber</div>", "Anna Weber");
+        adopt_account_signature(&db.lock_db(), &again).unwrap();
+        assert_eq!(entries(&db).len(), 2);
+    }
+
+    #[test]
+    fn equal_signatures_of_two_accounts_stay_separate() {
+        let db = temp_db();
+        let one = account(&db, "Anna Weber", "<div>Anna Weber</div>", "Anna Weber");
+        let two = account(&db, "Anna Weber", "<div>Anna Weber</div>", "Anna Weber");
+        adopt_account_signature(&db.lock_db(), &one).unwrap();
+        adopt_account_signature(&db.lock_db(), &two).unwrap();
+        assert_eq!(entries(&db).len(), 2);
     }
 
     #[test]

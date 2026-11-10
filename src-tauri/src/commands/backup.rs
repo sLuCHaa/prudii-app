@@ -3168,4 +3168,15 @@ mod signatures_roundtrip {
         assert_eq!(exported["signature_id"].as_str(), list_accounts_inner(&conn).unwrap()[0].signature_id.as_deref());
         assert!(exported.get("signature_html").is_none() && exported.get("signature_text").is_none());
     }
+
+    #[test]
+    fn restoring_an_old_backup_again_in_replace_mode_reuses_its_entry() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        assert!(import_backup_account(&conn, &old_account(), true, true).unwrap());
+        assert!(import_backup_account(&conn, &old_account(), true, true).unwrap());
+        let list = list_signatures_inner(&conn).unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list_accounts_inner(&conn).unwrap()[0].signature_id.as_deref(), Some(list[0].id.as_str()));
+    }
 }
