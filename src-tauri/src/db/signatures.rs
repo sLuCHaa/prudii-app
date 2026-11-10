@@ -65,19 +65,16 @@ fn markup_shows(html: &str) -> bool {
     !text.replace("&nbsp;", " ").trim().is_empty()
 }
 
-// The list editor renders markup only; a signature kept as plain text would look empty there.
+// The list editor renders markup only. This is the markup compose built for a
+// text-only signature (`plainTextParagraph`), so its mails look as before.
 fn markup_from_text(text: &str) -> String {
-    text.trim()
-        .lines()
-        .map(|line| {
-            let line = line.trim_end();
-            if line.is_empty() {
-                "<div><br></div>".to_string()
-            } else {
-                format!("<div>{}</div>", line.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;"))
-            }
-        })
-        .collect()
+    let escaped = text
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;");
+    format!("<p>{}</p>", escaped.replace('\n', "<br>"))
 }
 
 #[cfg(test)]
@@ -123,12 +120,12 @@ mod tests {
     }
 
     #[test]
-    fn a_text_only_signature_becomes_markup_lines() {
+    fn a_text_only_signature_keeps_the_markup_compose_built_for_it() {
         let db = temp_db();
-        let id = account(&db, "Anna Weber", "", "Viele Grüße\n\nAnna & Team");
+        let id = account(&db, "Anna Weber", "", "Viele Grüße\n\nAnna & \"Team\" O'Neil <a>");
         assert!(adopt_account_signature(&db.lock_db(), &id).unwrap());
-        assert_eq!(entries(&db)[0].1, "<div>Viele Grüße</div><div><br></div><div>Anna &amp; Team</div>");
-        assert_eq!(entries(&db)[0].2, "Viele Grüße\n\nAnna & Team");
+        assert_eq!(entries(&db)[0].1, "<p>Viele Grüße<br><br>Anna &amp; &quot;Team&quot; O&#39;Neil &lt;a&gt;</p>");
+        assert_eq!(entries(&db)[0].2, "Viele Grüße\n\nAnna & \"Team\" O'Neil <a>");
     }
 
     #[test]
