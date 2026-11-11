@@ -134,6 +134,8 @@ pub struct AppSettings {
     pub show_all_unread_counts: bool,
     #[serde(default = "default_true")]
     pub show_cleanup_counts: bool,
+    #[serde(default)]
+    pub show_starred_count: bool,
     pub notifications_enabled: bool,
     pub notification_sound: bool,
     pub language: String,

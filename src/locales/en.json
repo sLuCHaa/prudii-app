@@ -551,6 +551,8 @@
       "showAllUnreadCountsDesc": "Display unread count badges on all folders, not just Inbox",
       "showCleanupCounts": "Show what's left in Spam and Trash",
       "showCleanupCountsDesc": "Show in the sidebar how many mails are still in Spam and Trash, with a button to empty them",
+      "showStarredCount": "Show the number of starred mails",
+      "showStarredCountDesc": "Show in the sidebar next to “Starred” how many mails carry a star",
       "hideStarredInInbox": "Hide starred mails in the inbox",
       "hideStarredInInboxDesc": "Starred emails are then listed under “Starred” only. On the server they stay in the inbox.",
       "composeDocked": "Compose inside the main window",

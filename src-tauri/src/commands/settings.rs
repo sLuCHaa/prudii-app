@@ -37,6 +37,7 @@ pub fn get_app_settings(db: State<'_, Database>) -> Result<AppSettings, String> 
             use_24h_clock: values.get("use_24h_clock").map(|v| v == "true" || v == "1"),
             show_all_unread_counts: get_bool("show_all_unread_counts", false),
             show_cleanup_counts: get_bool("show_cleanup_counts", true),
+            show_starred_count: get_bool("show_starred_count", false),
             notifications_enabled: get_bool("notifications_enabled", true),
             notification_sound: get_bool("notification_sound", true),
             language: get_string("language", "system"),
@@ -92,6 +93,7 @@ pub fn update_app_settings(
         }
         set_setting(&conn, "show_all_unread_counts", settings.show_all_unread_counts)?;
         set_setting(&conn, "show_cleanup_counts", settings.show_cleanup_counts)?;
+        set_setting(&conn, "show_starred_count", settings.show_starred_count)?;
         set_setting(&conn, "notifications_enabled", settings.notifications_enabled)?;
         set_setting(&conn, "notification_sound", settings.notification_sound)?;
         set_setting(&conn, "transparent_sidebar", settings.transparent_sidebar)?;

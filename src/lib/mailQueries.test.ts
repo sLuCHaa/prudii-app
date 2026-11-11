@@ -33,6 +33,12 @@ describe("invalidateMailListQueries", () => {
     expect(seen).not.toContain("split-inbox-mails");
   });
 
+  it("refreshes the starred count in the sidebar", () => {
+    const { seen, client } = record();
+    invalidateMailListQueries(client);
+    expect(seen).toContain("starred-count");
+  });
+
   it("covers every list a mail can leave", () => {
     const { seen, client } = record();
     invalidateMailListQueries(client);
@@ -140,5 +146,43 @@ describe("patchCachedMails in list caches", () => {
     qc.setQueryData(["search", "rechnung", undefined], [hit("m1", "Studio Halde")]);
     patchCachedMails(qc, ["m1"], { is_starred: true });
     expect(qc.getQueryData<SearchResult[]>(["search", "rechnung", undefined])![0]).toEqual(hit("m1", "Studio Halde"));
+  });
+});
+
+describe("patchCachedMails and the starred count", () => {
+  const starred = (id: string): Mail => ({ ...mail(id), is_starred: true });
+  const cached = (rows: Mail[], count: number | null = 4) => {
+    const qc = new QueryClient();
+    qc.setQueryData(["mails", "f1", undefined, "date"], { pages: [rows], pageParams: [0] });
+    qc.setQueryData(["all-inbox-mails", undefined, "date"], { pages: [rows], pageParams: [0] });
+    if (count !== null) qc.setQueryData(["starred-count"], count);
+    return qc;
+  };
+  const count = (qc: QueryClient) => qc.getQueryData<number>(["starred-count"]);
+
+  it("moves with the star before the server has answered", () => {
+    const qc = cached([mail("m1"), mail("m2")]);
+    patchCachedMails(qc, ["m1"], { is_starred: true });
+    expect(count(qc)).toBe(5);
+    patchCachedMails(qc, ["m1"], { is_starred: false });
+    expect(count(qc)).toBe(4);
+  });
+
+  it("skips mails that already carry the star", () => {
+    const qc = cached([mail("m1"), starred("m2")]);
+    patchCachedMails(qc, ["m1", "m2"], { is_starred: true });
+    expect(count(qc)).toBe(5);
+  });
+
+  it("stays put on a read change", () => {
+    const qc = cached([mail("m1"), starred("m2")]);
+    patchCachedMails(qc, ["m1", "m2"], { is_read: true });
+    expect(count(qc)).toBe(4);
+  });
+
+  it("is not invented while the sidebar has never loaded it", () => {
+    const qc = cached([mail("m1")], null);
+    patchCachedMails(qc, ["m1"], { is_starred: true });
+    expect(count(qc)).toBeUndefined();
   });
 });

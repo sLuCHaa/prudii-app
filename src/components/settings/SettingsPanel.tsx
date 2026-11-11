@@ -836,6 +836,13 @@ export function SettingsPanel() {
 
                       <SettingsRow
                         icon={<Star className="w-4 h-4 text-text-tertiary shrink-0" />}
+                        title={t("settings.appSettings.showStarredCount")}
+                        description={t("settings.appSettings.showStarredCountDesc")}
+                        control={<Switch checked={localSettings.show_starred_count} onChange={(v) => updateLocalSetting("show_starred_count", v)} />}
+                      />
+
+                      <SettingsRow
+                        icon={<Star className="w-4 h-4 text-text-tertiary shrink-0" />}
                         title={t("settings.appSettings.hideStarredInInbox")}
                         description={t("settings.appSettings.hideStarredInInboxDesc")}
                         control={<Switch checked={localSettings.hide_starred_in_inbox} onChange={(v) => updateLocalSetting("hide_starred_in_inbox", v)} />}

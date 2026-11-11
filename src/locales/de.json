@@ -542,6 +542,8 @@
       "showAllUnreadCountsDesc": "Anzahl ungelesener E-Mails für alle Ordner anzeigen, nicht nur für den Posteingang",
       "showCleanupCounts": "Inhalt von Spam und Papierkorb anzeigen",
       "showCleanupCountsDesc": "Zeigt in der Seitenleiste, wie viele E-Mails noch in Spam und Papierkorb liegen, mit einem Knopf zum Leeren",
+      "showStarredCount": "Anzahl markierter Mails anzeigen",
+      "showStarredCountDesc": "Zeigt in der Seitenleiste neben „Markiert“, wie viele E-Mails einen Stern haben",
       "hideStarredInInbox": "Markierte Mails im Posteingang ausblenden",
       "hideStarredInInboxDesc": "Mit Stern markierte E-Mails stehen dann nur noch unter „Markiert“. Auf dem Server bleiben sie im Posteingang.",
       "composeDocked": "Im Hauptfenster verfassen",

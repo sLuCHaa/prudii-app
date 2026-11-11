@@ -1131,6 +1131,7 @@ pub fn run() {
             commands::mails::list_snoozed_mails,
             commands::mails::check_snoozed_mails,
             commands::mails::count_snoozed_mails,
+            commands::mails::count_starred_mails,
             commands::mails::batch_update_mails,
             commands::settings::get_app_settings,
             commands::settings::update_app_settings,

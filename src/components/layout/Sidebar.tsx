@@ -6,7 +6,7 @@ import gsap from "gsap";
 import { prefersReducedMotion } from "../motion/tokens";
 import { DROP_FLIGHT_MS, noteDropTarget } from "../motion/dropFlight";
 import { useAppStore, type MailFilter } from "../../stores/appStore";
-import { useAccounts, useFolders, prefetchFolderMails } from "../../hooks/useAccounts";
+import { useAccounts, useFolders, prefetchFolderMails, useStarredCount } from "../../hooks/useAccounts";
 import { parseMailSort } from "../../lib/mailSort";
 import { useSyncAccount, useSyncAll } from "../../hooks/useSync";
 import { useRemoveAccount } from "../../hooks/useRemoveAccount";
@@ -1215,6 +1215,8 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
   const { snapshot } = useTeamSnapshot();
   const assignments = useTeamAssignments(!!snapshot);
   const assignedCount = snapshot ? openAssignedTo(assignments, snapshot.team.me).length : 0;
+  const showStarredCount = useAppStore((s) => s.appSettings.show_starred_count);
+  const starredCount = useStarredCount(showStarredCount).data;
 
   const [snoozedCount, setSnoozedCount] = useState(0);
   const [scheduledCount, setScheduledCount] = useState(0);
@@ -1255,6 +1257,7 @@ function ViewsSection({ collapsed }: { collapsed: boolean }) {
       icon: <StarIcon size={16} color="var(--c-warning)" />,
       onClick: () => setActiveFilter(activeFilter === "starred" ? null : "starred"),
       isActive: activeFilter === "starred",
+      count: showStarredCount ? starredCount : undefined,
       show: true,
     },
     {

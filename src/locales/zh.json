@@ -550,6 +550,8 @@
       "showAllUnreadCountsDesc": "在所有文件夹上显示未读计数标记，而不仅是收件箱",
       "showCleanupCounts": "显示垃圾邮件和垃圾箱中剩余的邮件",
       "showCleanupCountsDesc": "在侧边栏中显示垃圾邮件和垃圾箱里还有多少封邮件，并提供清空按钮",
+      "showStarredCount": "显示已加星标邮件的数量",
+      "showStarredCountDesc": "在侧边栏的“已加星标”旁显示有多少封邮件带有星标",
       "hideStarredInInbox": "在收件箱中隐藏已加星标的邮件",
       "hideStarredInInboxDesc": "已加星标的邮件只显示在“已加星标”中。在服务器上它们仍留在收件箱。",
       "composeDocked": "在主窗口中撰写",

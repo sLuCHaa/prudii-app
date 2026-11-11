@@ -1,5 +1,5 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { listAccounts, createAccount, deleteAccount, listFolders, listMails, listFilteredMails, listAllInboxMails, listCombinedFolderMails, listSnoozedMails, listAttachments, toggleStar, togglePin, toggleMailFlag, listRules, createRule, updateRule, deleteRule, applyRulesNow } from "../lib/tauri";
+import { listAccounts, createAccount, deleteAccount, listFolders, listMails, listFilteredMails, listAllInboxMails, listCombinedFolderMails, listSnoozedMails, countStarredMails, listAttachments, toggleStar, togglePin, toggleMailFlag, listRules, createRule, updateRule, deleteRule, applyRulesNow } from "../lib/tauri";
 import type { CreateAccountRequest, CreateRuleRequest, Mail, MailFlag, MailRule } from "../types";
 import { useAppStore, type MailFilter } from "../stores/appStore";
 import type { MailSort } from "../lib/mailSort";
@@ -115,6 +115,15 @@ export function useSnoozedMails(enabled: boolean) {
     queryFn: () => listSnoozedMails(undefined),
     initialPageParam: 0,
     getNextPageParam: () => undefined, // snoozed mails are not paginated
+    enabled,
+    staleTime: 0,
+  });
+}
+
+export function useStarredCount(enabled: boolean) {
+  return useQuery({
+    queryKey: ["starred-count"],
+    queryFn: countStarredMails,
     enabled,
     staleTime: 0,
   });

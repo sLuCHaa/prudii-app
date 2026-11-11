@@ -122,6 +122,7 @@ export interface AppSettings {
   use_24h_clock: boolean;
   show_all_unread_counts: boolean;
   show_cleanup_counts: boolean;
+  show_starred_count: boolean;
   notifications_enabled: boolean;
   notification_sound: boolean;
   language: string;

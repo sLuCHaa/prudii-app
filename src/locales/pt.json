@@ -551,6 +551,8 @@
       "showAllUnreadCountsDesc": "Exibir contador de não lidas em todas as pastas, não apenas na Caixa de Entrada",
       "showCleanupCounts": "Mostrar o que resta no Spam e na Lixeira",
       "showCleanupCountsDesc": "Mostra na barra lateral quantos e-mails ainda estão no Spam e na Lixeira, com um botão para os esvaziar",
+      "showStarredCount": "Mostrar o número de e-mails com estrela",
+      "showStarredCountDesc": "Mostra na barra lateral, junto a “Com Estrela”, quantos e-mails têm estrela",
       "hideStarredInInbox": "Ocultar e-mails com estrela na caixa de entrada",
       "hideStarredInInboxDesc": "Os e-mails com estrela aparecem então apenas em “Com Estrela”. No servidor continuam na caixa de entrada.",
       "composeDocked": "Escrever na janela principal",

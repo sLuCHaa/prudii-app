@@ -17,6 +17,7 @@ export const MAIL_LIST_QUERY_KEYS = [
   "combined-folder-mails",
   "category-mails",
   "category-counts",
+  "starred-count",
 ] as const;
 
 /**
@@ -55,7 +56,22 @@ export function invalidateRestoredData(queryClient: QueryClient): void {
 
 export type MailFlagPatch = Partial<Pick<Mail, "is_read" | "is_starred">>;
 
-const LIST_KEYS = MAIL_LIST_QUERY_KEYS.filter((k) => k !== "folders" && k !== "category-counts");
+const LIST_KEYS = MAIL_LIST_QUERY_KEYS.filter((k) => k !== "folders" && k !== "category-counts" && k !== "starred-count");
+
+/** An IMAP star returns only after the server round trip; the sidebar count moves with the click instead. */
+function shiftStarredCount(queryClient: QueryClient, ids: Set<string>, starred: boolean): void {
+  const changed = new Set<string>();
+  for (const key of LIST_KEYS) {
+    for (const [, data] of queryClient.getQueriesData<InfiniteData<Mail[]>>({ queryKey: [key] })) {
+      for (const page of data?.pages ?? []) {
+        for (const m of page) if (ids.has(m.id) && m.is_starred !== starred) changed.add(m.id);
+      }
+    }
+  }
+  if (changed.size === 0) return;
+  const delta = starred ? changed.size : -changed.size;
+  queryClient.setQueryData<number>(["starred-count"], (n) => (n === undefined ? n : Math.max(0, n + delta)));
+}
 
 /**
  * Carry an optimistic read/star change into every cached list and search, so
@@ -63,7 +79,8 @@ const LIST_KEYS = MAIL_LIST_QUERY_KEYS.filter((k) => k !== "folders" && k !== "c
  */
 export function patchCachedMails(queryClient: QueryClient, mailIds: readonly string[], patch: MailFlagPatch): void {
   const ids = new Set(mailIds);
-  const patchMail = (m: Mail) => (ids.has(m.id) ? { ...m, ...patch } : m);
+  if (patch.is_starred !== undefined) shiftStarredCount(queryClient, ids, patch.is_starred);
+  const patchMail =(m: Mail) => (ids.has(m.id) ? { ...m, ...patch } : m);
   for (const key of LIST_KEYS) {
     queryClient.setQueriesData<InfiniteData<Mail[]>>({ queryKey: [key] }, (data) =>
       data?.pages ? { ...data, pages: data.pages.map((page) => page.map(patchMail)) } : data,

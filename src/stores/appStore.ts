@@ -692,6 +692,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     use_24h_clock: prefers24HourClock(),
     show_all_unread_counts: false,
     show_cleanup_counts: true,
+    show_starred_count: false,
     notifications_enabled: true,
     notification_sound: true,
     language: "system",

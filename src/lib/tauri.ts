@@ -586,6 +586,10 @@ export async function countSnoozedMails(): Promise<number> {
   return invoke("count_snoozed_mails");
 }
 
+export async function countStarredMails(): Promise<number> {
+  return invoke("count_starred_mails");
+}
+
 export async function listTemplates(): Promise<EmailTemplate[]> {
   return invoke("list_templates");
 }

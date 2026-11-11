@@ -143,6 +143,24 @@ fn starred_where(account_scoped: bool, extra: &str) -> String {
     )
 }
 
+/// Counted through the view's own dedup: a plain COUNT(*) would count a mail
+/// once per folder copy and disagree with the list.
+fn count_starred(conn: &rusqlite::Connection) -> Result<u32, String> {
+    let sql = format!("SELECT {} FROM mails{}", mail_columns("", false), starred_where(false, ""));
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let mails = stmt
+        .query_map([], map_mail_row)
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(dedup_mails(mails).len() as u32)
+}
+
+#[tauri::command(async)]
+pub fn count_starred_mails(db: State<'_, Database>) -> Result<u32, String> {
+    super::catch_panic(|| count_starred(&db.read_db()))
+}
+
 /// Delete a pending operation from a background task using an ad-hoc DB connection.
 /// Used by spawned tasks that don't have access to the main Database state.
 fn delete_pending_op_bg(db_path: &std::path::Path, mail_id: &str, op_type: &str) {
@@ -4796,6 +4814,23 @@ mod list_tests {
         }
         // filter_clause("unread") appends this shape; the exclusion must compose with it.
         assert_eq!(count(&db, &starred_where(false, " AND is_read = 0"), &[]), 1);
+    }
+
+    #[test]
+    fn starred_count_leaves_spam_and_trash_out() {
+        let db = temp_db();
+        seed(&db, "acc1", &[("inbox", "Inbox"), ("spam", "Junk"), ("trash", "Trash"), ("archive", "Archive")]);
+
+        assert_eq!(count_starred(&db.lock_db()).unwrap(), 2);
+    }
+
+    #[test]
+    fn starred_count_folds_the_copies_the_view_shows_once() {
+        let db = temp_db();
+        seed(&db, "acc1", &[("inbox", "Inbox"), ("archive", "Archive")]);
+        db.lock_db().execute("UPDATE mails SET message_id = '<m1@example.com>'", []).unwrap();
+
+        assert_eq!(count_starred(&db.lock_db()).unwrap(), 1);
     }
 }
 
