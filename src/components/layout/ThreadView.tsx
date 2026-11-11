@@ -932,7 +932,8 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
 
   const notices = (
     <>
-      <InvitationCard mailId={displayMail.id} enabled={!!hasBody} />
+      {/* A finished fetch counts too: an invitation can come without any text. */}
+      <InvitationCard mailId={displayMail.id} enabled={!!hasBody || !!loadedMail} />
       {hasExternalImages && !allowExternalImages && (
         <div className="flex items-center justify-between gap-3 px-4 py-2 mb-2 bg-bg-secondary border border-border rounded-lg text-xs text-text-secondary">
           <div className="flex items-center gap-2">
