@@ -1,5 +1,6 @@
 //! Finding the iCalendar part of an incoming mail.
 
+use super::content_line::{parse_components, unescape_text, Component};
 use super::ical::parse_calendar;
 use mail_parser::{Message, MessagePart, MimeHeaders, PartType};
 
@@ -56,13 +57,35 @@ pub fn choose(candidates: Vec<InviteCandidate>) -> Option<FoundInvite> {
 
 /// A VEVENT without DTSTART is dropped by `parse_calendar`, but a CANCEL may still omit it.
 fn has_vevent(text: &str) -> bool {
-    super::content_line::parse_components(text.strip_prefix('\u{feff}').unwrap_or(text))
-        .iter()
-        .any(|root| match root.name.as_str() {
-            "VEVENT" => true,
-            "VCALENDAR" => root.children.iter().any(|c| c.name == "VEVENT"),
-            _ => false,
-        })
+    first_vevent(&components(text)).is_some()
+}
+
+fn components(text: &str) -> Vec<Component> {
+    parse_components(text.strip_prefix('\u{feff}').unwrap_or(text))
+}
+
+fn first_vevent(roots: &[Component]) -> Option<&Component> {
+    roots.iter().find_map(|root| match root.name.as_str() {
+        "VEVENT" => Some(root),
+        "VCALENDAR" => root.children.iter().find(|c| c.name == "VEVENT"),
+        _ => None,
+    })
+}
+
+/// Outlook sends meeting requests as a bare text/calendar message; the organizer's text lives only in the event.
+pub fn fill_empty_body(body_text: &mut String, body_html: &mut String, invite: Option<&FoundInvite>) {
+    if !body_text.trim().is_empty() || !body_html.trim().is_empty() {
+        return;
+    }
+    let Some(found) = invite else { return };
+    let roots = components(&found.ics);
+    let Some(event) = first_vevent(&roots) else { return };
+    *body_text = event.text("DESCRIPTION").unwrap_or_default().trim().to_string();
+    *body_html = event
+        .props_named("X-ALT-DESC")
+        .find(|p| p.param("FMTTYPE").is_some_and(|f| f.eq_ignore_ascii_case("text/html")))
+        .map(|p| unescape_text(&p.value).trim().to_string())
+        .unwrap_or_default();
 }
 
 fn part_mime(part: &MessagePart) -> String {
@@ -177,5 +200,33 @@ mod tests {
         assert_eq!(find_in_mime(raw.as_bytes()).unwrap().method, "REQUEST");
         let inline: Vec<bool> = msg.attachments().map(is_inline_calendar).collect();
         assert_eq!(inline, vec![true, false]);
+    }
+
+    fn filled(text: &str, html: &str, ics: &str) -> (String, String) {
+        let (mut text, mut html) = (text.to_string(), html.to_string());
+        fill_empty_body(&mut text, &mut html, Some(&FoundInvite { method: "REQUEST".into(), ics: ics.into() }));
+        (text, html)
+    }
+
+    #[test]
+    fn an_empty_body_takes_the_text_and_html_of_the_event() {
+        let ics = "BEGIN:VCALENDAR\r\nMETHOD:REQUEST\r\nBEGIN:VEVENT\r\nUID:a\r\nDESCRIPTION:Hello Sam\\,\\n\\nplease \r\n\tjoin.\\n\\n \\n\r\nX-ALT-DESC;FMTTYPE=text/plain:ignored\r\nX-ALT-DESC;FMTTYPE=\"TEXT/HTML\":<p style='a:b\\;c:d'>Hello Sam\\,\r\n  please join.</p>\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+        assert_eq!(
+            filled("", " \r\n", ics),
+            ("Hello Sam,\n\nplease join.".to_string(), "<p style='a:b;c:d'>Hello Sam, please join.</p>".to_string())
+        );
+    }
+
+    #[test]
+    fn a_body_with_text_of_its_own_is_left_alone() {
+        let ics = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:a\r\nDESCRIPTION:From the event\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+        assert_eq!(filled("Mine", "", ics), ("Mine".to_string(), String::new()));
+        assert_eq!(filled("", "<p>Mine</p>", ics), (String::new(), "<p>Mine</p>".to_string()));
+    }
+
+    #[test]
+    fn an_event_without_a_description_leaves_the_body_empty() {
+        assert_eq!(filled("", "", REQUEST), (String::new(), String::new()));
+        assert_eq!(filled("", "", "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n"), (String::new(), String::new()));
     }
 }

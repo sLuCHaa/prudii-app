@@ -1456,8 +1456,10 @@ pub async fn fetch_mail_body(
 pub async fn store_body_and_attachments(db: &Database, mail_id: &str, body_bytes: &[u8]) -> Result<()> {
     let parser = MessageParser::default();
     if let Some(msg) = parser.parse(body_bytes) {
-        let body_text = msg.body_text(0).unwrap_or_default().to_string();
+        let mut body_text = msg.body_text(0).unwrap_or_default().to_string();
         let mut body_html = msg.body_html(0).unwrap_or_default().to_string();
+        let invite = crate::calendar::invite_mail::choose(crate::calendar::invite_mail::candidates_from_message(&msg));
+        crate::calendar::invite_mail::fill_empty_body(&mut body_text, &mut body_html, invite.as_ref());
         let snippet = {
             let s = if body_text.len() > 200 {
                 let mut end = 200;
@@ -1468,7 +1470,6 @@ pub async fn store_body_and_attachments(db: &Database, mail_id: &str, body_bytes
             };
             s.replace('\n', " ").replace('\r', "")
         };
-        let invite = crate::calendar::invite_mail::choose(crate::calendar::invite_mail::candidates_from_message(&msg));
         let attach_dir = db.data_dir.join("attachments").join(mail_id);
         let _ = tokio::fs::create_dir_all(&attach_dir).await;
 
@@ -2625,5 +2626,38 @@ mod invite_tests {
         let db = fixture();
         store_body_and_attachments(&db, "m1", &invitation(true)).await.unwrap();
         assert_eq!(state(&db), (Some("REQUEST".to_string()), vec!["invite.ics".to_string()], 1));
+    }
+
+    const WITH_TEXT: &str = "SUMMARY:Review\r\nDESCRIPTION:Hello Sam\\,\\n\\nplease join.\\n\r\nX-ALT-DESC;FMTTYPE=text/html:<p>Hello Sam\\, please join.</p>\r\n";
+
+    fn body(db: &Database) -> (String, String, String) {
+        db.lock_db()
+            .query_row("SELECT body_text, body_html, snippet FROM mails WHERE id = 'm1'", [], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn a_calendar_only_invitation_shows_what_the_organizer_wrote() {
+        let db = fixture();
+        let raw = format!(
+            "From: Robin <robin@example.com>\r\nTo: sam@example.com\r\nSubject: Review\r\nMessage-ID: <review-2@example.com>\r\nMIME-Version: 1.0\r\nContent-Type: text/calendar; charset=UTF-8; method=REQUEST\r\n\r\n{}",
+            ICS.replace("SUMMARY:Review\r\n", WITH_TEXT)
+        );
+        store_body_and_attachments(&db, "m1", raw.as_bytes()).await.unwrap();
+        assert_eq!(
+            body(&db),
+            ("Hello Sam,\n\nplease join.".to_string(), "<p>Hello Sam, please join.</p>".to_string(), "Hello Sam,  please join.".to_string())
+        );
+        assert_eq!(state(&db), (Some("REQUEST".to_string()), vec![], 0));
+    }
+
+    #[tokio::test]
+    async fn the_text_of_the_mail_wins_over_the_event_description() {
+        let db = fixture();
+        let raw = String::from_utf8(invitation(false)).unwrap().replace("SUMMARY:Review\r\n", WITH_TEXT);
+        store_body_and_attachments(&db, "m1", raw.as_bytes()).await.unwrap();
+        let (text, html, _) = body(&db);
+        assert_eq!(text.trim(), "You are invited.");
+        assert!(!html.contains("please join"));
     }
 }

@@ -2,7 +2,7 @@
 
 use crate::db::Database;
 use crate::gmail::api::{self, GmailClient, GmailPayload};
-use crate::calendar::invite_mail::{choose, is_calendar_part, method_param, InviteCandidate};
+use crate::calendar::invite_mail::{choose, fill_empty_body, is_calendar_part, method_param, InviteCandidate};
 use anyhow::Result;
 
 /// Fetch the full body of a Gmail message and store it in the DB.
@@ -199,7 +199,9 @@ pub async fn fetch_message_body(
         }
     }
 
-    crate::calendar::invite_store::store_invite(db, mail_id, choose(invites).as_ref());
+    let invite = choose(invites);
+    fill_empty_body(&mut body_text, &mut body_html, invite.as_ref());
+    crate::calendar::invite_store::store_invite(db, mail_id, invite.as_ref());
 
     // Write body LAST — this is what the dedup mechanism polls for, so it must happen
     // after all attachments are saved to ensure they're available when the UI queries them.
