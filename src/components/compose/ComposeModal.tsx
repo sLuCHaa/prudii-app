@@ -55,6 +55,7 @@ import { prepareImage } from "../../lib/imagePrep";
 import { limitConcurrency } from "../../lib/limitConcurrency";
 import { FilePaste, displayWidth, insertInOrder } from "./pasteFiles";
 import type { SortedPaste } from "./pasteFiles";
+import { composeInputs } from "./composeInputs";
 import {
   MAX_ATTACHMENT_BYTES,
   toOriginal,
@@ -391,17 +392,19 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   const accounts = initData?.accounts ?? hookAccounts;
 
   const storeSelectedAccountId = useAppStore((s) => s.selectedAccountId);
-  const selectedAccountId = initData?.selectedAccountId ?? storeSelectedAccountId;
+  const storeMailtoParams = useAppStore((s) => s.composeMailtoParams);
+  const storeAiReplyText = useAppStore((s) => s.composeAiReplyText);
+  const { selectedAccountId, mailtoParams, aiReplyText: composeAiReplyText } = composeInputs(initData, {
+    selectedAccountId: storeSelectedAccountId,
+    mailtoParams: storeMailtoParams,
+    aiReplyText: storeAiReplyText,
+  });
 
   const storeAppSettings = useAppStore((s) => s.appSettings);
   const appSettings = initData?.appSettings ?? storeAppSettings;
   const typography = composeTypography(appSettings.compose_font, appSettings.compose_font_size);
 
   const startUndoSend = useAppStore((s) => s.startUndoSend);
-  const storeMailtoParams = useAppStore((s) => s.composeMailtoParams);
-  const mailtoParams = initData?.mailtoParams ?? storeMailtoParams;
-  const storeAiReplyText = useAppStore((s) => s.composeAiReplyText);
-  const composeAiReplyText = initData?.aiReplyText ?? storeAiReplyText;
 
   const addToast = useAppStore((s) => s.addToast);
 
