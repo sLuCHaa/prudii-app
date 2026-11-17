@@ -398,7 +398,6 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   const typography = composeTypography(appSettings.compose_font, appSettings.compose_font_size);
 
   const startUndoSend = useAppStore((s) => s.startUndoSend);
-  const undoSendSnapshot = useAppStore((s) => s.undoSend.composeSnapshot);
   const storeMailtoParams = useAppStore((s) => s.composeMailtoParams);
   const mailtoParams = initData?.mailtoParams ?? storeMailtoParams;
   const storeAiReplyText = useAppStore((s) => s.composeAiReplyText);
@@ -894,8 +893,8 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     }
   }, [isOpen, editor, mode, to.length, toDraft]);
 
-  // Restore compose state when undo-send is cancelled
-  const restoreSnapshot = initData?.snapshot ?? undoSendSnapshot;
+  // Only this form's own init data: the store's pending-send snapshot belongs to another compose.
+  const restoreSnapshot = initData?.snapshot ?? null;
   useEffect(() => {
     if (!isOpen || !editor || !restoreSnapshot) return;
     setTo(restoreSnapshot.to);
@@ -918,8 +917,6 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     restoredRef.current = true;
     applyQuote(quoteFromHtml(restoreSnapshot.quotedHtml));
     setComposeBody(editor, bodyWithoutQuote(restoreSnapshot.bodyHtml, restoreSnapshot.quotedHtml));
-    // Clear snapshot so it doesn't re-apply
-    useAppStore.getState().clearUndoSend();
   }, [isOpen, editor, restoreSnapshot, applyQuote]);
 
   useEffect(() => {
