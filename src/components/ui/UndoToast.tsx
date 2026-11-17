@@ -1,14 +1,53 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
+import type { TFunction } from "i18next";
 import { Check, X, Send } from "../icons";
 import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { useTranslation } from "react-i18next";
 import { emit } from "@tauri-apps/api/event";
-import { useAppStore } from "../../stores/appStore";
+import { useAppStore, type UndoSendState } from "../../stores/appStore";
 import { sendMail, saveDraft, syncAccount, deleteMailPermanently } from "../../lib/tauri";
 import { causeMessage } from "../../lib/errorToast";
 import { playSentSound } from "../../lib/sounds";
+import { undoSendStep } from "../../lib/undoSendStep";
+import type { SendMailRequest } from "../../types";
 
 type Phase = "countdown" | "sending" | "sent" | "error";
+
+/** Throws when the send fails; a failed draft cleanup only warns. */
+async function deliver(u: UndoSendState, request: SendMailRequest, t: TFunction): Promise<void> {
+  await sendMail(request);
+  // Awaited: it queues the server-side delete as a pending op, and the sync below
+  // only runs those before re-fetching the folders. Starting the sync first lets
+  // it re-import the draft that is still sitting in the server's Drafts folder.
+  if (u.composeMode === "draft" && u.composeMail) {
+    await deleteMailPermanently(u.composeMail.id).catch((err) => {
+      console.error("draft cleanup after send failed", err);
+      useAppStore.getState().addToast(
+        "warning",
+        t("undoSend.draftCleanupFailedTitle"),
+        err instanceof Error ? err.message : String(err),
+      );
+    });
+  }
+  // The deleted draft is already gone from the local DB — show that now instead
+  // of waiting for the sync; the sent copy emits its own event once it lands.
+  emit("mails-changed", { account_id: request.account_id });
+  syncAccount(request.account_id).catch(() => {});
+}
+
+// The compose window is long gone, so the request is the only copy of the message.
+async function parkAsDraft(request: SendMailRequest): Promise<boolean> {
+  try {
+    await saveDraft(request);
+    emit("mails-changed", { account_id: request.account_id });
+    return true;
+  } catch (err) {
+    console.error("[undoSend] draft backstop failed", err);
+    return false;
+  }
+}
+
+const isCurrent = (request: SendMailRequest) => useAppStore.getState().undoSend.request === request;
 
 export function UndoToast() {
   const { t } = useTranslation();
@@ -25,88 +64,71 @@ export function UndoToast() {
   const [draftSaved, setDraftSaved] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef(0);
-  const activeRef = useRef(false);
-  // A new send can arrive while the pill still shows the previous outcome
-  // (the error phase persists until dismissed) — a changed request must
-  // restart the countdown even though activeRef is still true.
-  const lastRequestRef = useRef<typeof undoSend.request>(null);
+  const pendingRef = useRef<UndoSendState | null>(null);
+  const lastRequestRef = useRef<SendMailRequest | null>(null);
 
-  const doSend = useCallback(async () => {
-    if (!undoSend.request) return;
-    setPhase("sending");
+  // A newer send can take over the pill while this one is still on its way: only the current one may touch it.
+  async function sendNow(u: UndoSendState) {
+    const request = u.request;
+    if (!request) return;
+    if (isCurrent(request)) setPhase("sending");
     try {
-      await sendMail(undoSend.request);
-      // Sent from a saved draft — delete the original draft for good.
-      // Awaited: it queues the server-side delete as a pending op, and the sync below
-      // only runs those before re-fetching the folders. Starting the sync first lets
-      // it re-import the draft that is still sitting in the server's Drafts folder.
-      if (undoSend.composeMode === "draft" && undoSend.composeMail) {
-        await deleteMailPermanently(undoSend.composeMail.id).catch((err) => {
-          console.error("draft cleanup after send failed", err);
-          useAppStore.getState().addToast(
-            "warning",
-            t("undoSend.draftCleanupFailedTitle"),
-            err instanceof Error ? err.message : String(err),
-          );
-        });
-      }
-      // The deleted draft is already gone from the local DB — show that now instead
-      // of waiting for the sync; the sent copy emits its own event once it lands.
-      emit("mails-changed", { account_id: undoSend.request.account_id });
-      syncAccount(undoSend.request.account_id).catch(() => {});
+      await deliver(u, request, t);
       if (useAppStore.getState().appSettings.notification_sound) playSentSound();
+      if (!isCurrent(request)) return;
       setPhase("sent");
       setTimeout(() => {
-        clearUndoSend();
+        if (isCurrent(request)) clearUndoSend();
       }, 2000);
     } catch (err) {
       console.error("[undoSend]", err);
-      // The compose window is long gone — the snapshot in the store is the only
-      // copy of the message. Park it in Drafts so nothing can be lost, then keep
-      // the pill up (no auto-dismiss) with a one-click restore.
-      const savedAsDraft = await saveDraft(undoSend.request)
-        .then(() => {
-          emit("mails-changed", { account_id: undoSend.request!.account_id });
-          return true;
-        })
-        .catch((draftErr) => {
-          console.error("[undoSend] draft backstop failed", draftErr);
-          return false;
-        });
-      setDraftSaved(savedAsDraft);
-      setErrorMsg(causeMessage(err));
-      setPhase("error");
+      const savedAsDraft = await parkAsDraft(request);
+      if (isCurrent(request)) {
+        setDraftSaved(savedAsDraft);
+        setErrorMsg(causeMessage(err));
+        setPhase("error");
+      } else {
+        useAppStore.getState().addToast(
+          "error",
+          t("undoSend.sendFailedTitle"),
+          `${causeMessage(err)}${savedAsDraft ? ` ${t("undoSend.savedAsDraft")}` : ""}`,
+        );
+      }
     }
-  }, [undoSend.request, undoSend.composeMode, undoSend.composeMail, clearUndoSend, t]);
+  }
+  const sendNowRef = useRef(sendNow);
+  sendNowRef.current = sendNow;
 
   useEffect(() => {
+    const step = undoSendStep(pendingRef.current, lastRequestRef.current, undoSend);
+    if (step.flush) void sendNowRef.current(step.flush);
+
     if (!undoSend.active) {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-      activeRef.current = false;
+      pendingRef.current = null;
+      lastRequestRef.current = null;
       setPhase("countdown");
       setProgress(1);
       return;
     }
+    if (step.countdown === "none") return;
+    if (step.countdown === "start") {
+      pendingRef.current = undoSend;
+      lastRequestRef.current = undoSend.request;
+      startTimeRef.current = Date.now();
+      setPhase("countdown");
+      setProgress(1);
+    }
 
-    // Already running for this request — don't restart
-    if (activeRef.current && lastRequestRef.current === undoSend.request) return;
-    activeRef.current = true;
-    lastRequestRef.current = undoSend.request;
-    setPhase("countdown");
-    setProgress(1);
-
-    startTimeRef.current = Date.now();
+    const counting = undoSend;
     timerRef.current = setInterval(() => {
       const elapsed = Date.now() - startTimeRef.current;
       const remaining = 1 - elapsed / COUNTDOWN_MS;
       if (remaining <= 0) {
         if (timerRef.current) clearInterval(timerRef.current);
         timerRef.current = null;
+        pendingRef.current = null;
         setProgress(0);
-        doSend();
+        void sendNowRef.current(counting);
       } else {
         setProgress(remaining);
       }
@@ -118,26 +140,25 @@ export function UndoToast() {
         timerRef.current = null;
       }
     };
-  }, [undoSend.active, doSend]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [undoSend]);
 
   function handleUndo() {
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
-    activeRef.current = false;
+    pendingRef.current = null;
     cancelUndoSend();
   }
 
   // Reopens a compose window with the full snapshot — same path as Undo.
   function handleRestore() {
-    activeRef.current = false;
     setPhase("countdown");
     cancelUndoSend();
   }
 
   function handleDismissError() {
-    activeRef.current = false;
     setPhase("countdown");
     clearUndoSend();
   }
