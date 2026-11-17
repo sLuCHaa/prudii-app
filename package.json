@@ -1,6 +1,6 @@
 {
   "name": "prudii",
-  "version": "1.9.1",
+  "version": "1.9.2",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@12.18.0",
