@@ -1572,26 +1572,18 @@
     "title": "Novedades de Prudii {{version}}",
     "subtitle": "Esto es lo que ha cambiado desde tu última actualización.",
     "done": "Entendido",
-    "v1_9_0": {
-      "sidebar": {
-        "title": "Una barra lateral más ordenada",
-        "text": "Tareas, Calendario, Adjuntos y Revisión del buzón están ahora en una barra abajo, y los colores caben en una sola línea. Las categorías y tus propias carpetas se pueden plegar."
+    "v1_9_3": {
+      "priority": {
+        "title": "Enviar con prioridad alta",
+        "text": "En el menú del botón Enviar marcas un correo como importante. Outlook, Apple Mail y Thunderbird lo muestran así al destinatario."
       },
-      "move": {
-        "title": "Más rápido a la carpeta",
-        "text": "Cada fila de correo tiene un botón de carpeta que abre la lista de carpetas con búsqueda, y «Mover a carpeta» está más arriba en el menú contextual. Los correos también se pueden copiar a carpetas de otras cuentas IMAP."
+      "important": {
+        "title": "Reconoce los correos importantes",
+        "text": "Los correos nuevos que el remitente marcó como importantes llevan un signo de exclamación rojo en la lista y en el mensaje abierto."
       },
-      "thread": {
-        "title": "Conversaciones entre cuentas",
-        "text": "Si respondes desde otra cuenta, la respuesta aparece igualmente en la conversación, con el nombre de esa cuenta. Funciona con las cuentas conectadas por IMAP."
-      },
-      "signatures": {
-        "title": "Firmas en una lista",
-        "text": "Crea una firma una vez y asígnala a todas las cuentas que quieras. Tus firmas anteriores se han conservado."
-      },
-      "options": {
-        "title": "Dos ajustes nuevos",
-        "text": "La redacción puede abrirse acoplada en la ventana principal, y los correos destacados se pueden ocultar en la bandeja de entrada. Activas ambos en la configuración de la app."
+      "starredCount": {
+        "title": "Contador junto a Destacados",
+        "text": "Si quieres, la barra lateral muestra cuántos correos tienen estrella. Lo activas en la configuración de la app."
       }
     }
   },

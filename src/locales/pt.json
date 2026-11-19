@@ -1572,26 +1572,18 @@
     "title": "Novidades do Prudii {{version}}",
     "subtitle": "Veja o que mudou desde a sua última atualização.",
     "done": "Entendi",
-    "v1_9_0": {
-      "sidebar": {
-        "title": "Uma barra lateral mais organizada",
-        "text": "Tarefas, Calendário, Anexos e Revisão da caixa de entrada agora ficam em uma barra embaixo, e as cores cabem em uma única linha. As categorias e as suas próprias pastas podem ser recolhidas."
+    "v1_9_3": {
+      "priority": {
+        "title": "Enviar com prioridade alta",
+        "text": "No menu do botão Enviar você marca um e-mail como importante. Outlook, Apple Mail e Thunderbird o mostram assim ao destinatário."
       },
-      "move": {
-        "title": "Mais rápido para a pasta",
-        "text": "Cada linha de e-mail tem um botão de pasta que abre a lista de pastas com busca, e “Mover para pasta” fica mais acima no menu de contexto. Os e-mails também podem ser copiados para pastas de outras contas IMAP."
+      "important": {
+        "title": "Reconheça e-mails importantes",
+        "text": "Os novos e-mails que o remetente marcou como importantes trazem um ponto de exclamação vermelho na lista e na mensagem aberta."
       },
-      "thread": {
-        "title": "Conversas entre contas",
-        "text": "Se você responder de outra conta, a resposta aparece mesmo assim na conversa, com o nome dessa conta. Vale para contas conectadas por IMAP."
-      },
-      "signatures": {
-        "title": "Assinaturas em lista",
-        "text": "Crie uma assinatura uma vez e atribua a quantas contas quiser. As suas assinaturas atuais foram mantidas."
-      },
-      "options": {
-        "title": "Duas novas configurações",
-        "text": "A escrita pode abrir ancorada na janela principal, e os e-mails com estrela podem ser ocultados na caixa de entrada. Você ativa as duas nas configurações do app."
+      "starredCount": {
+        "title": "Contador ao lado de Com Estrela",
+        "text": "Se quiser, a barra lateral mostra quantos e-mails têm estrela. Você ativa isso nas configurações do app."
       }
     }
   },
