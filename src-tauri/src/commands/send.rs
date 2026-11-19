@@ -496,12 +496,68 @@ pub async fn save_draft(db: State<'_, Database>, pool: State<'_, ImapPool>, requ
     }
 
     // Gmail and IMAP both need an RFC822 message
+    let message_bytes = build_draft_message(&email, &display_name, &request)?;
+
+    if is_gmail_api {
+        // Gmail API: POST /me/drafts with base64url-encoded RFC822
+        let client = crate::gmail::api::GmailClient::new(&credential);
+        crate::gmail::messages::save_draft(&client, &message_bytes)
+            .await
+            .map_err(|e| format!("Gmail draft failed: {}", e))?;
+        return Ok(None);
+    }
+
+    // The user waits for this, so don't queue behind a running sync — a second
+    // connection is better than a draft save that hangs for a minute.
+    let mut session = pool.get_session_max_wait(&request.account_id, &imap_host, imap_port as u16, &email, &credential, &auth_type, crate::pool::APPEND_WAIT)
+        .await
+        .map_err(|e| format!("Failed to get IMAP session: {}", e))?;
+
+    match imap::append_to_folder(&mut session, &drafts_folder_path, &message_bytes, &["\\Draft", "\\Seen"], None).await {
+        Ok(_) => pool.return_session(&request.account_id, session).await,
+        Err(e) => {
+            let _ = session.logout().await;
+            pool.release(&request.account_id);
+            return Err(format!("Failed to save draft: {}", e));
+        }
+    }
+
+    // Mirror the draft into the local DB immediately. Without this the draft only
+    // exists on the server until the next sync round-trip finishes, so a just-saved
+    // draft cannot be reopened (the superseded local row is trashed right after this
+    // returns). The row carries uid = NULL and is claimed by Message-ID on the next
+    // sync, so no duplicate appears.
+    let local_id = match drafts_folder_id {
+        Some(folder_id) => match imap::insert_local_sent_mail(&db, &request.account_id, &folder_id, &message_bytes) {
+            Ok(id) => Some(id),
+            Err(e) => {
+                log::warn!("save_draft: local mirror failed, falling back to sync: {}", e);
+                None
+            }
+        },
+        None => None,
+    };
+
+    // The mirrored row has no UID yet, so reopening the draft cannot fetch its
+    // attachments from the server. Store them from the bytes we just built — otherwise
+    // the draft reopens without them and would be sent with the files missing.
+    if let Some(ref id) = local_id {
+        if let Err(e) = imap::store_body_and_attachments(&db, id, &message_bytes).await {
+            log::error!("save_draft: storing attachments for the local draft failed: {}", e);
+        }
+    }
+
+    Ok(local_id)
+}
+
+/// The draft as RFC822 bytes for the Gmail API and the IMAP Drafts folder.
+pub(crate) fn build_draft_message(email: &str, display_name: &str, request: &SendMailRequest) -> Result<Vec<u8>, String> {
     let from_mailbox = if display_name.is_empty() {
         email.parse::<lettre::Address>()
             .map_err(|e| format!("Invalid email: {}", e))?
             .into()
     } else {
-        lettre::message::Mailbox::new(Some(display_name), email.parse().map_err(|e| format!("Invalid email: {}", e))?)
+        lettre::message::Mailbox::new(Some(display_name.to_string()), email.parse().map_err(|e| format!("Invalid email: {}", e))?)
     };
 
     let from_mailbox_clone = from_mailbox.clone();
@@ -619,58 +675,7 @@ pub async fn save_draft(db: State<'_, Database>, pool: State<'_, ImapPool>, requ
             .map_err(|e| format!("Failed to build message: {}", e))?
     };
 
-    let message_bytes = message.formatted();
-
-    if is_gmail_api {
-        // Gmail API: POST /me/drafts with base64url-encoded RFC822
-        let client = crate::gmail::api::GmailClient::new(&credential);
-        crate::gmail::messages::save_draft(&client, &message_bytes)
-            .await
-            .map_err(|e| format!("Gmail draft failed: {}", e))?;
-        return Ok(None);
-    }
-
-    // The user waits for this, so don't queue behind a running sync — a second
-    // connection is better than a draft save that hangs for a minute.
-    let mut session = pool.get_session_max_wait(&request.account_id, &imap_host, imap_port as u16, &email, &credential, &auth_type, crate::pool::APPEND_WAIT)
-        .await
-        .map_err(|e| format!("Failed to get IMAP session: {}", e))?;
-
-    match imap::append_to_folder(&mut session, &drafts_folder_path, &message_bytes, &["\\Draft", "\\Seen"], None).await {
-        Ok(_) => pool.return_session(&request.account_id, session).await,
-        Err(e) => {
-            let _ = session.logout().await;
-            pool.release(&request.account_id);
-            return Err(format!("Failed to save draft: {}", e));
-        }
-    }
-
-    // Mirror the draft into the local DB immediately. Without this the draft only
-    // exists on the server until the next sync round-trip finishes, so a just-saved
-    // draft cannot be reopened (the superseded local row is trashed right after this
-    // returns). The row carries uid = NULL and is claimed by Message-ID on the next
-    // sync, so no duplicate appears.
-    let local_id = match drafts_folder_id {
-        Some(folder_id) => match imap::insert_local_sent_mail(&db, &request.account_id, &folder_id, &message_bytes) {
-            Ok(id) => Some(id),
-            Err(e) => {
-                log::warn!("save_draft: local mirror failed, falling back to sync: {}", e);
-                None
-            }
-        },
-        None => None,
-    };
-
-    // The mirrored row has no UID yet, so reopening the draft cannot fetch its
-    // attachments from the server. Store them from the bytes we just built — otherwise
-    // the draft reopens without them and would be sent with the files missing.
-    if let Some(ref id) = local_id {
-        if let Err(e) = imap::store_body_and_attachments(&db, id, &message_bytes).await {
-            log::error!("save_draft: storing attachments for the local draft failed: {}", e);
-        }
-    }
-
-    Ok(local_id)
+    Ok(message.formatted())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -909,6 +914,20 @@ mod tests {
             attachments: None,
             high_priority,
         }
+    }
+
+    #[test]
+    fn draft_carries_priority_headers_only_when_high() {
+        let draft = |high| {
+            let raw = build_draft_message("sam@studio-halde.example", "Sam", &scheduled_request("acc", "Entwurf", high)).unwrap();
+            String::from_utf8_lossy(&raw).to_string()
+        };
+        let high = draft(true);
+        for header in ["X-Priority: 1 (Highest)\r\n", "X-MSMail-Priority: High\r\n", "Importance: High\r\n"] {
+            assert!(high.contains(header), "{header} missing in:\n{high}");
+        }
+        let normal = draft(false);
+        assert!(!normal.contains("X-Priority") && !normal.contains("Importance:"), "{normal}");
     }
 
     #[test]
