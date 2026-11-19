@@ -628,7 +628,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     }, 5000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initData, editor, sending, savingDraft, to, cc, bcc, subject, attachments, fromAccountId, quote, quoteRemoved, quoteEditing, mode, originalMail]);
+  }, [initData, editor, sending, savingDraft, to, cc, bcc, subject, attachments, fromAccountId, quote, quoteRemoved, quoteEditing, mode, originalMail, highPriority]);
 
   const getSignatureHtml = useCallback((accountId: string, isReplyOrForward: boolean): string => {
     const account = accounts?.find((a) => a.id === accountId);
