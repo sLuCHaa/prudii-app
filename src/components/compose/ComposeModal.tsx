@@ -1997,7 +1997,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
                       setShowScheduleMenu(!showScheduleMenu);
                       setCustomSchedule(null);
                     }}
-                    disabled={!canSend}
+                    disabled={sending}
                     title={highPriority ? t("compose.highPriorityOn") : undefined}
                     className="relative flex items-center gap-0.5 px-2 text-on-accent rounded-r-control border-l disabled:cursor-default"
                     style={{ borderLeftColor: "color-mix(in srgb, var(--c-on-accent) 25%, transparent)" }}
@@ -2039,16 +2039,20 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
                         {getSchedulePresets().map((preset) => (
                           <button
                             key={preset.label}
+                            data-schedule-option
+                            disabled={!canSend}
                             onClick={() => handleScheduleSend(preset.date)}
-                            className="w-full text-left px-3 py-1.5 text-sm text-text hover:bg-hover transition-colors"
+                            className="w-full text-left px-3 py-1.5 text-sm text-text hover:bg-hover transition-colors disabled:opacity-40 disabled:cursor-default disabled:hover:bg-transparent"
                           >
                             {preset.label}
                           </button>
                         ))}
                         <div className="border-t border-border my-1" />
                         <button
+                          data-schedule-option
+                          disabled={!canSend}
                           onClick={handleScheduleCustom}
-                          className="w-full text-left px-3 py-1.5 text-sm text-text hover:bg-hover transition-colors"
+                          className="w-full text-left px-3 py-1.5 text-sm text-text hover:bg-hover transition-colors disabled:opacity-40 disabled:cursor-default disabled:hover:bg-transparent"
                         >
                           {t("scheduled.customTime")}
                         </button>
