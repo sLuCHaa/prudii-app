@@ -46,6 +46,7 @@ pub struct EmailMessage {
     pub references: Option<String>,
     pub attachments: Vec<EmailAttachment>,
     pub calendar_part: Option<CalendarPart>,
+    pub high_priority: bool,
 }
 
 /// Build the `Message-ID` header value for an outgoing mail.
@@ -158,6 +159,9 @@ fn build_lettre_message(config: &SmtpConfig, message: &EmailMessage) -> Result<M
             .map(ensure_angle_brackets)
             .collect();
         email_builder = email_builder.references(bracketed.join(" "));
+    }
+    if message.high_priority {
+        email_builder = crate::priority::with_high_priority(email_builder);
     }
 
     // Inline parts (cid: referenced from the HTML) live in a multipart/related
@@ -350,6 +354,7 @@ mod tests {
             references: None,
             attachments,
             calendar_part: None,
+            high_priority: false,
         }
     }
 
@@ -426,6 +431,7 @@ mod tests {
                 content_id: None,
             }],
             calendar_part: None,
+            high_priority: false,
         };
 
         let raw = String::from_utf8_lossy(&build_message(config(), message).unwrap()).to_string();
@@ -452,6 +458,7 @@ mod tests {
             references: None,
             attachments: vec![],
             calendar_part: None,
+            high_priority: false,
         };
 
         let raw = String::from_utf8_lossy(&build_message(config(), message).unwrap()).to_string();
@@ -492,6 +499,23 @@ mod tests {
         let candidates = crate::calendar::invite_mail::candidates_from_message(&parsed);
         assert_eq!(candidates.iter().map(|c| c.inline).collect::<Vec<_>>(), vec![true, false]);
         assert_eq!(crate::calendar::invite_mail::choose(candidates).map(|f| f.method).as_deref(), Some("REPLY"));
+    }
+
+    #[test]
+    fn high_priority_mail_carries_the_three_headers() {
+        let message = EmailMessage { high_priority: true, ..message_with(None, vec![]) };
+        let raw = String::from_utf8_lossy(&build_message(config(), message).unwrap()).to_string();
+        assert!(raw.contains("X-Priority: 1 (Highest)\r\n"), "{raw}");
+        assert!(raw.contains("X-MSMail-Priority: High\r\n"), "{raw}");
+        assert!(raw.contains("Importance: High\r\n"), "{raw}");
+    }
+
+    #[test]
+    fn normal_mail_has_no_priority_headers() {
+        let raw = String::from_utf8_lossy(&build_message(config(), message_with(None, vec![])).unwrap()).to_string();
+        assert!(!raw.contains("X-Priority"), "{raw}");
+        assert!(!raw.contains("X-MSMail-Priority"), "{raw}");
+        assert!(!raw.contains("Importance:"), "{raw}");
     }
 
     #[test]

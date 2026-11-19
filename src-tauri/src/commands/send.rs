@@ -185,6 +185,7 @@ pub async fn send_mail(app: AppHandle, db: State<'_, Database>, request: SendMai
             references: request.references,
             attachments,
             calendar_part: None,
+            high_priority: request.high_priority,
         };
 
         (config, message)
@@ -559,6 +560,9 @@ pub async fn save_draft(db: State<'_, Database>, pool: State<'_, ImapPool>, requ
             .collect();
         message_builder = message_builder.references(bracketed.join(" "));
     }
+    if request.high_priority {
+        message_builder = crate::priority::with_high_priority(message_builder);
+    }
 
     let attachments = decode_attachments(request.attachments.clone())?;
     // Mirrors build_lettre_message: cid-referenced images live in a
@@ -823,6 +827,7 @@ pub async fn run_scheduled_check(app: &AppHandle) -> Result<i32, String> {
             in_reply_to: if in_reply_to.is_empty() { None } else { Some(in_reply_to) },
             references: if references_header.is_empty() { None } else { Some(references_header) },
             attachments,
+            high_priority: false,
         };
 
         let db_state: tauri::State<'_, Database> = app.state();

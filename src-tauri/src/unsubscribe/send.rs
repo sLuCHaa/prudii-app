@@ -94,6 +94,7 @@ pub fn mailto_message(target: &MailtoTarget) -> EmailMessage {
         references: None,
         attachments: Vec::new(),
         calendar_part: None,
+        high_priority: false,
     }
 }
 

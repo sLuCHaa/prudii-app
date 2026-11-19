@@ -300,6 +300,7 @@ pub async fn respond_invitation(
         references: None,
         attachments: vec![],
         calendar_part: Some(CalendarPart { method: "REPLY".into(), ics: draft.ics }),
+        high_priority: false,
     };
     crate::commands::send::send_prepared_mail(&app, &draft.account_id, message).await.map_err(|e| {
         log::warn!("invitation reply for {} not sent: {}", mail_id, e);

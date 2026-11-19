@@ -226,6 +226,8 @@ pub struct SendMailRequest {
     pub in_reply_to: Option<String>,
     pub references: Option<String>,
     pub attachments: Option<Vec<SendAttachment>>,
+    #[serde(default)]
+    pub high_priority: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
