@@ -563,7 +563,7 @@ pub(crate) fn build_draft_message(email: &str, display_name: &str, request: &Sen
     let from_mailbox_clone = from_mailbox.clone();
     let mut message_builder = Message::builder()
         .from(from_mailbox)
-        .message_id(Some(smtp::generate_message_id(&email)))
+        .message_id(Some(smtp::generate_message_id(email)))
         .subject(&request.subject);
 
     // Add recipients — drafts may have no recipients yet, so use sender as placeholder.
