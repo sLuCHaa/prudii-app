@@ -1,7 +1,7 @@
 import { Fragment, createContext, useContext, useEffect, useLayoutEffect, useState, useRef, useCallback, memo, useMemo } from "react";
 import { Tooltip } from "../ui/Tooltip";
 import { parseISO } from "date-fns";
-import { FileText, Image, Film, Music, File, Download, ChevronDown, ChevronRight, ChevronUp, MessageSquare, Copy, Check, Code, Eye, FileCode, FileType, Printer, MailMinus, UserMinus, ImageOff, FileWarning, FolderOpen, ClipboardList, ClipboardPlus, Ellipsis, Archive, Paperclip, Forward, Reply, ReplyAll, TrashIcon } from "../icons";
+import { FileText, Image, Film, Music, File, Download, ChevronDown, ChevronRight, ChevronUp, MessageSquare, Copy, Check, Code, Eye, FileCode, FileType, Printer, MailMinus, UserMinus, ImageOff, FileWarning, FolderOpen, ClipboardList, ClipboardPlus, Ellipsis, Archive, Paperclip, Forward, Reply, ReplyAll, TrashIcon, Exclamation } from "../icons";
 import { LightThread } from "../motion/LightThread";
 import { StarToggleIcon } from "../motion/StarToggleIcon";
 import { SkeletonText } from "../ui/Skeleton";
@@ -1103,6 +1103,9 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
               </Tooltip>
             )}
             {fromAccount && <AccountChip account={fromAccount} />}
+            {mail.high_priority && (
+              <Exclamation className="w-3.5 h-3.5 text-danger shrink-0" strokeWidth={2.5} aria-label={t("mailList.highPriority")} />
+            )}
             <span aria-hidden="true">·</span>
             <span className="shrink-0">{formattedDate}</span>
           </div>
@@ -1231,6 +1234,9 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
               </span>
             )}
             {fromAccount && <AccountChip account={fromAccount} />}
+            {mail.high_priority && (
+              <Exclamation className="w-3.5 h-3.5 text-danger shrink-0" strokeWidth={2.5} aria-label={t("mailList.highPriority")} />
+            )}
             {mail.has_attachments && (
               <Paperclip className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
             )}

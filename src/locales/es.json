@@ -135,6 +135,8 @@
     "aiError": "Búsqueda IA fallida"
   },
   "compose": {
+    "highPriority": "Prioridad alta",
+    "highPriorityOn": "Se enviará con prioridad alta",
     "compose": "Redactar",
     "dock": { "collapse": "Contraer", "expand": "Expandir", "popOut": "Abrir en su propia ventana" },
     "newMessage": "Nuevo mensaje",
@@ -432,6 +434,7 @@
     }
   },
   "mailList": {
+    "highPriority": "Prioridad alta",
     "messages": "{{count}} mensajes",
     "search": "Buscar (/)",
     "loadingEmails": "Cargando correos...",

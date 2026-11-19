@@ -98,6 +98,7 @@ export interface Mail {
   is_pinned: boolean;
   snoozed_until: string | null;
   category: string | null;
+  high_priority: boolean;
 }
 
 export type MailFlag = "red" | "orange" | "yellow" | "green" | "blue" | "purple" | "gray";
@@ -356,6 +357,7 @@ export interface SendMailRequest {
   in_reply_to?: string;
   references?: string;
   attachments?: SendAttachment[];
+  high_priority?: boolean;
 }
 
 export interface BackupOptions {

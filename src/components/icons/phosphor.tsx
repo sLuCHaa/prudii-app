@@ -55,6 +55,7 @@ import {
   EnvelopeSimpleIcon,
   EnvelopeSimpleOpenIcon,
   EraserIcon,
+  ExclamationMarkIcon,
   ExportIcon,
   EyeIcon,
   EyeSlashIcon,
@@ -226,6 +227,7 @@ export const Download = duotone(DownloadSimpleIcon, "Download");
 export const Edit3 = duotone(PencilSimpleLineIcon, "Edit3");
 export const Ellipsis = duotone(DotsThreeIcon, "Ellipsis");
 export const ExternalLink = duotone(ArrowSquareOutIcon, "ExternalLink");
+export const Exclamation = duotone(ExclamationMarkIcon, "Exclamation");
 export const Eye = duotone(EyeIcon, "Eye");
 export const EyeOff = duotone(EyeSlashIcon, "EyeOff");
 export const File = duotone(FileIcon, "File");

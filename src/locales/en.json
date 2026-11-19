@@ -135,6 +135,8 @@
     "aiError": "AI search failed"
   },
   "compose": {
+    "highPriority": "High priority",
+    "highPriorityOn": "Sending with high priority",
     "compose": "Compose",
     "dock": { "collapse": "Collapse", "expand": "Expand", "popOut": "Open in its own window" },
     "newMessage": "New Message",
@@ -432,6 +434,7 @@
     }
   },
   "mailList": {
+    "highPriority": "High priority",
     "messages": "{{count}} messages",
     "search": "Search (/)",
     "loadingEmails": "Loading emails...",

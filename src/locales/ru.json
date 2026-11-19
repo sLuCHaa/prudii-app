@@ -137,6 +137,8 @@
     "aiError": "Ошибка ИИ-поиска"
   },
   "compose": {
+    "highPriority": "Высокий приоритет",
+    "highPriorityOn": "Будет отправлено с высоким приоритетом",
     "compose": "Написать",
     "dock": { "collapse": "Свернуть", "expand": "Развернуть", "popOut": "Открыть в отдельном окне" },
     "newMessage": "Новое письмо",
@@ -438,6 +440,7 @@
     }
   },
   "mailList": {
+    "highPriority": "Высокий приоритет",
     "messages": "{{count}} писем",
     "search": "Поиск (/)",
     "loadingEmails": "Загрузка писем...",

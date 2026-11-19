@@ -135,6 +135,8 @@
     "aiError": "KI-Suche fehlgeschlagen"
   },
   "compose": {
+    "highPriority": "Hohe Priorität",
+    "highPriorityOn": "Wird mit hoher Priorität gesendet",
     "compose": "Verfassen",
     "dock": { "collapse": "Einklappen", "expand": "Ausklappen", "popOut": "In eigenes Fenster lösen" },
     "newMessage": "Neue Nachricht",
@@ -432,6 +434,7 @@
     }
   },
   "mailList": {
+    "highPriority": "Hohe Priorität",
     "messages": "{{count}} Nachrichten",
     "search": "Suche (/)",
     "loadingEmails": "E-Mails werden geladen...",

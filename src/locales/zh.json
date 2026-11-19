@@ -135,6 +135,8 @@
     "aiError": "AI 搜索失败"
   },
   "compose": {
+    "highPriority": "高优先级",
+    "highPriorityOn": "将以高优先级发送",
     "compose": "撰写",
     "dock": { "collapse": "折叠", "expand": "展开", "popOut": "在单独窗口中打开" },
     "newMessage": "新邮件",
@@ -431,6 +433,7 @@
     }
   },
   "mailList": {
+    "highPriority": "高优先级",
     "messages": "{{count}} 封邮件",
     "search": "搜索 (/)",
     "loadingEmails": "加载邮件中...",

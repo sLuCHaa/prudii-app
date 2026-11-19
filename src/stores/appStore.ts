@@ -22,6 +22,7 @@ export interface ComposeSnapshot {
   fromAccountId: string;
   attachments: { name: string; size: number; type: string; data: string }[];
   quotedHtml?: string;
+  highPriority?: boolean;
 }
 
 export interface UndoSendState {

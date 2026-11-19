@@ -135,6 +135,8 @@
     "aiError": "Échec de la recherche IA"
   },
   "compose": {
+    "highPriority": "Priorité haute",
+    "highPriorityOn": "Envoi avec priorité haute",
     "compose": "Rédiger",
     "dock": { "collapse": "Réduire", "expand": "Développer", "popOut": "Ouvrir dans sa propre fenêtre" },
     "newMessage": "Nouveau message",
@@ -432,6 +434,7 @@
     }
   },
   "mailList": {
+    "highPriority": "Priorité haute",
     "messages": "{{count}} messages",
     "search": "Rechercher (/)",
     "loadingEmails": "Chargement des emails...",

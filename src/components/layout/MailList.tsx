@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useCallback, useState, useRef, useMemo, DragEvent } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { X, Mail as MailIcon, MailOpen, Check, Pin, Clock, CalendarClock, FileText, ShieldAlert, Folder, FolderInput, Archive, Paperclip, Inbox, MagnifierIcon, Send, Star, StarIcon, Trash2 } from "../icons";
+import { X, Mail as MailIcon, MailOpen, Check, Pin, Clock, CalendarClock, FileText, ShieldAlert, Folder, FolderInput, Archive, Paperclip, Inbox, MagnifierIcon, Send, Star, StarIcon, Trash2, Exclamation } from "../icons";
 import { LightThread } from "../motion/LightThread";
 import { MailStripe } from "./MailStripe";
 import { StarToggleIcon } from "../motion/StarToggleIcon";
@@ -134,6 +134,7 @@ function DragPreview({
               {mail.snippet}
             </div>
             <div className="flex items-center gap-1.5 mt-1">
+              {mail.high_priority && <Exclamation className="w-3 h-3 text-danger" strokeWidth={2.5} aria-label={t("mailList.highPriority")} />}
               {mail.is_starred && <StarIcon size={12} color="var(--c-warning)" />}
               {mail.has_attachments && <Paperclip className="w-3 h-3 text-text-tertiary" />}
             </div>
@@ -1012,8 +1013,9 @@ function VirtualMailList({
                         >
                           {mail.subject || t("compose.noSubject")}
                         </span>
-                        {(mail.is_pinned || mail.is_starred || (mail.flags && mail.flags.length > 0) || mail.has_attachments || taskCounts[mail.id] > 0 || assignments.has(mail.message_id)) && (
+                        {(mail.high_priority || mail.is_pinned || mail.is_starred || (mail.flags && mail.flags.length > 0) || mail.has_attachments || taskCounts[mail.id] > 0 || assignments.has(mail.message_id)) && (
                           <span className="flex shrink-0 items-center gap-1.5 text-text-tertiary">
+                            {mail.high_priority && <Exclamation className="w-3 h-3 text-danger" strokeWidth={2.5} aria-label={t("mailList.highPriority")} />}
                             {mail.is_pinned && <Pin className="w-3 h-3 text-accent" />}
                             {mail.is_starred && <StarIcon size={12} color="var(--c-warning)" />}
                             {mail.flags && mail.flags.length > 0 && <FlagDots flags={mail.flags} size={9} />}

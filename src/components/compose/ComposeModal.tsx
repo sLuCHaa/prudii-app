@@ -5,7 +5,7 @@ import { dateLocale } from "../../lib/dateUtils";
 import { PulseDot } from "../motion/PulseDot";
 import { GradientAvatar } from "../motion/GradientAvatar";
 import { SPRING_SNAPPY } from "../motion/tokens";
-import { X, Paperclip, Trash2, Send, File, FileText, Image, Film, Music, FileCode, FileSpreadsheet, Archive, Sparkles, FileType, CalendarClock, ChevronDown, Undo2, Check, Eye } from "../icons";
+import { X, Paperclip, Trash2, Send, File, FileText, Image, Film, Music, FileCode, FileSpreadsheet, Archive, Sparkles, FileType, CalendarClock, ChevronDown, Undo2, Check, Eye, Exclamation } from "../icons";
 import { LightThread } from "../motion/LightThread";
 import { motion, AnimatePresence } from "motion/react";
 import { EditorContent } from "@tiptap/react";
@@ -437,6 +437,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
   const [showScheduleMenu, setShowScheduleMenu] = useState(false);
+  const [highPriority, setHighPriority] = useState(false);
   const [sendPhase, setSendPhase] = useState<SendPhase>("idle");
   // Bumped when a send fails after the button already showed "sent"; remounting resets it.
   const [sendResetKey, setSendResetKey] = useState(0);
@@ -577,7 +578,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
   }, [editor]);
   useEffect(() => {
     autosaveDirty.current = true;
-  }, [to, cc, bcc, subject, attachments, fromAccountId, quote, quoteRemoved]);
+  }, [to, cc, bcc, subject, attachments, fromAccountId, quote, quoteRemoved, highPriority]);
 
   const buildSnapshot = (quoteEdit: string | null): ComposeSnapshot => {
     const quotedHtml = outgoingQuoteHtml(quoteEdit);
@@ -594,6 +595,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         .filter((att) => att.status === "ready")
         .map((att) => ({ name: att.name, size: att.size, type: att.type, data: att.data })),
       quotedHtml: quotedHtml || undefined,
+      highPriority,
     };
   };
   const currentSnapshot = () => (editor ? buildSnapshot(quoteEditing ? readQuoteEdit() : null) : null);
@@ -726,6 +728,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     }
 
     let content = "";
+    setHighPriority(mode === "draft" && !!originalMail?.high_priority);
 
     if (mode === "draft" && originalMail) {
       const toFormatted = originalMail.to.map((r) =>
@@ -908,6 +911,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
     setSubject(restoreSnapshot.subject);
     setToDraft(null);
     setFromAccountId(restoreSnapshot.fromAccountId);
+    setHighPriority(!!restoreSnapshot.highPriority);
     // The snapshot is only taken once the send guard has confirmed every attachment
     // was loaded, so these are ready by construction.
     setAttachments(
@@ -1273,6 +1277,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       body_text: bodyText,
       body_html: bodyHtml,
       ...threadingHeaders(mode, originalMail),
+      high_priority: highPriority,
       attachments: [
         ...attachments.map((att) => ({
           name: att.name,
@@ -1300,6 +1305,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         data: att.data,
       })),
       quotedHtml: quotedHtml || undefined,
+      highPriority,
     };
 
     if (appSettings.undo_send_delay === 0) {
@@ -1427,6 +1433,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
       body_text: bodyText,
       body_html: bodyHtml,
       ...threadingHeaders(mode, originalMail),
+      high_priority: highPriority,
       attachments: [
         ...attachments.map((att) => ({
           name: att.name,
@@ -1513,6 +1520,7 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
         body_text: bodyText,
         body_html: bodyHtml,
         ...threadingHeaders(mode, originalMail),
+        high_priority: highPriority,
         // Only attachments whose bytes are present go into the draft — a failed one
         // would be baked in as an empty file and the send guard could never clear it.
         // The user is told which ones were left out.
@@ -1990,14 +1998,31 @@ export const ComposeForm = forwardRef<ComposeFormHandle, ComposeFormProps>(funct
                       setCustomSchedule(null);
                     }}
                     disabled={!canSend}
-                    className="relative flex items-center px-2 text-on-accent rounded-r-control border-l disabled:cursor-default"
+                    title={highPriority ? t("compose.highPriorityOn") : undefined}
+                    className="relative flex items-center gap-0.5 px-2 text-on-accent rounded-r-control border-l disabled:cursor-default"
                     style={{ borderLeftColor: "color-mix(in srgb, var(--c-on-accent) 25%, transparent)" }}
                   >
+                    {highPriority && <Exclamation className="w-3.5 h-3.5" strokeWidth={2.5} aria-label={t("compose.highPriorityOn")} />}
                     <ChevronDown className="w-4 h-4" />
                   </button>
                 </div>
                 {showScheduleMenu && (
                   <div className="absolute bottom-full right-0 mb-2 min-w-[200px] bg-surface rounded-lg shadow-lg inset-shadow-edge border border-border py-1 z-50 overflow-hidden">
+                    {!customSchedule && (
+                      <>
+                        <button
+                          role="menuitemcheckbox"
+                          aria-checked={highPriority}
+                          onClick={() => setHighPriority((on) => !on)}
+                          className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-text hover:bg-hover transition-colors"
+                        >
+                          <Exclamation className={`w-3.5 h-3.5 ${highPriority ? "text-danger" : "text-text-tertiary"}`} strokeWidth={2.5} />
+                          <span className="flex-1 text-left">{t("compose.highPriority")}</span>
+                          {highPriority && <Check className="w-3.5 h-3.5 text-accent" />}
+                        </button>
+                        <div className="border-t border-border my-1" />
+                      </>
+                    )}
                     <div className="px-3 py-1.5 text-xs font-semibold text-text-tertiary flex items-center gap-1.5">
                       <CalendarClock className="w-3.5 h-3.5" />
                       {t("scheduled.scheduleSend")}

@@ -16,6 +16,7 @@ export function embeddedMailToMail(outer: Mail, part: EmbeddedMail): Mail {
     list_unsubscribe: null,
     snoozed_until: null,
     category: null,
+    high_priority: false,
     from: part.from,
     to: part.to,
     cc: part.cc,
