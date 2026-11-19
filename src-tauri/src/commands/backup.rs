@@ -486,35 +486,7 @@ fn do_create_backup_inner(
             total_steps,
         });
 
-        let drafts: Vec<serde_json::Value> = {
-            let conn = db.lock_db();
-            let mut stmt = conn.prepare(
-                "SELECT id, account_id, subject, to_addresses, cc_addresses, bcc_addresses,
-                        body_text, body_html, in_reply_to, scheduled_at, created_at, updated_at
-                 FROM drafts ORDER BY updated_at DESC"
-            ).map_err(|e| e.to_string())?;
-
-            let rows = stmt.query_map([], |row| {
-                Ok(serde_json::json!({
-                    "id": row.get::<_, String>(0)?,
-                    "account_id": row.get::<_, String>(1)?,
-                    "subject": row.get::<_, Option<String>>(2)?,
-                    "to_addresses": row.get::<_, Option<String>>(3)?,
-                    "cc_addresses": row.get::<_, Option<String>>(4)?,
-                    "bcc_addresses": row.get::<_, Option<String>>(5)?,
-                    "body_text": row.get::<_, Option<String>>(6)?,
-                    "body_html": row.get::<_, Option<String>>(7)?,
-                    "in_reply_to": row.get::<_, Option<String>>(8)?,
-                    "scheduled_at": row.get::<_, Option<String>>(9)?,
-                    "created_at": row.get::<_, String>(10)?,
-                    "updated_at": row.get::<_, String>(11)?,
-                }))
-            })
-            .map_err(|e| e.to_string())?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| e.to_string())?;
-            rows
-        };
+        let drafts = read_drafts(&db.lock_db()).map_err(|e| e.to_string())?;
 
         let json = serde_json::to_string_pretty(&drafts).map_err(|e| e.to_string())?;
         zip.start_file("drafts.json", zip_options).map_err(|e| e.to_string())?;
@@ -1075,6 +1047,78 @@ pub(crate) fn read_mail_batch(conn: &rusqlite::Connection, limit: i64, offset: i
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
     Ok(rows)
+}
+
+pub(crate) fn read_drafts(conn: &rusqlite::Connection) -> rusqlite::Result<Vec<serde_json::Value>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, account_id, subject, to_addresses, cc_addresses, bcc_addresses,
+                body_text, body_html, in_reply_to, scheduled_at, created_at, updated_at,
+                references_header, attachments_json, COALESCE(high_priority, 0)
+         FROM drafts ORDER BY updated_at DESC",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(serde_json::json!({
+            "id": row.get::<_, String>(0)?,
+            "account_id": row.get::<_, String>(1)?,
+            "subject": row.get::<_, Option<String>>(2)?,
+            "to_addresses": row.get::<_, Option<String>>(3)?,
+            "cc_addresses": row.get::<_, Option<String>>(4)?,
+            "bcc_addresses": row.get::<_, Option<String>>(5)?,
+            "body_text": row.get::<_, Option<String>>(6)?,
+            "body_html": row.get::<_, Option<String>>(7)?,
+            "in_reply_to": row.get::<_, Option<String>>(8)?,
+            "scheduled_at": row.get::<_, Option<String>>(9)?,
+            "created_at": row.get::<_, String>(10)?,
+            "updated_at": row.get::<_, String>(11)?,
+            "references_header": row.get::<_, Option<String>>(12)?,
+            "attachments_json": row.get::<_, Option<String>>(13)?,
+            "high_priority": row.get::<_, i32>(14)?,
+        }))
+    })?;
+    rows.collect()
+}
+
+pub(crate) fn import_drafts(conn: &rusqlite::Connection, drafts: &[serde_json::Value], insert_or: &str) -> Result<(), String> {
+    let sql = format!(
+        "{} INTO drafts (id, account_id, subject, to_addresses, cc_addresses, bcc_addresses,
+         body_text, body_html, in_reply_to, scheduled_at, created_at, updated_at,
+         references_header, attachments_json, high_priority)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)",
+        insert_or
+    );
+    conn.execute_batch("BEGIN TRANSACTION;").map_err(|e| e.to_string())?;
+    let result = drafts.iter().try_for_each(|draft| {
+        let text = |key: &str| draft.get(key).and_then(|v| v.as_str());
+        conn.execute(
+            &sql,
+            rusqlite::params![
+                text("id").unwrap_or(""),
+                text("account_id").unwrap_or(""),
+                text("subject"),
+                text("to_addresses"),
+                text("cc_addresses"),
+                text("bcc_addresses"),
+                text("body_text"),
+                text("body_html"),
+                text("in_reply_to"),
+                text("scheduled_at"),
+                text("created_at").unwrap_or(""),
+                text("updated_at").unwrap_or(""),
+                text("references_header"),
+                text("attachments_json"),
+                draft.get("high_priority").and_then(|v| v.as_i64()).unwrap_or(0),
+            ],
+        )
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+    });
+    match result {
+        Ok(()) => conn.execute_batch("COMMIT;").map_err(|e| e.to_string()),
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(e)
+        }
+    }
 }
 
 pub(crate) fn import_mail_chunk(conn: &rusqlite::Connection, mails: &[serde_json::Value], is_replace: bool) -> Result<(), String> {
@@ -2044,35 +2088,7 @@ fn do_restore_backup_inner(
 
             if let Some(drafts_str) = drafts_json {
                 let drafts: Vec<serde_json::Value> = serde_json::from_str(&drafts_str).map_err(|e| e.to_string())?;
-
-                let draft_sql = format!(
-                    "{} INTO drafts (id, account_id, subject, to_addresses, cc_addresses, bcc_addresses,
-                     body_text, body_html, in_reply_to, scheduled_at, created_at, updated_at)
-                     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)",
-                    insert_or
-                );
-
-                conn.execute_batch("BEGIN TRANSACTION;").map_err(|e| e.to_string())?;
-                for draft in &drafts {
-                    conn.execute(
-                        &draft_sql,
-                        rusqlite::params![
-                            draft.get("id").and_then(|v| v.as_str()).unwrap_or(""),
-                            draft.get("account_id").and_then(|v| v.as_str()).unwrap_or(""),
-                            draft.get("subject").and_then(|v| v.as_str()),
-                            draft.get("to_addresses").and_then(|v| v.as_str()),
-                            draft.get("cc_addresses").and_then(|v| v.as_str()),
-                            draft.get("bcc_addresses").and_then(|v| v.as_str()),
-                            draft.get("body_text").and_then(|v| v.as_str()),
-                            draft.get("body_html").and_then(|v| v.as_str()),
-                            draft.get("in_reply_to").and_then(|v| v.as_str()),
-                            draft.get("scheduled_at").and_then(|v| v.as_str()),
-                            draft.get("created_at").and_then(|v| v.as_str()).unwrap_or(""),
-                            draft.get("updated_at").and_then(|v| v.as_str()).unwrap_or(""),
-                        ],
-                    ).map_err(|e| e.to_string())?;
-                }
-                conn.execute_batch("COMMIT;").map_err(|e| e.to_string())?;
+                import_drafts(&conn, &drafts, insert_or)?;
             }
         }
 
@@ -2959,6 +2975,54 @@ mod category_roundtrip {
         let account = seed_account(&conn, "me@studio-halde.example");
         let inbox = seed_folder(&conn, &account, "inbox");
         f(&conn, &account, &inbox);
+    }
+
+    #[test]
+    fn scheduled_mail_keeps_priority_attachments_and_threading_through_backup() {
+        let db_a = temp_db();
+        let mut account = String::new();
+        seed_into(&db_a, |conn, acc, _| {
+            account = acc.to_string();
+            let request = crate::models::SendMailRequest {
+                account_id: acc.into(),
+                to: vec!["anna.weber@studio-halde.example".into()],
+                cc: vec![],
+                bcc: vec![],
+                subject: "Angebot".into(),
+                body_text: "Anbei das Angebot".into(),
+                body_html: None,
+                in_reply_to: Some("anfrage@studio-halde.example".into()),
+                references: Some("anfrage@studio-halde.example".into()),
+                attachments: Some(vec![crate::models::SendAttachment {
+                    name: "angebot.pdf".into(),
+                    mime_type: "application/pdf".into(),
+                    data: "JVBERi0=".into(),
+                    size: Some(5),
+                    content_id: None,
+                }]),
+                high_priority: true,
+            };
+            crate::commands::send::insert_scheduled(conn, "s1", &request, "2000-01-01 00:00:00").unwrap();
+        });
+        let drafts = read_drafts(&db_a.lock_db()).unwrap();
+
+        let db_b = temp_db();
+        {
+            let conn = db_b.lock_db();
+            conn.execute(
+                "INSERT INTO accounts (id, email, display_name, provider, imap_host, smtp_host) VALUES (?1, 'me@studio-halde.example', 'me', 'imap', 'h', 'h')",
+                rusqlite::params![account],
+            )
+            .unwrap();
+            import_drafts(&conn, &drafts, "INSERT OR IGNORE").unwrap();
+        }
+
+        let due = crate::commands::send::due_scheduled(&db_b.lock_db(), 3).unwrap();
+        assert_eq!(due.len(), 1);
+        let request = &due[0].request;
+        assert!(request.high_priority);
+        assert_eq!(request.references.as_deref(), Some("anfrage@studio-halde.example"));
+        assert_eq!(request.attachments.as_ref().map(|a| a[0].name.as_str()), Some("angebot.pdf"));
     }
 
     #[test]
