@@ -955,6 +955,8 @@ pub struct SendMessage {
     pub attachments: Option<Vec<SendAttachment>>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub internet_message_headers: Vec<InternetMessageHeader>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub importance: Option<&'static str>,
 }
 
 #[derive(Debug, Serialize)]
@@ -994,10 +996,31 @@ pub struct ReplyPayload {
 
 #[cfg(test)]
 mod tests {
-    use super::mime_send_body;
+    use super::{mime_send_body, SendBody, SendMessage};
 
     #[test]
     fn mime_sends_carry_the_whole_message_base64_encoded() {
         assert_eq!(mime_send_body(b"Subject: Hi\r\n\r\nBody"), "U3ViamVjdDogSGkNCg0KQm9keQ==");
+    }
+
+    fn message(importance: Option<&'static str>) -> SendMessage {
+        SendMessage {
+            subject: "Angebot".into(),
+            body: SendBody { content_type: "Text".into(), content: "Hallo".into() },
+            to_recipients: Vec::new(),
+            cc_recipients: Vec::new(),
+            bcc_recipients: Vec::new(),
+            attachments: None,
+            internet_message_headers: Vec::new(),
+            importance,
+        }
+    }
+
+    #[test]
+    fn importance_is_sent_only_when_high() {
+        let high = serde_json::to_value(message(Some("high"))).unwrap();
+        assert_eq!(high["importance"], "high");
+        let normal = serde_json::to_value(message(None)).unwrap();
+        assert!(normal.get("importance").is_none(), "{normal}");
     }
 }

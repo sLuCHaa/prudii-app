@@ -225,6 +225,7 @@ pub async fn send_mail(app: AppHandle, db: State<'_, Database>, request: SendMai
                     &message.body_text,
                     message.body_html.as_deref(),
                     &att_tuples,
+                    message.high_priority,
                 )
                 .await
                 .map_err(|e| format!("Outlook reply failed: {}", e))?;
@@ -238,6 +239,7 @@ pub async fn send_mail(app: AppHandle, db: State<'_, Database>, request: SendMai
                     &message.body_text,
                     message.body_html.as_deref(),
                     &att_tuples,
+                    message.high_priority,
                 )
                 .await
                 .map_err(|e| format!("Outlook send failed: {}", e))?;
@@ -252,6 +254,7 @@ pub async fn send_mail(app: AppHandle, db: State<'_, Database>, request: SendMai
                 &message.body_text,
                 message.body_html.as_deref(),
                 &att_tuples,
+                message.high_priority,
             )
             .await
             .map_err(|e| format!("Outlook send failed: {}", e))?;
@@ -484,6 +487,7 @@ pub async fn save_draft(db: State<'_, Database>, pool: State<'_, ImapPool>, requ
             &request.body_text,
             request.body_html.as_deref(),
             &attachments,
+            request.high_priority,
         )
         .await
         .map_err(|e| format!("Outlook draft failed: {}", e))?;
@@ -687,15 +691,19 @@ pub async fn schedule_send(
 ) -> Result<String, String> {
     let id = Uuid::new_v4().to_string();
     let conn = db.lock_db();
+    insert_scheduled(&conn, &id, &request, &scheduled_at).map_err(|e| format!("Failed to schedule mail: {}", e))?;
+    Ok(id)
+}
 
+pub(crate) fn insert_scheduled(conn: &rusqlite::Connection, id: &str, request: &SendMailRequest, scheduled_at: &str) -> rusqlite::Result<()> {
     let attachments_json = request.attachments
         .as_ref()
         .map(|atts| serde_json::to_string(atts).unwrap_or_default())
         .unwrap_or_default();
 
     conn.execute(
-        "INSERT INTO drafts (id, account_id, subject, to_addresses, cc_addresses, bcc_addresses, body_text, body_html, in_reply_to, references_header, attachments_json, scheduled_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+        "INSERT INTO drafts (id, account_id, subject, to_addresses, cc_addresses, bcc_addresses, body_text, body_html, in_reply_to, references_header, attachments_json, scheduled_at, high_priority)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         rusqlite::params![
             id,
             request.account_id,
@@ -704,15 +712,57 @@ pub async fn schedule_send(
             serde_json::to_string(&request.cc).unwrap_or_default(),
             serde_json::to_string(&request.bcc).unwrap_or_default(),
             request.body_text,
-            request.body_html.unwrap_or_default(),
+            request.body_html.as_deref().unwrap_or_default(),
             request.in_reply_to.as_deref().unwrap_or(""),
             request.references.as_deref().unwrap_or(""),
             attachments_json,
             scheduled_at,
+            request.high_priority as i32,
         ],
-    ).map_err(|e| format!("Failed to schedule mail: {}", e))?;
+    )?;
+    Ok(())
+}
 
-    Ok(id)
+pub(crate) struct DueScheduled {
+    pub draft_id: String,
+    pub retry_count: i32,
+    pub request: SendMailRequest,
+}
+
+pub(crate) fn due_scheduled(conn: &rusqlite::Connection, max_retries: i32) -> rusqlite::Result<Vec<DueScheduled>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, account_id, COALESCE(subject, ''), COALESCE(to_addresses, '[]'), \
+         COALESCE(cc_addresses, '[]'), COALESCE(bcc_addresses, '[]'), COALESCE(body_text, ''), \
+         COALESCE(body_html, ''), COALESCE(in_reply_to, ''), COALESCE(references_header, ''), \
+         COALESCE(attachments_json, ''), retry_count, COALESCE(high_priority, 0) \
+         FROM drafts WHERE scheduled_at IS NOT NULL AND scheduled_at != '' \
+         AND scheduled_at <= datetime('now') AND retry_count < ?1"
+    )?;
+    let optional = |s: String| if s.is_empty() { None } else { Some(s) };
+    let rows = stmt.query_map(rusqlite::params![max_retries], |row| {
+        let addresses = |i: usize| -> rusqlite::Result<Vec<String>> {
+            Ok(serde_json::from_str(&row.get::<_, String>(i)?).unwrap_or_default())
+        };
+        let attachments_json: String = row.get(10)?;
+        Ok(DueScheduled {
+            draft_id: row.get(0)?,
+            retry_count: row.get(11)?,
+            request: SendMailRequest {
+                account_id: row.get(1)?,
+                to: addresses(3)?,
+                cc: addresses(4)?,
+                bcc: addresses(5)?,
+                subject: row.get(2)?,
+                body_text: row.get(6)?,
+                body_html: optional(row.get(7)?),
+                in_reply_to: optional(row.get(8)?),
+                references: optional(row.get(9)?),
+                attachments: if attachments_json.is_empty() { None } else { serde_json::from_str(&attachments_json).ok() },
+                high_priority: row.get::<_, i32>(12)? != 0,
+            },
+        })
+    })?;
+    Ok(rows.filter_map(|r| r.ok()).collect())
 }
 
 #[tauri::command]
@@ -768,37 +818,10 @@ pub async fn check_scheduled_mails(
 pub async fn run_scheduled_check(app: &AppHandle) -> Result<i32, String> {
     const MAX_RETRIES: i32 = 3;
 
-    let due_drafts: Vec<(String, String, String, String, String, String, String, String, String, String, String, i32)> = {
+    let due_drafts = {
         let db = app.state::<Database>();
         let conn = db.lock_db();
-        let mut stmt = conn.prepare(
-            "SELECT id, account_id, COALESCE(subject, ''), COALESCE(to_addresses, '[]'), \
-             COALESCE(cc_addresses, '[]'), COALESCE(bcc_addresses, '[]'), COALESCE(body_text, ''), \
-             COALESCE(body_html, ''), COALESCE(in_reply_to, ''), COALESCE(references_header, ''), \
-             COALESCE(attachments_json, ''), retry_count \
-             FROM drafts WHERE scheduled_at IS NOT NULL AND scheduled_at != '' \
-             AND scheduled_at <= datetime('now') AND retry_count < ?1"
-        ).map_err(|e| e.to_string())?;
-
-        let rows: Vec<_> = stmt.query_map(rusqlite::params![MAX_RETRIES], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, String>(4)?,
-                row.get::<_, String>(5)?,
-                row.get::<_, String>(6)?,
-                row.get::<_, String>(7)?,
-                row.get::<_, String>(8)?,
-                row.get::<_, String>(9)?,
-                row.get::<_, String>(10)?,
-                row.get::<_, i32>(11)?,
-            ))
-        }).map_err(|e| e.to_string())?
-        .filter_map(|r| r.ok())
-        .collect();
-        rows
+        due_scheduled(&conn, MAX_RETRIES).map_err(|e| e.to_string())?
     };
 
     let count = due_drafts.len() as i32;
@@ -806,29 +829,9 @@ pub async fn run_scheduled_check(app: &AppHandle) -> Result<i32, String> {
         return Ok(0);
     }
 
-    for (draft_id, account_id, subject, to_json, cc_json, bcc_json, body_text, body_html, in_reply_to, references_header, attachments_json, retry_count) in due_drafts {
-        let to: Vec<String> = serde_json::from_str(&to_json).unwrap_or_default();
-        let cc: Vec<String> = serde_json::from_str(&cc_json).unwrap_or_default();
-        let bcc: Vec<String> = serde_json::from_str(&bcc_json).unwrap_or_default();
-        let attachments: Option<Vec<crate::models::SendAttachment>> = if attachments_json.is_empty() {
-            None
-        } else {
-            serde_json::from_str(&attachments_json).ok()
-        };
-
-        let request = SendMailRequest {
-            account_id: account_id.clone(),
-            to,
-            cc,
-            bcc,
-            subject: subject.clone(),
-            body_text,
-            body_html: if body_html.is_empty() { None } else { Some(body_html) },
-            in_reply_to: if in_reply_to.is_empty() { None } else { Some(in_reply_to) },
-            references: if references_header.is_empty() { None } else { Some(references_header) },
-            attachments,
-            high_priority: false,
-        };
+    for DueScheduled { draft_id, retry_count, request } in due_drafts {
+        let account_id = request.account_id.clone();
+        let subject = request.subject.clone();
 
         let db_state: tauri::State<'_, Database> = app.state();
         match send_mail(app.clone(), db_state, request).await {
@@ -890,5 +893,37 @@ mod tests {
         assert_eq!((config.host.as_str(), config.port, config.display_name.as_str()), ("smtp.example.com", 465, "Sam"));
         assert!(smtp_config(&SendAccount { smtp_port: 0, ..account }, "secret").is_err());
         assert!(load_send_account(&db, "missing").is_err());
+    }
+
+    fn scheduled_request(account_id: &str, subject: &str, high_priority: bool) -> SendMailRequest {
+        SendMailRequest {
+            account_id: account_id.into(),
+            to: vec!["anna.weber@studio-halde.example".into()],
+            cc: vec![],
+            bcc: vec![],
+            subject: subject.into(),
+            body_text: "Hallo Anna".into(),
+            body_html: None,
+            in_reply_to: None,
+            references: None,
+            attachments: None,
+            high_priority,
+        }
+    }
+
+    #[test]
+    fn scheduled_mail_keeps_high_priority() {
+        let db = crate::test_support::temp_db();
+        let conn = db.lock_db();
+        let account = crate::test_support::seed_account(&conn, "sam@studio-halde.example");
+        insert_scheduled(&conn, "s1", &scheduled_request(&account, "Dringend", true), "2000-01-01 00:00:00").unwrap();
+        insert_scheduled(&conn, "s2", &scheduled_request(&account, "Normal", false), "2000-01-01 00:00:01").unwrap();
+
+        let due = due_scheduled(&conn, 3).unwrap();
+        let priority_of = |id: &str| due.iter().find(|d| d.draft_id == id).map(|d| d.request.high_priority);
+        assert_eq!(due.len(), 2);
+        assert_eq!(priority_of("s1"), Some(true));
+        assert_eq!(priority_of("s2"), Some(false));
+        assert_eq!(due[0].request.to, vec!["anna.weber@studio-halde.example".to_string()]);
     }
 }

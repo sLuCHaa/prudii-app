@@ -213,7 +213,7 @@ fn calendar_tables_exist_with_unique_slots_and_cascade() {
     let conn = db.lock_db();
 
     let version: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
-    assert_eq!(version, 48);
+    assert_eq!(version, 49);
 
     conn.execute("INSERT INTO calendars (id, name, color) VALUES ('c1', 'Cal', '#3b82f6')", []).unwrap();
     let insert = |id: &str, rid: Option<&str>| {
@@ -253,10 +253,35 @@ fn subscription_columns_are_added_to_existing_calendars() {
     let db = Database::new(dir.clone()).unwrap();
     let conn = db.lock_db();
     let version: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
-    assert_eq!(version, 48);
+    assert_eq!(version, 49);
     let (muted, refresh): (i64, Option<i64>) =
         conn.query_row("SELECT reminders_muted, refresh_minutes FROM calendars WHERE id = 'c1'", [], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
     assert_eq!((muted, refresh), (0, None));
+    drop(conn);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn priority_columns_are_added_to_existing_mails_and_drafts() {
+    let dir = temp_dir("priority-columns");
+    {
+        let db = Database::new(dir.clone()).unwrap();
+        let conn = db.lock_db();
+        conn.execute_batch("ALTER TABLE mails DROP COLUMN high_priority").unwrap();
+        conn.execute_batch("ALTER TABLE drafts DROP COLUMN high_priority").unwrap();
+        conn.pragma_update(None, "user_version", 48).unwrap();
+    }
+    let db = Database::new(dir.clone()).unwrap();
+    let conn = db.lock_db();
+    let version: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
+    assert_eq!(version, 49);
+    for table in ["mails", "drafts"] {
+        let has: bool = conn
+            .query_row(&format!("SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = 'high_priority'"), [], |r| r.get::<_, i64>(0))
+            .map(|n| n == 1)
+            .unwrap();
+        assert!(has, "{table}.high_priority missing");
+    }
     drop(conn);
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -276,7 +301,7 @@ fn invite_columns_are_added_to_existing_mails() {
     let db = Database::new(dir.clone()).unwrap();
     let conn = db.lock_db();
     let version: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
-    assert_eq!(version, 48);
+    assert_eq!(version, 49);
     let cols: Vec<String> = conn
         .prepare("SELECT name FROM pragma_table_info('mails')")
         .unwrap()

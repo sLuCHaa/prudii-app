@@ -321,6 +321,7 @@ pub async fn send_mail(
     body_text: &str,
     body_html: Option<&str>,
     attachments: &[(String, String, Vec<u8>, Option<String>)], // (name, mime_type, data, content_id)
+    high_priority: bool,
 ) -> Result<()> {
     let to_recipients: Vec<GraphRecipient> = to.iter()
         .filter(|a| !a.trim().is_empty())
@@ -372,6 +373,7 @@ pub async fn send_mail(
             bcc_recipients,
             attachments: graph_attachments,
             internet_message_headers: headers,
+            importance: high_priority.then_some("high"),
         },
         save_to_sent_items: true,
     };
@@ -391,6 +393,7 @@ pub async fn reply_mail(
     body_text: &str,
     body_html: Option<&str>,
     attachments: &[(String, String, Vec<u8>, Option<String>)],
+    high_priority: bool,
 ) -> Result<()> {
     let to_recipients: Vec<GraphRecipient> = to.iter()
         .filter(|a| !a.trim().is_empty())
@@ -437,6 +440,7 @@ pub async fn reply_mail(
             bcc_recipients,
             attachments: graph_attachments,
             internet_message_headers: Vec::new(),
+            importance: high_priority.then_some("high"),
         },
     };
 
@@ -452,6 +456,7 @@ pub async fn save_draft(
     body_text: &str,
     body_html: Option<&str>,
     attachments: &[(String, String, Vec<u8>, Option<String>)], // (name, mime_type, data, content_id)
+    high_priority: bool,
 ) -> Result<()> {
     let to_recipients: Vec<GraphRecipient> = to.iter()
         .filter(|a| !a.trim().is_empty())
@@ -497,6 +502,7 @@ pub async fn save_draft(
         bcc_recipients,
         attachments: graph_attachments,
         internet_message_headers: Vec::new(),
+        importance: high_priority.then_some("high"),
     };
 
     client.create_draft(&message).await?;

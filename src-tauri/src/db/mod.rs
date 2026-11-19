@@ -6,7 +6,7 @@ use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
-pub(crate) const SCHEMA_VERSION: u32 = 48;
+pub(crate) const SCHEMA_VERSION: u32 = 49;
 
 pub struct Database {
     pub conn: Mutex<Connection>,
@@ -760,6 +760,14 @@ impl Database {
 
         if let Err(e) = signatures::install(&conn) {
             log::error!("DB v48: signature list not installed: {}", e);
+        }
+
+        // Mail priority (schema 49); "duplicate column" on re-runs is expected.
+        for sql in [
+            "ALTER TABLE mails ADD COLUMN high_priority INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE drafts ADD COLUMN high_priority INTEGER NOT NULL DEFAULT 0",
+        ] {
+            let _ = conn.execute_batch(sql);
         }
 
         // Only bump version AFTER all migrations have run
