@@ -120,6 +120,8 @@ pub struct Mail {
     pub snoozed_until: Option<String>,
     #[serde(default)]
     pub category: Option<String>,
+    #[serde(default)]
+    pub high_priority: bool,
 }
 
 fn default_true() -> bool {

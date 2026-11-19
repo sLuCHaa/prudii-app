@@ -567,6 +567,7 @@ fn insert_message_from_metadata(
         |name| api::get_header(payload, name).map(str::to_string),
         crate::categorize::signals::gmail_category_from_labels(labels),
     );
+    let high_priority = crate::priority::is_high_priority(|name| api::get_header(payload, name).map(str::to_string));
 
     // Parse date — Gmail internalDate is millis since epoch.
     // Format as RFC3339 UTC (with `T` and `Z`) so the frontend's parseISO treats it
@@ -602,14 +603,15 @@ fn insert_message_from_metadata(
     }
 
     let result = conn.execute(
-        "INSERT OR IGNORE INTO mails (id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, body_text, body_html, is_read, is_starred, has_attachments, thread_id, in_reply_to, \"references\", size_bytes, list_unsubscribe, reply_to_json, signal_headers)
-         VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?6, ?7, ?8, ?9, '[]', ?10, ?11, '', '', ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
+        "INSERT OR IGNORE INTO mails (id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, body_text, body_html, is_read, is_starred, has_attachments, thread_id, in_reply_to, \"references\", size_bytes, list_unsubscribe, reply_to_json, signal_headers, high_priority)
+         VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?6, ?7, ?8, ?9, '[]', ?10, ?11, '', '', ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
         rusqlite::params![
             mail_id, account_id, folder.id, msg.id,
             subject, from_name, from_email, to_json, cc_json,
             date, snippet, is_read as i32, is_starred as i32,
             has_attachments as i32, thread_id, in_reply_to, references,
             msg.size_estimate, list_unsubscribe, reply_to_json, signal_headers,
+            high_priority as i32,
         ],
     );
 

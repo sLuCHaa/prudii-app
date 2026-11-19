@@ -278,7 +278,7 @@ pub(crate) fn mail_columns(prefix: &str, with_body: bool) -> String {
         "'' as body_text, '' as body_html".to_string()
     };
     format!(
-        "{p}id, {p}account_id, {p}folder_id, {p}message_id, {p}uid, {p}subject, {p}from_name, {p}from_email, {p}to_json, {p}cc_json, {p}bcc_json, {p}date, {p}snippet, {body}, {p}is_read, {p}is_starred, {p}is_flagged, {p}is_replied, {p}is_forwarded, {p}has_attachments, {p}thread_id, {p}in_reply_to, {p}size_bytes, COALESCE({p}flags, ''), COALESCE({p}list_unsubscribe, ''), COALESCE({p}is_pinned, 0), COALESCE({p}snoozed_until, ''), COALESCE({p}reply_to_json, '[]'), COALESCE({p}category, ''), COALESCE({p}\"references\", '')"
+        "{p}id, {p}account_id, {p}folder_id, {p}message_id, {p}uid, {p}subject, {p}from_name, {p}from_email, {p}to_json, {p}cc_json, {p}bcc_json, {p}date, {p}snippet, {body}, {p}is_read, {p}is_starred, {p}is_flagged, {p}is_replied, {p}is_forwarded, {p}has_attachments, {p}thread_id, {p}in_reply_to, {p}size_bytes, COALESCE({p}flags, ''), COALESCE({p}list_unsubscribe, ''), COALESCE({p}is_pinned, 0), COALESCE({p}snoozed_until, ''), COALESCE({p}reply_to_json, '[]'), COALESCE({p}category, ''), COALESCE({p}\"references\", ''), COALESCE({p}high_priority, 0)"
     )
 }
 
@@ -326,6 +326,7 @@ pub(crate) fn map_mail_row(row: &rusqlite::Row) -> rusqlite::Result<Mail> {
         is_pinned: row.get::<_, i32>(26)? != 0,
         snoozed_until: if snoozed_str.is_empty() { None } else { Some(snoozed_str) },
         category: if category.is_empty() { None } else { Some(category) },
+        high_priority: row.get::<_, i32>(31)? != 0,
     })
 }
 
@@ -4701,6 +4702,7 @@ mod list_tests {
             is_pinned: false,
             snoozed_until: None,
             category: None,
+            high_priority: false,
         }
     }
 

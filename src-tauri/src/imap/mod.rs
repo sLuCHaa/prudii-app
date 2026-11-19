@@ -955,6 +955,10 @@ fn message_signal_headers(msg: &mail_parser::Message) -> String {
     )
 }
 
+fn message_high_priority(msg: &mail_parser::Message) -> bool {
+    crate::priority::is_high_priority(|name| msg.header_raw(name.to_string()).map(str::to_string))
+}
+
 /// Header fields extracted from one fetched message, parsed without the DB lock.
 struct ParsedHeader {
     uid: u32,
@@ -977,6 +981,7 @@ struct ParsedHeader {
     is_read: bool,
     is_starred: bool,
     is_replied: bool,
+    high_priority: bool,
 }
 
 /// Process a batch of header-only fetches: parse headers, insert into DB.
@@ -1111,13 +1116,14 @@ fn process_header_batch(
         let is_read = fetched.flags.iter().any(|f| f.contains("Seen"));
         let is_starred = fetched.flags.iter().any(|f| f.contains("Flagged"));
         let is_replied = fetched.flags.iter().any(|f| f.contains("Answered"));
+        let high_priority = parsed.as_ref().is_some_and(message_high_priority);
 
         parsed_batch.push(ParsedHeader {
             uid: fetched.uid,
             size: fetched.size,
             subject, from_name, from_email, to_json, cc_json, bcc_json, reply_to_json,
             date, message_id, in_reply_to, thread_id, has_attachments, list_unsubscribe,
-            signal_headers, references_str, is_read, is_starred, is_replied,
+            signal_headers, references_str, is_read, is_starred, is_replied, high_priority,
         });
     }
 
@@ -1162,13 +1168,14 @@ fn process_header_batch(
         }
 
         let insert_result = tx.execute(
-            "INSERT OR IGNORE INTO mails (id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, body_text, body_html, is_read, is_starred, is_flagged, is_replied, is_forwarded, has_attachments, thread_id, in_reply_to, size_bytes, list_unsubscribe, reply_to_json, \"references\", signal_headers) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, '', '', '', ?13, ?14, 0, ?15, 0, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)",
+            "INSERT OR IGNORE INTO mails (id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, body_text, body_html, is_read, is_starred, is_flagged, is_replied, is_forwarded, has_attachments, thread_id, in_reply_to, size_bytes, list_unsubscribe, reply_to_json, \"references\", signal_headers, high_priority) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, '', '', '', ?13, ?14, 0, ?15, 0, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)",
             rusqlite::params![
                 mail_id, account_id, folder.id, p.message_id, p.uid,
                 p.subject, p.from_name, p.from_email, p.to_json, p.cc_json, p.bcc_json, p.date,
                 p.is_read as i32, p.is_starred as i32, p.is_replied as i32,
                 p.has_attachments as i32, p.thread_id, p.in_reply_to, p.size as i64,
                 p.list_unsubscribe, p.reply_to_json, p.references_str, p.signal_headers,
+                p.high_priority as i32,
             ],
         );
 
@@ -1284,13 +1291,14 @@ pub fn insert_local_sent_mail(
     // uid = NULL (claimed by the next sync via Message-ID); is_read = 1 because we
     // authored it. is_starred/is_flagged/is_replied/is_forwarded default to 0.
     conn.execute(
-        "INSERT OR IGNORE INTO mails (id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, body_text, body_html, is_read, is_starred, is_flagged, is_replied, is_forwarded, has_attachments, thread_id, in_reply_to, size_bytes, list_unsubscribe, reply_to_json, \"references\", signal_headers) VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, 1, 0, 0, 0, 0, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
+        "INSERT OR IGNORE INTO mails (id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, body_text, body_html, is_read, is_starred, is_flagged, is_replied, is_forwarded, has_attachments, thread_id, in_reply_to, size_bytes, list_unsubscribe, reply_to_json, \"references\", signal_headers, high_priority) VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, 1, 0, 0, 0, 0, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)",
         rusqlite::params![
             mail_id, account_id, folder_id, message_id,
             subject, from_name, from_email, to_json, cc_json, bcc_json, date,
             snippet, body_text, body_html,
             has_attachments as i32, thread_id, in_reply_to, size,
             list_unsubscribe, reply_to_json, references_str, signal_headers,
+            message_high_priority(&msg) as i32,
         ],
     )
     .context("Failed to insert local sent mail")?;
@@ -2329,6 +2337,70 @@ mod header_batch_tests {
     use crate::models::Folder;
     use mail_parser::MessageParser;
     use std::collections::{HashMap, HashSet};
+
+    fn header_mail(uid: u32, extra: &str) -> FetchedMail {
+        let raw = format!("From: Anna Weber <anna.weber@studio-halde.example>\r\nSubject: Angebot\r\nMessage-ID: <p{uid}@studio-halde.example>\r\nDate: Mon, 05 Jan 2026 10:00:00 +0000\r\n{extra}\r\n");
+        FetchedMail { uid, size: raw.len() as u32, raw_bytes: raw.into_bytes(), flags: Vec::new(), internal_date: None }
+    }
+
+    fn stored_priority(db: &Database, where_clause: &str) -> i64 {
+        db.lock_db().query_row(&format!("SELECT high_priority FROM mails WHERE {where_clause}"), [], |r| r.get(0)).unwrap()
+    }
+
+    #[test]
+    fn batch_stores_importance_high() {
+        let db = fixture("importance");
+        let batch = vec![header_mail(21, "Importance: high\r\n"), header_mail(22, "")];
+        process_header_batch(&batch, &MessageParser::default(), "acc", &inbox(), &db, &HashSet::new());
+        assert_eq!(stored_priority(&db, "uid = 21"), 1);
+        assert_eq!(stored_priority(&db, "uid = 22"), 0);
+    }
+
+    #[test]
+    fn high_priority_header_is_stored() {
+        let db = fixture("x-priority");
+        let raw = "From: Anna Weber <anna.weber@studio-halde.example>\r\nTo: sam@studio-halde.example\r\nSubject: Dringend\r\nMessage-ID: <dringend@studio-halde.example>\r\nX-Priority: 1 (Highest)\r\n\r\nBitte heute noch.\r\n";
+        let id = super::insert_local_sent_mail(&db, "acc", "inbox", raw.as_bytes()).unwrap();
+        assert_eq!(stored_priority(&db, &format!("id = '{id}'")), 1);
+    }
+
+    fn built_mail(subject: &str, high_priority: bool) -> Vec<u8> {
+        let config = crate::smtp::SmtpConfig {
+            host: "smtp.studio-halde.example".into(),
+            port: 465,
+            security: "ssl".into(),
+            email: "anna.weber@studio-halde.example".into(),
+            password: String::new(),
+            auth_type: "password".into(),
+            display_name: "Anna Weber".into(),
+        };
+        let message = crate::smtp::EmailMessage {
+            to: vec!["sam@studio-halde.example".into()],
+            cc: vec![],
+            bcc: vec![],
+            subject: subject.into(),
+            body_text: "Hallo Sam".into(),
+            body_html: None,
+            in_reply_to: None,
+            references: None,
+            attachments: vec![],
+            calendar_part: None,
+            high_priority,
+        };
+        crate::smtp::build_message(config, message).unwrap()
+    }
+
+    #[test]
+    fn reopened_draft_keeps_high_priority() {
+        let db = fixture("draft-priority");
+        super::insert_local_sent_mail(&db, "acc", "inbox", &built_mail("Dringend", true)).unwrap();
+        super::insert_local_sent_mail(&db, "acc", "inbox", &built_mail("Normal", false)).unwrap();
+
+        let mails = crate::commands::mails::list_mails_inner(&db.lock_db(), "inbox", None, None, &None, None).unwrap();
+        let priority_of = |subject: &str| mails.iter().find(|m| m.subject == subject).map(|m| m.high_priority);
+        assert_eq!(priority_of("Dringend"), Some(true));
+        assert_eq!(priority_of("Normal"), Some(false));
+    }
 
     fn fixture(tag: &str) -> Database {
         let dir = std::env::temp_dir().join(format!("prudii-header-batch-{}-{}", tag, std::process::id()));

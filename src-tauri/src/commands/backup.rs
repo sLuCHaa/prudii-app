@@ -1025,7 +1025,8 @@ pub(crate) fn read_mail_batch(conn: &rusqlite::Connection, limit: i64, offset: i
                     COALESCE(is_pinned, 0),
                     COALESCE(snoozed_until, ''),
                     COALESCE(reply_to_json, '[]'),
-                    category, category_source, category_confidence, category_reasons, signal_headers
+                    category, category_source, category_confidence, category_reasons, signal_headers,
+                    COALESCE(high_priority, 0)
              FROM mails ORDER BY date DESC, id LIMIT ?1 OFFSET ?2",
         )
         .map_err(|e| e.to_string())?;
@@ -1067,6 +1068,7 @@ pub(crate) fn read_mail_batch(conn: &rusqlite::Connection, limit: i64, offset: i
                 "category_confidence": row.get::<_, Option<f64>>(31)?,
                 "category_reasons": row.get::<_, Option<String>>(32)?,
                 "signal_headers": row.get::<_, Option<String>>(33)?,
+                "high_priority": row.get::<_, i32>(34)?,
             }))
         })
         .map_err(|e| e.to_string())?
@@ -1084,8 +1086,8 @@ pub(crate) fn import_mail_chunk(conn: &rusqlite::Connection, mails: &[serde_json
          is_read, is_starred, is_flagged, is_replied, is_forwarded,
          has_attachments, thread_id, in_reply_to, size_bytes, flags,
          list_unsubscribe, is_pinned, snoozed_until, reply_to_json,
-         category, category_source, category_confidence, category_reasons, signal_headers)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25,?26,?27,?28,?29,?30,?31,?32,?33,?34)",
+         category, category_source, category_confidence, category_reasons, signal_headers, high_priority)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25,?26,?27,?28,?29,?30,?31,?32,?33,?34,?35)",
         insert_or
     );
 
@@ -1129,6 +1131,7 @@ pub(crate) fn import_mail_chunk(conn: &rusqlite::Connection, mails: &[serde_json
                     mail.get("category_confidence").and_then(|v| v.as_f64()),
                     mail.get("category_reasons").and_then(|v| v.as_str()),
                     mail.get("signal_headers").and_then(|v| v.as_str()),
+                    mail.get("high_priority").and_then(|v| v.as_i64()).unwrap_or(0),
                 ],
             )
             .map_err(|e| e.to_string())?;
@@ -2975,7 +2978,7 @@ mod category_roundtrip {
                 },
             );
             conn.execute(
-                "UPDATE mails SET category_confidence = 1.0, category_reasons = '[{\"code\":\"user_choice\",\"params\":{}}]' WHERE id = ?1",
+                "UPDATE mails SET category_confidence = 1.0, category_reasons = '[{\"code\":\"user_choice\",\"params\":{}}]', high_priority = 1 WHERE id = ?1",
                 rusqlite::params![id],
             )
             .unwrap();
@@ -3009,6 +3012,8 @@ mod category_roundtrip {
         assert_eq!(row.2, 1.0);
         assert!(row.3.contains("user_choice"));
         assert!(row.4.contains("list-id"));
+        let high_priority: i64 = conn.query_row("SELECT high_priority FROM mails", [], |r| r.get(0)).unwrap();
+        assert_eq!(high_priority, 1);
         let rule: (String, String, String) = conn
             .query_row("SELECT email, category, created_at FROM sender_categories", [], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
             .unwrap();

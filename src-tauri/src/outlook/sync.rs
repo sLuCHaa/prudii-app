@@ -607,14 +607,15 @@ fn insert_message_from_graph(
     }
 
     let result = conn.execute(
-        "INSERT OR IGNORE INTO mails (id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, body_text, body_html, is_read, is_starred, has_attachments, thread_id, in_reply_to, \"references\", list_unsubscribe, reply_to_json, signal_headers)
-         VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?6, ?7, ?8, ?9, '[]', ?10, ?11, '', '', ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
+        "INSERT OR IGNORE INTO mails (id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, body_text, body_html, is_read, is_starred, has_attachments, thread_id, in_reply_to, \"references\", list_unsubscribe, reply_to_json, signal_headers, high_priority)
+         VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?6, ?7, ?8, ?9, '[]', ?10, ?11, '', '', ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
         rusqlite::params![
             mail_id, account_id, folder.id, msg.id,
             subject, from_name, from_email, to_json, cc_json,
             date, snippet, is_read as i32, is_starred as i32,
             has_attachments as i32, thread_id, in_reply_to, internet_msg_id,
             list_unsubscribe, reply_to_json, signal_headers,
+            crate::priority::is_high_importance(msg.importance.as_deref()) as i32,
         ],
     );
 
