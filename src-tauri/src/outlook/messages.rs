@@ -395,6 +395,20 @@ pub async fn reply_mail(
     attachments: &[(String, String, Vec<u8>, Option<String>)],
     high_priority: bool,
 ) -> Result<()> {
+    let payload = reply_payload(to, cc, bcc, subject, body_text, body_html, attachments, high_priority);
+    client.reply_mail(original_graph_id, &payload).await
+}
+
+pub(crate) fn reply_payload(
+    to: &[String],
+    cc: &[String],
+    bcc: &[String],
+    subject: &str,
+    body_text: &str,
+    body_html: Option<&str>,
+    attachments: &[(String, String, Vec<u8>, Option<String>)],
+    high_priority: bool,
+) -> ReplyPayload {
     let to_recipients: Vec<GraphRecipient> = to.iter()
         .filter(|a| !a.trim().is_empty())
         .map(|a| parse_recipient(a))
@@ -431,7 +445,7 @@ pub async fn reply_mail(
         }).collect())
     };
 
-    let payload = ReplyPayload {
+    ReplyPayload {
         message: SendMessage {
             subject: subject.to_string(),
             body: SendBody { content_type, content },
@@ -440,11 +454,10 @@ pub async fn reply_mail(
             bcc_recipients,
             attachments: graph_attachments,
             internet_message_headers: Vec::new(),
-            importance: high_priority.then_some("high"),
+            // Explicit, or Exchange may carry the original's importance into the reply.
+            importance: Some(if high_priority { "high" } else { "normal" }),
         },
-    };
-
-    client.reply_mail(original_graph_id, &payload).await
+    }
 }
 
 pub async fn save_draft(
@@ -581,8 +594,18 @@ fn sanitize_filename(name: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::is_event_message;
+    use super::{is_event_message, reply_payload};
     use crate::outlook::api::GraphMessage;
+
+    #[test]
+    fn replies_state_their_importance_so_the_original_is_not_inherited() {
+        let importance = |high| {
+            let payload = reply_payload(&["anna.weber@studio-halde.example".into()], &[], &[], "AW: Angebot", "Danke", None, &[], high);
+            serde_json::to_value(payload).unwrap()["message"]["importance"].clone()
+        };
+        assert_eq!(importance(false), "normal");
+        assert_eq!(importance(true), "high");
+    }
 
     #[test]
     fn meeting_mails_are_recognised_by_their_graph_type() {
