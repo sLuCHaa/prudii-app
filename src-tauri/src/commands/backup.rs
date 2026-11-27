@@ -3253,7 +3253,7 @@ mod signatures_roundtrip {
         let source = temp_db();
         let conn = source.lock_db();
         import_backup_account(&conn, &old_account(), false, true).unwrap();
-        conn.execute_batch("UPDATE accounts SET incoming_protocol = 'pop3', incoming_security = 'starttls', pop3_delete_mode = 'after_days', pop3_delete_after_days = 30, pop3_delete_with_local = 1").unwrap();
+        conn.execute_batch("UPDATE accounts SET incoming_protocol = 'pop3', incoming_security = 'starttls', pop3_delete_mode = 'keep', pop3_delete_after_days = 30, pop3_delete_with_local = 0").unwrap();
         let exported = account_rows(&conn).unwrap();
         let target = temp_db();
         let conn = target.lock_db();
@@ -3261,9 +3261,9 @@ mod signatures_roundtrip {
         let account = list_accounts_inner(&conn).unwrap().remove(0);
         assert_eq!(
             (account.incoming_protocol.as_str(), account.incoming_security.as_str(), account.pop3_delete_mode.as_str()),
-            ("pop3", "starttls", "after_days")
+            ("pop3", "starttls", "keep")
         );
-        assert_eq!((account.pop3_delete_after_days, account.pop3_delete_with_local), (30, true));
+        assert_eq!((account.pop3_delete_after_days, account.pop3_delete_with_local), (30, false));
     }
 
     #[test]
@@ -3272,8 +3272,8 @@ mod signatures_roundtrip {
         let conn = db.lock_db();
         import_backup_account(&conn, &old_account(), false, true).unwrap();
         let account = list_accounts_inner(&conn).unwrap().remove(0);
-        assert_eq!((account.incoming_protocol.as_str(), account.pop3_delete_mode.as_str()), ("imap", "keep"));
-        assert!(!account.pop3_delete_with_local);
+        assert_eq!((account.incoming_protocol.as_str(), account.pop3_delete_mode.as_str()), ("imap", "after_days"));
+        assert_eq!((account.pop3_delete_after_days, account.pop3_delete_with_local), (14, true));
     }
 
     #[test]
