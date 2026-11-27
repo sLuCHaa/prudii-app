@@ -174,6 +174,8 @@ export function WizardStepAuth({
         />
       )}
 
+      {isPop3 && <p className="text-xs text-text-tertiary">{t("pop3.inboxOnly")}</p>}
+
       {isPop3 && <Pop3DeleteRule rule={rule} onChange={onRuleChange} />}
 
       {isOAuth ? (

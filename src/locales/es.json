@@ -1854,6 +1854,7 @@
   },
   "pop3": {
     "protocol": "Protocolo de entrada",
+    "inboxOnly": "POP3 solo descarga la bandeja de entrada. Los correos enviados y las demás carpetas permanecen en el servidor.",
     "host": "Servidor POP3",
     "security": "Cifrado",
     "ruleTitle": "Correos en el servidor",

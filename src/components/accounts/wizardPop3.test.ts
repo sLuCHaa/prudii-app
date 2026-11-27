@@ -555,6 +555,17 @@ describe("account wizard layout", () => {
     expect(button(i18n.t("pop3.mode.keep")).className).not.toContain("border-accent");
   });
 
+  it("says that only the inbox is fetched with POP3 and not with IMAP", () => {
+    const hint = "POP3 lädt nur den Posteingang. Gesendete Mails und andere Ordner bleiben auf dem Server.";
+    open("custom");
+    expect(host.textContent).not.toContain(hint);
+    choosePop3();
+    expect(host.textContent).toContain(hint);
+    expect(host.querySelector("details")).toBeNull();
+    click(button("IMAP"));
+    expect(host.textContent).not.toContain(hint);
+  });
+
   it("translates the heading of the custom provider", () => {
     open("custom");
     expect(host.querySelector("form h3")!.textContent).toBe("Benutzerdefiniert");

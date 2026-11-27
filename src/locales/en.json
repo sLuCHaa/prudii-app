@@ -1854,6 +1854,7 @@
   },
   "pop3": {
     "protocol": "Incoming protocol",
+    "inboxOnly": "POP3 only downloads the inbox. Sent mail and other folders stay on the server.",
     "host": "POP3 server",
     "security": "Encryption",
     "ruleTitle": "Mail on the server",

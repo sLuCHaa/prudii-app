@@ -1854,6 +1854,7 @@
   },
   "pop3": {
     "protocol": "Abrufprotokoll",
+    "inboxOnly": "POP3 lädt nur den Posteingang. Gesendete Mails und andere Ordner bleiben auf dem Server.",
     "host": "POP3-Server",
     "security": "Verschlüsselung",
     "ruleTitle": "Mails auf dem Server",

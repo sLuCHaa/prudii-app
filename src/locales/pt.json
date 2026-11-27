@@ -1854,6 +1854,7 @@
   },
   "pop3": {
     "protocol": "Protocolo de recebimento",
+    "inboxOnly": "O POP3 baixa apenas a caixa de entrada. Os e-mails enviados e as outras pastas permanecem no servidor.",
     "host": "Servidor POP3",
     "security": "Criptografia",
     "ruleTitle": "E-mails no servidor",

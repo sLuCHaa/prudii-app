@@ -1850,6 +1850,7 @@
   },
   "pop3": {
     "protocol": "收信协议",
+    "inboxOnly": "POP3 仅下载收件箱。已发送邮件和其他文件夹保留在服务器上。",
     "host": "POP3 服务器",
     "security": "加密方式",
     "ruleTitle": "服务器上的邮件",

@@ -1854,6 +1854,7 @@
   },
   "pop3": {
     "protocol": "Protocole de réception",
+    "inboxOnly": "POP3 ne récupère que la boîte de réception. Les e-mails envoyés et les autres dossiers restent sur le serveur.",
     "host": "Serveur POP3",
     "security": "Chiffrement",
     "ruleTitle": "E-mails sur le serveur",
