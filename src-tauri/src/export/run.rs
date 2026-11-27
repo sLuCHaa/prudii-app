@@ -93,19 +93,22 @@ fn load_folders(db: &Database, labels: &ExportLabels, ids: &[String]) -> Vec<Fol
     let mut out = Vec::new();
     for id in ids {
         let found = conn.query_row(
-            "SELECT f.id, f.name, f.folder_type, COALESCE(f.is_local, 0), a.id, a.email, a.display_name, a.provider, a.auth_type
+            "SELECT f.id, f.name, f.folder_type, COALESCE(f.is_local, 0), a.id, a.email, a.display_name, a.provider, a.auth_type, a.incoming_protocol
              FROM folders f JOIN accounts a ON a.id = f.account_id WHERE f.id = ?1",
             rusqlite::params![id],
             |row| {
                 let folder_type: String = row.get(2)?;
                 let name: String = row.get(1)?;
-                let (provider, auth_type): (String, String) = (row.get(7)?, row.get(8)?);
+                let (provider, auth_type, incoming_protocol): (String, String, String) = (row.get(7)?, row.get(8)?, row.get(9)?);
                 Ok(FolderInfo {
                     id: row.get(0)?,
                     name: labels.folder_names.get(&folder_type).cloned().unwrap_or(name),
                     folder_type,
                     is_local: row.get::<_, i64>(3)? != 0,
-                    uses_api: !matches!(api_type_of(&provider, &auth_type), ApiType::Imap),
+                    uses_api: match api_type_of(&provider, &auth_type, &incoming_protocol) {
+                        ApiType::Gmail | ApiType::Outlook => true,
+                        ApiType::Imap | ApiType::Pop3 => false,
+                    },
                     account_id: row.get(4)?,
                     account_email: row.get(5)?,
                     account_name: row.get(6)?,

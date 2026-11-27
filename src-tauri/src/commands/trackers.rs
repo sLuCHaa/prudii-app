@@ -92,7 +92,7 @@ pub async fn fetch_bulk_bodies(app: tauri::AppHandle) -> Result<u32, String> {
     let plan: Vec<Vec<String>> = {
         let conn = db.read_db();
         let accounts: Vec<String> = conn
-            .prepare("SELECT id FROM accounts WHERE provider IN ('google', 'microsoft') AND auth_type = 'oauth'")
+            .prepare("SELECT id FROM accounts WHERE provider IN ('google', 'microsoft') AND auth_type = 'oauth' AND incoming_protocol != 'pop3'")
             .and_then(|mut stmt| stmt.query_map([], |r| r.get(0))?.collect())
             .map_err(|e| e.to_string())?;
         accounts

@@ -557,6 +557,22 @@ async fn do_sync_account(app: AppHandle, account: Account, account_id: String, c
 }
 
 async fn do_sync_account_inner(app: &AppHandle, account: Account, account_id: &str, credential: &str, auth_type: &str) {
+    // Ahead of the provider checks: POP3 wins over OAuth.
+    if account.incoming_protocol == "pop3" {
+        emit_progress(app, &SyncProgress {
+            account_id: account_id.to_string(),
+            status: "error".into(),
+            folder_name: None,
+            folder_index: 0,
+            folder_count: 0,
+            folder_done: 0,
+            folder_total: 0,
+            new_mails: 0,
+            message: crate::commands::mails::POP3_NOT_SUPPORTED.into(),
+        });
+        return;
+    }
+
     // Gmail REST API path — skip IMAP entirely for Google OAuth accounts
     if account.provider == "google" && auth_type == "oauth" {
         do_gmail_sync(app, &account, account_id, credential).await;
@@ -1446,7 +1462,7 @@ pub async fn sync_account(
     let account: Account = {
         let conn = db.lock_db();
         conn.query_row(
-            "SELECT id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port, COALESCE(smtp_security, 'ssl') as smtp_security, auth_type, '' as signature_html, '' as signature_text, COALESCE(sync_interval_minutes, 0) as sync_interval_minutes, COALESCE(signature_on_compose, 1) as signature_on_compose, COALESCE(signature_on_reply, 1) as signature_on_reply, COALESCE(load_external_images, 'always') as load_external_images, created_at, updated_at FROM accounts WHERE id = ?1",
+            "SELECT id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port, COALESCE(smtp_security, 'ssl') as smtp_security, auth_type, '' as signature_html, '' as signature_text, COALESCE(sync_interval_minutes, 0) as sync_interval_minutes, COALESCE(signature_on_compose, 1) as signature_on_compose, COALESCE(signature_on_reply, 1) as signature_on_reply, COALESCE(load_external_images, 'always') as load_external_images, created_at, updated_at, incoming_protocol, incoming_security, pop3_delete_mode, pop3_delete_after_days, pop3_delete_with_local FROM accounts WHERE id = ?1",
             rusqlite::params![account_id],
             |row| {
                 Ok(Account {
@@ -1470,6 +1486,11 @@ pub async fn sync_account(
                     load_external_images: row.get(16)?,
                     created_at: row.get(17)?,
                     updated_at: row.get(18)?,
+                    incoming_protocol: row.get(19)?,
+                    incoming_security: row.get(20)?,
+                    pop3_delete_mode: row.get(21)?,
+                    pop3_delete_after_days: row.get(22)?,
+                    pop3_delete_with_local: row.get(23)?,
                 })
             },
         )
@@ -1514,7 +1535,7 @@ pub async fn sync_folder(
         let conn = db.lock_db();
         conn.query_row(
             // Same columns as sync_account (sync.rs:1293).
-            "SELECT id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port, COALESCE(smtp_security, 'ssl') as smtp_security, auth_type, '' as signature_html, '' as signature_text, COALESCE(sync_interval_minutes, 0) as sync_interval_minutes, COALESCE(signature_on_compose, 1) as signature_on_compose, COALESCE(signature_on_reply, 1) as signature_on_reply, COALESCE(load_external_images, 'always') as load_external_images, created_at, updated_at FROM accounts WHERE id = ?1",
+            "SELECT id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port, COALESCE(smtp_security, 'ssl') as smtp_security, auth_type, '' as signature_html, '' as signature_text, COALESCE(sync_interval_minutes, 0) as sync_interval_minutes, COALESCE(signature_on_compose, 1) as signature_on_compose, COALESCE(signature_on_reply, 1) as signature_on_reply, COALESCE(load_external_images, 'always') as load_external_images, created_at, updated_at, incoming_protocol, incoming_security, pop3_delete_mode, pop3_delete_after_days, pop3_delete_with_local FROM accounts WHERE id = ?1",
             rusqlite::params![account_id],
             |row| Ok(Account {
                 id: row.get(0)?, email: row.get(1)?, display_name: row.get(2)?, provider: row.get(3)?,
@@ -1523,13 +1544,15 @@ pub async fn sync_folder(
                 signature_id: None, signature_html: row.get(11)?, signature_text: row.get(12)?, sync_interval_minutes: row.get(13)?,
                 signature_on_compose: row.get(14)?, signature_on_reply: row.get(15)?, load_external_images: row.get(16)?,
                 created_at: row.get(17)?, updated_at: row.get(18)?,
+                incoming_protocol: row.get(19)?, incoming_security: row.get(20)?, pop3_delete_mode: row.get(21)?,
+                pop3_delete_after_days: row.get(22)?, pop3_delete_with_local: row.get(23)?,
             }),
         )
         .map_err(|e| format!("Account not found: {}", e))?
     };
 
-    // OAuth accounts sync via the Gmail/Graph API path — no IMAP folder sync here.
-    if account.auth_type == "oauth" {
+    // OAuth accounts sync via the Gmail/Graph API path, and POP3 has no folders on the server.
+    if account.auth_type == "oauth" || account.incoming_protocol == "pop3" {
         return Ok(());
     }
 
@@ -1591,7 +1614,7 @@ async fn spawn_account_syncs(app: AppHandle, db: &Database, only_automatic: bool
     let accounts: Vec<Account> = {
         let conn = db.lock_db();
         let mut stmt = conn
-            .prepare("SELECT id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port, COALESCE(smtp_security, 'ssl') as smtp_security, auth_type, '' as signature_html, '' as signature_text, COALESCE(sync_interval_minutes, 0) as sync_interval_minutes, COALESCE(signature_on_compose, 1) as signature_on_compose, COALESCE(signature_on_reply, 1) as signature_on_reply, COALESCE(load_external_images, 'always') as load_external_images, created_at, updated_at FROM accounts ORDER BY created_at ASC")
+            .prepare("SELECT id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port, COALESCE(smtp_security, 'ssl') as smtp_security, auth_type, '' as signature_html, '' as signature_text, COALESCE(sync_interval_minutes, 0) as sync_interval_minutes, COALESCE(signature_on_compose, 1) as signature_on_compose, COALESCE(signature_on_reply, 1) as signature_on_reply, COALESCE(load_external_images, 'always') as load_external_images, created_at, updated_at, incoming_protocol, incoming_security, pop3_delete_mode, pop3_delete_after_days, pop3_delete_with_local FROM accounts ORDER BY created_at ASC")
             .map_err(|e| e.to_string())?;
         let result = stmt
             .query_map([], |row| {
@@ -1616,6 +1639,11 @@ async fn spawn_account_syncs(app: AppHandle, db: &Database, only_automatic: bool
                     load_external_images: row.get(16)?,
                     created_at: row.get(17)?,
                     updated_at: row.get(18)?,
+                    incoming_protocol: row.get(19)?,
+                    incoming_security: row.get(20)?,
+                    pop3_delete_mode: row.get(21)?,
+                    pop3_delete_after_days: row.get(22)?,
+                    pop3_delete_with_local: row.get(23)?,
                 })
             })
             .map_err(|e| e.to_string())?
@@ -1661,6 +1689,9 @@ pub async fn backfill_bodies(
     // API accounts (Gmail/Outlook) don't use IMAP backfill — bodies are fetched on-demand via API
     {
         let conn = db.lock_db();
+        if crate::commands::mails::is_pop3_account(&conn, &account_id) {
+            return Ok(());
+        }
         let is_api: bool = conn.query_row(
             "SELECT ((provider = 'google' OR provider = 'microsoft') AND auth_type = 'oauth') FROM accounts WHERE id = ?1",
             rusqlite::params![account_id],
@@ -1718,7 +1749,7 @@ pub async fn backfill_bodies(
     let account: Account = {
         let conn = db.lock_db();
         conn.query_row(
-            "SELECT id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port, COALESCE(smtp_security, 'ssl') as smtp_security, auth_type, '' as signature_html, '' as signature_text, COALESCE(sync_interval_minutes, 0) as sync_interval_minutes, COALESCE(signature_on_compose, 1) as signature_on_compose, COALESCE(signature_on_reply, 1) as signature_on_reply, COALESCE(load_external_images, 'always') as load_external_images, created_at, updated_at FROM accounts WHERE id = ?1",
+            "SELECT id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port, COALESCE(smtp_security, 'ssl') as smtp_security, auth_type, '' as signature_html, '' as signature_text, COALESCE(sync_interval_minutes, 0) as sync_interval_minutes, COALESCE(signature_on_compose, 1) as signature_on_compose, COALESCE(signature_on_reply, 1) as signature_on_reply, COALESCE(load_external_images, 'always') as load_external_images, created_at, updated_at, incoming_protocol, incoming_security, pop3_delete_mode, pop3_delete_after_days, pop3_delete_with_local FROM accounts WHERE id = ?1",
             rusqlite::params![account_id],
             |row| {
                 Ok(Account {
@@ -1742,6 +1773,11 @@ pub async fn backfill_bodies(
                     load_external_images: row.get(16)?,
                     created_at: row.get(17)?,
                     updated_at: row.get(18)?,
+                    incoming_protocol: row.get(19)?,
+                    incoming_security: row.get(20)?,
+                    pop3_delete_mode: row.get(21)?,
+                    pop3_delete_after_days: row.get(22)?,
+                    pop3_delete_with_local: row.get(23)?,
                 })
             },
         )

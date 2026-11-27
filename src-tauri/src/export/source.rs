@@ -1,4 +1,4 @@
-use crate::commands::mails::{get_api_message_id, get_api_type, ApiType};
+use crate::commands::mails::{get_api_message_id, get_api_type, mail_is_pop3, ApiType, POP3_NOT_SUPPORTED};
 use crate::credentials;
 use crate::db::Database;
 use crate::gmail;
@@ -52,6 +52,9 @@ pub fn display_source(raw: Vec<u8>) -> String {
 }
 
 pub async fn fetch_raw_message(db: &Database, pool: &ImapPool, mail_id: &str) -> Result<Vec<u8>, FetchError> {
+    if mail_is_pop3(db, mail_id) {
+        return Err(POP3_NOT_SUPPORTED.into());
+    }
     if let Some((api_msg_id, account_id)) = get_api_message_id(db, mail_id) {
         let (api_type, provider, auth_type) = get_api_type(db, &account_id);
         match api_type {
@@ -78,6 +81,7 @@ pub async fn fetch_raw_message(db: &Database, pool: &ImapPool, mail_id: &str) ->
                     .map_err(|e| FetchError::from_error("Outlook source fetch", &e));
             }
             ApiType::Imap => {}
+            ApiType::Pop3 => return Err(POP3_NOT_SUPPORTED.into()),
         }
     }
 

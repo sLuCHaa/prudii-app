@@ -1264,7 +1264,7 @@ pub(crate) fn account_rows(conn: &rusqlite::Connection) -> Result<Vec<serde_json
                     COALESCE(sync_interval_minutes, 0),
                     COALESCE(signature_on_compose, 1), COALESCE(signature_on_reply, 1),
                     COALESCE(load_external_images, 'always'),
-                    created_at, updated_at
+                    created_at, updated_at, incoming_protocol, incoming_security, pop3_delete_mode, pop3_delete_after_days, pop3_delete_with_local
              FROM accounts ORDER BY created_at ASC",
         )
         .map_err(|e| e.to_string())?;
@@ -1289,6 +1289,11 @@ pub(crate) fn account_rows(conn: &rusqlite::Connection) -> Result<Vec<serde_json
                 "load_external_images": row.get::<_, String>(15)?,
                 "created_at": row.get::<_, String>(16)?,
                 "updated_at": row.get::<_, String>(17)?,
+                "incoming_protocol": row.get::<_, String>(18)?,
+                "incoming_security": row.get::<_, String>(19)?,
+                "pop3_delete_mode": row.get::<_, String>(20)?,
+                "pop3_delete_after_days": row.get::<_, i64>(21)?,
+                "pop3_delete_with_local": row.get::<_, bool>(22)?,
             }))
         })
         .map_err(|e| e.to_string())?;
@@ -1379,8 +1384,8 @@ pub(crate) fn import_backup_account(
 
     let signature_html = crate::commands::signatures::clean_signature_html(acc.get("signature_html").and_then(|v| v.as_str()).unwrap_or(""));
     conn.execute(
-        "INSERT OR REPLACE INTO accounts (id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port, smtp_security, auth_type, signature_html, signature_text, sync_interval_minutes, signature_on_compose, signature_on_reply, load_external_images, created_at, updated_at, signature_id)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, (SELECT id FROM signatures WHERE id = ?20))",
+        "INSERT OR REPLACE INTO accounts (id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port, smtp_security, auth_type, signature_html, signature_text, sync_interval_minutes, signature_on_compose, signature_on_reply, load_external_images, created_at, updated_at, signature_id, incoming_protocol, incoming_security, pop3_delete_mode, pop3_delete_after_days, pop3_delete_with_local)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, (SELECT id FROM signatures WHERE id = ?20), ?21, ?22, ?23, ?24, ?25)",
         rusqlite::params![
             id,
             email,
@@ -1402,6 +1407,11 @@ pub(crate) fn import_backup_account(
             acc.get("created_at").and_then(|v| v.as_str()).unwrap_or(""),
             acc.get("updated_at").and_then(|v| v.as_str()).unwrap_or(""),
             acc.get("signature_id").and_then(|v| v.as_str()),
+            acc.get("incoming_protocol").and_then(|v| v.as_str()).unwrap_or(crate::models::DEFAULT_INCOMING_PROTOCOL),
+            acc.get("incoming_security").and_then(|v| v.as_str()).unwrap_or(crate::models::DEFAULT_INCOMING_SECURITY),
+            acc.get("pop3_delete_mode").and_then(|v| v.as_str()).unwrap_or(crate::models::DEFAULT_POP3_DELETE_MODE),
+            acc.get("pop3_delete_after_days").and_then(|v| v.as_i64()).unwrap_or(crate::models::DEFAULT_POP3_DELETE_AFTER_DAYS),
+            acc.get("pop3_delete_with_local").and_then(|v| v.as_bool()).unwrap_or(crate::models::DEFAULT_POP3_DELETE_WITH_LOCAL),
         ],
     ).map_err(|e| e.to_string())?;
     if adopt_signature {
@@ -3236,6 +3246,34 @@ mod signatures_roundtrip {
         let exported = &account_rows(&conn).unwrap()[0];
         assert_eq!(exported["signature_id"].as_str(), list_accounts_inner(&conn).unwrap()[0].signature_id.as_deref());
         assert!(exported.get("signature_html").is_none() && exported.get("signature_text").is_none());
+    }
+
+    #[test]
+    fn pop3_account_settings_survive_a_backup() {
+        let source = temp_db();
+        let conn = source.lock_db();
+        import_backup_account(&conn, &old_account(), false, true).unwrap();
+        conn.execute_batch("UPDATE accounts SET incoming_protocol = 'pop3', incoming_security = 'starttls', pop3_delete_mode = 'after_days', pop3_delete_after_days = 30, pop3_delete_with_local = 1").unwrap();
+        let exported = account_rows(&conn).unwrap();
+        let target = temp_db();
+        let conn = target.lock_db();
+        import_backup_account(&conn, &exported[0], false, false).unwrap();
+        let account = list_accounts_inner(&conn).unwrap().remove(0);
+        assert_eq!(
+            (account.incoming_protocol.as_str(), account.incoming_security.as_str(), account.pop3_delete_mode.as_str()),
+            ("pop3", "starttls", "after_days")
+        );
+        assert_eq!((account.pop3_delete_after_days, account.pop3_delete_with_local), (30, true));
+    }
+
+    #[test]
+    fn an_old_backup_restores_as_an_imap_account() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        import_backup_account(&conn, &old_account(), false, true).unwrap();
+        let account = list_accounts_inner(&conn).unwrap().remove(0);
+        assert_eq!((account.incoming_protocol.as_str(), account.pop3_delete_mode.as_str()), ("imap", "keep"));
+        assert!(!account.pop3_delete_with_local);
     }
 
     #[test]

@@ -6,7 +6,7 @@ use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
-pub(crate) const SCHEMA_VERSION: u32 = 49;
+pub(crate) const SCHEMA_VERSION: u32 = 50;
 
 pub struct Database {
     pub conn: Mutex<Connection>,
@@ -105,6 +105,18 @@ impl Database {
         let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_attachments_inline ON attachments(is_inline, mail_id);");
         // Body prefetch and backfill look for mails without a body; without this they read every body in the folder.
         let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_mails_folder_missing_body ON mails(folder_id, date DESC) WHERE body_text = '' AND uid IS NOT NULL;");
+        {
+            use crate::models::*;
+            for column in [
+                format!("incoming_protocol TEXT NOT NULL DEFAULT '{DEFAULT_INCOMING_PROTOCOL}'"),
+                format!("incoming_security TEXT NOT NULL DEFAULT '{DEFAULT_INCOMING_SECURITY}'"),
+                format!("pop3_delete_mode TEXT NOT NULL DEFAULT '{DEFAULT_POP3_DELETE_MODE}'"),
+                format!("pop3_delete_after_days INTEGER NOT NULL DEFAULT {DEFAULT_POP3_DELETE_AFTER_DAYS}"),
+                format!("pop3_delete_with_local INTEGER NOT NULL DEFAULT {}", DEFAULT_POP3_DELETE_WITH_LOCAL as i32),
+            ] {
+                let _ = conn.execute_batch(&format!("ALTER TABLE accounts ADD COLUMN {column};"));
+            }
+        }
 
         let _ = conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS ai_cache (

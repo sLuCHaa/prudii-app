@@ -227,3 +227,16 @@ CREATE TABLE IF NOT EXISTS mail_scan_bodies (
     fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (mail_id) REFERENCES mails(id) ON DELETE CASCADE
 );
+
+-- POP3 messages already seen on the server, keyed by their UIDL.
+CREATE TABLE IF NOT EXISTS pop3_uidls (
+    account_id TEXT NOT NULL,
+    uidl TEXT NOT NULL,
+    mail_id TEXT,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    state TEXT NOT NULL DEFAULT 'stored',       -- 'stored' | 'server_deleted'
+    local_deleted_at TEXT,
+    PRIMARY KEY (account_id, uidl),
+    FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_pop3_uidls_mail ON pop3_uidls(mail_id);
