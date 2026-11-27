@@ -1251,6 +1251,17 @@ fn pop3_archive_mail(db: &Database, mail_id: &str) -> Result<(), String> {
     move_mail_locally(db, mail_id, &archive)
 }
 
+fn pop3_trash_and_sync(app: &tauri::AppHandle, db: &Database, mail_id: &str, permanent: bool) -> Result<(), String> {
+    let account_id: Result<String, _> = db
+        .lock_db()
+        .query_row("SELECT account_id FROM mails WHERE id = ?1", [mail_id], |row| row.get(0));
+    pop3_trash_mail(db, mail_id, permanent)?;
+    if let Ok(account_id) = account_id {
+        crate::commands::sync::sync_after_pop3_delete(app, db, &account_id);
+    }
+    Ok(())
+}
+
 /// To the trash first, from the trash for good. `permanent` only removes drafts that never came from a server.
 fn pop3_trash_mail(db: &Database, mail_id: &str, permanent: bool) -> Result<(), String> {
     match pop3_purge_or_target(db, mail_id, permanent)? {
@@ -1821,7 +1832,7 @@ enum TrashAction {
 pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id: String, permanent: Option<bool>) -> Result<(), String> {
     let permanent = permanent.unwrap_or(false);
     if mail_is_pop3(&db, &mail_id) {
-        return pop3_trash_mail(&db, &mail_id, permanent);
+        return pop3_trash_and_sync(&app, &db, &mail_id, permanent);
     }
     if let Some((api_msg_id, account_id)) = get_api_message_id(&db, &mail_id) {
         let (api_type, provider, auth_type) = get_api_type(&db, &account_id);
@@ -2055,7 +2066,7 @@ pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id:
                 return Ok(());
             }
             ApiType::Imap => {}
-            ApiType::Pop3 => return pop3_trash_mail(&db, &mail_id, permanent),
+            ApiType::Pop3 => return pop3_trash_and_sync(&app, &db, &mail_id, permanent),
         }
     }
 
@@ -3667,7 +3678,11 @@ async fn empty_folder_by_type(app: tauri::AppHandle, db: State<'_, Database>, ac
             return Ok(count);
         }
         ApiType::Imap => {}
-        ApiType::Pop3 => return pop3_empty_folder(&db, &account_id, folder_type),
+        ApiType::Pop3 => {
+            let removed = pop3_empty_folder(&db, &account_id, folder_type)?;
+            crate::commands::sync::sync_after_pop3_delete(&app, &db, &account_id);
+            return Ok(removed);
+        }
     }
 
     let folder_info: Option<(String, String)> = {
