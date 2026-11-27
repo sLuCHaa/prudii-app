@@ -1194,27 +1194,36 @@ fn process_header_batch(
     (new_count, new_mail_ids)
 }
 
-/// Insert a just-sent mail into the local DB immediately after a successful IMAP
-/// APPEND to the Sent folder, so it shows up without waiting for the next server
-/// sync to re-fetch it. Relying on that round-trip was unreliable (e.g. GMX's
-/// STATUS UIDNEXT can lag, causing the "UIDNEXT unchanged" fast-path in
-/// `sync_mails` to skip fetching new mail), which made sent mail go missing.
-///
-/// The row is stored with `uid = NULL` and the full body (so it is viewable
-/// offline and opening it does not require an IMAP fetch by a UID it doesn't have
-/// yet). When a later sync fetches the same message from the server, the
-/// claim-by-Message-ID step in `process_header_batch` updates this row's UID in
-/// place instead of inserting a duplicate.
-pub fn insert_local_sent_mail(
-    db: &Database,
-    account_id: &str,
-    folder_id: &str,
-    raw_bytes: &[u8],
-) -> Result<String> {
-    let parser = MessageParser::default();
-    let msg = parser
-        .parse(raw_bytes)
-        .ok_or_else(|| anyhow::anyhow!("Failed to parse sent message for local insert"))?;
+pub enum InsertOutcome {
+    Inserted(String),
+    Existing(String),
+    NotStored,
+}
+
+struct LocalMailFields {
+    subject: String,
+    from_name: String,
+    from_email: String,
+    to_json: String,
+    cc_json: String,
+    bcc_json: String,
+    reply_to_json: String,
+    date: String,
+    message_id: String,
+    in_reply_to: Option<String>,
+    references: String,
+    thread_id: Option<String>,
+    has_attachments: bool,
+    list_unsubscribe: String,
+    signal_headers: String,
+    body_text: String,
+    body_html: String,
+    snippet: String,
+    high_priority: bool,
+}
+
+fn local_mail_fields(raw_bytes: &[u8]) -> Option<LocalMailFields> {
+    let msg = MessageParser::default().parse(raw_bytes)?;
 
     let subject = msg.subject().unwrap_or_default().to_string();
     let (from_name, from_email) = extract_first_address(msg.from());
@@ -1240,7 +1249,7 @@ pub fn insert_local_sent_mail(
         .filter(|s| !s.is_empty());
 
     let references_raw = parse_references(&msg);
-    let references_str = references_raw.clone().unwrap_or_default();
+    let references = references_raw.clone().unwrap_or_default();
 
     let thread_id = references_raw
         .or_else(|| in_reply_to.clone())
@@ -1284,26 +1293,145 @@ pub fn insert_local_sent_mail(
         basis.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(200).collect()
     };
 
-    let mail_id = uuid::Uuid::new_v4().to_string();
-    let size = raw_bytes.len() as i64;
+    Some(LocalMailFields {
+        subject,
+        from_name,
+        from_email,
+        to_json,
+        cc_json,
+        bcc_json,
+        reply_to_json,
+        date,
+        message_id,
+        in_reply_to,
+        references,
+        thread_id,
+        has_attachments,
+        list_unsubscribe,
+        signal_headers,
+        body_text,
+        body_html,
+        snippet,
+        high_priority: message_high_priority(&msg),
+    })
+}
 
-    let conn = db.lock_db();
-    // uid = NULL (claimed by the next sync via Message-ID); is_read = 1 because we
-    // authored it. is_starred/is_flagged/is_replied/is_forwarded default to 0.
+fn placeholder_mail_fields(raw_bytes: &[u8]) -> LocalMailFields {
+    let head = &raw_bytes[..raw_bytes.len().min(64 * 1024)];
+    let head_text = String::from_utf8_lossy(head);
+    let from_line = head_text
+        .lines()
+        .take_while(|l| !l.trim().is_empty())
+        .find(|l| l.len() >= 5 && l.is_char_boundary(5) && l[..5].eq_ignore_ascii_case("from:"))
+        .map(|l| l[5..].trim().to_string())
+        .unwrap_or_default();
+    let (from_name, from_email) = match from_line.rfind('<') {
+        Some(open) if from_line.ends_with('>') => (
+            from_line[..open].trim().trim_matches('"').to_string(),
+            from_line[open + 1..from_line.len() - 1].trim().to_string(),
+        ),
+        _ => (String::new(), from_line),
+    };
+    LocalMailFields {
+        subject: String::new(),
+        from_name,
+        from_email,
+        to_json: "[]".into(),
+        cc_json: "[]".into(),
+        bcc_json: "[]".into(),
+        reply_to_json: "[]".into(),
+        date: chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+        message_id: String::new(),
+        in_reply_to: None,
+        references: String::new(),
+        thread_id: None,
+        has_attachments: false,
+        list_unsubscribe: String::new(),
+        signal_headers: String::new(),
+        body_text: String::new(),
+        body_html: String::new(),
+        snippet: String::new(),
+        high_priority: false,
+    }
+}
+
+/// Returns the number of rows inserted (0 when the dedup index ignored the row).
+fn insert_local_row(
+    conn: &rusqlite::Connection,
+    account_id: &str,
+    folder_id: &str,
+    mail_id: &str,
+    f: &LocalMailFields,
+    size: i64,
+    is_read: bool,
+) -> Result<usize> {
+    // uid = NULL (claimed by the next sync via Message-ID); the star/flag/reply/forward flags default to 0.
     conn.execute(
-        "INSERT OR IGNORE INTO mails (id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, body_text, body_html, is_read, is_starred, is_flagged, is_replied, is_forwarded, has_attachments, thread_id, in_reply_to, size_bytes, list_unsubscribe, reply_to_json, \"references\", signal_headers, high_priority) VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, 1, 0, 0, 0, 0, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)",
+        "INSERT OR IGNORE INTO mails (id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, body_text, body_html, is_read, is_starred, is_flagged, is_replied, is_forwarded, has_attachments, thread_id, in_reply_to, size_bytes, list_unsubscribe, reply_to_json, \"references\", signal_headers, high_priority) VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?24, 0, 0, 0, 0, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)",
         rusqlite::params![
-            mail_id, account_id, folder_id, message_id,
-            subject, from_name, from_email, to_json, cc_json, bcc_json, date,
-            snippet, body_text, body_html,
-            has_attachments as i32, thread_id, in_reply_to, size,
-            list_unsubscribe, reply_to_json, references_str, signal_headers,
-            message_high_priority(&msg) as i32,
+            mail_id, account_id, folder_id, f.message_id,
+            f.subject, f.from_name, f.from_email, f.to_json, f.cc_json, f.bcc_json, f.date,
+            f.snippet, f.body_text, f.body_html,
+            f.has_attachments as i32, f.thread_id, f.in_reply_to, size,
+            f.list_unsubscribe, f.reply_to_json, f.references, f.signal_headers,
+            f.high_priority as i32, is_read as i32,
         ],
     )
-    .context("Failed to insert local sent mail")?;
+    .context("Failed to insert local mail")
+}
 
+/// Insert a just-sent mail into the local DB immediately after a successful IMAP
+/// APPEND to the Sent folder, so it shows up without waiting for the next server
+/// sync to re-fetch it. Relying on that round-trip was unreliable (e.g. GMX's
+/// STATUS UIDNEXT can lag, causing the "UIDNEXT unchanged" fast-path in
+/// `sync_mails` to skip fetching new mail), which made sent mail go missing.
+///
+/// The row is stored with `uid = NULL` and the full body (so it is viewable
+/// offline and opening it does not require an IMAP fetch by a UID it doesn't have
+/// yet). When a later sync fetches the same message from the server, the
+/// claim-by-Message-ID step in `process_header_batch` updates this row's UID in
+/// place instead of inserting a duplicate.
+pub fn insert_local_sent_mail(
+    db: &Database,
+    account_id: &str,
+    folder_id: &str,
+    raw_bytes: &[u8],
+) -> Result<String> {
+    let fields = local_mail_fields(raw_bytes)
+        .ok_or_else(|| anyhow::anyhow!("Failed to parse sent message for local insert"))?;
+    let mail_id = uuid::Uuid::new_v4().to_string();
+    let conn = db.lock_db();
+    insert_local_row(&conn, account_id, folder_id, &mail_id, &fields, raw_bytes.len() as i64, true)?;
     Ok(mail_id)
+}
+
+/// Stores a raw message as a local mail row (uid = NULL) with its bodies. Unparseable
+/// bytes become a placeholder row so the mail is never lost.
+pub fn insert_local_mail(
+    db: &Database,
+    account_id: &str,
+    folder_id: &str,
+    mail_id: &str,
+    raw_bytes: &[u8],
+    is_read: bool,
+) -> Result<InsertOutcome> {
+    let fields = local_mail_fields(raw_bytes).unwrap_or_else(|| placeholder_mail_fields(raw_bytes));
+    let conn = db.lock_db();
+    let changed = insert_local_row(&conn, account_id, folder_id, mail_id, &fields, raw_bytes.len() as i64, is_read)?;
+    if changed > 0 {
+        return Ok(InsertOutcome::Inserted(mail_id.to_string()));
+    }
+    if fields.message_id.is_empty() {
+        return Ok(InsertOutcome::NotStored);
+    }
+    let existing: Option<String> = conn
+        .query_row(
+            "SELECT id FROM mails WHERE account_id = ?1 AND folder_id = ?2 AND message_id = ?3 AND uid IS NULL",
+            rusqlite::params![account_id, folder_id, fields.message_id],
+            |r| r.get(0),
+        )
+        .ok();
+    Ok(existing.map_or(InsertOutcome::NotStored, InsertOutcome::Existing))
 }
 
 /// Fetch the full body of a single mail from IMAP and update the DB.
@@ -2731,5 +2859,102 @@ mod invite_tests {
         let (text, html, _) = body(&db);
         assert_eq!(text.trim(), "You are invited.");
         assert!(!html.contains("please join"));
+    }
+}
+
+
+#[cfg(test)]
+mod local_mail_tests {
+    use super::{insert_local_mail, insert_local_sent_mail, InsertOutcome};
+    use crate::test_support::{seed_account, seed_folder, temp_db};
+
+    const RAW: &str = "From: Anna Weber <anna@studio-halde.example>\r\nTo: sam@studio-halde.example\r\nSubject: Angebot\r\nMessage-ID: <angebot@studio-halde.example>\r\nDate: Mon, 05 Jan 2026 10:00:00 +0000\r\n\r\nHallo Sam\r\n";
+
+    fn setup() -> (crate::db::Database, String, String) {
+        let db = temp_db();
+        let (account, folder) = {
+            let conn = db.lock_db();
+            let account = seed_account(&conn, "sam@studio-halde.example");
+            let folder = seed_folder(&conn, &account, "inbox");
+            (account, folder)
+        };
+        (db, account, folder)
+    }
+
+    fn row(db: &crate::db::Database, id: &str) -> (String, String, String, i64) {
+        db.lock_db()
+            .query_row(
+                "SELECT subject, from_email, body_text, is_read FROM mails WHERE id = ?1",
+                [id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )
+            .unwrap()
+    }
+
+    #[test]
+    fn inserts_parsed_mail_with_bodies_and_read_flag() {
+        let (db, account, folder) = setup();
+        let outcome = insert_local_mail(&db, &account, &folder, "m1", RAW.as_bytes(), false).unwrap();
+        assert!(matches!(outcome, InsertOutcome::Inserted(ref id) if id == "m1"));
+        let (subject, from, body, is_read) = row(&db, "m1");
+        assert_eq!(subject, "Angebot");
+        assert_eq!(from, "anna@studio-halde.example");
+        assert!(body.contains("Hallo Sam"));
+        assert_eq!(is_read, 0);
+    }
+
+    #[test]
+    fn duplicate_message_id_maps_to_existing_row() {
+        let (db, account, folder) = setup();
+        insert_local_mail(&db, &account, &folder, "m1", RAW.as_bytes(), false).unwrap();
+        let outcome = insert_local_mail(&db, &account, &folder, "m2", RAW.as_bytes(), false).unwrap();
+        assert!(matches!(outcome, InsertOutcome::Existing(ref id) if id == "m1"));
+        let count: i64 = db.lock_db().query_row("SELECT COUNT(*) FROM mails", [], |r| r.get(0)).unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn same_message_id_in_other_folder_is_inserted() {
+        let (db, account, folder) = setup();
+        let other = seed_folder(&db.lock_db(), &account, "archive");
+        insert_local_mail(&db, &account, &folder, "m1", RAW.as_bytes(), false).unwrap();
+        let outcome = insert_local_mail(&db, &account, &other, "m2", RAW.as_bytes(), false).unwrap();
+        assert!(matches!(outcome, InsertOutcome::Inserted(_)));
+    }
+
+    #[test]
+    fn mails_without_message_id_never_collide() {
+        let (db, account, folder) = setup();
+        let raw = "From: Anna Weber <anna@studio-halde.example>\r\nSubject: Ohne ID\r\n\r\nHallo\r\n";
+        let a = insert_local_mail(&db, &account, &folder, "m1", raw.as_bytes(), false).unwrap();
+        let b = insert_local_mail(&db, &account, &folder, "m2", raw.as_bytes(), false).unwrap();
+        assert!(matches!(a, InsertOutcome::Inserted(_)));
+        assert!(matches!(b, InsertOutcome::Inserted(_)));
+    }
+
+    #[test]
+    fn unparseable_bytes_become_placeholder_with_raw_sender() {
+        let (db, account, folder) = setup();
+        let raw = b"From: Anna Weber <anna@studio-halde.example>\r\n\xff\xfe\x00 not a header";
+        let outcome = insert_local_mail(&db, &account, &folder, "m1", raw, false).unwrap();
+        assert!(matches!(outcome, InsertOutcome::Inserted(_)));
+        let (subject, from, _, _) = row(&db, "m1");
+        assert_eq!(subject, "");
+        assert_eq!(from, "anna@studio-halde.example");
+    }
+
+    #[test]
+    fn empty_bytes_still_insert_a_placeholder() {
+        let (db, account, folder) = setup();
+        let outcome = insert_local_mail(&db, &account, &folder, "m1", b"", false).unwrap();
+        assert!(matches!(outcome, InsertOutcome::Inserted(_)));
+        assert_eq!(row(&db, "m1").0, "");
+    }
+
+    #[test]
+    fn sent_mail_is_stored_as_read() {
+        let (db, account, folder) = setup();
+        let id = insert_local_sent_mail(&db, &account, &folder, RAW.as_bytes()).unwrap();
+        assert_eq!(row(&db, &id).3, 1);
     }
 }
