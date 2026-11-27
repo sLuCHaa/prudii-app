@@ -454,6 +454,7 @@ function AppInner() {
         message: t("compose.restoreDraftsMessage", { count: rows.length }),
         confirmLabel: t("undoSend.restore"),
         cancelLabel: t("common.discard"),
+        replacedValue: true,
       });
       for (const row of rows) {
         if (ok) {

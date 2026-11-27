@@ -255,6 +255,11 @@ export async function trashMail(mailId: string): Promise<void> {
   return invoke("trash_mail", { mailId });
 }
 
+/** How many of these mails a delete would also remove from a POP3 server. */
+export async function countPop3ServerDeletes(mailIds: string[]): Promise<number> {
+  return invoke("count_pop3_server_deletes", { mailIds });
+}
+
 /** Deletes on the server without a stop in Trash — for a draft that was sent or saved anew. */
 export async function deleteMailPermanently(mailId: string): Promise<void> {
   return invoke("trash_mail", { mailId, permanent: true });

@@ -1124,6 +1124,7 @@ pub fn run() {
             commands::mails::list_combined_folder_mails,
             commands::mails::count_folder_mails,
             commands::mails::count_searchable_mails,
+            commands::mails::count_pop3_server_deletes,
             commands::mails::empty_trash,
             commands::mails::empty_spam,
             commands::mails::count_combined_folder_mails,

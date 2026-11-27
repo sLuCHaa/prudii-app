@@ -1854,6 +1854,7 @@
   },
   "pop3": {
     "protocol": "Protocole de réception",
+    "inboxOnly": "POP3 ne récupère que la boîte de réception. Les e-mails envoyés et les autres dossiers restent sur le serveur.",
     "host": "Serveur POP3",
     "security": "Chiffrement",
     "ruleTitle": "E-mails sur le serveur",
@@ -1876,6 +1877,13 @@
     "ruleChange": {
       "sooner": "S’applique aussi aux e-mails déjà relevés : tout ce qui arrive à échéance selon la nouvelle règle sera supprimé du serveur à la prochaine synchronisation.",
       "withLocal": "Les e-mails déjà effacés définitivement ici seront alors aussi supprimés du serveur à la prochaine synchronisation."
+    },
+    "deleteWarning": {
+      "title": "Supprimer aussi sur le serveur ?",
+      "mails_one": "{{count}} e-mail sera ainsi aussi supprimé immédiatement du serveur.",
+      "mails_other": "{{count}} e-mails seront ainsi aussi supprimés immédiatement du serveur.",
+      "folder": "Ces e-mails seront ainsi aussi supprimés immédiatement du serveur.",
+      "combined": "Parmi ces e-mails, ceux des comptes POP3 réglés ainsi seront aussi supprimés immédiatement du serveur."
     },
     "appPasswordGmail": "Gmail exige un mot de passe d'application pour POP3, et POP doit être activé dans les paramètres de Gmail.",
     "appPasswordFastmail": "Fastmail exige un mot de passe d'application pour POP3.",

@@ -20,7 +20,7 @@ vi.mock("../../lib/tauri", () => ({
 }));
 vi.mock("../ui/DialogProvider", () => ({ useDialog: () => ({ danger: vi.fn() }) }));
 
-import { updateAccountSettings, checkSieveSupport } from "../../lib/tauri";
+import { updateAccountSettings, updateAccountSyncInterval, checkSieveSupport } from "../../lib/tauri";
 import { AccountSettings } from "./SettingsPanel";
 
 const update = vi.mocked(updateAccountSettings);
@@ -317,6 +317,20 @@ describe("account settings for POP3", () => {
       days().blur();
     });
     expect(days().value).toBe("30");
+  });
+
+  it("keeps the warnings up to date when a later save step fails", async () => {
+    const account = pop3Account();
+    useAppStore.setState({ accounts: [account] });
+    vi.mocked(updateAccountSyncInterval).mockRejectedValueOnce(new Error("offline"));
+    await render(account);
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+
+    click(localSwitch());
+    await save();
+
+    expect(useAppStore.getState().accounts[0].pop3_delete_with_local).toBe(true);
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["accounts"] });
   });
 
   it("explains a refused protocol change", async () => {

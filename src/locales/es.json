@@ -1854,6 +1854,7 @@
   },
   "pop3": {
     "protocol": "Protocolo de entrada",
+    "inboxOnly": "POP3 solo descarga la bandeja de entrada. Los correos enviados y las demás carpetas permanecen en el servidor.",
     "host": "Servidor POP3",
     "security": "Cifrado",
     "ruleTitle": "Correos en el servidor",
@@ -1876,6 +1877,13 @@
     "ruleChange": {
       "sooner": "También se aplica a los correos ya descargados: lo que venza según la nueva regla se eliminará del servidor en la próxima sincronización.",
       "withLocal": "Los correos que ya hayas borrado definitivamente aquí se eliminarán también del servidor en la próxima sincronización."
+    },
+    "deleteWarning": {
+      "title": "¿Eliminar también en el servidor?",
+      "mails_one": "Con ello, {{count}} correo se elimina también del servidor de inmediato.",
+      "mails_other": "Con ello, {{count}} correos se eliminan también del servidor de inmediato.",
+      "folder": "Con ello, estos correos se eliminan también del servidor de inmediato.",
+      "combined": "De estos correos, los de las cuentas POP3 configuradas así se eliminan también del servidor de inmediato."
     },
     "appPasswordGmail": "Gmail requiere una contraseña de aplicación para POP3, y POP debe estar activado en la configuración de Gmail.",
     "appPasswordFastmail": "Fastmail requiere una contraseña de aplicación para POP3.",

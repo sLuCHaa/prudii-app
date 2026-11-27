@@ -3620,7 +3620,7 @@ mod signatures_roundtrip {
         import_backup_account(&conn, &old_account(), false, true).unwrap();
         let account = list_accounts_inner(&conn).unwrap().remove(0);
         assert_eq!((account.incoming_protocol.as_str(), account.pop3_delete_mode.as_str()), ("imap", "after_days"));
-        assert_eq!((account.pop3_delete_after_days, account.pop3_delete_with_local), (14, true));
+        assert_eq!((account.pop3_delete_after_days, account.pop3_delete_with_local), (14, false));
     }
 
     fn pop3_account_with_a_mail(conn: &rusqlite::Connection) -> String {
@@ -3866,11 +3866,11 @@ mod pop3_roundtrip {
 
     #[test]
     fn invalid_imap_delete_fields_are_made_safe_one_by_one() {
-        assert_eq!(restored_rule(serde_json::json!({})), ("after_days".to_string(), 14, true));
+        assert_eq!(restored_rule(serde_json::json!({})), ("after_days".to_string(), 14, false));
         let fields = serde_json::json!({ "pop3_delete_mode": "sofort", "pop3_delete_after_days": 30, "pop3_delete_with_local": "ja" });
         assert_eq!(restored_rule(fields), ("keep".to_string(), 30, false));
         let fields = serde_json::json!({ "pop3_delete_after_days": 366 });
-        assert_eq!(restored_rule(fields), ("after_days".to_string(), 14, true));
+        assert_eq!(restored_rule(fields), ("after_days".to_string(), 14, false));
     }
 
     #[test]

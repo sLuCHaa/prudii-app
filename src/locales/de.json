@@ -1854,6 +1854,7 @@
   },
   "pop3": {
     "protocol": "Abrufprotokoll",
+    "inboxOnly": "POP3 lädt nur den Posteingang. Gesendete Mails und andere Ordner bleiben auf dem Server.",
     "host": "POP3-Server",
     "security": "Verschlüsselung",
     "ruleTitle": "Mails auf dem Server",
@@ -1876,6 +1877,13 @@
     "ruleChange": {
       "sooner": "Gilt auch für bereits abgerufene Mails: Was nach der neuen Regel fällig ist, wird beim nächsten Abruf vom Server gelöscht.",
       "withLocal": "Auch hier bereits endgültig gelöschte Mails werden dann beim nächsten Abruf auf dem Server gelöscht."
+    },
+    "deleteWarning": {
+      "title": "Auch auf dem Server löschen?",
+      "mails_one": "{{count}} Mail wird damit auch sofort auf dem Server gelöscht.",
+      "mails_other": "{{count}} Mails werden damit auch sofort auf dem Server gelöscht.",
+      "folder": "Diese Mails werden damit auch sofort auf dem Server gelöscht.",
+      "combined": "Davon werden Mails aus POP3-Konten, bei denen das eingestellt ist, auch sofort auf dem Server gelöscht."
     },
     "appPasswordGmail": "Gmail braucht für POP3 ein App-Passwort, und POP muss in den Gmail-Einstellungen eingeschaltet sein.",
     "appPasswordFastmail": "Fastmail braucht für POP3 ein App-Passwort.",

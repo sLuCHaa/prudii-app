@@ -239,6 +239,10 @@ export function AccountSettings({
         loadExternalImages,
         ...incoming
       );
+      // The delete warnings read the store, so it must learn the saved switch even if a later step fails.
+      const { accounts, setAccounts } = useAppStore.getState();
+      setAccounts(accounts.map((a) => (a.id === account.id ? { ...a, ...incoming[0] } : a)));
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
       const savedRule = { ...rule, days: clampDeleteDays(rule.days, stored.rule.days) };
       setStored({ host: imapHost, port: imapPort, rule: savedRule });
       setRule(savedRule);

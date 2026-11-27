@@ -519,7 +519,7 @@ fn migration_adds_pop3_columns_with_defaults() {
                 |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
             )
             .unwrap();
-        assert_eq!(row, ("imap".to_string(), "ssl".to_string(), "after_days".to_string(), 14, 1));
+        assert_eq!(row, ("imap".to_string(), "ssl".to_string(), "after_days".to_string(), 14, 0));
         conn.execute("INSERT OR IGNORE INTO pop3_uidls (account_id, uidl) VALUES ('a1', 'u1')", []).unwrap();
         let state: String = conn.query_row("SELECT state FROM pop3_uidls WHERE uidl = 'u1'", [], |r| r.get(0)).unwrap();
         assert_eq!(state, "stored");

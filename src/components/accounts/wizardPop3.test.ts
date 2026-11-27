@@ -45,7 +45,7 @@ const testPop3 = vi.mocked(testPop3Connection);
 
 const EMAIL = "anna@studio-halde.example";
 const DEFAULT_SENTENCE =
-  "Mails werden 14 Tage nach dem Abruf vom Server gelöscht. Endgültig gelöschte Mails werden sofort auch auf dem Server gelöscht.";
+  "Mails werden 14 Tage nach dem Abruf vom Server gelöscht. Endgültiges Löschen hier löst keine Löschung auf dem Server aus.";
 
 let root: Root;
 let host: HTMLDivElement;
@@ -203,7 +203,7 @@ describe("account wizard delete rule", () => {
     expect(input("input[max='365']")).toBeNull();
 
     click(host.querySelector('[role="switch"]')!);
-    expect(host.textContent).toContain(i18n.t("pop3.rule.withoutLocal"));
+    expect(host.textContent).toContain(i18n.t("pop3.rule.withLocal"));
     expect(host.textContent).not.toContain(i18n.t("pop3.rule.localOnly"));
 
     click(button(i18n.t("pop3.mode.afterFetch")));
@@ -314,7 +314,7 @@ describe("account wizard submit", () => {
       incoming_security: "starttls",
       pop3_delete_mode: "after_days",
       pop3_delete_after_days: 14,
-      pop3_delete_with_local: true,
+      pop3_delete_with_local: false,
     });
     expect(syncMock).toHaveBeenCalledWith({ accountId: "acc-1", password });
   });
@@ -445,7 +445,7 @@ describe("account wizard going back after a failed first sync", () => {
     expect(update).toHaveBeenCalledWith(
       "acc-1", "anna", expect.any(String), "pop3.web.de", 995, "smtp.web.de", expect.any(Number), expect.any(String),
       "always",
-      { incoming_security: "ssl", pop3_delete_mode: "keep", pop3_delete_after_days: 14, pop3_delete_with_local: true },
+      { incoming_security: "ssl", pop3_delete_mode: "keep", pop3_delete_after_days: 14, pop3_delete_with_local: false },
     );
     expect(syncMock.mock.calls).toEqual([
       [{ accountId: "acc-1", password }],
@@ -553,6 +553,17 @@ describe("account wizard layout", () => {
     expect(rule.compareDocumentPosition(email) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(button(i18n.t("pop3.mode.afterDays")).className).toContain("border-accent bg-accent/10");
     expect(button(i18n.t("pop3.mode.keep")).className).not.toContain("border-accent");
+  });
+
+  it("says that only the inbox is fetched with POP3 and not with IMAP", () => {
+    const hint = "POP3 lädt nur den Posteingang. Gesendete Mails und andere Ordner bleiben auf dem Server.";
+    open("custom");
+    expect(host.textContent).not.toContain(hint);
+    choosePop3();
+    expect(host.textContent).toContain(hint);
+    expect(host.querySelector("details")).toBeNull();
+    click(button("IMAP"));
+    expect(host.textContent).not.toContain(hint);
   });
 
   it("translates the heading of the custom provider", () => {

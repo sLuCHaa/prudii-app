@@ -27,6 +27,7 @@ const client = { invalidateQueries: async () => {} } as unknown as QueryClient;
 const offers: Folder = { id: "f-offers", account_id: "info", name: "Angebote", folder_type: "custom", path: "Angebote", unread_count: 0, total_count: 0, is_local: false, color: "" };
 const info = { id: "info", email: "info@studio-halde.example" } as Account;
 const toasts = () => useAppStore.getState().toasts;
+const run = (_mails: unknown, action: () => unknown) => void action();
 
 beforeEach(() => {
   calls.copy.length = 0;
@@ -38,12 +39,12 @@ beforeEach(() => {
 
 describe("copyToOtherAccount", () => {
   it("copies the mail into the picked folder", async () => {
-    await copyToOtherAccount(client, { id: "m1" }, offers, info);
+    await copyToOtherAccount(client, { id: "m1" }, offers, info, run);
     expect(calls.copy).toEqual([["m1", "f-offers"]]);
   });
 
   it("says where the copy went", async () => {
-    await copyToOtherAccount(client, { id: "m1" }, offers, info);
+    await copyToOtherAccount(client, { id: "m1" }, offers, info, run);
     expect(toasts()).toHaveLength(1);
     expect(toasts()[0].type).toBe("success");
     expect(toasts()[0].title).toBe(i18n.t("folder.copied", { folder: "Angebote" }));
@@ -51,23 +52,23 @@ describe("copyToOtherAccount", () => {
   });
 
   it("names a standard folder the way the sidebar does", async () => {
-    await copyToOtherAccount(client, { id: "m1" }, { ...offers, folder_type: "archive", name: "Archive" }, info);
+    await copyToOtherAccount(client, { id: "m1" }, { ...offers, folder_type: "archive", name: "Archive" }, info, run);
     expect(toasts()[0].title).toBe(i18n.t("folder.copied", { folder: i18n.t("folder.types.archive") }));
   });
 
   it("fetches the copy into the local list", async () => {
-    await copyToOtherAccount(client, { id: "m1" }, offers, info);
+    await copyToOtherAccount(client, { id: "m1" }, offers, info, run);
     expect(calls.sync).toEqual([["info", "f-offers"]]);
   });
 
   it("leaves the original alone", async () => {
-    await copyToOtherAccount(client, { id: "m1" }, offers, info);
+    await copyToOtherAccount(client, { id: "m1" }, offers, info, run);
     expect(calls.trash).toEqual([]);
     expect(useAppStore.getState().pendingRemoveIds).toEqual([]);
   });
 
   it("offers to bin the original, which makes it a move", async () => {
-    await copyToOtherAccount(client, { id: "m1" }, offers, info);
+    await copyToOtherAccount(client, { id: "m1" }, offers, info, run);
     const action = toasts()[0].action!;
     expect(action.label).toBe(i18n.t("folder.trashOriginal"));
     action.onClick();
@@ -75,9 +76,18 @@ describe("copyToOtherAccount", () => {
     expect(calls.trash).toEqual(["m1"]);
   });
 
+  it("bins the original only once the delete guard lets it", async () => {
+    const held: unknown[] = [];
+    await copyToOtherAccount(client, { id: "m1", account_id: "pop" }, offers, info, (mails) => held.push(mails));
+    toasts()[0].action!.onClick();
+    expect(held).toEqual([[{ id: "m1", account_id: "pop" }]]);
+    expect(useAppStore.getState().pendingRemoveIds).toEqual([]);
+    expect(calls.trash).toEqual([]);
+  });
+
   it("reports a failed copy and offers nothing further", async () => {
     calls.failCopy = true;
-    await copyToOtherAccount(client, { id: "m1" }, offers, info);
+    await copyToOtherAccount(client, { id: "m1" }, offers, info, run);
     expect(toasts()).toHaveLength(1);
     expect(toasts()[0].type).toBe("error");
     expect(toasts()[0].title).toBe(i18n.t("errors.copy"));

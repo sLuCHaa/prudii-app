@@ -1266,6 +1266,45 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn without_local_delete_a_deleted_mail_leaves_the_server_only_when_due() {
+        let t = env("after_days");
+        let mail_id = store_first(&t).await;
+        delete_locally(&t, &mail_id);
+
+        for days_ago in [0, 13] {
+            let fetched_at = (Utc::now() - chrono::Duration::days(days_ago)).format(FETCHED_AT_FORMAT);
+            set_column(&t, "u1", &format!("fetched_at = '{fetched_at}'"));
+            let report = run(&t, vec![uidl(&[(1, "u1")]), list(&[(1, 400)]), QUIT]).await.unwrap();
+            assert_eq!((report.deleted_on_server, report.new_mail_ids.len()), (0, 0));
+            assert!(crate::pop3::store::has_source(&t.dir, &mail_id));
+        }
+
+        let fetched_at = (Utc::now() - chrono::Duration::days(15)).format(FETCHED_AT_FORMAT);
+        set_column(&t, "u1", &format!("fetched_at = '{fetched_at}'"));
+        let report = run(&t, vec![uidl(&[(1, "u1")]), list(&[(1, 400)]), dele(1), QUIT]).await.unwrap();
+        assert_eq!((report.deleted_on_server, report.new_mail_ids.len()), (1, 0));
+        assert_eq!(uidl_rows(&t)[0].2, "server_deleted");
+
+        let report = run(&t, vec![uidl(&[(1, "u1")]), list(&[(1, 400)]), QUIT]).await.unwrap();
+        assert!(report.new_mail_ids.is_empty());
+        assert!(inbox_mails(&t).is_empty());
+    }
+
+    #[tokio::test]
+    async fn without_local_delete_keep_mode_never_deletes_or_downloads_again() {
+        let t = env("keep");
+        let mail_id = store_first(&t).await;
+        delete_locally(&t, &mail_id);
+        set_column(&t, "u1", "fetched_at = '2020-01-01 00:00:00'");
+        for _ in 0..3 {
+            let report = run(&t, vec![uidl(&[(1, "u1")]), list(&[(1, 400)]), QUIT]).await.unwrap();
+            assert_eq!((report.deleted_on_server, report.new_mail_ids.len()), (0, 0));
+        }
+        assert_eq!(uidl_rows(&t)[0].2, "stored");
+        assert!(inbox_mails(&t).is_empty());
+    }
+
+    #[tokio::test]
     async fn discard_removes_only_unreferenced_sources() {
         let t = env("keep");
         let mail_id = store_first(&t).await;

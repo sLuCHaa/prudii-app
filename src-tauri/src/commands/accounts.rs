@@ -1171,7 +1171,7 @@ mod pop3_account_tests {
     }
 
     #[test]
-    fn new_pop3_account_deletes_after_14_days_and_with_local() {
+    fn new_pop3_account_deletes_after_14_days_but_not_with_local() {
         let db = temp_db();
         let conn = db.lock_db();
         insert_account(&conn, &request(Some("pop3"))).unwrap();
@@ -1179,7 +1179,7 @@ mod pop3_account_tests {
         assert_eq!(stored.incoming_security, "ssl");
         assert_eq!(stored.pop3_delete_mode, "after_days");
         assert_eq!(stored.pop3_delete_after_days, 14);
-        assert!(stored.pop3_delete_with_local);
+        assert!(!stored.pop3_delete_with_local);
     }
 
     #[test]
@@ -1255,6 +1255,7 @@ mod pop3_account_tests {
         let mut r = request(Some("pop3"));
         r.incoming_security = Some("starttls".into());
         r.pop3_delete_after_days = Some(30);
+        r.pop3_delete_with_local = Some(true);
         let account = insert_account(&conn, &r).unwrap();
         let update = UpdateAccountSettings {
             incoming_protocol: Some("pop3".into()),
