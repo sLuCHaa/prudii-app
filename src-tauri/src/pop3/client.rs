@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use base64::Engine;
+use futures_util::FutureExt;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 use tokio_rustls::client::TlsStream;
@@ -14,6 +15,8 @@ const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(15);
 const READ_TIMEOUT: Duration = Duration::from_secs(60);
 const WRITE_TIMEOUT: Duration = Duration::from_secs(30);
 
+// RFC 5034, CRLF included.
+const MAX_AUTH_COMMAND_BYTES: usize = 255;
 const MAX_STATUS_LINE_BYTES: u64 = 8 * 1024;
 const MAX_CAPA_BYTES: u64 = 64 * 1024;
 const MAX_LISTING_BYTES: u64 = 16 * 1024 * 1024;
@@ -123,7 +126,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Pop3Client<S> {
             if !plain {
                 return Err(rejected(text));
             }
-            let reply = self.simple(&format!("AUTH PLAIN {token}")).await?;
+            let reply = self.auth_plain(&token).await?;
             return reply.map(drop).map_err(rejected);
         }
         let reply = self.simple(&format!("PASS {pass}")).await?;
@@ -207,7 +210,12 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Pop3Client<S> {
             ));
         }
         self.broken = true;
-        let line = format!("{command}\r\n");
+        self.write_line(command).await
+    }
+
+    async fn write_line(&mut self, line: &str) -> Result<(), Pop3Error> {
+        self.ensure_nothing_pending()?;
+        let line = format!("{line}\r\n");
         let stream = self.stream.get_mut();
         let write = async {
             stream.write_all(line.as_bytes()).await?;
@@ -219,7 +227,19 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Pop3Client<S> {
             .map_err(io_error)
     }
 
-    async fn read_status(&mut self) -> Result<Reply, Pop3Error> {
+    // One poll without waiting: sees buffered bytes and whatever the socket already reports.
+    fn ensure_nothing_pending(&mut self) -> Result<(), Pop3Error> {
+        match self.stream.fill_buf().now_or_never() {
+            None => Ok(()),
+            Some(Ok([])) => Err(connection_closed()),
+            Some(Ok(_)) => Err(Pop3Error::Protocol(
+                "unsolicited data from the server".into(),
+            )),
+            Some(Err(error)) => Err(io_error(error)),
+        }
+    }
+
+    async fn read_line(&mut self) -> Result<String, Pop3Error> {
         let mut line = Vec::new();
         let mut limited = (&mut self.stream).take(MAX_STATUS_LINE_BYTES);
         tokio::time::timeout(READ_TIMEOUT, limited.read_until(b'\n', &mut line))
@@ -231,8 +251,33 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Pop3Client<S> {
             return Err(connection_closed());
         }
         line.strip_suffix(b"\n")
-            .and_then(|line| parse_status(&String::from_utf8_lossy(line)))
-            .ok_or_else(|| self.poison("unreadable status line"))
+            .map(|line| {
+                String::from_utf8_lossy(line)
+                    .trim_end_matches('\r')
+                    .to_string()
+            })
+            .ok_or_else(|| self.poison("status line too long"))
+    }
+
+    async fn read_status(&mut self) -> Result<Reply, Pop3Error> {
+        let line = self.read_line().await?;
+        parse_status(&line).ok_or_else(|| self.poison("unreadable status line"))
+    }
+
+    async fn auth_plain(&mut self, token: &str) -> Result<Reply, Pop3Error> {
+        let mut command = format!("AUTH PLAIN {token}");
+        if command.len() + 2 > MAX_AUTH_COMMAND_BYTES {
+            command.truncate("AUTH PLAIN".len());
+        }
+        self.send(&command).await?;
+        let mut line = self.read_line().await?;
+        if line == "+" || line.starts_with("+ ") {
+            self.write_line(token).await?;
+            line = self.read_line().await?;
+        }
+        let reply = parse_status(&line).ok_or_else(|| self.poison("unreadable AUTH response"))?;
+        self.broken = false;
+        Ok(reply)
     }
 
     async fn simple(&mut self, command: &str) -> Result<Reply, Pop3Error> {
@@ -366,7 +411,6 @@ impl Body {
 }
 
 fn parse_status(line: &str) -> Option<Reply> {
-    let line = line.trim_end_matches('\r');
     let after = |marker: &str| {
         line.strip_prefix(marker)
             .filter(|rest| rest.is_empty() || rest.starts_with([' ', '\t']))
@@ -376,6 +420,9 @@ fn parse_status(line: &str) -> Option<Reply> {
 }
 
 fn parse_sizes(line: &str) -> Option<(u32, u64)> {
+    if line.contains(['\r', '\n']) {
+        return None;
+    }
     let mut words = line.split_whitespace();
     Some((words.next()?.parse().ok()?, words.next()?.parse().ok()?))
 }
@@ -409,7 +456,20 @@ fn has_auth_code(text: &str) -> bool {
 
 fn is_locked(text: &str) -> bool {
     let text = text.to_ascii_lowercase();
-    text.contains("[in-use]") || text.contains("lock")
+    if text.contains("[in-use]") {
+        return true;
+    }
+    let words: Vec<&str> = text
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|word| !word.is_empty())
+        .collect();
+    let names_maildrop = words
+        .iter()
+        .any(|word| matches!(*word, "maildrop" | "mailbox"))
+        || words
+            .windows(2)
+            .any(|pair| pair[0] == "mail" && matches!(pair[1], "drop" | "box"));
+    names_maildrop && words.iter().any(|word| word.starts_with("lock"))
 }
 
 fn refused(text: String) -> Pop3Error {
@@ -432,7 +492,8 @@ fn connection_closed() -> Pop3Error {
 mod tests {
     use std::time::Duration;
 
-    use tokio::io::DuplexStream;
+    use base64::Engine;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream};
     use tokio::task::JoinHandle;
 
     use super::*;
@@ -768,6 +829,194 @@ mod tests {
         let result = client.into_starttls_stream().await.map(|_| ());
         assert!(matches!(result, Err(Pop3Error::Tls(_))));
         server.await.unwrap();
+    }
+
+    fn leak(text: String) -> &'static str {
+        Box::leak(text.into_boxed_str())
+    }
+
+    fn plain_token(pass: &str) -> String {
+        base64::engine::general_purpose::STANDARD.encode(format!("\0{USER}\0{pass}"))
+    }
+
+    #[tokio::test]
+    async fn buffered_stale_reply_is_not_taken_for_quit() {
+        let (mut client, server) = open(vec![("NOOP", "+OK\r\n+OK stale\r\n")]).await;
+        client.noop().await.unwrap();
+        assert!(matches!(client.quit().await, Err(Pop3Error::Protocol(_))));
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn stale_reply_still_in_stream_is_not_taken_for_quit() {
+        let (stream, mut server) = tokio::io::duplex(1024);
+        server.write_all(b"+OK ready\r\n").await.unwrap();
+        let mut client = Pop3Client::from_stream(stream).await.unwrap();
+        server.write_all(b"+OK stale\r\n").await.unwrap();
+        assert!(matches!(client.noop().await, Err(Pop3Error::Protocol(_))));
+        assert!(client.quit().await.is_err());
+        let mut sent = Vec::new();
+        server.read_to_end(&mut sent).await.unwrap();
+        assert_eq!(sent, b"");
+    }
+
+    #[tokio::test]
+    async fn closed_connection_is_noticed_before_writing() {
+        let (stream, mut server) = tokio::io::duplex(1024);
+        server.write_all(b"+OK ready\r\n").await.unwrap();
+        let mut client = Pop3Client::from_stream(stream).await.unwrap();
+        server.shutdown().await.unwrap();
+        assert!(matches!(client.noop().await, Err(Pop3Error::Io(_))));
+        drop(client);
+        let mut sent = Vec::new();
+        server.read_to_end(&mut sent).await.unwrap();
+        assert_eq!(sent, b"");
+    }
+
+    #[test]
+    fn only_maildrop_locks_count_as_locked() {
+        for text in [
+            "[IN-USE] try later",
+            "[in-use]",
+            "maildrop locked",
+            "unable to lock maildrop",
+            "Mailbox is locked by another session",
+            "mail drop already locked",
+            "could not lock mail box",
+        ] {
+            assert!(is_locked(text), "{text}");
+        }
+        for text in [
+            "login blocked",
+            "account locked",
+            "mailbox blocked",
+            "mailbox unavailable",
+            "your clock is wrong",
+        ] {
+            assert!(!is_locked(text), "{text}");
+        }
+    }
+
+    #[tokio::test]
+    async fn blocked_or_locked_account_after_pass_is_auth_error() {
+        for reply in ["-ERR login blocked\r\n", "-ERR account locked\r\n"] {
+            let (mut client, server) =
+                open(vec![(USER_LINE, "+OK\r\n"), ("PASS secret", reply)]).await;
+            let err = client.login(USER, "secret").await.unwrap_err();
+            assert!(matches!(err, Pop3Error::Auth(_)), "{err:?}");
+            close(client, server).await;
+        }
+    }
+
+    #[tokio::test]
+    async fn blocked_user_command_still_falls_back_to_auth_plain() {
+        let (mut client, server) = open(vec![
+            (USER_LINE, "-ERR plaintext login blocked\r\n"),
+            ("CAPA", "+OK\r\nSASL PLAIN\r\n.\r\n"),
+            (AUTH_LINE, "+OK\r\n"),
+        ])
+        .await;
+        client.login(USER, "secret").await.unwrap();
+        close(client, server).await;
+    }
+
+    #[tokio::test]
+    async fn auth_plain_answers_a_continuation() {
+        let (mut client, server) = open(vec![
+            (USER_LINE, "-ERR USER not supported\r\n"),
+            ("CAPA", "+OK\r\nSASL PLAIN\r\n.\r\n"),
+            (AUTH_LINE, "+ \r\n"),
+            ("AGFubmFAc3R1ZGlvLWhhbGRlLmV4YW1wbGUAc2VjcmV0", "+OK\r\n"),
+            ("NOOP", "+OK\r\n"),
+        ])
+        .await;
+        client.login(USER, "secret").await.unwrap();
+        client.noop().await.unwrap();
+        close(client, server).await;
+    }
+
+    #[tokio::test]
+    async fn auth_plain_keeps_one_line_up_to_the_command_limit() {
+        let pass = "p".repeat(153);
+        let line = format!("AUTH PLAIN {}", plain_token(&pass));
+        assert_eq!(line.len() + 2, 253);
+        let (mut client, server) = open(vec![
+            (USER_LINE, "-ERR USER not supported\r\n"),
+            ("CAPA", "+OK\r\nSASL PLAIN\r\n.\r\n"),
+            (leak(line), "+OK\r\n"),
+        ])
+        .await;
+        client.login(USER, &pass).await.unwrap();
+        close(client, server).await;
+    }
+
+    #[tokio::test]
+    async fn long_auth_plain_waits_for_continuation() {
+        let pass = "p".repeat(154);
+        let token = leak(plain_token(&pass));
+        let (mut client, server) = open(vec![
+            (USER_LINE, "-ERR USER not supported\r\n"),
+            ("CAPA", "+OK\r\nSASL PLAIN\r\n.\r\n"),
+            ("AUTH PLAIN", "+\r\n"),
+            (token, leak(format!("-ERR bad {token}\r\n"))),
+            ("NOOP", "+OK\r\n"),
+        ])
+        .await;
+        let err = client.login(USER, &pass).await.unwrap_err();
+        assert!(
+            matches!(&err, Pop3Error::Auth(text) if text == "[redacted]"),
+            "{err:?}"
+        );
+        client.noop().await.unwrap();
+        close(client, server).await;
+    }
+
+    #[tokio::test]
+    async fn repeated_continuation_poisons_session_without_leaking() {
+        let (mut client, server) = open(vec![
+            (USER_LINE, "-ERR USER not supported\r\n"),
+            ("CAPA", "+OK\r\nSASL PLAIN\r\n.\r\n"),
+            (AUTH_LINE, "+ \r\n"),
+            (
+                "AGFubmFAc3R1ZGlvLWhhbGRlLmV4YW1wbGUAc2VjcmV0",
+                "+ secret\r\n",
+            ),
+        ])
+        .await;
+        let err = client.login(USER, "secret").await.unwrap_err();
+        assert!(matches!(err, Pop3Error::Protocol(_)), "{err:?}");
+        assert!(!format!("{err:?} {err}").contains("secret"));
+        assert!(client.quit().await.is_err());
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn bare_line_breaks_in_list_poison_session() {
+        for reply in [
+            "+OK\r\n1 100\n2 200\r\n.\r\n",
+            "+OK\r\n1 100\r2 200\r\n.\r\n",
+        ] {
+            let (mut client, server) = open(vec![("LIST", reply)]).await;
+            assert!(matches!(
+                client.list_all().await,
+                Err(Pop3Error::Protocol(_))
+            ));
+            assert!(client.quit().await.is_err());
+            server.await.unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn bare_line_breaks_in_uidl_poison_session() {
+        for reply in ["+OK\r\n1 a1\n2 b2\r\n.\r\n", "+OK\r\n1 a1\r2 b2\r\n.\r\n"] {
+            let (mut client, server) = open(vec![("UIDL", reply)]).await;
+            assert!(matches!(
+                client.uidl_all().await,
+                Err(Pop3Error::Protocol(_))
+            ));
+            assert!(client.quit().await.is_err());
+            server.await.unwrap();
+        }
     }
 
     #[test]
