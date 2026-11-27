@@ -171,6 +171,31 @@ fn check_new_account(request: &CreateAccountRequest) -> Result<(), String> {
     Ok(())
 }
 
+/// A pasted space would break the login and slip past the duplicate-address check.
+fn trim_pop3_request(mut request: CreateAccountRequest) -> CreateAccountRequest {
+    if request.incoming_protocol.as_deref() == Some("pop3") {
+        for field in [&mut request.email, &mut request.imap_host, &mut request.smtp_host] {
+            *field = field.trim().to_string();
+        }
+    }
+    request
+}
+
+fn trim_pop3_hosts(conn: &rusqlite::Connection, account_id: &str, imap_host: String, smtp_host: String) -> (String, String) {
+    let is_pop3 = conn
+        .query_row(
+            "SELECT incoming_protocol = 'pop3' FROM accounts WHERE id = ?1",
+            rusqlite::params![account_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+    if is_pop3 {
+        (imap_host.trim().to_string(), smtp_host.trim().to_string())
+    } else {
+        (imap_host, smtp_host)
+    }
+}
+
 fn insert_account(conn: &rusqlite::Connection, request: &CreateAccountRequest) -> Result<Account, String> {
     check_new_account(request)?;
     let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
@@ -251,6 +276,7 @@ pub fn create_account(
     request: CreateAccountRequest,
 ) -> Result<Account, String> {
     check_new_account(&request)?;
+    let request = trim_pop3_request(request);
     let incoming_protocol = request.incoming_protocol.as_deref().unwrap_or(DEFAULT_INCOMING_PROTOCOL);
 
     let conn = db.lock_db();
@@ -293,8 +319,8 @@ pub fn create_account(
 
     // Stored in the system credential manager (never as plaintext in the DB). A failed
     // persist keeps the account usable this session via the in-memory cache, so the row stays.
-    if let Err(e) = credentials::store_password(&account.id, &request.password) {
-        log::warn!("[accounts] Password for {} not persisted, session cache only: {}", account.id, e);
+    if credentials::store_password(&account.id, &request.password).is_err() {
+        log::warn!("[accounts] Password for {} not persisted, session cache only", account.id);
     }
 
     Ok(account)
@@ -408,6 +434,7 @@ pub fn update_account_settings(
         if let Some(incoming) = &incoming {
             apply_incoming_settings(&tx, &account_id, incoming)?;
         }
+        let (imap_host, smtp_host) = trim_pop3_hosts(&tx, &account_id, imap_host, smtp_host);
         tx.execute(
             "UPDATE accounts SET display_name = ?1, color = ?2, imap_host = ?3, imap_port = ?4, smtp_host = ?5, smtp_port = ?6, smtp_security = ?7, load_external_images = ?8, updated_at = ?9 WHERE id = ?10",
             rusqlite::params![display_name, color, imap_host, imap_port, smtp_host, smtp_port, smtp_security, load_external_images, now, account_id],
@@ -585,9 +612,7 @@ pub async fn test_pop3_connection(
     let host = host.trim();
     let security: Pop3Security = security.parse().map_err(|e: Pop3Error| e.to_string())?;
     let connect = pop3::connect(host, port, security);
-    pop3_test_within(POP3_TEST_TIMEOUT, connect, email.trim(), &password)
-        .await
-        .inspect_err(|msg| log::warn!("POP3 connection test to {}:{} failed: {}", host, port, msg))
+    pop3_test_within(POP3_TEST_TIMEOUT, connect, email.trim(), &password).await
 }
 
 async fn pop3_test_within<S: AsyncRead + AsyncWrite + Unpin>(
@@ -621,7 +646,21 @@ async fn test_pop3_connection_with_client<S: AsyncRead + AsyncWrite + Unpin>(
     })
 }
 
+fn pop3_error_kind(error: &Pop3Error) -> &'static str {
+    match error {
+        Pop3Error::Io(_) => "io",
+        Pop3Error::Timeout => "timeout",
+        Pop3Error::Tls(_) => "tls",
+        Pop3Error::Auth(_) => "auth",
+        Pop3Error::Protocol(_) => "protocol",
+        Pop3Error::NoUidl => "no-uidl",
+        Pop3Error::Locked(_) => "locked",
+        Pop3Error::TooLarge(_) => "too-large",
+    }
+}
+
 fn pop3_test_error(error: Pop3Error) -> String {
+    log::warn!("POP3 connection test failed: {}", pop3_error_kind(&error));
     match error {
         Pop3Error::NoUidl => "POP3_NO_UIDL".into(),
         Pop3Error::Locked(_) => "POP3_LOCKED".into(),
@@ -938,7 +977,10 @@ mod replace_tests {
 
 #[cfg(test)]
 mod pop3_account_tests {
-    use super::{apply_incoming_settings, insert_account, list_accounts_inner, list_folders_inner};
+    use super::{
+        apply_incoming_settings, insert_account, list_accounts_inner, list_folders_inner,
+        replaceable_id, trim_pop3_hosts, trim_pop3_request,
+    };
     use crate::models::{CreateAccountRequest, UpdateAccountSettings};
     use crate::test_support::temp_db;
 
@@ -960,6 +1002,65 @@ mod pop3_account_tests {
             pop3_delete_mode: None,
             pop3_delete_after_days: None,
             pop3_delete_with_local: None,
+        }
+    }
+
+    fn padded(protocol: Option<&str>) -> CreateAccountRequest {
+        let mut r = request(protocol);
+        r.email = " anna@studio-halde.example ".into();
+        r.imap_host = " pop.studio-halde.example	".into();
+        r.smtp_host = "smtp.studio-halde.example ".into();
+        r.password = " fictional ".into();
+        r
+    }
+
+    #[test]
+    fn pop3_request_is_trimmed_except_the_password() {
+        let r = trim_pop3_request(padded(Some("pop3")));
+        assert_eq!(r.email, "anna@studio-halde.example");
+        assert_eq!(r.imap_host, "pop.studio-halde.example");
+        assert_eq!(r.smtp_host, "smtp.studio-halde.example");
+        assert_eq!(r.password, " fictional ");
+    }
+
+    #[test]
+    fn imap_request_is_left_as_typed() {
+        for protocol in [None, Some("imap")] {
+            let r = trim_pop3_request(padded(protocol));
+            assert_eq!(r.email, " anna@studio-halde.example ");
+            assert_eq!(r.imap_host, " pop.studio-halde.example	");
+            assert_eq!(r.smtp_host, "smtp.studio-halde.example ");
+        }
+    }
+
+    #[test]
+    fn padded_pop3_email_still_conflicts() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        insert_account(&conn, &request(None)).unwrap();
+        let r = trim_pop3_request(padded(Some("pop3")));
+        let error = replaceable_id(&conn, &r.email, &r.provider, &r.auth_type, "pop3").unwrap_err();
+        assert!(error.starts_with("EMAIL_PROVIDER_CONFLICT|anna@studio-halde.example|"));
+    }
+
+    #[test]
+    fn updated_hosts_are_trimmed_for_pop3_only() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        for (protocol, imap, smtp) in [
+            ("pop3", "pop.studio-halde.example", "smtp.studio-halde.example"),
+            ("imap", " pop.studio-halde.example ", " smtp.studio-halde.example "),
+        ] {
+            let mut r = request(Some(protocol));
+            r.email = format!("{protocol}@studio-halde.example");
+            let account = insert_account(&conn, &r).unwrap();
+            let hosts = trim_pop3_hosts(
+                &conn,
+                &account.id,
+                " pop.studio-halde.example ".into(),
+                " smtp.studio-halde.example ".into(),
+            );
+            assert_eq!(hosts, (imap.to_string(), smtp.to_string()));
         }
     }
 
@@ -1127,9 +1228,12 @@ mod pop3_account_tests {
 mod pop3_connection_tests {
     use std::time::Duration;
 
-    use super::{pop3_test_within, test_pop3_connection, test_pop3_connection_with_client, Pop3TestResult};
+    use super::{
+        pop3_error_kind, pop3_test_within, test_pop3_connection, test_pop3_connection_with_client,
+        Pop3TestResult,
+    };
     use crate::pop3::test_server::scripted;
-    use crate::pop3::Pop3Client;
+    use crate::pop3::{Pop3Client, Pop3Error};
 
     const GREETING: (&str, &str) = ("", "+OK pop.studio-halde.example ready\r\n");
     const CAPA: (&str, &str) = ("CAPA", "+OK\r\nUIDL\r\n.\r\n");
@@ -1145,6 +1249,20 @@ mod pop3_connection_tests {
         let result = test_pop3_connection_with_client(client, EMAIL, "secret").await;
         server.await.expect("server script");
         result
+    }
+
+    #[test]
+    fn logged_error_kind_carries_no_server_text() {
+        let reply = || "anna@studio-halde.example".to_string();
+        for (error, kind) in [
+            (Pop3Error::Io(reply()), "io"),
+            (Pop3Error::Tls(reply()), "tls"),
+            (Pop3Error::Auth(reply()), "auth"),
+            (Pop3Error::Protocol(reply()), "protocol"),
+            (Pop3Error::Locked(reply()), "locked"),
+        ] {
+            assert_eq!(pop3_error_kind(&error), kind);
+        }
     }
 
     #[tokio::test]
