@@ -13,6 +13,7 @@ pub const MAX_MESSAGE_BYTES: u64 = 100 * 1024 * 1024;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(15);
 const READ_TIMEOUT: Duration = Duration::from_secs(60);
+const DISCARD_TIMEOUT: Duration = Duration::from_secs(120);
 const WRITE_TIMEOUT: Duration = Duration::from_secs(30);
 
 // RFC 5034, CRLF included.
@@ -323,8 +324,20 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Pop3Client<S> {
             max: max_bytes,
         };
         let mut state = LineState::Start;
+        let mut discard_until: Option<tokio::time::Instant> = None;
         loop {
-            let chunk = tokio::time::timeout(READ_TIMEOUT, self.stream.fill_buf())
+            let wait = match discard_until {
+                // Without a total bound a trickling server keeps the discard alive forever.
+                Some(deadline) => {
+                    let left = deadline.saturating_duration_since(tokio::time::Instant::now());
+                    if left.is_zero() {
+                        return Err(Pop3Error::Timeout);
+                    }
+                    left.min(READ_TIMEOUT)
+                }
+                None => READ_TIMEOUT,
+            };
+            let chunk = tokio::time::timeout(wait, self.stream.fill_buf())
                 .await
                 .map_err(|_| Pop3Error::Timeout)?
                 .map_err(io_error)?;
@@ -364,6 +377,9 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Pop3Client<S> {
             self.stream.consume(used);
             if overflow == Overflow::Abort && body.total > body.max {
                 return Err(Pop3Error::Protocol("response too long".into()));
+            }
+            if discard_until.is_none() && !done && body.total > body.max {
+                discard_until = Some(tokio::time::Instant::now() + DISCARD_TIMEOUT);
             }
             if done {
                 return Ok(body);
@@ -622,6 +638,31 @@ mod tests {
         assert_eq!(client.retr(2, 10).await.unwrap(), b"12345678\r\n");
         client.quit().await.unwrap();
         server.await.unwrap();
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn trickling_oversize_reply_times_out_and_breaks_session() {
+        let (stream, mut server) = tokio::io::duplex(64 * 1024);
+        let feeder = tokio::spawn(async move {
+            server.write_all(b"+OK ready\r\n").await.unwrap();
+            let mut command = [0u8; 64];
+            let _ = server.read(&mut command).await.unwrap();
+            server.write_all(b"+OK\r\n").await.unwrap();
+            server.write_all(&[b'x'; 64]).await.unwrap();
+            loop {
+                tokio::time::sleep(Duration::from_secs(30)).await;
+                if server.write_all(b"y").await.is_err() {
+                    break;
+                }
+            }
+        });
+        let mut client = Pop3Client::from_stream(stream).await.unwrap();
+        let started = tokio::time::Instant::now();
+        let result = client.retr(1, 10).await;
+        assert!(matches!(result, Err(Pop3Error::Timeout)));
+        assert!(started.elapsed() <= DISCARD_TIMEOUT + READ_TIMEOUT);
+        assert!(matches!(client.noop().await, Err(Pop3Error::Io(_))));
+        feeder.abort();
     }
 
     #[tokio::test]
