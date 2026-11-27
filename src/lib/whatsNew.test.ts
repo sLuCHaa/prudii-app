@@ -66,13 +66,13 @@ describe("pendingRelease", () => {
 });
 
 describe("RELEASES", () => {
-  it("shows 1.9.3 with only its own highlights", () => {
-    expect(RELEASES.map((r) => r.version)).toEqual(["1.9.3"]);
+  it("shows 1.9.4 with only its own highlights", () => {
+    expect(RELEASES.map((r) => r.version)).toEqual(["1.9.4"]);
     expect(RELEASES[0].items.map((i) => i.key)).toEqual([
-      "whatsNew.v1_9_3.priority",
-      "whatsNew.v1_9_3.important",
-      "whatsNew.v1_9_3.starredCount",
+      "whatsNew.v1_9_4.accounts",
+      "whatsNew.v1_9_4.serverRule",
+      "whatsNew.v1_9_4.serverDelete",
     ]);
-    expect(RELEASES[0].items.map((i) => i.icon)).toEqual(["mail", "tag", "star"]);
+    expect(RELEASES[0].items.map((i) => i.icon)).toEqual(["mail", "sync", "trash"]);
   });
 });

@@ -1573,18 +1573,18 @@
     "title": "Neu in Prudii {{version}}",
     "subtitle": "Das hat sich seit deinem letzten Update getan.",
     "done": "Verstanden",
-    "v1_9_3": {
-      "priority": {
-        "title": "Mit hoher Priorität senden",
-        "text": "Im Menü am Senden-Knopf markierst du eine Mail als wichtig. Outlook, Apple Mail und Thunderbird zeigen sie beim Empfänger entsprechend an."
+    "v1_9_4": {
+      "accounts": {
+        "title": "Konten über POP3",
+        "text": "Beim Hinzufügen eines Kontos kannst du jetzt POP3 wählen. Abgerufen wird nur der Posteingang, die Anmeldung geht nur mit Passwort. Microsoft-Konten lassen sich so nicht einrichten."
       },
-      "important": {
-        "title": "Wichtige Mails erkennen",
-        "text": "Neu eintreffende Mails, die der Absender als wichtig markiert hat, tragen ein rotes Ausrufezeichen in der Liste und in der geöffneten Mail."
+      "serverRule": {
+        "title": "Mails auf dem Server",
+        "text": "Je POP3-Konto legst du fest, ob Mails auf dem Server bleiben oder gleich nach dem Abruf bzw. nach einigen Tagen dort gelöscht werden."
       },
-      "starredCount": {
-        "title": "Zähler bei „Markiert“",
-        "text": "Auf Wunsch zeigt die Seitenleiste, wie viele Mails einen Stern haben. Du schaltest das in den App-Einstellungen ein."
+      "serverDelete": {
+        "title": "Endgültiges Löschen",
+        "text": "Auf Wunsch werden Mails, die du in Prudii endgültig löschst, auch auf dem Server gelöscht. Das ist zunächst ausgeschaltet, und Prudii fragt vorher nach."
       }
     }
   },
