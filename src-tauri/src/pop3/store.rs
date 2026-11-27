@@ -46,6 +46,18 @@ pub fn read_source(data_dir: &Path, mail_id: &str) -> std::io::Result<Vec<u8>> {
     std::fs::read(source_path(data_dir, mail_id))
 }
 
+pub fn source_matches(data_dir: &Path, mail_id: &str, raw: &[u8]) -> bool {
+    match read_source(data_dir, mail_id) {
+        Ok(stored) => stored == raw,
+        Err(e) => {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                log::warn!("POP3: could not read a raw source: {}", e.kind());
+            }
+            false
+        }
+    }
+}
+
 pub fn has_source(data_dir: &Path, mail_id: &str) -> bool {
     std::fs::metadata(source_path(data_dir, mail_id)).is_ok_and(|m| m.is_file() && m.len() > 0)
 }
@@ -205,6 +217,15 @@ mod tests {
         assert!(!has_source(&dir, "m1"));
         write_source(&dir, "m1", b"").unwrap();
         assert!(!has_source(&dir, "m1"));
+    }
+
+    #[test]
+    fn source_matches_is_false_for_a_missing_file() {
+        let dir = temp_dir();
+        assert!(!source_matches(&dir, "m1", b""));
+        write_source(&dir, "m1", b"alt").unwrap();
+        assert!(source_matches(&dir, "m1", b"alt"));
+        assert!(!source_matches(&dir, "m1", b"neu"));
     }
 
     #[test]

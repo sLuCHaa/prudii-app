@@ -1316,6 +1316,12 @@ pub(crate) fn local_mail_fields(raw_bytes: &[u8]) -> Option<LocalMailFields> {
     })
 }
 
+/// Subject, sender address and date exactly as a local insert of these bytes would store them.
+pub(crate) fn local_mail_identity(raw_bytes: &[u8]) -> (String, String, String) {
+    let f = local_mail_fields(raw_bytes).unwrap_or_else(|| placeholder_mail_fields(raw_bytes));
+    (f.subject, f.from_email, f.date)
+}
+
 fn placeholder_mail_fields(raw_bytes: &[u8]) -> LocalMailFields {
     let head = &raw_bytes[..raw_bytes.len().min(64 * 1024)];
     let head_text = String::from_utf8_lossy(head);

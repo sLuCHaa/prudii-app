@@ -1588,8 +1588,8 @@ pub async fn sync_account(
     let credential = if let Some(pw) = password {
         // When password is provided directly (e.g. from Account Wizard),
         // also store it in the keyring so other commands can access it later
-        if let Err(e) = credentials::store_password(&account_id, &pw) {
-            log::warn!("[sync] Password for {} not persisted, session cache only: {}", account_id, e);
+        if credentials::store_password(&account_id, &pw).is_err() {
+            log::warn!("[sync] Password not persisted, session cache only");
         }
         pw
     } else {
@@ -1754,7 +1754,7 @@ async fn spawn_account_syncs(app: AppHandle, db: &Database, only_automatic: bool
                 Ok(cred) => {
                     do_sync_account(app_handle, account, account_id, cred, auth_type).await;
                 }
-                Err(e) => log::warn!("Skipping account {}: {}", account_id, e),
+                Err(_) => log::warn!("Skipping an account: no credential available"),
             }
         });
     }

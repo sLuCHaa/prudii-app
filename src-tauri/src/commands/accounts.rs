@@ -282,7 +282,7 @@ pub fn create_account(
     let conn = db.lock_db();
 
     if let Some(old_id) = replaceable_id(&conn, &request.email, &request.provider, &request.auth_type, incoming_protocol)? {
-        log::info!("Cleaning up existing account {} before re-add (same provider)", old_id);
+        log::info!("Cleaning up an existing account before re-add (same provider)");
         // Mirror delete_account's teardown — an orphaned IDLE watcher would
         // reconnect to the mailbox forever.
         crate::task_registry::abort_account(&old_id);
@@ -295,8 +295,8 @@ pub fn create_account(
                 pool.drop_session(&old_id).await;
             });
         }
-        if let Err(e) = credentials::delete_password(&old_id) {
-            log::warn!("Failed to delete credentials for {}: {}", old_id, e);
+        if credentials::delete_password(&old_id).is_err() {
+            log::warn!("Failed to delete the credentials of the replaced account");
         }
         conn.execute_batch("BEGIN").map_err(|e| format!("Failed to start cleanup transaction: {}", e))?;
         for (table, query) in [
@@ -307,7 +307,7 @@ pub fn create_account(
             ("accounts", "DELETE FROM accounts WHERE id = ?1"),
         ] {
             if let Err(e) = conn.execute(query, rusqlite::params![old_id]) {
-                log::warn!("Failed to clean up {} for account {}: {}", table, old_id, e);
+                log::warn!("Failed to clean up {} of the replaced account: {}", table, e);
             }
         }
         conn.execute_batch("COMMIT").map_err(|e| format!("Failed to commit cleanup: {}", e))?;
@@ -350,8 +350,8 @@ pub fn store_account_password(
 
     // Called mid-save from the settings panel: a failed persist must not abort the rest of
     // that save. The session cache still holds the secret, so the account keeps working.
-    if let Err(e) = credentials::store_password(&account_id, &password) {
-        log::warn!("[accounts] Password for {} not persisted, session cache only: {}", account_id, e);
+    if credentials::store_password(&account_id, &password).is_err() {
+        log::warn!("[accounts] Password not persisted, session cache only");
     }
     crate::idle::retry_now();
 
