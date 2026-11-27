@@ -1879,7 +1879,7 @@
     "testing": "Test de la connexion POP3...",
     "serverSettingsDesc": "Détails de connexion POP3 et SMTP. Ne les modifie que si tu sais ce que tu fais.",
     "serverChangeHint": "Après un changement de serveur, les e-mails qui s'y trouvent encore peuvent arriver de nouveau.",
-    "deleteAccountBody": "Les e-mails de ce compte POP3 n'existent peut-être que sur cet appareil et seront définitivement perdus avec le compte. Crée d'abord une sauvegarde (Paramètres → Sauvegarde) ou exporte les e-mails.",
+    "deleteAccountBody": "Les e-mails de ce compte POP3 n'existent peut-être que sur cet appareil et seront définitivement perdus avec le compte. Crée d'abord une sauvegarde (Paramètres → Données) ou exporte les e-mails.",
     "error": {
       "noUidl": {
         "title": "Serveur non pris en charge",

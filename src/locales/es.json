@@ -1879,7 +1879,7 @@
     "testing": "Probando conexión POP3...",
     "serverSettingsDesc": "Datos de conexión POP3 y SMTP. Cámbialos solo si sabes lo que haces.",
     "serverChangeHint": "Tras cambiar de servidor, los correos que sigan en él pueden volver a llegar.",
-    "deleteAccountBody": "Es posible que los correos de esta cuenta POP3 solo existan en este dispositivo y se pierdan para siempre junto con la cuenta. Crea antes una copia de seguridad (Configuración → Copia de seguridad) o exporta los correos.",
+    "deleteAccountBody": "Es posible que los correos de esta cuenta POP3 solo existan en este dispositivo y se pierdan para siempre junto con la cuenta. Crea antes una copia de seguridad (Configuración → Datos) o exporta los correos.",
     "error": {
       "noUidl": {
         "title": "Servidor no compatible",

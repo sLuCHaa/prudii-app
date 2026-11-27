@@ -1874,7 +1874,7 @@
     "testing": "测试 POP3 连接中...",
     "serverSettingsDesc": "POP3 和 SMTP 连接信息。仅在清楚操作后果时修改。",
     "serverChangeHint": "更换服务器后，仍留在服务器上的邮件可能会再次收到。",
-    "deleteAccountBody": "此 POP3 账户的邮件可能只保存在本设备上，删除账户后将永久丢失。请先创建备份（设置 → 备份）或导出邮件。",
+    "deleteAccountBody": "此 POP3 账户的邮件可能只保存在本设备上，删除账户后将永久丢失。请先创建备份（设置 → 数据）或导出邮件。",
     "error": {
       "noUidl": {
         "title": "不支持该服务器",

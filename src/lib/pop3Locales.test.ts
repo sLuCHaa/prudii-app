@@ -59,6 +59,11 @@ describe("POP3 translations", () => {
       }
     });
 
+    it(`${lang} points to the backup tab by its label`, () => {
+      const { settings } = data as { settings: { title: string; tabs: { backup: string } } };
+      expect(String(read(block, "deleteAccountBody"))).toContain(`${settings.title} → ${settings.tabs.backup}`);
+    });
+
     if (lang !== "en") {
       it(`${lang} translates the sentences`, () => {
         const english = (en as Record<string, unknown>).pop3;

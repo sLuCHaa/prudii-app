@@ -1879,7 +1879,7 @@
     "testing": "Testing POP3 connection...",
     "serverSettingsDesc": "POP3 and SMTP connection details. Only change them if you know what you are doing.",
     "serverChangeHint": "After changing the server, mails that are still on it may arrive again.",
-    "deleteAccountBody": "The mails of this POP3 account may exist only on this device and are lost for good with the account. Create a backup first (Settings → Backup) or export the mails.",
+    "deleteAccountBody": "The mails of this POP3 account may exist only on this device and are lost for good with the account. Create a backup first (Settings → Data) or export the mails.",
     "error": {
       "noUidl": {
         "title": "Server not supported",

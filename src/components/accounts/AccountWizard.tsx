@@ -8,10 +8,11 @@ import { useCreateAccount } from "../../hooks/useAccounts";
 import { useSyncAccount } from "../../hooks/useSync";
 import { useAppConfig } from "../../hooks/useAppConfig";
 import { useAppStore } from "../../stores/appStore";
-import { testImapConnection, startOAuth } from "../../lib/tauri";
+import { testImapConnection, testPop3Connection, startOAuth } from "../../lib/tauri";
+import { accountSetupError, DEFAULT_POP3_RULE, ruleToSettings, type Pop3Rule } from "../../lib/pop3";
 import { IconButton } from "../ui/Button";
 import { useTranslation } from "react-i18next";
-import type { SmtpSecurity, SyncProgress } from "../../types";
+import type { IncomingProtocol, IncomingSecurity, SmtpSecurity, SyncProgress } from "../../types";
 import { WizardStepProvider } from "./WizardStepProvider";
 import { WizardStepAuth } from "./WizardStepAuth";
 import { WizardStepTesting } from "./WizardStepTesting";
@@ -93,6 +94,11 @@ export function AccountWizard() {
   const [smtpHost, setSmtpHost] = useState("");
   const [smtpPort, setSmtpPort] = useState(465);
   const [smtpSecurity, setSmtpSecurity] = useState<SmtpSecurity>("ssl");
+  const [protocol, setProtocol] = useState<IncomingProtocol>("imap");
+  const [pop3Host, setPop3Host] = useState("");
+  const [pop3Port, setPop3Port] = useState(995);
+  const [incomingSecurity, setIncomingSecurity] = useState<IncomingSecurity>("ssl");
+  const [rule, setRule] = useState<Pop3Rule>(DEFAULT_POP3_RULE);
   const [usePasswordFallback, setUsePasswordFallback] = useState(false);
   const [testError, setTestError] = useState<string | null>(null);
   const [testStatus, setTestStatus] = useState<string>("");
@@ -149,6 +155,11 @@ export function AccountWizard() {
     setSmtpHost(p.smtpHost);
     setSmtpPort(p.smtpPort);
     setSmtpSecurity(p.smtpSecurity);
+    setProtocol("imap");
+    setPop3Host(p.pop3Host ?? "");
+    setPop3Port(p.pop3Port ?? 995);
+    setIncomingSecurity("ssl");
+    setRule(DEFAULT_POP3_RULE);
     setColor(p.color);
     setUsePasswordFallback(oauthClosedFor(p.id));
     setStep("credentials");
@@ -156,15 +167,7 @@ export function AccountWizard() {
 
   function formatError(err: unknown): string {
     const raw = err instanceof Error ? err.message : String(err);
-    if (raw.startsWith("EMAIL_PROVIDER_CONFLICT|")) {
-      const [, email, existingProvider] = raw.split("|");
-      const providerLabel =
-        existingProvider === "google" ? "Google" :
-        existingProvider === "microsoft" ? "Microsoft" :
-        existingProvider.toUpperCase();
-      return t("wizard.emailConflict", { email, existingProvider: providerLabel });
-    }
-    return raw;
+    return accountSetupError(t, raw, protocol, useAppStore.getState().accounts);
   }
 
   async function handleOAuth() {
@@ -213,10 +216,15 @@ export function AccountWizard() {
 
     setStep("testing");
     setTestError(null);
-    setTestStatus(t("wizard.testingConnection"));
+    const isPop3 = protocol === "pop3";
+    setTestStatus(t(isPop3 ? "pop3.testing" : "wizard.testingConnection"));
 
     try {
-      await testImapConnection(imapHost, imapPort, email, password);
+      if (isPop3) {
+        await testPop3Connection(pop3Host, pop3Port, incomingSecurity, email, password);
+      } else {
+        await testImapConnection(imapHost, imapPort, email, password);
+      }
       setTestStatus(t("wizard.creatingAccount"));
 
       const account = await createAccount.mutateAsync({
@@ -224,13 +232,16 @@ export function AccountWizard() {
         display_name: displayName || email.split("@")[0],
         provider: provider.id,
         color,
-        imap_host: imapHost,
-        imap_port: imapPort,
+        imap_host: isPop3 ? pop3Host : imapHost,
+        imap_port: isPop3 ? pop3Port : imapPort,
         smtp_host: smtpHost,
         smtp_port: smtpPort,
         smtp_security: smtpSecurity,
         password,
         auth_type: "password",
+        ...(isPop3
+          ? { incoming_protocol: protocol, incoming_security: incomingSecurity, ...ruleToSettings(rule) }
+          : {}),
       });
 
       setCreatedAccountId(account.id);
@@ -314,6 +325,11 @@ export function AccountWizard() {
               smtpHost={smtpHost}
               smtpPort={smtpPort}
               smtpSecurity={smtpSecurity}
+              protocol={protocol}
+              pop3Host={pop3Host}
+              pop3Port={pop3Port}
+              incomingSecurity={incomingSecurity}
+              rule={rule}
               usePasswordFallback={usePasswordFallback}
               oauthDisabled={provider ? oauthClosedFor(provider.id) : false}
               testError={testError}
@@ -327,6 +343,11 @@ export function AccountWizard() {
               onSmtpHostChange={setSmtpHost}
               onSmtpPortChange={setSmtpPort}
               onSmtpSecurityChange={setSmtpSecurity}
+              onProtocolChange={setProtocol}
+              onPop3HostChange={setPop3Host}
+              onPop3PortChange={setPop3Port}
+              onIncomingSecurityChange={setIncomingSecurity}
+              onRuleChange={setRule}
               onUsePasswordFallback={() => { setUsePasswordFallback(true); }}
               onBack={() => setStep("provider")}
               onOAuth={handleOAuth}
@@ -342,6 +363,7 @@ export function AccountWizard() {
               syncProgress={syncProgress}
               email={email}
               providerId={provider?.id}
+              protocol={protocol}
               onBack={() => { setStep("credentials"); setTestError(null); }}
               onRetry={handleRetry}
               onSyncInBackground={close}

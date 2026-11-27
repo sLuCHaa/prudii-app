@@ -1879,7 +1879,7 @@
     "testing": "Testando conexão POP3...",
     "serverSettingsDesc": "Dados de conexão POP3 e SMTP. Altere apenas se souber o que está fazendo.",
     "serverChangeHint": "Após trocar de servidor, os e-mails que ainda estiverem nele podem chegar novamente.",
-    "deleteAccountBody": "Os e-mails desta conta POP3 podem existir apenas neste dispositivo e serão perdidos para sempre junto com a conta. Antes, crie um backup (Configurações → Backup) ou exporte os e-mails.",
+    "deleteAccountBody": "Os e-mails desta conta POP3 podem existir apenas neste dispositivo e serão perdidos para sempre junto com a conta. Antes, crie um backup (Configurações → Dados) ou exporte os e-mails.",
     "error": {
       "noUidl": {
         "title": "Servidor não compatível",

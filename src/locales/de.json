@@ -1879,7 +1879,7 @@
     "testing": "POP3-Verbindung wird getestet …",
     "serverSettingsDesc": "POP3- und SMTP-Verbindungsdetails. Nur ändern, wenn du weißt, was du tust.",
     "serverChangeHint": "Nach einem Serverwechsel können Mails, die noch auf dem Server liegen, erneut ankommen.",
-    "deleteAccountBody": "Die Mails dieses POP3-Kontos liegen möglicherweise nur auf diesem Gerät und gehen mit dem Konto unwiderruflich verloren. Erstelle vorher eine Sicherung (Einstellungen → Backup) oder exportiere die Mails.",
+    "deleteAccountBody": "Die Mails dieses POP3-Kontos liegen möglicherweise nur auf diesem Gerät und gehen mit dem Konto unwiderruflich verloren. Erstelle vorher eine Sicherung (Einstellungen → Daten) oder exportiere die Mails.",
     "error": {
       "noUidl": {
         "title": "Server wird nicht unterstützt",
