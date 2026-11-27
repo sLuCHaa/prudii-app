@@ -3,7 +3,9 @@ use crate::calendar::subscription::{KeyringLinks, LinkStore};
 use crate::calendar::{REFRESH_CHOICES, SUBSCRIPTION};
 use crate::credentials::SecretStore;
 use crate::db::Database;
-use crate::models::{BackupIncludes, BackupManifest, BackupOptions, BackupProgress, BackupStats, RestorePreview};
+use crate::models::{
+    BackupIncludes, BackupManifest, BackupOptions, BackupProgress, BackupStats, RestorePreview, UpdateAccountSettings,
+};
 use crate::pool::ImapPool;
 use std::io::{Read, Seek, Write};
 use std::path::{Path, PathBuf};
@@ -491,6 +493,8 @@ fn do_create_backup_inner(
         let json = serde_json::to_string_pretty(&drafts).map_err(|e| e.to_string())?;
         zip.start_file("drafts.json", zip_options).map_err(|e| e.to_string())?;
         zip.write_all(json.as_bytes()).map_err(|e| e.to_string())?;
+
+        export_pop3(&db, &mut zip, data_dir, &zip_options)?;
     }
 
     if options.include_attachments {
@@ -620,6 +624,46 @@ fn do_create_backup_inner(
         total_steps,
     });
 
+    Ok(())
+}
+
+const POP3_UIDL_COLUMNS: [&str; 7] = ["account_id", "uidl", "mail_id", "fetched_at", "state", "local_deleted_at", "server"];
+
+/// Writes `pop3_uidls.json` and `mail_sources/{mail_id}.eml`. Only a missing source is skipped,
+/// since the file may be the only copy of the mail.
+pub(crate) fn export_pop3<W: Write + Seek>(
+    db: &Database,
+    zip: &mut zip::ZipWriter<W>,
+    data_dir: &Path,
+    opts: &zip::write::SimpleFileOptions,
+) -> Result<(), String> {
+    let (uidls, mail_ids) = {
+        let conn = db.lock_db();
+        let uidls = table_json(&conn, "pop3_uidls", &POP3_UIDL_COLUMNS)?;
+        let mut stmt = conn
+            .prepare("SELECT m.id FROM mails m JOIN accounts a ON a.id = m.account_id WHERE a.incoming_protocol = 'pop3'")
+            .map_err(|e| e.to_string())?;
+        let mail_ids = stmt
+            .query_map([], |row| row.get::<_, String>(0))
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        (uidls, mail_ids)
+    };
+
+    let json = serde_json::to_string_pretty(&uidls).map_err(|e| e.to_string())?;
+    zip.start_file("pop3_uidls.json", *opts).map_err(|e| e.to_string())?;
+    zip.write_all(json.as_bytes()).map_err(|e| e.to_string())?;
+
+    for mail_id in &mail_ids {
+        let mut file = match std::fs::File::open(crate::pop3::store::source_path(data_dir, mail_id)) {
+            Ok(file) => file,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(e) => return Err(format!("Failed to open a mail source: {}", e)),
+        };
+        zip.start_file(format!("mail_sources/{mail_id}.eml"), *opts).map_err(|e| e.to_string())?;
+        std::io::copy(&mut file, zip).map_err(|e| format!("Failed to copy a mail source: {}", e))?;
+    }
     Ok(())
 }
 
@@ -1482,6 +1526,50 @@ pub(crate) fn ensure_no_pop3_overwrite(conn: &rusqlite::Connection, accounts: &[
     Ok(())
 }
 
+/// Run before a restore writes anything, so an unknown server setting leaves no half-restored state.
+pub(crate) fn check_backup_server_fields(accounts: &[serde_json::Value]) -> Result<(), String> {
+    for acc in accounts {
+        let text = |key: &str| match acc.get(key) {
+            None => Ok(None),
+            Some(v) => v.as_str().map(|s| Some(s.to_string())).ok_or_else(|| format!("Invalid account field: {}", key)),
+        };
+        crate::commands::accounts::check_incoming(&UpdateAccountSettings {
+            incoming_protocol: text("incoming_protocol")?,
+            incoming_security: text("incoming_security")?,
+            ..Default::default()
+        })?;
+    }
+    Ok(())
+}
+
+/// Delete mode, delay and delete-with-local of an imported account; doubt keeps mail on the server.
+fn imported_delete_rule(acc: &serde_json::Value) -> (String, i64, bool) {
+    use crate::models::{DEFAULT_POP3_DELETE_AFTER_DAYS, DEFAULT_POP3_DELETE_MODE, DEFAULT_POP3_DELETE_WITH_LOCAL};
+    let valid = |update: UpdateAccountSettings| crate::commands::accounts::check_incoming(&update).is_ok();
+    // Outer `None`: field missing. Inner `None`: wrong type or value.
+    let mode = acc.get("pop3_delete_mode").map(|v| {
+        v.as_str()
+            .map(str::to_string)
+            .filter(|m| valid(UpdateAccountSettings { pop3_delete_mode: Some(m.clone()), ..Default::default() }))
+    });
+    let days = acc.get("pop3_delete_after_days").map(|v| {
+        v.as_i64().filter(|d| valid(UpdateAccountSettings { pop3_delete_after_days: Some(*d), ..Default::default() }))
+    });
+    let with_local = acc.get("pop3_delete_with_local").map(|v| v.as_bool());
+
+    if acc.get("incoming_protocol").and_then(|v| v.as_str()) == Some("pop3") {
+        return match (mode.flatten(), days.flatten(), with_local.flatten()) {
+            (Some(mode), Some(days), Some(with_local)) => (mode, days, with_local),
+            _ => ("keep".into(), DEFAULT_POP3_DELETE_AFTER_DAYS, false),
+        };
+    }
+    (
+        mode.map_or_else(|| DEFAULT_POP3_DELETE_MODE.into(), |m| m.unwrap_or_else(|| "keep".into())),
+        days.flatten().unwrap_or(DEFAULT_POP3_DELETE_AFTER_DAYS),
+        with_local.map_or(DEFAULT_POP3_DELETE_WITH_LOCAL, |w| w.unwrap_or(false)),
+    )
+}
+
 /// Inserts one account of `accounts.json`; `false` when a merge skipped an address that exists.
 /// `adopt_signature` is for archives from before the signature list, whose accounts carry their own.
 pub(crate) fn import_backup_account(
@@ -1492,6 +1580,7 @@ pub(crate) fn import_backup_account(
 ) -> Result<bool, String> {
     let email = acc.get("email").and_then(|v| v.as_str()).unwrap_or("");
     let id = acc.get("id").and_then(|v| v.as_str()).unwrap_or("");
+    check_backup_server_fields(std::slice::from_ref(acc))?;
 
     if !is_replace {
         let exists: bool = conn
@@ -1509,6 +1598,7 @@ pub(crate) fn import_backup_account(
             .map_err(|e| e.to_string())?;
     }
 
+    let (delete_mode, delete_after_days, delete_with_local) = imported_delete_rule(acc);
     let signature_html = crate::commands::signatures::clean_signature_html(acc.get("signature_html").and_then(|v| v.as_str()).unwrap_or(""));
     conn.execute(
         "INSERT OR REPLACE INTO accounts (id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port, smtp_security, auth_type, signature_html, signature_text, sync_interval_minutes, signature_on_compose, signature_on_reply, load_external_images, created_at, updated_at, signature_id, incoming_protocol, incoming_security, pop3_delete_mode, pop3_delete_after_days, pop3_delete_with_local)
@@ -1536,9 +1626,9 @@ pub(crate) fn import_backup_account(
             acc.get("signature_id").and_then(|v| v.as_str()),
             acc.get("incoming_protocol").and_then(|v| v.as_str()).unwrap_or(crate::models::DEFAULT_INCOMING_PROTOCOL),
             acc.get("incoming_security").and_then(|v| v.as_str()).unwrap_or(crate::models::DEFAULT_INCOMING_SECURITY),
-            acc.get("pop3_delete_mode").and_then(|v| v.as_str()).unwrap_or(crate::models::DEFAULT_POP3_DELETE_MODE),
-            acc.get("pop3_delete_after_days").and_then(|v| v.as_i64()).unwrap_or(crate::models::DEFAULT_POP3_DELETE_AFTER_DAYS),
-            acc.get("pop3_delete_with_local").and_then(|v| v.as_bool()).unwrap_or(crate::models::DEFAULT_POP3_DELETE_WITH_LOCAL),
+            delete_mode,
+            delete_after_days,
+            delete_with_local,
         ],
     ).map_err(|e| e.to_string())?;
     if adopt_signature {
@@ -1997,12 +2087,15 @@ fn do_restore_backup_inner(
         _ => None,
     };
 
-    if is_replace && manifest.includes.accounts {
+    if manifest.includes.accounts {
         if let Ok(mut f) = archive.by_name("accounts.json") {
             let mut s = String::new();
             f.read_to_string(&mut s).map_err(|e| e.to_string())?;
             let accounts: Vec<serde_json::Value> = serde_json::from_str(&s).map_err(|e| e.to_string())?;
-            ensure_no_pop3_overwrite(&db.lock_db(), &accounts)?;
+            check_backup_server_fields(&accounts)?;
+            if is_replace {
+                ensure_no_pop3_overwrite(&db.lock_db(), &accounts)?;
+            }
         }
     }
 
@@ -3471,5 +3564,151 @@ mod signatures_roundtrip {
         conn.execute("UPDATE accounts SET incoming_protocol = 'imap'", []).unwrap();
         assert!(!keeps_existing_file(&conn, &rel, &existing));
         std::fs::remove_file(existing).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod pop3_roundtrip {
+    use super::*;
+    use crate::test_support::{seed_account, seed_folder, seed_mail, temp_db, SeedMail};
+    use std::io::Cursor;
+
+    fn pop3_zip(db: &Database) -> Result<zip::ZipArchive<Cursor<Vec<u8>>>, String> {
+        let opts = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        export_pop3(db, &mut zip, &db.data_dir, &opts)?;
+        Ok(zip::ZipArchive::new(Cursor::new(zip.finish().unwrap().into_inner())).unwrap())
+    }
+
+    fn mail_of(conn: &rusqlite::Connection, email: &str, protocol: &str) -> (String, String) {
+        let account = seed_account(conn, email);
+        conn.execute("UPDATE accounts SET incoming_protocol = ?2 WHERE id = ?1", [account.as_str(), protocol]).unwrap();
+        let folder = seed_folder(conn, &account, "inbox");
+        let mail = seed_mail(conn, &SeedMail { account_id: &account, folder_id: &folder, ..Default::default() });
+        (account, mail)
+    }
+
+    fn write_source(db: &Database, mail_id: &str, bytes: &[u8]) {
+        let path = crate::pop3::store::source_path(&db.data_dir, mail_id);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, bytes).unwrap();
+    }
+
+    fn account_with(fields: serde_json::Value) -> serde_json::Value {
+        let mut acc = serde_json::json!({
+            "id": "a1", "email": "anna@studio-halde.example", "display_name": "Anna Weber",
+            "imap_host": "pop.studio-halde.example", "smtp_host": "smtp.studio-halde.example"
+        });
+        for (key, value) in fields.as_object().unwrap() {
+            acc[key] = value.clone();
+        }
+        acc
+    }
+
+    fn restored_rule(fields: serde_json::Value) -> (String, i64, bool) {
+        let db = temp_db();
+        let conn = db.lock_db();
+        assert!(import_backup_account(&conn, &account_with(fields), false, false).unwrap());
+        conn.query_row(
+            "SELECT pop3_delete_mode, pop3_delete_after_days, pop3_delete_with_local FROM accounts",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn pop3_backup_contains_uidls_and_sources() {
+        let db = temp_db();
+        let (account, mail) = {
+            let conn = db.lock_db();
+            let (account, mail) = mail_of(&conn, "anna@studio-halde.example", "pop3");
+            let folder = seed_folder(&conn, &account, "drafts");
+            seed_mail(&conn, &SeedMail { account_id: &account, folder_id: &folder, ..Default::default() });
+            let (_, imap_mail) = mail_of(&conn, "weber@studio-halde.example", "imap");
+            write_source(&db, &imap_mail, b"Subject: IMAP\r\n\r\n");
+            conn.execute(
+                "INSERT INTO pop3_uidls (account_id, uidl, mail_id, state, server) VALUES (?1, 'u1', ?2, 'stored', 'pop.studio-halde.example|995|anna')",
+                [&account, &mail],
+            )
+            .unwrap();
+            (account, mail)
+        };
+        write_source(&db, &mail, b"Subject: Angebot\r\n\r\nHallo");
+
+        let mut archive = pop3_zip(&db).unwrap();
+        let sources: Vec<String> = archive.file_names().map(|n| n.unwrap().into_owned()).filter(|n| n.ends_with(".eml")).collect();
+        assert_eq!(sources, vec![format!("mail_sources/{mail}.eml")]);
+        let mut bytes = Vec::new();
+        archive.by_name(&sources[0]).unwrap().read_to_end(&mut bytes).unwrap();
+        assert_eq!(bytes, b"Subject: Angebot\r\n\r\nHallo");
+        let json = read_zip_json(&mut archive, "pop3_uidls.json").unwrap().unwrap();
+        let rows: Vec<serde_json::Value> = serde_json::from_str(&json).unwrap();
+        assert_eq!(rows.len(), 1);
+        for (key, value) in [
+            ("account_id", account.as_str()),
+            ("uidl", "u1"),
+            ("mail_id", mail.as_str()),
+            ("state", "stored"),
+            ("server", "pop.studio-halde.example|995|anna"),
+        ] {
+            assert_eq!(rows[0][key], value);
+        }
+        assert!(rows[0]["fetched_at"].is_string());
+        assert!(rows[0].as_object().unwrap().contains_key("local_deleted_at"));
+    }
+
+    #[test]
+    fn pop3_backup_fails_when_a_source_cannot_be_read() {
+        let db = temp_db();
+        let (_, mail) = mail_of(&db.lock_db(), "anna@studio-halde.example", "pop3");
+        std::fs::create_dir_all(crate::pop3::store::source_path(&db.data_dir, &mail)).unwrap();
+        assert!(pop3_zip(&db).is_err());
+    }
+
+    #[test]
+    fn invalid_pop3_delete_rule_is_restored_as_keep() {
+        let safe = ("keep".to_string(), 14, false);
+        let rule = |mode: serde_json::Value, days: serde_json::Value| {
+            serde_json::json!({
+                "incoming_protocol": "pop3", "pop3_delete_mode": mode,
+                "pop3_delete_after_days": days, "pop3_delete_with_local": true
+            })
+        };
+        assert_eq!(restored_rule(rule("sofort".into(), 30.into())), safe);
+        assert_eq!(restored_rule(rule("after_days".into(), 0.into())), safe);
+        assert_eq!(restored_rule(rule("after_days".into(), "14".into())), safe);
+        let without_local = serde_json::json!({
+            "incoming_protocol": "pop3", "pop3_delete_mode": "after_fetch", "pop3_delete_after_days": 30
+        });
+        assert_eq!(restored_rule(without_local), safe);
+        assert_eq!(restored_rule(rule("after_days".into(), 30.into())), ("after_days".to_string(), 30, true));
+    }
+
+    #[test]
+    fn invalid_imap_delete_fields_are_made_safe_one_by_one() {
+        assert_eq!(restored_rule(serde_json::json!({})), ("after_days".to_string(), 14, true));
+        let fields = serde_json::json!({ "pop3_delete_mode": "sofort", "pop3_delete_after_days": 30, "pop3_delete_with_local": "ja" });
+        assert_eq!(restored_rule(fields), ("keep".to_string(), 30, false));
+        let fields = serde_json::json!({ "pop3_delete_after_days": 366 });
+        assert_eq!(restored_rule(fields), ("after_days".to_string(), 14, true));
+    }
+
+    #[test]
+    fn unknown_incoming_protocol_is_refused() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        for fields in [
+            serde_json::json!({ "incoming_protocol": "mbox" }),
+            serde_json::json!({ "incoming_protocol": 3 }),
+            serde_json::json!({ "incoming_security": "none" }),
+            serde_json::json!({ "incoming_security": null }),
+        ] {
+            let acc = account_with(fields);
+            assert!(check_backup_server_fields(std::slice::from_ref(&acc)).is_err());
+            assert!(import_backup_account(&conn, &acc, true, false).is_err());
+        }
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM accounts", [], |r| r.get(0)).unwrap();
+        assert_eq!(count, 0);
     }
 }

@@ -133,7 +133,7 @@ const POP3_LOCAL_FOLDERS: [(&str, &str); 5] = [
     ("archive", "Archive"),
 ];
 
-fn check_incoming(update: &UpdateAccountSettings) -> Result<(), String> {
+pub(crate) fn check_incoming(update: &UpdateAccountSettings) -> Result<(), String> {
     if let Some(protocol) = update.incoming_protocol.as_deref() {
         if !["imap", "pop3"].contains(&protocol) {
             return Err(format!("Invalid incoming protocol: '{}'. Must be 'imap' or 'pop3'.", protocol));
