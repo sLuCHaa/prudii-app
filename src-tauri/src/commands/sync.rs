@@ -2082,6 +2082,30 @@ pub fn search_mails_inner(
     Ok(results)
 }
 
+fn clear_account_for_resync(conn: &rusqlite::Connection, account_id: &str) -> Result<(), String> {
+    // The local copy may be the only one left.
+    if crate::commands::mails::is_pop3_account(conn, account_id) {
+        return Err(crate::commands::mails::POP3_NOT_SUPPORTED.into());
+    }
+    conn.execute(
+        "UPDATE folders SET uid_validity = 0, uid_next = 0 WHERE account_id = ?1",
+        rusqlite::params![account_id],
+    ).map_err(|e| e.to_string())?;
+    conn.execute(
+        "DELETE FROM mails WHERE account_id = ?1",
+        rusqlite::params![account_id],
+    ).map_err(|e| e.to_string())?;
+    let _ = conn.execute(
+        "UPDATE accounts SET gmail_history_id = '' WHERE id = ?1",
+        rusqlite::params![account_id],
+    );
+    let _ = conn.execute(
+        "UPDATE folders SET delta_link = '' WHERE account_id = ?1",
+        rusqlite::params![account_id],
+    );
+    Ok(())
+}
+
 /// Force a full re-sync for an account by resetting UIDNEXT/UIDVALIDITY,
 /// clearing all local mails, and triggering a fresh sync.
 #[tauri::command]
@@ -2090,25 +2114,7 @@ pub async fn force_resync_account(
     db: State<'_, Database>,
     account_id: String,
 ) -> Result<(), String> {
-    {
-        let conn = db.lock_db();
-        conn.execute(
-            "UPDATE folders SET uid_validity = 0, uid_next = 0 WHERE account_id = ?1",
-            rusqlite::params![account_id],
-        ).map_err(|e| e.to_string())?;
-        conn.execute(
-            "DELETE FROM mails WHERE account_id = ?1",
-            rusqlite::params![account_id],
-        ).map_err(|e| e.to_string())?;
-        let _ = conn.execute(
-            "UPDATE accounts SET gmail_history_id = '' WHERE id = ?1",
-            rusqlite::params![account_id],
-        );
-        let _ = conn.execute(
-            "UPDATE folders SET delta_link = '' WHERE account_id = ?1",
-            rusqlite::params![account_id],
-        );
-    }
+    clear_account_for_resync(&db.lock_db(), &account_id)?;
 
     log::info!("Force resync: cleared all data for account {}", account_id);
 
@@ -2157,5 +2163,32 @@ mod gmail_listing_tests {
         assert!(!gmail_folder_needs_listing("custom", 3, true));
         assert!(gmail_folder_needs_listing("trash", 0, false));
         assert!(gmail_folder_needs_listing("inbox", 12, false));
+    }
+}
+
+#[cfg(test)]
+mod resync_tests {
+    use super::clear_account_for_resync;
+    use crate::test_support::{seed_account, seed_folder, seed_mail, temp_db, SeedMail};
+
+    #[test]
+    fn a_resync_never_wipes_a_pop3_account() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        let account = seed_account(&conn, "anna@studio-halde.example");
+        let inbox = seed_folder(&conn, &account, "inbox");
+        seed_mail(&conn, &SeedMail { account_id: &account, folder_id: &inbox, ..Default::default() });
+        conn.execute("UPDATE folders SET uid_next = 7", []).unwrap();
+        conn.execute("UPDATE accounts SET incoming_protocol = 'pop3'", []).unwrap();
+        let state = || -> (i64, i64) {
+            conn.query_row("SELECT (SELECT COUNT(*) FROM mails), (SELECT uid_next FROM folders)", [], |r| Ok((r.get(0)?, r.get(1)?))).unwrap()
+        };
+
+        assert_eq!(clear_account_for_resync(&conn, &account), Err(crate::commands::mails::POP3_NOT_SUPPORTED.to_string()));
+        assert_eq!(state(), (1, 7));
+
+        conn.execute("UPDATE accounts SET incoming_protocol = 'imap'", []).unwrap();
+        assert_eq!(clear_account_for_resync(&conn, &account), Ok(()));
+        assert_eq!(state(), (0, 0));
     }
 }

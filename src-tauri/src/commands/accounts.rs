@@ -2,7 +2,7 @@ use crate::credentials;
 use crate::db::Database;
 use crate::gmail;
 use crate::outlook;
-use crate::commands::mails::POP3_NOT_SUPPORTED;
+use crate::commands::mails::{is_pop3_account, POP3_NOT_SUPPORTED};
 use crate::models::{
     Account, CreateAccountRequest, Folder, DEFAULT_INCOMING_PROTOCOL, DEFAULT_INCOMING_SECURITY,
     DEFAULT_POP3_DELETE_AFTER_DAYS, DEFAULT_POP3_DELETE_MODE, DEFAULT_POP3_DELETE_WITH_LOCAL,
@@ -87,6 +87,39 @@ pub fn list_accounts_inner(conn: &rusqlite::Connection) -> Result<Vec<Account>, 
     Ok(accounts)
 }
 
+/// The account a new one with this address takes the place of.
+/// - Same provider + auth_type → re-add after failed attempt: clean up and replace.
+/// - Different provider/auth_type → reject with a clear error so users notice that
+///   their OAuth provider returned an email belonging to an existing account
+///   (e.g. Outlook configured with a Gmail address as primary).
+fn account_to_replace(conn: &rusqlite::Connection, email: &str, provider: &str, auth_type: &str) -> Result<Option<String>, String> {
+    let existing: Option<(String, String, String)> = conn
+        .query_row(
+            "SELECT id, provider, auth_type FROM accounts WHERE email = ?1",
+            rusqlite::params![email],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .ok();
+    let Some((old_id, old_provider, old_auth_type)) = existing else {
+        return Ok(None);
+    };
+    if old_provider != provider || old_auth_type != auth_type {
+        return Err(format!(
+            "EMAIL_PROVIDER_CONFLICT|{}|{}|{}",
+            email, old_provider, old_auth_type
+        ));
+    }
+    if is_pop3_account(conn, &old_id) {
+        return Err(pop3_account_exists(email));
+    }
+    Ok(Some(old_id))
+}
+
+/// Replacing a POP3 account would delete mail that may exist nowhere else.
+pub(crate) fn pop3_account_exists(email: &str) -> String {
+    format!("POP3_ACCOUNT_EXISTS|{}", email)
+}
+
 #[tauri::command(async)]
 pub fn create_account(
     app: tauri::AppHandle,
@@ -113,25 +146,7 @@ pub fn create_account(
 
     let conn = db.lock_db();
 
-    // Check for existing account with the same email.
-    // - Same provider + auth_type → re-add after failed attempt: clean up and replace.
-    // - Different provider/auth_type → reject with a clear error so users notice that
-    //   their OAuth provider returned an email belonging to an existing account
-    //   (e.g. Outlook configured with a Gmail address as primary).
-    let existing: Option<(String, String, String)> = conn
-        .query_row(
-            "SELECT id, provider, auth_type FROM accounts WHERE email = ?1",
-            rusqlite::params![request.email],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-        )
-        .ok();
-    if let Some((old_id, old_provider, old_auth_type)) = existing {
-        if old_provider != request.provider || old_auth_type != request.auth_type {
-            return Err(format!(
-                "EMAIL_PROVIDER_CONFLICT|{}|{}|{}",
-                request.email, old_provider, old_auth_type
-            ));
-        }
+    if let Some(old_id) = account_to_replace(&conn, &request.email, &request.provider, &request.auth_type)? {
         log::info!("Cleaning up existing account {} before re-add (same provider)", old_id);
         // Mirror delete_account's teardown — an orphaned IDLE watcher would
         // reconnect to the mailbox forever.
@@ -735,4 +750,22 @@ pub async fn start_oauth(provider: String) -> Result<OAuthResult, String> {
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token,
     })
+}
+
+#[cfg(test)]
+mod replace_tests {
+    use super::account_to_replace;
+    use crate::test_support::{seed_account, temp_db};
+
+    #[test]
+    fn a_pop3_account_is_never_replaced() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        let id = seed_account(&conn, "anna@studio-halde.example");
+        let replace = || account_to_replace(&conn, "anna@studio-halde.example", "imap", "password");
+        assert_eq!(replace(), Ok(Some(id)));
+        conn.execute("UPDATE accounts SET incoming_protocol = 'pop3'", []).unwrap();
+        assert_eq!(replace(), Err("POP3_ACCOUNT_EXISTS|anna@studio-halde.example".to_string()));
+        assert_eq!(account_to_replace(&conn, "info@studio-halde.example", "imap", "password"), Ok(None));
+    }
 }

@@ -1358,6 +1358,68 @@ pub(crate) fn import_signatures<R: Read + Seek>(
     Ok(())
 }
 
+pub(crate) fn import_backup_folder(
+    conn: &rusqlite::Connection,
+    folder: &serde_json::Value,
+    is_replace: bool,
+) -> Result<(), String> {
+    let id = folder.get("id").and_then(|v| v.as_str()).unwrap_or("");
+    let account_id = folder.get("account_id").and_then(|v| v.as_str()).unwrap_or("");
+    let path = folder.get("path").and_then(|v| v.as_str()).unwrap_or("");
+    // Replacing a folder cascades to its mails.
+    let is_replace = is_replace && !crate::commands::mails::is_pop3_account(conn, account_id);
+
+    if is_replace {
+        conn.execute(
+            "DELETE FROM folders WHERE account_id = ?1 AND path = ?2",
+            rusqlite::params![account_id, path],
+        ).map_err(|e| e.to_string())?;
+    }
+
+    let sql = if is_replace {
+        "INSERT OR REPLACE INTO folders (id, account_id, name, folder_type, path, unread_count, total_count, is_local, color)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"
+    } else {
+        "INSERT OR IGNORE INTO folders (id, account_id, name, folder_type, path, unread_count, total_count, is_local, color)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"
+    };
+
+    conn.execute(
+        sql,
+        rusqlite::params![
+            id,
+            account_id,
+            folder.get("name").and_then(|v| v.as_str()).unwrap_or(""),
+            folder.get("folder_type").and_then(|v| v.as_str()).unwrap_or("custom"),
+            path,
+            folder.get("unread_count").and_then(|v| v.as_i64()).unwrap_or(0),
+            folder.get("total_count").and_then(|v| v.as_i64()).unwrap_or(0),
+            folder.get("is_local").and_then(|v| v.as_i64()).unwrap_or(0),
+            folder.get("color").and_then(|v| v.as_str()).unwrap_or(""),
+        ],
+    ).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Run before a replace restore writes anything, so a refusal leaves no half-restored state.
+pub(crate) fn ensure_no_pop3_overwrite(conn: &rusqlite::Connection, accounts: &[serde_json::Value]) -> Result<(), String> {
+    for acc in accounts {
+        let email = acc.get("email").and_then(|v| v.as_str()).unwrap_or("");
+        let id = acc.get("id").and_then(|v| v.as_str()).unwrap_or("");
+        let hits_pop3: bool = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM accounts WHERE (email = ?1 OR id = ?2) AND incoming_protocol = 'pop3'",
+                rusqlite::params![email, id],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        if hits_pop3 {
+            return Err(crate::commands::accounts::pop3_account_exists(email));
+        }
+    }
+    Ok(())
+}
+
 /// Inserts one account of `accounts.json`; `false` when a merge skipped an address that exists.
 /// `adopt_signature` is for archives from before the signature list, whose accounts carry their own.
 pub(crate) fn import_backup_account(
@@ -1369,17 +1431,20 @@ pub(crate) fn import_backup_account(
     let email = acc.get("email").and_then(|v| v.as_str()).unwrap_or("");
     let id = acc.get("id").and_then(|v| v.as_str()).unwrap_or("");
 
-    if is_replace {
-        // Delete existing account with same email (CASCADE deletes folders/mails/attachments)
-        conn.execute("DELETE FROM accounts WHERE email = ?1", rusqlite::params![email])
-            .map_err(|e| e.to_string())?;
-    } else {
+    if !is_replace {
         let exists: bool = conn
             .query_row("SELECT COUNT(*) > 0 FROM accounts WHERE email = ?1", rusqlite::params![email], |row| row.get(0))
             .unwrap_or(false);
         if exists {
             return Ok(false);
         }
+    }
+    // Also in a merge: a matching id alone would make INSERT OR REPLACE drop the row.
+    ensure_no_pop3_overwrite(conn, std::slice::from_ref(acc))?;
+    if is_replace {
+        // Delete existing account with same email (CASCADE deletes folders/mails/attachments)
+        conn.execute("DELETE FROM accounts WHERE email = ?1", rusqlite::params![email])
+            .map_err(|e| e.to_string())?;
     }
 
     let signature_html = crate::commands::signatures::clean_signature_html(acc.get("signature_html").and_then(|v| v.as_str()).unwrap_or(""));
@@ -1870,6 +1935,15 @@ fn do_restore_backup_inner(
         _ => None,
     };
 
+    if is_replace && manifest.includes.accounts {
+        if let Ok(mut f) = archive.by_name("accounts.json") {
+            let mut s = String::new();
+            f.read_to_string(&mut s).map_err(|e| e.to_string())?;
+            let accounts: Vec<serde_json::Value> = serde_json::from_str(&s).map_err(|e| e.to_string())?;
+            ensure_no_pop3_overwrite(&db.lock_db(), &accounts)?;
+        }
+    }
+
     if manifest.includes.app_settings {
         if let Ok(mut f) = archive.by_name("app_settings.json") {
             current_step += 1;
@@ -2009,39 +2083,7 @@ fn do_restore_backup_inner(
 
             let conn = db.lock_db();
             for folder in &folders {
-                let id = folder.get("id").and_then(|v| v.as_str()).unwrap_or("");
-                let account_id = folder.get("account_id").and_then(|v| v.as_str()).unwrap_or("");
-                let path = folder.get("path").and_then(|v| v.as_str()).unwrap_or("");
-
-                if is_replace {
-                    conn.execute(
-                        "DELETE FROM folders WHERE account_id = ?1 AND path = ?2",
-                        rusqlite::params![account_id, path],
-                    ).map_err(|e| e.to_string())?;
-                }
-
-                let sql = if is_replace {
-                    "INSERT OR REPLACE INTO folders (id, account_id, name, folder_type, path, unread_count, total_count, is_local, color)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"
-                } else {
-                    "INSERT OR IGNORE INTO folders (id, account_id, name, folder_type, path, unread_count, total_count, is_local, color)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"
-                };
-
-                conn.execute(
-                    sql,
-                    rusqlite::params![
-                        id,
-                        account_id,
-                        folder.get("name").and_then(|v| v.as_str()).unwrap_or(""),
-                        folder.get("folder_type").and_then(|v| v.as_str()).unwrap_or("custom"),
-                        path,
-                        folder.get("unread_count").and_then(|v| v.as_i64()).unwrap_or(0),
-                        folder.get("total_count").and_then(|v| v.as_i64()).unwrap_or(0),
-                        folder.get("is_local").and_then(|v| v.as_i64()).unwrap_or(0),
-                        folder.get("color").and_then(|v| v.as_str()).unwrap_or(""),
-                    ],
-                ).map_err(|e| e.to_string())?;
+                import_backup_folder(&conn, folder, is_replace)?;
             }
         }
     }
@@ -3274,6 +3316,59 @@ mod signatures_roundtrip {
         let account = list_accounts_inner(&conn).unwrap().remove(0);
         assert_eq!((account.incoming_protocol.as_str(), account.pop3_delete_mode.as_str()), ("imap", "after_days"));
         assert_eq!((account.pop3_delete_after_days, account.pop3_delete_with_local), (14, true));
+    }
+
+    fn pop3_account_with_a_mail(conn: &rusqlite::Connection) -> String {
+        import_backup_account(conn, &old_account(), false, false).unwrap();
+        conn.execute("UPDATE accounts SET incoming_protocol = 'pop3'", []).unwrap();
+        let inbox = crate::test_support::seed_folder(conn, "a1", "inbox");
+        let mail = crate::test_support::SeedMail { account_id: "a1", folder_id: &inbox, ..Default::default() };
+        crate::test_support::seed_mail(conn, &mail);
+        inbox
+    }
+
+    fn mail_count(conn: &rusqlite::Connection) -> i64 {
+        conn.query_row("SELECT COUNT(*) FROM mails", [], |r| r.get(0)).unwrap()
+    }
+
+    #[test]
+    fn a_replace_restore_refuses_to_overwrite_a_pop3_account() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        pop3_account_with_a_mail(&conn);
+        let mut same_id = old_account();
+        same_id["email"] = "info@studio-halde.example".into();
+        for account in [old_account(), same_id] {
+            assert_eq!(
+                import_backup_account(&conn, &account, true, false),
+                Err(format!("POP3_ACCOUNT_EXISTS|{}", account["email"].as_str().unwrap()))
+            );
+        }
+        assert_eq!(mail_count(&conn), 1);
+        assert_eq!(import_backup_account(&conn, &old_account(), false, false), Ok(false));
+    }
+
+    #[test]
+    fn a_replace_restore_is_refused_before_any_account_is_touched() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        pop3_account_with_a_mail(&conn);
+        let mut other = old_account();
+        other["email"] = "info@studio-halde.example".into();
+        other["id"] = "a2".into();
+        let accounts = [other, old_account()];
+        assert!(ensure_no_pop3_overwrite(&conn, &accounts[..1]).is_ok());
+        assert!(ensure_no_pop3_overwrite(&conn, &accounts).is_err());
+    }
+
+    #[test]
+    fn a_replace_restore_keeps_the_folders_of_a_pop3_account() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        let inbox = pop3_account_with_a_mail(&conn);
+        let folder = serde_json::json!({ "id": inbox, "account_id": "a1", "name": "inbox", "folder_type": "inbox", "path": "inbox" });
+        import_backup_folder(&conn, &folder, true).unwrap();
+        assert_eq!(mail_count(&conn), 1);
     }
 
     #[test]
