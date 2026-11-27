@@ -1403,8 +1403,13 @@ pub(crate) fn import_attachment_rows(
         let mail_id = att.get("mail_id").and_then(|v| v.as_str()).unwrap_or("");
         let filename = att.get("filename").and_then(|v| v.as_str()).unwrap_or("");
 
-        // The stored name may be the sender's raw one; the file on disk carries the sanitized form.
-        let on_disk = crate::imap::sanitize_filename(filename);
+        // Each provider sanitizes differently, so only the backed-up path knows the name on disk; it may use either separator.
+        let on_disk = att
+            .get("local_path")
+            .and_then(|v| v.as_str())
+            .and_then(|path| path.rsplit(['/', '\\']).next())
+            .filter(|name| is_safe_file_name(name))
+            .map_or_else(|| crate::imap::sanitize_filename(filename), str::to_string);
         let att_dir = crate::safe_path::mail_attachment_dir(data_dir, mail_id).filter(|_| is_safe_file_name(&on_disk));
         let Some(att_dir) = att_dir else {
             log::warn!("Restore: skipped an attachment with an unusable path");
@@ -4210,6 +4215,50 @@ mod pop3_roundtrip {
                 row("back", "..\\..\\c.pdf", ".._.._c.pdf"),
                 row("plain", "Angebot März 2026.v2.pdf", "Angebot März 2026.v2.pdf"),
                 row("slash", "a/b.pdf", "a_b.pdf"),
+            ]
+        );
+    }
+
+    #[test]
+    fn restore_takes_the_attachment_file_name_from_the_backed_up_path() {
+        let db = temp_db();
+        let (_, mail) = mail_of(&db.lock_db(), "anna@studio-halde.example", "pop3");
+        let conn = db.lock_db();
+        let data = Path::new("data");
+        let att = |id: &str, filename: &str, local_path: &str| {
+            serde_json::json!({ "id": id, "mail_id": mail, "filename": filename, "local_path": local_path })
+        };
+        let rows = [
+            att("dots", "a.pdf", "/old/attachments/x/.."),
+            att("drive", "b.pdf", "C:\\old\\attachments\\x\\c:d"),
+            att("empty", "c.pdf", ""),
+            att("none", "..", "/old/attachments/x/"),
+            att("unix", "con.pdf", "/old/attachments/x/con.pdf"),
+            att("up", "d.pdf", "../../anna.pdf"),
+            att("win", "aux.txt", "C:\\old\\attachments\\x\\aux.txt"),
+        ];
+
+        import_attachment_rows(&conn, &rows, data, true).unwrap();
+
+        let mut stmt = conn.prepare("SELECT id, local_path FROM attachments ORDER BY id").unwrap();
+        let stored: Vec<(String, String)> = stmt
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        let row = |id: &str, on_disk: &str| {
+            let path = data.join("attachments").join(&mail).join(on_disk).to_string_lossy().to_string();
+            (id.to_string(), path)
+        };
+        assert_eq!(
+            stored,
+            vec![
+                row("dots", "a.pdf"),
+                row("drive", "b.pdf"),
+                row("empty", "c.pdf"),
+                row("unix", "con.pdf"),
+                row("up", "anna.pdf"),
+                row("win", "aux.txt"),
             ]
         );
     }
