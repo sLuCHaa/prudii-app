@@ -82,6 +82,21 @@ impl std::fmt::Debug for CreateAccountRequest {
     }
 }
 
+/// Incoming-server settings of an existing account; omitted fields stay as they are.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct UpdateAccountSettings {
+    #[serde(default)]
+    pub incoming_protocol: Option<String>,
+    #[serde(default)]
+    pub incoming_security: Option<String>,
+    #[serde(default)]
+    pub pop3_delete_mode: Option<String>,
+    #[serde(default)]
+    pub pop3_delete_after_days: Option<i64>,
+    #[serde(default)]
+    pub pop3_delete_with_local: Option<bool>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Folder {
     pub id: String,

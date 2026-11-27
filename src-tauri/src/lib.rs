@@ -1080,6 +1080,7 @@ pub fn run() {
             commands::accounts::rename_folder,
             commands::accounts::update_folder_color,
             commands::accounts::test_imap_connection,
+            commands::accounts::test_pop3_connection,
             commands::accounts::start_oauth,
             commands::mails::list_mails,
             commands::mails::list_filtered_mails,

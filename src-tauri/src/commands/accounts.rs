@@ -2,12 +2,17 @@ use crate::credentials;
 use crate::db::Database;
 use crate::gmail;
 use crate::outlook;
-use crate::commands::mails::{is_pop3_account, POP3_NOT_SUPPORTED};
+use crate::pop3::{self, Pop3Client, Pop3Error, Pop3Security};
+use crate::commands::mails::POP3_NOT_SUPPORTED;
 use crate::models::{
-    Account, CreateAccountRequest, Folder, DEFAULT_INCOMING_PROTOCOL, DEFAULT_INCOMING_SECURITY,
-    DEFAULT_POP3_DELETE_AFTER_DAYS, DEFAULT_POP3_DELETE_MODE, DEFAULT_POP3_DELETE_WITH_LOCAL,
+    Account, CreateAccountRequest, Folder, UpdateAccountSettings, DEFAULT_INCOMING_PROTOCOL,
+    DEFAULT_INCOMING_SECURITY, DEFAULT_POP3_DELETE_AFTER_DAYS, DEFAULT_POP3_DELETE_MODE,
+    DEFAULT_POP3_DELETE_WITH_LOCAL,
 };
+use std::future::Future;
+use std::time::Duration;
 use tauri::State;
+use tokio::io::{AsyncRead, AsyncWrite};
 
 /// API type for an account — determines which backend to use for folder operations.
 enum FolderApiType { Gmail, Outlook, Imap, Pop3 }
@@ -88,28 +93,28 @@ pub fn list_accounts_inner(conn: &rusqlite::Connection) -> Result<Vec<Account>, 
 }
 
 /// The account a new one with this address takes the place of.
-/// - Same provider + auth_type → re-add after failed attempt: clean up and replace.
-/// - Different provider/auth_type → reject with a clear error so users notice that
+/// - Same provider, auth_type and protocol → re-add after failed attempt: clean up and replace.
+/// - Any of them different → reject with a clear error so users notice that
 ///   their OAuth provider returned an email belonging to an existing account
 ///   (e.g. Outlook configured with a Gmail address as primary).
-fn replaceable_id(conn: &rusqlite::Connection, email: &str, provider: &str, auth_type: &str) -> Result<Option<String>, String> {
-    let existing: Option<(String, String, String)> = conn
+fn replaceable_id(conn: &rusqlite::Connection, email: &str, provider: &str, auth_type: &str, incoming_protocol: &str) -> Result<Option<String>, String> {
+    let existing: Option<(String, String, String, String)> = conn
         .query_row(
-            "SELECT id, provider, auth_type FROM accounts WHERE email = ?1",
+            "SELECT id, provider, auth_type, incoming_protocol FROM accounts WHERE email = ?1",
             rusqlite::params![email],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )
         .ok();
-    let Some((old_id, old_provider, old_auth_type)) = existing else {
+    let Some((old_id, old_provider, old_auth_type, old_protocol)) = existing else {
         return Ok(None);
     };
-    if old_provider != provider || old_auth_type != auth_type {
+    if old_provider != provider || old_auth_type != auth_type || old_protocol != incoming_protocol {
         return Err(format!(
             "EMAIL_PROVIDER_CONFLICT|{}|{}|{}",
             email, old_provider, old_auth_type
         ));
     }
-    if is_pop3_account(conn, &old_id) {
+    if old_protocol == "pop3" {
         return Err(pop3_account_exists(email));
     }
     Ok(Some(old_id))
@@ -120,33 +125,163 @@ pub(crate) fn pop3_account_exists(email: &str) -> String {
     format!("POP3_ACCOUNT_EXISTS|{}", email)
 }
 
+const POP3_LOCAL_FOLDERS: [(&str, &str); 5] = [
+    ("inbox", "INBOX"),
+    ("sent", "Sent"),
+    ("drafts", "Drafts"),
+    ("trash", "Trash"),
+    ("archive", "Archive"),
+];
+
+fn check_incoming(update: &UpdateAccountSettings) -> Result<(), String> {
+    if let Some(protocol) = update.incoming_protocol.as_deref() {
+        if !["imap", "pop3"].contains(&protocol) {
+            return Err(format!("Invalid incoming protocol: '{}'. Must be 'imap' or 'pop3'.", protocol));
+        }
+    }
+    if let Some(security) = update.incoming_security.as_deref() {
+        if !["ssl", "starttls"].contains(&security) {
+            return Err(format!("Invalid incoming security mode: '{}'. Must be 'ssl' or 'starttls'.", security));
+        }
+    }
+    if let Some(mode) = update.pop3_delete_mode.as_deref() {
+        if !["keep", "after_fetch", "after_days"].contains(&mode) {
+            return Err(format!("Invalid POP3 delete mode: '{}'.", mode));
+        }
+    }
+    if let Some(days) = update.pop3_delete_after_days {
+        if !(1..=365).contains(&days) {
+            return Err(format!("Invalid POP3 delete delay: {}. Must be 1-365 days.", days));
+        }
+    }
+    Ok(())
+}
+
+fn check_new_account(request: &CreateAccountRequest) -> Result<(), String> {
+    check_incoming(&UpdateAccountSettings {
+        incoming_protocol: request.incoming_protocol.clone(),
+        incoming_security: request.incoming_security.clone(),
+        pop3_delete_mode: request.pop3_delete_mode.clone(),
+        pop3_delete_after_days: request.pop3_delete_after_days,
+        pop3_delete_with_local: request.pop3_delete_with_local,
+    })?;
+    if request.incoming_protocol.as_deref() == Some("pop3") && request.auth_type != "password" {
+        return Err("POP3 accounts support password sign-in only.".to_string());
+    }
+    Ok(())
+}
+
+/// A pasted space would break the login and slip past the duplicate-address check.
+fn trim_pop3_request(mut request: CreateAccountRequest) -> CreateAccountRequest {
+    if request.incoming_protocol.as_deref() == Some("pop3") {
+        for field in [&mut request.email, &mut request.imap_host, &mut request.smtp_host] {
+            *field = field.trim().to_string();
+        }
+    }
+    request
+}
+
+fn trim_pop3_hosts(conn: &rusqlite::Connection, account_id: &str, imap_host: String, smtp_host: String) -> (String, String) {
+    let is_pop3 = conn
+        .query_row(
+            "SELECT incoming_protocol = 'pop3' FROM accounts WHERE id = ?1",
+            rusqlite::params![account_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+    if is_pop3 {
+        (imap_host.trim().to_string(), smtp_host.trim().to_string())
+    } else {
+        (imap_host, smtp_host)
+    }
+}
+
+fn insert_account(conn: &rusqlite::Connection, request: &CreateAccountRequest) -> Result<Account, String> {
+    check_new_account(request)?;
+    let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    let request = request.clone();
+    let account = Account {
+        id: uuid::Uuid::new_v4().to_string(),
+        email: request.email,
+        display_name: request.display_name,
+        provider: request.provider,
+        color: request.color,
+        imap_host: request.imap_host,
+        imap_port: request.imap_port,
+        smtp_host: request.smtp_host,
+        smtp_port: request.smtp_port,
+        smtp_security: request.smtp_security,
+        auth_type: request.auth_type,
+        signature_id: None,
+        signature_html: String::new(),
+        signature_text: String::new(),
+        signature_on_compose: true,
+        signature_on_reply: true,
+        sync_interval_minutes: 5,
+        load_external_images: "always".to_string(),
+        created_at: now.clone(),
+        updated_at: now,
+        incoming_protocol: request.incoming_protocol.unwrap_or_else(|| DEFAULT_INCOMING_PROTOCOL.to_string()),
+        incoming_security: request.incoming_security.unwrap_or_else(|| DEFAULT_INCOMING_SECURITY.to_string()),
+        pop3_delete_mode: request.pop3_delete_mode.unwrap_or_else(|| DEFAULT_POP3_DELETE_MODE.to_string()),
+        pop3_delete_after_days: request.pop3_delete_after_days.unwrap_or(DEFAULT_POP3_DELETE_AFTER_DAYS),
+        pop3_delete_with_local: request.pop3_delete_with_local.unwrap_or(DEFAULT_POP3_DELETE_WITH_LOCAL),
+    };
+
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+    tx.execute(
+        "INSERT INTO accounts (id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port, smtp_security, auth_type, created_at, updated_at, incoming_protocol, incoming_security, pop3_delete_mode, pop3_delete_after_days, pop3_delete_with_local) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+        rusqlite::params![account.id, account.email, account.display_name, account.provider, account.color, account.imap_host, account.imap_port, account.smtp_host, account.smtp_port, account.smtp_security, account.auth_type, account.created_at, account.updated_at, account.incoming_protocol, account.incoming_security, account.pop3_delete_mode, account.pop3_delete_after_days, account.pop3_delete_with_local],
+    )
+    .map_err(|e| e.to_string())?;
+    if account.incoming_protocol == "pop3" {
+        for (folder_type, path) in POP3_LOCAL_FOLDERS {
+            tx.execute(
+                "INSERT INTO folders (id, account_id, name, folder_type, path, is_local) VALUES (?1, ?2, ?3, ?4, ?3, 0)",
+                rusqlite::params![uuid::Uuid::new_v4().to_string(), account.id, path, folder_type],
+            )
+            .map_err(|e| format!("Failed to create folder: {}", e))?;
+        }
+    }
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(account)
+}
+
+fn apply_incoming_settings(conn: &rusqlite::Connection, account_id: &str, update: &UpdateAccountSettings) -> Result<(), String> {
+    check_incoming(update)?;
+    if let Some(wanted) = update.incoming_protocol.as_deref() {
+        let current: String = conn
+            .query_row(
+                "SELECT incoming_protocol FROM accounts WHERE id = ?1",
+                rusqlite::params![account_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| format!("Account not found: {}", e))?;
+        if current != wanted {
+            return Err("PROTOCOL_CHANGE_UNSUPPORTED".to_string());
+        }
+    }
+    conn.execute(
+        "UPDATE accounts SET incoming_security = COALESCE(?1, incoming_security), pop3_delete_mode = COALESCE(?2, pop3_delete_mode), pop3_delete_after_days = COALESCE(?3, pop3_delete_after_days), pop3_delete_with_local = COALESCE(?4, pop3_delete_with_local) WHERE id = ?5",
+        rusqlite::params![update.incoming_security, update.pop3_delete_mode, update.pop3_delete_after_days, update.pop3_delete_with_local, account_id],
+    )
+    .map_err(|e| format!("Failed to update account settings: {}", e))?;
+    Ok(())
+}
+
 #[tauri::command(async)]
 pub fn create_account(
     app: tauri::AppHandle,
     db: State<'_, Database>,
     request: CreateAccountRequest,
 ) -> Result<Account, String> {
-    let incoming_protocol = request.incoming_protocol.unwrap_or_else(|| DEFAULT_INCOMING_PROTOCOL.to_string());
-    let incoming_security = request.incoming_security.unwrap_or_else(|| DEFAULT_INCOMING_SECURITY.to_string());
-    let pop3_delete_mode = request.pop3_delete_mode.unwrap_or_else(|| DEFAULT_POP3_DELETE_MODE.to_string());
-    let pop3_delete_after_days = request.pop3_delete_after_days.unwrap_or(DEFAULT_POP3_DELETE_AFTER_DAYS);
-    let pop3_delete_with_local = request.pop3_delete_with_local.unwrap_or(DEFAULT_POP3_DELETE_WITH_LOCAL);
-    if !["imap", "pop3"].contains(&incoming_protocol.as_str()) {
-        return Err(format!("Invalid incoming protocol: '{}'. Must be 'imap' or 'pop3'.", incoming_protocol));
-    }
-    if !["ssl", "starttls"].contains(&incoming_security.as_str()) {
-        return Err(format!("Invalid incoming security mode: '{}'. Must be 'ssl' or 'starttls'.", incoming_security));
-    }
-    if !["keep", "after_fetch", "after_days"].contains(&pop3_delete_mode.as_str()) {
-        return Err(format!("Invalid POP3 delete mode: '{}'.", pop3_delete_mode));
-    }
-    if pop3_delete_after_days < 0 {
-        return Err(format!("Invalid POP3 delete delay: {}", pop3_delete_after_days));
-    }
+    check_new_account(&request)?;
+    let request = trim_pop3_request(request);
+    let incoming_protocol = request.incoming_protocol.as_deref().unwrap_or(DEFAULT_INCOMING_PROTOCOL);
 
     let conn = db.lock_db();
 
-    if let Some(old_id) = replaceable_id(&conn, &request.email, &request.provider, &request.auth_type)? {
+    if let Some(old_id) = replaceable_id(&conn, &request.email, &request.provider, &request.auth_type, incoming_protocol)? {
         log::info!("Cleaning up existing account {} before re-add (same provider)", old_id);
         // Mirror delete_account's teardown — an orphaned IDLE watcher would
         // reconnect to the mailbox forever.
@@ -178,50 +313,17 @@ pub fn create_account(
         conn.execute_batch("COMMIT").map_err(|e| format!("Failed to commit cleanup: {}", e))?;
     }
 
-    let id = uuid::Uuid::new_v4().to_string();
-    let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
-
-    conn.execute(
-        "INSERT INTO accounts (id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port, smtp_security, auth_type, created_at, updated_at, incoming_protocol, incoming_security, pop3_delete_mode, pop3_delete_after_days, pop3_delete_with_local) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
-        rusqlite::params![id, request.email, request.display_name, request.provider, request.color, request.imap_host, request.imap_port, request.smtp_host, request.smtp_port, request.smtp_security, request.auth_type, now, now, incoming_protocol, incoming_security, pop3_delete_mode, pop3_delete_after_days, pop3_delete_with_local],
-    )
-    .map_err(|e| e.to_string())?;
+    let account = insert_account(&conn, &request)?;
 
     drop(conn);
 
     // Stored in the system credential manager (never as plaintext in the DB). A failed
     // persist keeps the account usable this session via the in-memory cache, so the row stays.
-    if let Err(e) = credentials::store_password(&id, &request.password) {
-        log::warn!("[accounts] Password for {} not persisted, session cache only: {}", id, e);
+    if credentials::store_password(&account.id, &request.password).is_err() {
+        log::warn!("[accounts] Password for the new account not persisted, session cache only");
     }
 
-    Ok(Account {
-        id,
-        email: request.email,
-        display_name: request.display_name,
-        provider: request.provider,
-        color: request.color,
-        imap_host: request.imap_host,
-        imap_port: request.imap_port,
-        smtp_host: request.smtp_host,
-        smtp_port: request.smtp_port,
-        smtp_security: request.smtp_security,
-        auth_type: request.auth_type,
-        signature_id: None,
-        signature_html: String::new(),
-        signature_text: String::new(),
-        signature_on_compose: true,
-        signature_on_reply: true,
-        sync_interval_minutes: 5,
-        load_external_images: "always".to_string(),
-        created_at: now.clone(),
-        updated_at: now,
-        incoming_protocol,
-        incoming_security,
-        pop3_delete_mode,
-        pop3_delete_after_days,
-        pop3_delete_with_local,
-    })
+    Ok(account)
 }
 
 /// Re-store a password in the system credential manager for an existing account.
@@ -310,6 +412,7 @@ pub fn update_account_settings(
     smtp_port: i32,
     smtp_security: String,
     load_external_images: String,
+    incoming: Option<UpdateAccountSettings>,
 ) -> Result<(), String> {
     super::catch_panic(|| {
         if smtp_security != "ssl" && smtp_security != "starttls" {
@@ -327,11 +430,17 @@ pub fn update_account_settings(
         let conn = db.lock_db();
         let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
 
-        conn.execute(
+        let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+        if let Some(incoming) = &incoming {
+            apply_incoming_settings(&tx, &account_id, incoming)?;
+        }
+        let (imap_host, smtp_host) = trim_pop3_hosts(&tx, &account_id, imap_host, smtp_host);
+        tx.execute(
             "UPDATE accounts SET display_name = ?1, color = ?2, imap_host = ?3, imap_port = ?4, smtp_host = ?5, smtp_port = ?6, smtp_security = ?7, load_external_images = ?8, updated_at = ?9 WHERE id = ?10",
             rusqlite::params![display_name, color, imap_host, imap_port, smtp_host, smtp_port, smtp_security, load_external_images, now, account_id],
         )
         .map_err(|e| format!("Failed to update account settings: {}", e))?;
+        tx.commit().map_err(|e| e.to_string())?;
 
         Ok(())
     })
@@ -481,6 +590,90 @@ pub async fn test_imap_connection(
             log::warn!("IMAP connection test to {}:{} failed: {}", host, port, msg);
             msg
         })
+}
+
+// The client only limits single reads, so a trickling server needs an overall deadline.
+const POP3_TEST_TIMEOUT: Duration = Duration::from_secs(90);
+
+#[derive(serde::Serialize)]
+pub struct Pop3TestResult {
+    pub message_count: u32,
+    pub supports_uidl: bool,
+}
+
+#[tauri::command]
+pub async fn test_pop3_connection(
+    host: String,
+    port: u16,
+    security: String,
+    email: String,
+    password: String,
+) -> Result<Pop3TestResult, String> {
+    let host = host.trim();
+    let security: Pop3Security = security.parse().map_err(|e: Pop3Error| e.to_string())?;
+    let connect = pop3::connect(host, port, security);
+    pop3_test_within(POP3_TEST_TIMEOUT, connect, email.trim(), &password).await
+}
+
+async fn pop3_test_within<S: AsyncRead + AsyncWrite + Unpin>(
+    limit: Duration,
+    connect: impl Future<Output = Result<Pop3Client<S>, Pop3Error>>,
+    email: &str,
+    password: &str,
+) -> Result<Pop3TestResult, String> {
+    let test = async {
+        let client = connect.await.map_err(pop3_test_error)?;
+        test_pop3_connection_with_client(client, email, password).await
+    };
+    tokio::time::timeout(limit, test)
+        .await
+        .map_err(|_| pop3_test_error(Pop3Error::Timeout))?
+}
+
+async fn test_pop3_connection_with_client<S: AsyncRead + AsyncWrite + Unpin>(
+    mut client: Pop3Client<S>,
+    email: &str,
+    password: &str,
+) -> Result<Pop3TestResult, String> {
+    client.capa().await.map_err(pop3_test_error)?;
+    client.login(email, password).await.map_err(pop3_test_error)?;
+    let uidls = client.uidl_all().await;
+    // QUIT releases the maildrop lock; its outcome does not change the verdict.
+    let _ = client.quit().await;
+    Ok(Pop3TestResult {
+        message_count: uidls.map_err(pop3_test_error)?.len() as u32,
+        supports_uidl: true,
+    })
+}
+
+fn pop3_error_kind(error: &Pop3Error) -> &'static str {
+    match error {
+        Pop3Error::Io(_) => "io",
+        Pop3Error::Timeout => "timeout",
+        Pop3Error::Tls(_) => "tls",
+        Pop3Error::Auth(_) => "auth",
+        Pop3Error::Protocol(_) => "protocol",
+        Pop3Error::NoUidl => "no-uidl",
+        Pop3Error::Locked(_) => "locked",
+        Pop3Error::TooLarge(_) => "too-large",
+    }
+}
+
+fn pop3_test_error(error: Pop3Error) -> String {
+    log::warn!("POP3 connection test failed: {}", pop3_error_kind(&error));
+    match error {
+        Pop3Error::NoUidl => "POP3_NO_UIDL".into(),
+        Pop3Error::Locked(_) => "POP3_LOCKED".into(),
+        Pop3Error::Auth(text) => {
+            let text = text.to_ascii_uppercase();
+            if text.contains("[LOGIN-DELAY]") || text.contains("[SYS/TEMP]") {
+                "the server refused the login for now, try again later".into()
+            } else {
+                "POP3_AUTH".into()
+            }
+        }
+        other => other.to_string(),
+    }
 }
 
 #[tauri::command]
@@ -762,10 +955,414 @@ mod replace_tests {
         let db = temp_db();
         let conn = db.lock_db();
         let id = seed_account(&conn, "anna@studio-halde.example");
-        let replace = || replaceable_id(&conn, "anna@studio-halde.example", "imap", "password");
-        assert_eq!(replace(), Ok(Some(id)));
+        let replace = |protocol| replaceable_id(&conn, "anna@studio-halde.example", "imap", "password", protocol);
+        assert_eq!(replace("imap"), Ok(Some(id)));
         conn.execute("UPDATE accounts SET incoming_protocol = 'pop3'", []).unwrap();
-        assert_eq!(replace(), Err("POP3_ACCOUNT_EXISTS|anna@studio-halde.example".to_string()));
-        assert_eq!(replaceable_id(&conn, "info@studio-halde.example", "imap", "password"), Ok(None));
+        assert_eq!(replace("pop3"), Err("POP3_ACCOUNT_EXISTS|anna@studio-halde.example".to_string()));
+        assert_eq!(replaceable_id(&conn, "info@studio-halde.example", "imap", "password", "imap"), Ok(None));
+    }
+
+    #[test]
+    fn same_email_with_another_protocol_conflicts() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        seed_account(&conn, "anna@studio-halde.example");
+        let conflict = Err("EMAIL_PROVIDER_CONFLICT|anna@studio-halde.example|imap|password".to_string());
+        let replace = |protocol| replaceable_id(&conn, "anna@studio-halde.example", "imap", "password", protocol);
+        assert_eq!(replace("pop3"), conflict);
+        conn.execute("UPDATE accounts SET incoming_protocol = 'pop3'", []).unwrap();
+        assert_eq!(replace("imap"), conflict);
+    }
+}
+
+#[cfg(test)]
+mod pop3_account_tests {
+    use super::{
+        apply_incoming_settings, insert_account, list_accounts_inner, list_folders_inner,
+        replaceable_id, trim_pop3_hosts, trim_pop3_request,
+    };
+    use crate::models::{CreateAccountRequest, UpdateAccountSettings};
+    use crate::test_support::temp_db;
+
+    fn request(protocol: Option<&str>) -> CreateAccountRequest {
+        CreateAccountRequest {
+            email: "anna@studio-halde.example".into(),
+            display_name: "Anna Weber".into(),
+            provider: "custom".into(),
+            color: "#336699".into(),
+            imap_host: "pop.studio-halde.example".into(),
+            imap_port: 995,
+            smtp_host: "smtp.studio-halde.example".into(),
+            smtp_port: 465,
+            smtp_security: "ssl".into(),
+            password: "fictional".into(),
+            auth_type: "password".into(),
+            incoming_protocol: protocol.map(Into::into),
+            incoming_security: None,
+            pop3_delete_mode: None,
+            pop3_delete_after_days: None,
+            pop3_delete_with_local: None,
+        }
+    }
+
+    fn padded(protocol: Option<&str>) -> CreateAccountRequest {
+        let mut r = request(protocol);
+        r.email = " anna@studio-halde.example ".into();
+        r.imap_host = " pop.studio-halde.example	".into();
+        r.smtp_host = "smtp.studio-halde.example ".into();
+        r.password = " fictional ".into();
+        r
+    }
+
+    #[test]
+    fn pop3_request_is_trimmed_except_the_password() {
+        let r = trim_pop3_request(padded(Some("pop3")));
+        assert_eq!(r.email, "anna@studio-halde.example");
+        assert_eq!(r.imap_host, "pop.studio-halde.example");
+        assert_eq!(r.smtp_host, "smtp.studio-halde.example");
+        assert_eq!(r.password, " fictional ");
+    }
+
+    #[test]
+    fn imap_request_is_left_as_typed() {
+        for protocol in [None, Some("imap")] {
+            let r = trim_pop3_request(padded(protocol));
+            assert_eq!(r.email, " anna@studio-halde.example ");
+            assert_eq!(r.imap_host, " pop.studio-halde.example	");
+            assert_eq!(r.smtp_host, "smtp.studio-halde.example ");
+        }
+    }
+
+    #[test]
+    fn padded_pop3_email_still_conflicts() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        insert_account(&conn, &request(None)).unwrap();
+        let r = trim_pop3_request(padded(Some("pop3")));
+        let error = replaceable_id(&conn, &r.email, &r.provider, &r.auth_type, "pop3").unwrap_err();
+        assert!(error.starts_with("EMAIL_PROVIDER_CONFLICT|anna@studio-halde.example|"));
+    }
+
+    #[test]
+    fn updated_hosts_are_trimmed_for_pop3_only() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        for (protocol, imap, smtp) in [
+            ("pop3", "pop.studio-halde.example", "smtp.studio-halde.example"),
+            ("imap", " pop.studio-halde.example ", " smtp.studio-halde.example "),
+        ] {
+            let mut r = request(Some(protocol));
+            r.email = format!("{protocol}@studio-halde.example");
+            let account = insert_account(&conn, &r).unwrap();
+            let hosts = trim_pop3_hosts(
+                &conn,
+                &account.id,
+                " pop.studio-halde.example ".into(),
+                " smtp.studio-halde.example ".into(),
+            );
+            assert_eq!(hosts, (imap.to_string(), smtp.to_string()));
+        }
+    }
+
+    #[test]
+    fn create_pop3_account_creates_local_folders() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        let account = insert_account(&conn, &request(Some("pop3"))).unwrap();
+        let folders = list_folders_inner(&conn, &account.id).unwrap();
+        let rows: Vec<_> = folders.iter().map(|f| (f.folder_type.as_str(), f.path.as_str(), f.is_local)).collect();
+        assert_eq!(
+            rows,
+            [
+                ("inbox", "INBOX", false),
+                ("sent", "Sent", false),
+                ("drafts", "Drafts", false),
+                ("archive", "Archive", false),
+                ("trash", "Trash", false),
+            ]
+        );
+        assert_eq!(list_accounts_inner(&conn).unwrap()[0].incoming_protocol, "pop3");
+    }
+
+    #[test]
+    fn create_imap_account_creates_no_folders() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        let account = insert_account(&conn, &request(None)).unwrap();
+        assert_eq!(account.incoming_protocol, "imap");
+        assert!(list_folders_inner(&conn, &account.id).unwrap().is_empty());
+    }
+
+    #[test]
+    fn new_pop3_account_deletes_after_14_days_and_with_local() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        insert_account(&conn, &request(Some("pop3"))).unwrap();
+        let stored = list_accounts_inner(&conn).unwrap().remove(0);
+        assert_eq!(stored.incoming_security, "ssl");
+        assert_eq!(stored.pop3_delete_mode, "after_days");
+        assert_eq!(stored.pop3_delete_after_days, 14);
+        assert!(stored.pop3_delete_with_local);
+    }
+
+    #[test]
+    fn create_pop3_rejects_invalid_delete_days() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        for days in [0, 366] {
+            let mut r = request(Some("pop3"));
+            r.pop3_delete_after_days = Some(days);
+            assert!(insert_account(&conn, &r).is_err(), "{days}");
+        }
+        assert!(list_accounts_inner(&conn).unwrap().is_empty());
+        for days in [1, 365] {
+            let mut r = request(Some("pop3"));
+            r.email = format!("anna{days}@studio-halde.example");
+            r.pop3_delete_after_days = Some(days);
+            assert!(insert_account(&conn, &r).is_ok(), "{days}");
+        }
+    }
+
+    #[test]
+    fn create_rejects_unknown_values() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        let mut protocol = request(Some("exchange"));
+        protocol.auth_type = "password".into();
+        let mut security = request(Some("pop3"));
+        security.incoming_security = Some("none".into());
+        let mut mode = request(Some("pop3"));
+        mode.pop3_delete_mode = Some("never".into());
+        for r in [protocol, security, mode] {
+            assert!(insert_account(&conn, &r).is_err());
+        }
+        assert!(list_accounts_inner(&conn).unwrap().is_empty());
+    }
+
+    #[test]
+    fn create_pop3_rejects_oauth() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        let mut r = request(Some("pop3"));
+        r.auth_type = "oauth".into();
+        assert!(insert_account(&conn, &r).is_err());
+        assert!(list_accounts_inner(&conn).unwrap().is_empty());
+    }
+
+    #[test]
+    fn update_rejects_protocol_change() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        for (stored, wanted) in [("imap", "pop3"), ("pop3", "imap")] {
+            let mut r = request(Some(stored));
+            r.email = format!("{stored}@studio-halde.example");
+            let account = insert_account(&conn, &r).unwrap();
+            let update = UpdateAccountSettings {
+                incoming_protocol: Some(wanted.into()),
+                pop3_delete_mode: Some("keep".into()),
+                ..Default::default()
+            };
+            assert_eq!(
+                apply_incoming_settings(&conn, &account.id, &update),
+                Err("PROTOCOL_CHANGE_UNSUPPORTED".to_string())
+            );
+            let after = list_accounts_inner(&conn).unwrap().into_iter().find(|a| a.id == account.id).unwrap();
+            assert_eq!((after.incoming_protocol.as_str(), after.pop3_delete_mode.as_str()), (stored, "after_days"));
+        }
+    }
+
+    #[test]
+    fn update_changes_pop3_delete_mode() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        let mut r = request(Some("pop3"));
+        r.incoming_security = Some("starttls".into());
+        r.pop3_delete_after_days = Some(30);
+        let account = insert_account(&conn, &r).unwrap();
+        let update = UpdateAccountSettings {
+            incoming_protocol: Some("pop3".into()),
+            pop3_delete_mode: Some("after_fetch".into()),
+            ..Default::default()
+        };
+        apply_incoming_settings(&conn, &account.id, &update).unwrap();
+        let after = list_accounts_inner(&conn).unwrap().remove(0);
+        assert_eq!(after.pop3_delete_mode, "after_fetch");
+        assert_eq!(after.incoming_security, "starttls");
+        assert_eq!(after.pop3_delete_after_days, 30);
+        assert!(after.pop3_delete_with_local);
+
+        let update = UpdateAccountSettings {
+            incoming_security: Some("ssl".into()),
+            pop3_delete_after_days: Some(7),
+            pop3_delete_with_local: Some(false),
+            ..Default::default()
+        };
+        apply_incoming_settings(&conn, &account.id, &update).unwrap();
+        let after = list_accounts_inner(&conn).unwrap().remove(0);
+        assert_eq!(after.pop3_delete_mode, "after_fetch");
+        assert_eq!(after.incoming_security, "ssl");
+        assert_eq!(after.pop3_delete_after_days, 7);
+        assert!(!after.pop3_delete_with_local);
+    }
+
+    #[test]
+    fn update_rejects_invalid_pop3_values() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        let account = insert_account(&conn, &request(Some("pop3"))).unwrap();
+        for update in [
+            UpdateAccountSettings { pop3_delete_after_days: Some(0), ..Default::default() },
+            UpdateAccountSettings { pop3_delete_after_days: Some(366), ..Default::default() },
+            UpdateAccountSettings { pop3_delete_mode: Some("never".into()), ..Default::default() },
+            UpdateAccountSettings { incoming_security: Some("none".into()), ..Default::default() },
+        ] {
+            assert!(apply_incoming_settings(&conn, &account.id, &update).is_err());
+        }
+        let after = list_accounts_inner(&conn).unwrap().remove(0);
+        assert_eq!((after.pop3_delete_mode.as_str(), after.pop3_delete_after_days), ("after_days", 14));
+        assert_eq!(after.incoming_security, "ssl");
+    }
+}
+
+#[cfg(test)]
+mod pop3_connection_tests {
+    use std::sync::OnceLock;
+    use std::time::Duration;
+
+    use super::{
+        pop3_error_kind, pop3_test_within, test_pop3_connection, test_pop3_connection_with_client,
+        Pop3TestResult,
+    };
+    use crate::pop3::test_server::scripted;
+    use crate::pop3::{Pop3Client, Pop3Error};
+
+    const GREETING: (&str, &str) = ("", "+OK pop.studio-halde.example ready\r\n");
+    const CAPA: (&str, &str) = ("CAPA", "+OK\r\nUIDL\r\n.\r\n");
+    const EMAIL: &str = "anna@studio-halde.example";
+    const USER: (&str, &str) = ("USER anna@studio-halde.example", "+OK\r\n");
+
+    fn password() -> &'static str {
+        static VALUE: OnceLock<String> = OnceLock::new();
+        VALUE.get_or_init(|| uuid::Uuid::new_v4().simple().to_string())
+    }
+
+    fn pass_line() -> &'static str {
+        static LINE: OnceLock<String> = OnceLock::new();
+        LINE.get_or_init(|| format!("PASS {}", password()))
+    }
+
+    fn pass_ok() -> (&'static str, &'static str) {
+        (pass_line(), "+OK logged in\r\n")
+    }
+
+    async fn run(steps: Vec<(&'static str, &'static str)>) -> Result<Pop3TestResult, String> {
+        let mut script = vec![GREETING, CAPA];
+        script.extend(steps);
+        let (stream, server) = scripted(script);
+        let client = Pop3Client::from_stream(stream).await.expect("greeting");
+        let result = test_pop3_connection_with_client(client, EMAIL, password()).await;
+        server.await.expect("server script");
+        result
+    }
+
+    #[test]
+    fn logged_error_kind_carries_no_server_text() {
+        let reply = || "anna@studio-halde.example".to_string();
+        for (error, kind) in [
+            (Pop3Error::Io(reply()), "io"),
+            (Pop3Error::Tls(reply()), "tls"),
+            (Pop3Error::Auth(reply()), "auth"),
+            (Pop3Error::Protocol(reply()), "protocol"),
+            (Pop3Error::Locked(reply()), "locked"),
+        ] {
+            assert_eq!(pop3_error_kind(&error), kind);
+        }
+    }
+
+    #[tokio::test]
+    async fn pop3_test_reports_message_count() {
+        let result = run(vec![
+            USER,
+            pass_ok(),
+            ("UIDL", "+OK\r\n1 a1\r\n2 b2\r\n.\r\n"),
+            ("QUIT", "+OK bye\r\n"),
+        ])
+        .await
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(result).unwrap(),
+            serde_json::json!({ "message_count": 2, "supports_uidl": true })
+        );
+    }
+
+    #[tokio::test]
+    async fn pop3_test_reports_no_uidl() {
+        let result = run(vec![
+            USER,
+            pass_ok(),
+            ("UIDL", "-ERR unknown command\r\n"),
+            ("QUIT", "+OK bye\r\n"),
+        ])
+        .await;
+        assert_eq!(result.err().as_deref(), Some("POP3_NO_UIDL"));
+    }
+
+    #[tokio::test]
+    async fn pop3_test_reports_auth_error() {
+        let result = run(vec![USER, (pass_line(), "-ERR [AUTH] invalid\r\n")]).await;
+        assert_eq!(result.err().as_deref(), Some("POP3_AUTH"));
+    }
+
+    #[tokio::test]
+    async fn pop3_test_reports_locked_maildrop() {
+        let result = run(vec![USER, (pass_line(), "-ERR [IN-USE] maildrop locked\r\n")]).await;
+        assert_eq!(result.err().as_deref(), Some("POP3_LOCKED"));
+    }
+
+    #[tokio::test]
+    async fn pop3_test_does_not_blame_the_password_for_a_temporary_refusal() {
+        for reply in [
+            "-ERR [LOGIN-DELAY] wait a few minutes\r\n",
+            "-ERR [SYS/TEMP] try again later\r\n",
+        ] {
+            let error = run(vec![USER, (pass_line(), reply)]).await.err().unwrap();
+            assert_eq!(error, "the server refused the login for now, try again later");
+        }
+    }
+
+    #[tokio::test]
+    async fn pop3_test_reports_other_failures_readably() {
+        let error = run(vec![USER, (pass_line(), "<DROP>")]).await.err().unwrap();
+        assert_eq!(error, "connection error: connection closed by the server");
+    }
+
+    #[tokio::test]
+    async fn pop3_test_gives_up_on_a_silent_server() {
+        let (stream, server) = scripted(vec![GREETING, ("CAPA", "")]);
+        let result = pop3_test_within(
+            Duration::from_millis(50),
+            Pop3Client::from_stream(stream),
+            EMAIL,
+            password(),
+        )
+        .await;
+        assert_eq!(result.err().as_deref(), Some("the server did not respond in time"));
+        server.await.expect("server script");
+    }
+
+    #[tokio::test]
+    async fn pop3_test_rejects_plaintext() {
+        let result = test_pop3_connection(
+            "pop.studio-halde.example".into(),
+            110,
+            "none".into(),
+            EMAIL.into(),
+            password().into(),
+        )
+        .await;
+        assert_eq!(
+            result.err().as_deref(),
+            Some("unexpected server response: unknown security mode: none")
+        );
     }
 }
