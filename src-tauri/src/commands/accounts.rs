@@ -92,7 +92,7 @@ pub fn list_accounts_inner(conn: &rusqlite::Connection) -> Result<Vec<Account>, 
 /// - Different provider/auth_type → reject with a clear error so users notice that
 ///   their OAuth provider returned an email belonging to an existing account
 ///   (e.g. Outlook configured with a Gmail address as primary).
-fn account_to_replace(conn: &rusqlite::Connection, email: &str, provider: &str, auth_type: &str) -> Result<Option<String>, String> {
+fn replaceable_id(conn: &rusqlite::Connection, email: &str, provider: &str, auth_type: &str) -> Result<Option<String>, String> {
     let existing: Option<(String, String, String)> = conn
         .query_row(
             "SELECT id, provider, auth_type FROM accounts WHERE email = ?1",
@@ -146,7 +146,7 @@ pub fn create_account(
 
     let conn = db.lock_db();
 
-    if let Some(old_id) = account_to_replace(&conn, &request.email, &request.provider, &request.auth_type)? {
+    if let Some(old_id) = replaceable_id(&conn, &request.email, &request.provider, &request.auth_type)? {
         log::info!("Cleaning up existing account {} before re-add (same provider)", old_id);
         // Mirror delete_account's teardown — an orphaned IDLE watcher would
         // reconnect to the mailbox forever.
@@ -754,7 +754,7 @@ pub async fn start_oauth(provider: String) -> Result<OAuthResult, String> {
 
 #[cfg(test)]
 mod replace_tests {
-    use super::account_to_replace;
+    use super::replaceable_id;
     use crate::test_support::{seed_account, temp_db};
 
     #[test]
@@ -762,10 +762,10 @@ mod replace_tests {
         let db = temp_db();
         let conn = db.lock_db();
         let id = seed_account(&conn, "anna@studio-halde.example");
-        let replace = || account_to_replace(&conn, "anna@studio-halde.example", "imap", "password");
+        let replace = || replaceable_id(&conn, "anna@studio-halde.example", "imap", "password");
         assert_eq!(replace(), Ok(Some(id)));
         conn.execute("UPDATE accounts SET incoming_protocol = 'pop3'", []).unwrap();
         assert_eq!(replace(), Err("POP3_ACCOUNT_EXISTS|anna@studio-halde.example".to_string()));
-        assert_eq!(account_to_replace(&conn, "info@studio-halde.example", "imap", "password"), Ok(None));
+        assert_eq!(replaceable_id(&conn, "info@studio-halde.example", "imap", "password"), Ok(None));
     }
 }
