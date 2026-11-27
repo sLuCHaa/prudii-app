@@ -559,17 +559,7 @@ async fn do_sync_account(app: AppHandle, account: Account, account_id: String, c
 async fn do_sync_account_inner(app: &AppHandle, account: Account, account_id: &str, credential: &str, auth_type: &str) {
     // Ahead of the provider checks: POP3 wins over OAuth.
     if account.incoming_protocol == "pop3" {
-        emit_progress(app, &SyncProgress {
-            account_id: account_id.to_string(),
-            status: "error".into(),
-            folder_name: None,
-            folder_index: 0,
-            folder_count: 0,
-            folder_done: 0,
-            folder_total: 0,
-            new_mails: 0,
-            message: crate::commands::mails::POP3_NOT_SUPPORTED.into(),
-        });
+        do_pop3_sync(app, &account, credential).await;
         return;
     }
 
@@ -895,6 +885,84 @@ async fn do_sync_account_inner(app: &AppHandle, account: Account, account_id: &s
             account.provider.clone(),
         );
     }
+}
+
+fn pop3_error_message(e: &crate::pop3::Pop3Error) -> String {
+    match e {
+        crate::pop3::Pop3Error::NoUidl => {
+            "This POP3 server does not support UIDL, so Prudii cannot fetch mail from it safely.".into()
+        }
+        other => format!("POP3 sync failed: {}", other),
+    }
+}
+
+fn pop3_progress(account_id: &str, status: &str, new_mails: u32, message: String) -> SyncProgress {
+    SyncProgress {
+        account_id: account_id.to_string(),
+        status: status.into(),
+        folder_name: None,
+        folder_index: 0,
+        folder_count: 0,
+        folder_done: 0,
+        folder_total: 0,
+        new_mails,
+        message,
+    }
+}
+
+/// POP3 sync: no folders, no pending ops, no pool session and no IDLE.
+async fn do_pop3_sync(app: &AppHandle, mailbox: &Account, password: &str) {
+    let owner_id = mailbox.id.as_str();
+    emit_progress(app, &pop3_progress(owner_id, "connecting", 0, "Connecting...".into()));
+
+    let db = app.state::<Database>();
+    {
+        let conn = db.lock_db();
+        let _ = conn.execute("DELETE FROM pending_ops WHERE account_id = ?1", rusqlite::params![owner_id]);
+    }
+
+    let data_dir = db.data_dir.clone();
+    let report = match crate::pop3::sync::fetch_pop3_mails(&db, &data_dir, mailbox, password).await {
+        Ok(r) => r,
+        Err(e) => {
+            log::warn!("POP3 sync failed for account {}: {}", owner_id, e);
+            emit_progress(app, &pop3_progress(owner_id, "error", 0, pop3_error_message(&e)));
+            return;
+        }
+    };
+
+    for chunk in report.new_mail_ids.chunks(500) {
+        let remaining = crate::unsubscribe::sweep::sweep_new_mails(owner_id, chunk, &db);
+        crate::rules::apply_rules_to_mails(owner_id, &remaining, &db);
+    }
+
+    {
+        let conn = db.lock_db();
+        let _ = conn.execute(
+            "UPDATE folders SET
+                total_count = (SELECT COUNT(*) FROM mails WHERE folder_id = folders.id),
+                unread_count = (SELECT COUNT(*) FROM mails WHERE folder_id = folders.id AND is_read = 0),
+                last_sync = CASE WHEN folder_type = 'inbox' THEN datetime('now') ELSE last_sync END
+             WHERE account_id = ?1",
+            rusqlite::params![owner_id],
+        );
+        let _ = conn.execute(
+            "UPDATE accounts SET last_sync = datetime('now'), updated_at = datetime('now') WHERE id = ?1",
+            rusqlite::params![owner_id],
+        );
+    }
+
+    let total_new = report.new_mail_ids.len() as u32;
+    log::info!(
+        "POP3 sync complete for account {}: {} new, {} deleted on server, {} too large",
+        owner_id, total_new, report.deleted_on_server, report.skipped_too_large
+    );
+
+    if total_new > 0 {
+        crate::notifications::send_new_mail_notification(app, owner_id, total_new, &db);
+    }
+
+    emit_progress(app, &pop3_progress(owner_id, "done", total_new, format!("Sync complete. {} new mails.", total_new)));
 }
 
 /// Gmail REST API sync — uses batch HTTP requests instead of IMAP.
@@ -2163,6 +2231,24 @@ mod gmail_listing_tests {
         assert!(!gmail_folder_needs_listing("custom", 3, true));
         assert!(gmail_folder_needs_listing("trash", 0, false));
         assert!(gmail_folder_needs_listing("inbox", 12, false));
+    }
+}
+
+#[cfg(test)]
+mod pop3_message_tests {
+    use super::pop3_error_message;
+    use crate::pop3::Pop3Error;
+
+    #[test]
+    fn a_server_without_uidl_gets_a_clear_message() {
+        let msg = pop3_error_message(&Pop3Error::NoUidl);
+        assert!(msg.contains("UIDL") && msg.contains("safely"));
+    }
+
+    #[test]
+    fn other_errors_keep_their_detail() {
+        let msg = pop3_error_message(&Pop3Error::Auth("bad password".into()));
+        assert!(msg.starts_with("POP3 sync failed") && msg.contains("bad password"));
     }
 }
 

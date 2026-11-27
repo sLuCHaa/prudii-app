@@ -13,6 +13,7 @@ pub const MAX_MESSAGE_BYTES: u64 = 100 * 1024 * 1024;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(15);
 const READ_TIMEOUT: Duration = Duration::from_secs(60);
+const DISCARD_TIMEOUT: Duration = Duration::from_secs(120);
 const WRITE_TIMEOUT: Duration = Duration::from_secs(30);
 
 // RFC 5034, CRLF included.
@@ -162,8 +163,9 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Pop3Client<S> {
         Ok(body.data)
     }
 
-    pub async fn dele(&mut self, msg: u32) -> Result<(), Pop3Error> {
-        self.expect_ok(&format!("DELE {msg}")).await.map(drop)
+    /// The inner Err carries the text of a `-ERR` reply; the outer one is a transport or protocol failure.
+    pub async fn dele(&mut self, msg: u32) -> Result<Result<(), String>, Pop3Error> {
+        Ok(self.simple(&format!("DELE {msg}")).await?.map(drop))
     }
 
     pub async fn rset(&mut self) -> Result<(), Pop3Error> {
@@ -323,8 +325,20 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Pop3Client<S> {
             max: max_bytes,
         };
         let mut state = LineState::Start;
+        let mut discard_until: Option<tokio::time::Instant> = None;
         loop {
-            let chunk = tokio::time::timeout(READ_TIMEOUT, self.stream.fill_buf())
+            let wait = match discard_until {
+                // Without a total bound a trickling server keeps the discard alive forever.
+                Some(deadline) => {
+                    let left = deadline.saturating_duration_since(tokio::time::Instant::now());
+                    if left.is_zero() {
+                        return Err(Pop3Error::Timeout);
+                    }
+                    left.min(READ_TIMEOUT)
+                }
+                None => READ_TIMEOUT,
+            };
+            let chunk = tokio::time::timeout(wait, self.stream.fill_buf())
                 .await
                 .map_err(|_| Pop3Error::Timeout)?
                 .map_err(io_error)?;
@@ -364,6 +378,9 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Pop3Client<S> {
             self.stream.consume(used);
             if overflow == Overflow::Abort && body.total > body.max {
                 return Err(Pop3Error::Protocol("response too long".into()));
+            }
+            if discard_until.is_none() && !done && body.total > body.max {
+                discard_until = Some(tokio::time::Instant::now() + DISCARD_TIMEOUT);
             }
             if done {
                 return Ok(body);
@@ -624,6 +641,31 @@ mod tests {
         server.await.unwrap();
     }
 
+    #[tokio::test(start_paused = true)]
+    async fn trickling_oversize_reply_times_out_and_breaks_session() {
+        let (stream, mut server) = tokio::io::duplex(64 * 1024);
+        let feeder = tokio::spawn(async move {
+            server.write_all(b"+OK ready\r\n").await.unwrap();
+            let mut command = [0u8; 64];
+            let _ = server.read(&mut command).await.unwrap();
+            server.write_all(b"+OK\r\n").await.unwrap();
+            server.write_all(&[b'x'; 64]).await.unwrap();
+            loop {
+                tokio::time::sleep(Duration::from_secs(30)).await;
+                if server.write_all(b"y").await.is_err() {
+                    break;
+                }
+            }
+        });
+        let mut client = Pop3Client::from_stream(stream).await.unwrap();
+        let started = tokio::time::Instant::now();
+        let result = client.retr(1, 10).await;
+        assert!(matches!(result, Err(Pop3Error::Timeout)));
+        assert!(started.elapsed() <= DISCARD_TIMEOUT + READ_TIMEOUT);
+        assert!(matches!(client.noop().await, Err(Pop3Error::Io(_))));
+        feeder.abort();
+    }
+
     #[tokio::test]
     async fn maildrop_locked_maps_to_locked() {
         let (mut client, server) = open(vec![
@@ -660,10 +702,10 @@ mod tests {
             ("QUIT", "-ERR some messages not removed\r\n"),
         ])
         .await;
-        client.dele(1).await.unwrap();
+        client.dele(1).await.unwrap().unwrap();
         client.rset().await.unwrap();
         client.noop().await.unwrap();
-        assert!(matches!(client.dele(9).await, Err(Pop3Error::Protocol(_))));
+        assert_eq!(client.dele(9).await.unwrap(), Err("no such message".to_string()));
         assert!(client.quit().await.is_err());
         server.await.unwrap();
     }
