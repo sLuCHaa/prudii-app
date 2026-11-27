@@ -90,16 +90,39 @@ pub(crate) async fn sync_with_client<S: AsyncRead + AsyncWrite + Unpin>(
         }
     }
 
-    prune_vanished(db, data_dir, &mailbox.id, &server, &server_uidls)?;
+    let phase = delete_phase(client, db, data_dir, mailbox, &server, &server_uidls, &numbers, &sizes).await;
+    match phase {
+        Ok(deleted) => report.deleted_on_server = deleted,
+        // Mails stored in this run still need rules and notifications.
+        Err(_) if !report.new_mail_ids.is_empty() => {
+            log::warn!("POP3: server cleanup failed, retried next run");
+        }
+        Err(e) => return Err(e),
+    }
+    Ok(report)
+}
 
-    let rows = load_rows(db, &mailbox.id, &server)?;
+/// Returns the number of mails now deleted on the server; an error ends the session without QUIT.
+async fn delete_phase<S: AsyncRead + AsyncWrite + Unpin>(
+    mut client: Pop3Client<S>,
+    db: &Database,
+    data_dir: &Path,
+    mailbox: &Account,
+    server: &str,
+    server_uidls: &HashSet<String>,
+    numbers: &HashMap<&str, Option<u32>>,
+    sizes: &HashMap<u32, u64>,
+) -> Result<u32, Pop3Error> {
+    prune_vanished(db, data_dir, &mailbox.id, server, server_uidls)?;
+
+    let rows = load_rows(db, &mailbox.id, server)?;
     let mail_ids: HashMap<&str, &str> = rows
         .iter()
         .filter_map(|r| r.mail_id.as_deref().map(|m| (r.uidl.as_str(), m)))
         .collect();
     let restored: HashSet<&str> = rows.iter().filter(|r| r.state == "restored").map(|r| r.uidl.as_str()).collect();
     let mut targets: Vec<(u32, String)> = Vec::new();
-    for uidl in store::plan_deletions(Utc::now(), &delete_policy(mailbox), &rows, &server_uidls) {
+    for uidl in store::plan_deletions(Utc::now(), &delete_policy(mailbox), &rows, server_uidls) {
         match numbers.get(uidl.as_str()) {
             Some(Some(msg)) => targets.push((*msg, uidl)),
             _ => log::warn!("POP3: no unique message number for a planned delete, kept on server"),
@@ -126,7 +149,18 @@ pub(crate) async fn sync_with_client<S: AsyncRead + AsyncWrite + Unpin>(
             continue;
         }
         if restored.contains(uidl.as_str()) {
-            let raw = client.retr(msg, MAX_MESSAGE_BYTES).await?;
+            if sizes.get(&msg).is_some_and(|&size| size > MAX_MESSAGE_BYTES) {
+                log::warn!("POP3: a restored entry points to a too large message, kept on server");
+                continue;
+            }
+            let raw = match client.retr(msg, MAX_MESSAGE_BYTES).await {
+                Ok(raw) => raw,
+                Err(_) if client.is_usable() => {
+                    log::warn!("POP3: a restored entry could not be checked, kept on server");
+                    continue;
+                }
+                Err(e) => return Err(e),
+            };
             if !store::source_matches(data_dir, mail_id, &raw) {
                 log::warn!("POP3: a restored entry does not match the server message, kept on server");
                 forget_uidl(db, data_dir, &mailbox.id, &uidl, mail_id)?;
@@ -145,20 +179,22 @@ pub(crate) async fn sync_with_client<S: AsyncRead + AsyncWrite + Unpin>(
 
     if client.quit().await.is_err() {
         log::warn!("POP3: QUIT failed, server deletes are retried next run");
-        return Ok(report);
+        return Ok(0);
     }
     match mark_server_deleted(db, &mailbox.id, &deleted) {
         Ok(marked) => {
-            report.deleted_on_server = marked;
             let gone: Vec<String> = deleted
                 .iter()
                 .filter_map(|uidl| mail_ids.get(uidl.as_str()).map(|id| id.to_string()))
                 .collect();
             super::discard_orphan_sources(&db.lock_db(), data_dir, &gone);
+            Ok(marked)
         }
-        Err(e) => log::warn!("POP3: could not mark server deletes: {}", e),
+        Err(e) => {
+            log::warn!("POP3: could not mark server deletes: {}", e);
+            Ok(0)
+        }
     }
-    Ok(report)
 }
 
 // WAL with synchronous=NORMAL can lose committed rows on power loss; the server copy must not go before they are durable.
@@ -996,7 +1032,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn connection_drop_on_dele_aborts_without_marking() {
+    async fn connection_drop_on_dele_keeps_new_mails_without_marking() {
         let t = env("after_fetch");
         let result = run(&t, vec![
             uidl(&[(1, "u1"), (2, "u2")]),
@@ -1006,8 +1042,10 @@ mod tests {
             dele(1),
             ("DELE 2", "<DROP>"),
         ])
-        .await;
-        assert!(result.is_err());
+        .await
+        .unwrap();
+        assert_eq!(result.new_mail_ids.len(), 2);
+        assert_eq!(result.deleted_on_server, 0);
         let rows = uidl_rows(&t);
         assert_eq!(rows.len(), 2);
         assert!(rows.iter().all(|r| r.2 == "stored"));
@@ -1307,6 +1345,87 @@ mod tests {
         .unwrap();
         assert_eq!(report.deleted_on_server, 1);
         assert!(!crate::pop3::store::has_source(&t.dir, &mail_id));
+    }
+
+    async fn store_two_first_restored(t: &mut Env) {
+        run(t, vec![
+            uidl(&[(1, "u1"), (2, "u2")]),
+            list(&[(1, 400), (2, 400)]),
+            retr(2, &mail("m2", "Zweite")),
+            retr(1, &mail("m1", "Erste")),
+            QUIT,
+        ])
+        .await
+        .unwrap();
+        set_column(t, "u1", "state = 'restored'");
+        t.account.pop3_delete_mode = "after_fetch".into();
+    }
+
+    fn states(t: &Env) -> Vec<String> {
+        uidl_rows(t).into_iter().map(|r| r.2).collect()
+    }
+
+    #[tokio::test]
+    async fn refused_restored_check_skips_only_that_row() {
+        let mut t = env("keep");
+        store_two_first_restored(&mut t).await;
+        let report = run(&t, vec![
+            uidl(&[(1, "u1"), (2, "u2")]),
+            list(&[(1, 400), (2, 400)]),
+            ("RETR 1", "-ERR no such message
+"),
+            dele(2),
+            QUIT,
+        ])
+        .await
+        .unwrap();
+        assert_eq!(report.deleted_on_server, 1);
+        assert_eq!(states(&t), ["restored", "server_deleted"]);
+    }
+
+    #[tokio::test]
+    async fn too_large_restored_message_is_skipped_without_download() {
+        let mut t = env("keep");
+        store_two_first_restored(&mut t).await;
+        let report = run(&t, vec![
+            uidl(&[(1, "u1"), (2, "u2")]),
+            list(&[(1, MAX_MESSAGE_BYTES + 1), (2, 400)]),
+            dele(2),
+            QUIT,
+        ])
+        .await
+        .unwrap();
+        assert_eq!(report.deleted_on_server, 1);
+        assert_eq!(states(&t), ["restored", "server_deleted"]);
+    }
+
+    #[tokio::test]
+    async fn connection_drop_on_restored_check_keeps_new_mails() {
+        let mut t = env("keep");
+        store_first(&t).await;
+        set_column(&t, "u1", "state = 'restored'");
+        t.account.pop3_delete_mode = "after_fetch".into();
+        let report = run(&t, vec![
+            uidl(&[(1, "u1"), (2, "u2")]),
+            list(&[(1, 400), (2, 400)]),
+            retr(2, &mail("m2", "Zweite")),
+            ("RETR 1", "<DROP>"),
+        ])
+        .await
+        .unwrap();
+        assert_eq!(report.new_mail_ids, vec![mail_of(&t, "u2")]);
+        assert_eq!(report.deleted_on_server, 0);
+        assert_eq!(states(&t), ["restored", "stored"]);
+    }
+
+    #[tokio::test]
+    async fn connection_drop_without_new_mails_is_an_error() {
+        let mut t = env("keep");
+        store_two_first_restored(&mut t).await;
+        let result = run(&t, vec![uidl(&[(1, "u1"), (2, "u2")]), list(&[(1, 400), (2, 400)]), ("RETR 1", "<DROP>")])
+            .await;
+        assert!(result.is_err());
+        assert_eq!(states(&t), ["restored", "stored"]);
     }
 
     #[tokio::test]
