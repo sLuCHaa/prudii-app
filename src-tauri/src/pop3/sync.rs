@@ -103,6 +103,13 @@ pub(crate) async fn sync_with_client<S: AsyncRead + AsyncWrite + Unpin>(
     }
     targets.sort();
 
+    if !targets.is_empty() {
+        if let Err(e) = flush_database(db) {
+            log::warn!("POP3 {}: database not flushed, server deletes skipped this run: {}", account.id, e);
+            targets.clear();
+        }
+    }
+
     let mut deleted = Vec::new();
     for (msg, uidl) in targets {
         let Some(mail_id) = mail_ids.get(uidl.as_str()) else { continue };
@@ -125,6 +132,18 @@ pub(crate) async fn sync_with_client<S: AsyncRead + AsyncWrite + Unpin>(
         Err(e) => log::warn!("POP3 {}: could not mark server deletes: {}", account.id, e),
     }
     Ok(report)
+}
+
+// WAL with synchronous=NORMAL can lose committed rows on power loss; the server copy must not go before they are durable.
+fn flush_database(db: &Database) -> Result<(), Pop3Error> {
+    let busy: i64 = db
+        .lock_db()
+        .query_row("PRAGMA wal_checkpoint(FULL)", [], |r| r.get(0))
+        .map_err(db_error)?;
+    if busy != 0 {
+        return Err(Pop3Error::Database("checkpoint blocked".into()));
+    }
+    Ok(())
 }
 
 fn skip_too_large(report: &mut Pop3SyncReport, account: &Account, uidl: &str, size: u64) {
@@ -161,7 +180,8 @@ async fn store_fetched(
         InsertOutcome::Existing(existing) => {
             let mapped = if store::has_source(data_dir, &existing) {
                 remove_source(data_dir, &mail_id);
-                let same = store::read_source(data_dir, &existing).is_ok_and(|stored| stored == raw);
+                let stored = store::read_source(data_dir, &existing).map_err(|e| Pop3Error::Storage(e.to_string()))?;
+                let same = stored == raw;
                 if !same {
                     log::warn!(
                         "POP3 {}: message {} reuses the Message-ID of mail {}, left on the server",
@@ -170,14 +190,11 @@ async fn store_fetched(
                 }
                 same
             } else {
-                match store::move_source(data_dir, &mail_id, &existing) {
-                    Ok(()) => true,
-                    Err(e) => {
-                        log::warn!("POP3 {}: could not attach the raw source to mail {}: {}", account_id, existing, e);
-                        remove_source(data_dir, &mail_id);
-                        false
-                    }
+                if let Err(e) = store::move_source(data_dir, &mail_id, &existing) {
+                    remove_source(data_dir, &mail_id);
+                    return Err(Pop3Error::Storage(e.to_string()));
                 }
+                true
             };
             record_uidl(db, account_id, uidl, mapped.then_some(existing.as_str()))?;
             Ok(None)
@@ -626,6 +643,22 @@ mod tests {
         assert!(report.new_mail_ids.is_empty());
         assert_eq!(mail_of(&t, "u9"), mail_id);
         assert!(crate::pop3::store::has_source(&t.dir, &mail_id));
+        assert_eq!(source_files(&t), 1);
+    }
+
+    #[tokio::test]
+    async fn failed_source_attach_aborts_without_uidl_row() {
+        let t = env("after_fetch");
+        run(&t, vec![uidl(&[(1, "u1")]), list(&[(1, 400)]), retr(1, &mail("m1", "Erste")), dele(1), QUIT])
+            .await
+            .unwrap();
+        let mail_id = mail_of(&t, "u1");
+        let path = crate::pop3::store::source_path(&t.dir, &mail_id);
+        std::fs::remove_file(&path).unwrap();
+        std::fs::create_dir(&path).unwrap();
+        let result = run(&t, vec![uidl(&[(1, "u1"), (2, "u9")]), list(&[(1, 400), (2, 400)]), retr(2, &mail("m1", "Erste"))]).await;
+        assert!(matches!(result, Err(Pop3Error::Storage(_))));
+        assert_eq!(uidl_rows(&t).len(), 1);
         assert_eq!(source_files(&t), 1);
     }
 

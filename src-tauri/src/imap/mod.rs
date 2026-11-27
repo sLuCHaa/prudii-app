@@ -1200,7 +1200,7 @@ pub enum InsertOutcome {
     NotStored,
 }
 
-struct LocalMailFields {
+pub(crate) struct LocalMailFields {
     subject: String,
     from_name: String,
     from_email: String,
@@ -1222,7 +1222,7 @@ struct LocalMailFields {
     high_priority: bool,
 }
 
-fn local_mail_fields(raw_bytes: &[u8]) -> Option<LocalMailFields> {
+pub(crate) fn local_mail_fields(raw_bytes: &[u8]) -> Option<LocalMailFields> {
     let msg = MessageParser::default().parse(raw_bytes)?;
 
     let subject = msg.subject().unwrap_or_default().to_string();
@@ -1365,7 +1365,7 @@ fn insert_local_row(
     size: i64,
     is_read: bool,
 ) -> Result<usize> {
-    // uid = NULL (claimed by the next sync via Message-ID); the star/flag/reply/forward flags default to 0.
+    // uid = NULL; the star/flag/reply/forward flags default to 0.
     conn.execute(
         "INSERT OR IGNORE INTO mails (id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, body_text, body_html, is_read, is_starred, is_flagged, is_replied, is_forwarded, has_attachments, thread_id, in_reply_to, size_bytes, list_unsubscribe, reply_to_json, \"references\", signal_headers, high_priority) VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?24, 0, 0, 0, 0, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)",
         rusqlite::params![
@@ -2862,7 +2862,6 @@ mod invite_tests {
     }
 }
 
-
 #[cfg(test)]
 mod local_mail_tests {
     use super::{insert_local_mail, insert_local_sent_mail, InsertOutcome};
@@ -2933,19 +2932,18 @@ mod local_mail_tests {
     }
 
     #[test]
-    fn unparseable_bytes_become_placeholder_with_raw_sender() {
-        let (db, account, folder) = setup();
+    fn placeholder_fields_keep_the_raw_sender() {
         let raw = b"From: Anna Weber <anna@studio-halde.example>\r\n\xff\xfe\x00 not a header";
-        let outcome = insert_local_mail(&db, &account, &folder, "m1", raw, false).unwrap();
-        assert!(matches!(outcome, InsertOutcome::Inserted(_)));
-        let (subject, from, _, _) = row(&db, "m1");
-        assert_eq!(subject, "");
-        assert_eq!(from, "anna@studio-halde.example");
+        let f = super::placeholder_mail_fields(raw);
+        assert_eq!(f.subject, "");
+        assert_eq!(f.from_name, "Anna Weber");
+        assert_eq!(f.from_email, "anna@studio-halde.example");
     }
 
     #[test]
     fn empty_bytes_still_insert_a_placeholder() {
         let (db, account, folder) = setup();
+        assert!(super::local_mail_fields(b"").is_none());
         let outcome = insert_local_mail(&db, &account, &folder, "m1", b"", false).unwrap();
         assert!(matches!(outcome, InsertOutcome::Inserted(_)));
         assert_eq!(row(&db, "m1").0, "");

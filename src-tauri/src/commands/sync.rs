@@ -930,12 +930,21 @@ async fn do_pop3_sync(app: &AppHandle, account: &Account, account_id: &str, pass
         }
     };
 
-    if !report.new_mail_ids.is_empty() {
-        crate::rules::apply_rules_to_mails(account_id, &report.new_mail_ids, &db);
+    for chunk in report.new_mail_ids.chunks(500) {
+        let remaining = crate::unsubscribe::sweep::sweep_new_mails(account_id, chunk, &db);
+        crate::rules::apply_rules_to_mails(account_id, &remaining, &db);
     }
 
     {
         let conn = db.lock_db();
+        let _ = conn.execute(
+            "UPDATE folders SET
+                total_count = (SELECT COUNT(*) FROM mails WHERE folder_id = folders.id),
+                unread_count = (SELECT COUNT(*) FROM mails WHERE folder_id = folders.id AND is_read = 0),
+                last_sync = CASE WHEN folder_type = 'inbox' THEN datetime('now') ELSE last_sync END
+             WHERE account_id = ?1",
+            rusqlite::params![account_id],
+        );
         let _ = conn.execute(
             "UPDATE accounts SET last_sync = datetime('now'), updated_at = datetime('now') WHERE id = ?1",
             rusqlite::params![account_id],
