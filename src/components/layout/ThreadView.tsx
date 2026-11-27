@@ -48,6 +48,7 @@ import { MailSourceView } from "./MailSourceView";
 import { AiSummaryButton, AiSummaryPanel } from "../ai/AiSummary";
 import { AiReplyButton, AiReplySuggestionsPanel } from "../ai/AiReplySuggestions";
 import { useDialog } from "../ui/DialogProvider";
+import { confirmMailDelete, deletesOnPop3Server } from "../../lib/pop3Delete";
 import { ContextMenu } from "../ui/ContextMenu";
 import type { MenuEntry } from "../../lib/menuModel";
 import { useMailTasks, useLinkMailToTask } from "../../hooks/useTasks";
@@ -1761,12 +1762,13 @@ export function ThreadView({ mail }: ThreadViewProps) {
   }, [mail.id]);
 
   const handleTrash = useCallback(async () => {
-    // Only confirm when permanently deleting from trash
-    if (isInTrash) {
-      const confirmed = await dialog.danger({
+    // Only confirm when permanently deleting; opened from search, the selected folder does not tell.
+    if (isInTrash || deletesOnPop3Server()) {
+      const question = {
         title: t("mailDetail.trash"),
         message: t("mailDetail.permanentDeleteConfirm", { name: mail.subject || t("compose.noSubject") }),
-      });
+      };
+      const confirmed = await confirmMailDelete(dialog.danger, t, [mail.id], isInTrash ? question : undefined);
       if (!confirmed) return;
     }
     // Same exit path as archive: the list plays the row sweep and picks the next mail.

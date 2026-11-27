@@ -1877,6 +1877,13 @@
       "sooner": "S’applique aussi aux e-mails déjà relevés : tout ce qui arrive à échéance selon la nouvelle règle sera supprimé du serveur à la prochaine synchronisation.",
       "withLocal": "Les e-mails déjà effacés définitivement ici seront alors aussi supprimés du serveur à la prochaine synchronisation."
     },
+    "deleteWarning": {
+      "title": "Supprimer aussi sur le serveur ?",
+      "mails_one": "{{count}} e-mail sera ainsi aussi supprimé immédiatement du serveur.",
+      "mails_other": "{{count}} e-mails seront ainsi aussi supprimés immédiatement du serveur.",
+      "folder": "Les e-mails de ce compte POP3 seront ainsi aussi supprimés immédiatement du serveur.",
+      "combined": "Les e-mails des comptes POP3 réglés ainsi seront aussi supprimés immédiatement du serveur."
+    },
     "appPasswordGmail": "Gmail exige un mot de passe d'application pour POP3, et POP doit être activé dans les paramètres de Gmail.",
     "appPasswordFastmail": "Fastmail exige un mot de passe d'application pour POP3.",
     "enableHint": "POP3 doit être activé dans les paramètres de {{provider}}.",

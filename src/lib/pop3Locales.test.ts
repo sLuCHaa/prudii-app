@@ -12,6 +12,7 @@ const KEYS = [
   "rule.keep", "rule.afterFetch", "rule.withLocal", "rule.withoutLocal", "rule.localOnly",
   "appPasswordGmail", "appPasswordFastmail", "enableHint", "enableLink", "testing",
   "serverSettingsDesc", "serverChangeHint", "deleteAccountBody", "ruleChange.sooner", "ruleChange.withLocal",
+  "deleteWarning.title", "deleteWarning.folder", "deleteWarning.combined",
   "error.noUidl.title", "error.noUidl.detail", "error.locked.title", "error.locked.detail",
   "error.tryLater.title", "error.tryLater.detail", "error.auth.generic", "error.auth.gmail",
   "error.auth.fastmail", "error.auth.enable", "error.protocolConflict", "error.accountExists", "error.protocolChange",
@@ -34,7 +35,7 @@ const PLACEHOLDERS: Record<string, string[]> = {
   "error.accountExists": ["{{email}}"],
 };
 
-const SENTENCES = KEYS.filter((k) => /^rule\.|^ruleChange\.|^error\.|Hint$|Desc$|Body$|^appPassword/.test(k));
+const SENTENCES = KEYS.filter((k) => /^rule\.|^ruleChange\.|^deleteWarning\.|^error\.|Hint$|Desc$|Body$|^appPassword/.test(k));
 
 const read = (block: unknown, path: string) =>
   path.split(".").reduce<unknown>((node, k) => (node as Record<string, unknown> | undefined)?.[k], block);
@@ -42,7 +43,7 @@ const read = (block: unknown, path: string) =>
 describe("POP3 translations", () => {
   for (const [lang, data] of Object.entries({ en, de, es, fr, pt, ru, zh })) {
     const block = (data as Record<string, unknown>).pop3;
-    const plurals = PLURALS[lang].map((s) => `rule.afterDays_${s}`);
+    const plurals = ["rule.afterDays", "deleteWarning.mails"].flatMap((k) => PLURALS[lang].map((s) => `${k}_${s}`));
 
     it(`${lang} has every POP3 text`, () => {
       const missing = [...KEYS, ...plurals].filter((k) => {

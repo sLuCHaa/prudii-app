@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 pub const DEFAULT_INCOMING_PROTOCOL: &str = "imap";
 pub const DEFAULT_INCOMING_SECURITY: &str = "ssl";
 pub const DEFAULT_POP3_DELETE_MODE: &str = "after_days";
-pub const DEFAULT_POP3_DELETE_WITH_LOCAL: bool = true;
+pub const DEFAULT_POP3_DELETE_WITH_LOCAL: bool = false;
 pub const DEFAULT_POP3_DELETE_AFTER_DAYS: i64 = 14;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

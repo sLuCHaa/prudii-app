@@ -8,7 +8,7 @@ export interface Pop3Rule {
   withLocal: boolean;
 }
 
-export const DEFAULT_POP3_RULE: Pop3Rule = { mode: "after_days", days: 14, withLocal: true };
+export const DEFAULT_POP3_RULE: Pop3Rule = { mode: "after_days", days: 14, withLocal: false };
 
 const MODE_SENTENCE: Record<Pop3DeleteMode, string> = {
   keep: "pop3.rule.keep",

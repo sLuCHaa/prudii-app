@@ -1872,6 +1872,12 @@
       "sooner": "也适用于已收取的邮件：按照新规则到期的邮件将在下次同步时从服务器删除。",
       "withLocal": "此前在此永久删除的邮件，也会在下次同步时从服务器删除。"
     },
+    "deleteWarning": {
+      "title": "同时从服务器删除？",
+      "mails_other": "{{count}} 封邮件会立即同时从服务器删除。",
+      "folder": "此 POP3 账户的邮件会立即同时从服务器删除。",
+      "combined": "已开启此设置的 POP3 账户的邮件会立即同时从服务器删除。"
+    },
     "appPasswordGmail": "Gmail 使用 POP3 需要应用专用密码，并且须在 Gmail 设置中开启 POP。",
     "appPasswordFastmail": "Fastmail 使用 POP3 需要应用专用密码。",
     "enableHint": "须在 {{provider}} 的设置中开启 POP3。",

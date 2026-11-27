@@ -1877,6 +1877,13 @@
       "sooner": "Vale também para e-mails já baixados: o que vencer pela nova regra será excluído do servidor na próxima sincronização.",
       "withLocal": "Os e-mails que você já apagou definitivamente aqui também serão excluídos do servidor na próxima sincronização."
     },
+    "deleteWarning": {
+      "title": "Excluir também no servidor?",
+      "mails_one": "Com isso, {{count}} e-mail também é excluído imediatamente no servidor.",
+      "mails_other": "Com isso, {{count}} e-mails também são excluídos imediatamente no servidor.",
+      "folder": "Com isso, os e-mails desta conta POP3 também são excluídos imediatamente no servidor.",
+      "combined": "Os e-mails das contas POP3 configuradas assim também são excluídos imediatamente no servidor."
+    },
     "appPasswordGmail": "O Gmail exige uma senha de app para POP3, e o POP precisa estar ativado nas configurações do Gmail.",
     "appPasswordFastmail": "O Fastmail exige uma senha de app para POP3.",
     "enableHint": "O POP3 precisa estar ativado nas configurações do {{provider}}.",

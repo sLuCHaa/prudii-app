@@ -31,7 +31,7 @@ describe("describePop3Rule", () => {
   it("words the default rule", async () => {
     const t = await german();
     expect(describePop3Rule(t, DEFAULT_POP3_RULE)).toBe(
-      "Mails werden 14 Tage nach dem Abruf vom Server gelöscht. Endgültig gelöschte Mails werden sofort auch auf dem Server gelöscht.",
+      "Mails werden 14 Tage nach dem Abruf vom Server gelöscht. Endgültiges Löschen hier löst keine Löschung auf dem Server aus.",
     );
   });
 
@@ -46,6 +46,10 @@ describe("describePop3Rule", () => {
     expect(describePop3Rule(t, { ...DEFAULT_POP3_RULE, mode: "after_fetch" })).toContain(
       "Mails werden direkt nach dem Abruf vom Server gelöscht.",
     );
+  });
+
+  it("leaves the delete-with-local switch off by default", () => {
+    expect(DEFAULT_POP3_RULE.withLocal).toBe(false);
   });
 
   it("says when local deletion stays local", async () => {

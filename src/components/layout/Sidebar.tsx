@@ -42,6 +42,8 @@ import { Tooltip } from "../ui/Tooltip";
 import { SidebarTools } from "./SidebarTools";
 import { takesCopy } from "../../lib/moveTargets";
 import { copyToOtherAccount } from "../../lib/copyMail";
+import { useMailDeleteGuard } from "../../hooks/useMailDeleteGuard";
+import { withServerDeleteWarning } from "../../lib/pop3Delete";
 import { accountCategoriesStartOpen, categoriesFoldKey, isFoldOpen, ownFoldersFoldKey, splitFolders } from "../../lib/sidebarFolds";
 import { visibleCategories } from "../../lib/categories";
 
@@ -364,6 +366,7 @@ export function AccountSection({ account, collapsed }: { account: AccountType; c
   const removeAccount = useRemoveAccount();
   const queryClient = useQueryClient();
   const dialog = useDialog();
+  const guardDelete = useMailDeleteGuard();
   const warmTimer = useRef(0);
   useEffect(() => () => window.clearTimeout(warmTimer.current), []);
 
@@ -450,7 +453,7 @@ export function AccountSection({ account, collapsed }: { account: AccountType; c
     if (mailAccountId !== account.id) {
       if (takesCopy(account, folder)) {
         noteDropTarget(folderEl);
-        void copyToOtherAccount(queryClient, { id: mailId }, folder, account);
+        void copyToOtherAccount(queryClient, { id: mailId }, folder, account, guardDelete);
         return;
       }
       await dialog.alert({
@@ -511,7 +514,7 @@ export function AccountSection({ account, collapsed }: { account: AccountType; c
 
     const confirmed = await dialog.danger({
       title: t("folder.deleteFolder"),
-      message: t("folder.deleteFolderConfirm", { name: folder.name }),
+      message: withServerDeleteWarning(t, t("folder.deleteFolderConfirm", { name: folder.name }), "folder", account.id),
       confirmLabel: t("common.delete"),
       cancelLabel: t("common.cancel"),
     });
@@ -555,7 +558,7 @@ export function AccountSection({ account, collapsed }: { account: AccountType; c
 
     const confirmed = await dialog.danger({
       title: t("folder.emptyConfirmTitle", { name: folderName }),
-      message: t("folder.emptyConfirmMessage", { count: mailCount, name: folderName }),
+      message: withServerDeleteWarning(t, t("folder.emptyConfirmMessage", { count: mailCount, name: folderName }), "folder", account.id),
       confirmLabel: t("folder.emptyConfirmButton"),
       cancelLabel: t("common.cancel"),
     });
@@ -1072,7 +1075,7 @@ function CombinedFoldersSection({ collapsed }: { collapsed: boolean }) {
 
     const confirmed = await dialog.danger({
       title: t("folder.emptyConfirmTitle", { name: folderName }),
-      message: t("folder.emptyConfirmMessage", { count: mailCount, name: folderName }),
+      message: withServerDeleteWarning(t, t("folder.emptyConfirmMessage", { count: mailCount, name: folderName }), "combined"),
       confirmLabel: t("folder.emptyConfirmButton"),
       cancelLabel: t("common.cancel"),
     });

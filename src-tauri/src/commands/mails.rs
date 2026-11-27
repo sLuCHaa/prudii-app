@@ -1335,6 +1335,26 @@ fn pop3_empty_folder(db: &Database, account_id: &str, folder_type: &str) -> Resu
     Ok(ids.len() as u32)
 }
 
+/// How many of these mails would lose their POP3 server copy if the user deleted them now.
+fn count_server_deletes(conn: &rusqlite::Connection, mail_ids: &[String]) -> rusqlite::Result<u32> {
+    let mut stmt = conn.prepare(
+        "SELECT EXISTS(SELECT 1 FROM mails m
+             JOIN accounts a ON a.id = m.account_id
+             JOIN folders f ON f.id = m.folder_id
+             JOIN pop3_uidls u ON u.account_id = m.account_id AND u.mail_id = m.id
+             WHERE m.id = ?1 AND a.incoming_protocol = 'pop3' AND a.pop3_delete_with_local = 1
+               AND f.folder_type = 'trash' AND u.state IN ('stored','restored'))",
+    )?;
+    mail_ids.iter().try_fold(0, |count, mail_id| {
+        Ok(count + stmt.query_row([mail_id], |row| row.get::<_, u32>(0))?)
+    })
+}
+
+#[tauri::command(async)]
+pub fn count_pop3_server_deletes(db: State<'_, Database>, mail_ids: Vec<String>) -> Result<u32, String> {
+    super::catch_panic(|| count_server_deletes(&db.read_db(), &mail_ids).map_err(|e| e.to_string()))
+}
+
 /// Needs a transaction: the UIDL mark and the row delete must not come apart.
 pub(crate) fn pop3_delete_rows(tx: &rusqlite::Connection, account_id: &str, mail_ids: &[String]) -> rusqlite::Result<()> {
     crate::pop3::mark_locally_deleted(tx, account_id, mail_ids)?;
@@ -5893,6 +5913,32 @@ mod pop3_action_tests {
         assert_eq!((counts(&e, &e.trash), queued(&e)), ((0, 0), 0));
         assert_eq!(pop3_empty_folder(&e.db, &e.account, "trash"), Ok(0));
         assert!(pop3_empty_folder(&e.db, &e.account, "drafts").is_err());
+    }
+
+    #[test]
+    fn counts_only_mails_whose_server_copy_would_go() {
+        let e = env();
+        let trashed = mail(&e, &e.trash, "<a@studio-halde.example>");
+        let inbox = mail(&e, &e.inbox, "<b@studio-halde.example>");
+        let gone = mail(&e, &e.trash, "<c@studio-halde.example>");
+        let local = mail(&e, &e.trash, "<d@studio-halde.example>");
+        {
+            let conn = e.db.lock_db();
+            conn.execute("UPDATE pop3_uidls SET state = 'server_deleted' WHERE mail_id = ?1", [&gone]).unwrap();
+            conn.execute("DELETE FROM pop3_uidls WHERE mail_id = ?1", [&local]).unwrap();
+        }
+        let ids = [trashed.clone(), inbox, gone, local, "missing".to_string()];
+        let count = || count_server_deletes(&e.db.lock_db(), &ids).unwrap();
+        let set = |sql: &str| e.db.lock_db().execute(sql, []).unwrap();
+
+        set("UPDATE accounts SET pop3_delete_with_local = 0");
+        assert_eq!(count(), 0);
+        set("UPDATE accounts SET pop3_delete_with_local = 1");
+        assert_eq!(count(), 1);
+        set("UPDATE pop3_uidls SET state = 'restored' WHERE state = 'stored'");
+        assert_eq!(count(), 1);
+        set("UPDATE accounts SET incoming_protocol = 'imap'");
+        assert_eq!(count(), 0);
     }
 
     #[test]

@@ -3,12 +3,16 @@ import { createElement, act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import i18n from "../../lib/i18n";
+import { useAppStore } from "../../stores/appStore";
 import type { Account, Folder, IncomingProtocol } from "../../types";
 
-const { createFolder, forceResyncAccount, confirm, mutate, folderList } = vi.hoisted(() => ({
+const { createFolder, forceResyncAccount, confirm, danger, deleteFolder, emptyTrash, mutate, folderList } = vi.hoisted(() => ({
   createFolder: vi.fn(),
   forceResyncAccount: vi.fn(),
   confirm: vi.fn(),
+  danger: vi.fn(),
+  deleteFolder: vi.fn(),
+  emptyTrash: vi.fn(),
   mutate: vi.fn(),
   folderList: { current: [] as unknown[] },
 }));
@@ -17,6 +21,9 @@ vi.mock("../../lib/tauri", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../lib/tauri")>()),
   createFolder,
   forceResyncAccount,
+  deleteFolder,
+  emptyTrash,
+  countFolderMails: async () => 2,
 }));
 vi.mock("../../hooks/useAccounts", () => ({
   useAccounts: () => ({ data: [] }),
@@ -29,7 +36,7 @@ vi.mock("../../hooks/useSync", () => ({
   useSyncAll: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 vi.mock("../../hooks/useRemoveAccount", () => ({ useRemoveAccount: () => vi.fn() }));
-vi.mock("../ui/DialogProvider", () => ({ useDialog: () => ({ confirm, alert: vi.fn(), danger: vi.fn() }) }));
+vi.mock("../ui/DialogProvider", () => ({ useDialog: () => ({ confirm, alert: vi.fn(), danger }) }));
 
 import { AccountSection } from "./Sidebar";
 
@@ -68,6 +75,9 @@ beforeEach(async () => {
   forceResyncAccount.mockReset().mockResolvedValue(undefined);
   confirm.mockReset().mockResolvedValue(true);
   mutate.mockReset();
+  danger.mockReset().mockResolvedValue(false);
+  deleteFolder.mockReset().mockResolvedValue(undefined);
+  emptyTrash.mockReset().mockResolvedValue(2);
   folderList.current = [inbox];
 });
 
@@ -203,5 +213,35 @@ describe.each([
     render(account("imap"), collapsed);
     rightClick(folderRow());
     expect(document.body.textContent).toContain(i18n.t("folder.serverFolder"));
+  });
+});
+
+describe("permanently deleting folders", () => {
+  const projects = { ...inbox, id: "folder-projects", name: "Projects", path: "Projects", folder_type: "custom", is_local: true } as Folder;
+  const trash = { ...inbox, id: "folder-trash", name: "Trash", folder_type: "trash" } as Folder;
+  const row = (label: string) => Array.from(host.querySelectorAll("button")).find((b) => b.textContent?.includes(label))!;
+  const routes = [
+    ["deleting a folder", () => "Projects", "common.delete", deleteFolder],
+    ["emptying the trash", () => i18n.t("folder.types.trash"), "folder.emptyTrash", emptyTrash],
+  ] as const;
+
+  async function choose(rowLabel: () => string, entry: string, withLocal: boolean) {
+    const a = { ...account("pop3"), pop3_delete_with_local: withLocal };
+    useAppStore.setState({ accounts: [a] });
+    folderList.current = [inbox, trash, projects];
+    render(a);
+    rightClick(row(rowLabel()));
+    await click(menuItem(i18n.t(entry))!);
+  }
+
+  it.each(routes)("warns about the server when %s and keeps it on cancel", async (_name, rowLabel, entry, command) => {
+    await choose(rowLabel, entry, true);
+    expect(danger.mock.calls[0][0].message).toContain(i18n.t("pop3.deleteWarning.folder"));
+    expect(command).not.toHaveBeenCalled();
+  });
+
+  it.each(routes)("says nothing about the server when %s with the switch off", async (_name, rowLabel, entry) => {
+    await choose(rowLabel, entry, false);
+    expect(danger.mock.calls[0][0].message).not.toContain(i18n.t("pop3.deleteWarning.folder"));
   });
 });

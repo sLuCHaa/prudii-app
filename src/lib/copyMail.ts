@@ -14,6 +14,7 @@ export async function copyToOtherAccount(
   mail: Pick<Mail, "id">,
   dest: Folder,
   account: Pick<Account, "email">,
+  guardDelete: (mailIds: string[], run: () => void) => void,
 ): Promise<void> {
   try {
     await copyMailToFolder(mail.id, dest.id);
@@ -25,14 +26,14 @@ export async function copyToOtherAccount(
   const folder = i18n.t(`folder.types.${dest.folder_type}`, { defaultValue: dest.name });
   useAppStore.getState().addToast("success", i18n.t("folder.copied", { folder }), account.email, COPIED_TOAST_MS, {
     label: i18n.t("folder.trashOriginal"),
-    onClick: () => {
+    onClick: () => guardDelete([mail.id], () => {
       useAppStore.getState().setPendingRemoveIds([mail.id]);
       void runMailAction(() => trashMail(mail.id), {
         errorKey: "errors.trash",
         invalidate: () => invalidateMailListQueries(queryClient),
         onPendingClear: () => useAppStore.getState().setPendingRemoveIds([]),
       });
-    },
+    }),
   });
 
   // An uploaded copy only reaches the local list through a sync; a POP3 copy is already there.
