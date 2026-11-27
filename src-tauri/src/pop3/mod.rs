@@ -1,5 +1,6 @@
 pub mod client;
 pub mod store;
+pub mod sync;
 #[cfg(test)]
 pub(crate) mod test_server;
 
@@ -43,4 +44,10 @@ pub enum Pop3Error {
     Locked(String),
     #[error("the message is too large ({0} bytes)")]
     TooLarge(u64),
+    #[error("database error: {0}")]
+    Database(String),
+    #[error("could not store the mail: {0}")]
+    Storage(String),
+    #[error("the account has no inbox folder")]
+    NoInbox,
 }
