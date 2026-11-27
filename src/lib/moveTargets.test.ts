@@ -125,6 +125,16 @@ describe("copyTargets", () => {
     expect(groups([account("anna"), account("gapp", "google", "password")], "anna")).toEqual([["gapp", ["gapp-inbox"]]]);
   });
 
+  it("offers the local folders of a POP3 account, but never its drafts", () => {
+    const pop3 = { ...account("info"), incoming_protocol: "pop3" } as Account;
+    expect(groups([account("anna"), pop3], "anna")).toEqual([["info", ["info-inbox", "Angebote", "Ablage"]]]);
+  });
+
+  it("takes a POP3 account whatever its sign-in", () => {
+    const pop3 = { ...account("gmail", "google", "oauth"), incoming_protocol: "pop3" } as Account;
+    expect(groups([account("anna"), pop3], "anna")).toEqual([["gmail", ["gmail-inbox"]]]);
+  });
+
   it("takes any account as the source", () => {
     expect(groups([account("gmail", "google", "oauth"), account("info")], "gmail")).toEqual([["info", ["info-inbox", "Angebote"]]]);
   });

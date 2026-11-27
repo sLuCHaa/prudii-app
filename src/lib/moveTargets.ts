@@ -21,14 +21,18 @@ export interface CopyGroup {
   folders: Folder[];
 }
 
-/** A copy is uploaded over IMAP; accounts signed in through Google or Microsoft file through their own API instead. */
-export function takesImapUpload(account: Pick<Account, "provider" | "auth_type">): boolean {
+type CopyAccount = Pick<Account, "provider" | "auth_type" | "incoming_protocol">;
+
+/** A copy is filed locally for POP3 and uploaded over IMAP otherwise; Google and Microsoft sign-ins file through their own API. */
+export function accountTakesCopy(account: CopyAccount): boolean {
+  if (account.incoming_protocol === "pop3") return true;
   return !(account.auth_type === "oauth" && (account.provider === "google" || account.provider === "microsoft"));
 }
 
-/** A copy needs a folder on the server; drafts are written, not filed. */
-export function takesCopy(account: Pick<Account, "provider" | "auth_type">, folder: Folder): boolean {
-  return takesImapUpload(account) && !folder.is_local && folder.folder_type !== "drafts";
+/** Except for POP3 a copy needs a folder on the server; drafts are written, not filed. */
+export function takesCopy(account: CopyAccount, folder: Folder): boolean {
+  if (folder.folder_type === "drafts") return false;
+  return accountTakesCopy(account) && (account.incoming_protocol === "pop3" || !folder.is_local);
 }
 
 /** The folders of other accounts a mail can be copied into. */

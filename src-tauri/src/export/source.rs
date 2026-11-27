@@ -1,4 +1,4 @@
-use crate::commands::mails::{get_api_message_id, get_api_type, mail_is_pop3, ApiType, POP3_NOT_SUPPORTED};
+use crate::commands::mails::{get_api_message_id, get_api_type, mail_is_pop3, ApiType};
 use crate::credentials;
 use crate::db::Database;
 use crate::gmail;
@@ -51,9 +51,16 @@ pub fn display_source(raw: Vec<u8>) -> String {
     }
 }
 
+fn pop3_source(db: &Database, mail_id: &str) -> Result<Vec<u8>, FetchError> {
+    match crate::pop3::store::read_source(&db.data_dir, mail_id) {
+        Ok(raw) if !raw.is_empty() => Ok(raw),
+        _ => Err("The stored source of this mail is missing or empty.".into()),
+    }
+}
+
 pub async fn fetch_raw_message(db: &Database, pool: &ImapPool, mail_id: &str) -> Result<Vec<u8>, FetchError> {
     if mail_is_pop3(db, mail_id) {
-        return Err(POP3_NOT_SUPPORTED.into());
+        return pop3_source(db, mail_id);
     }
     if let Some((api_msg_id, account_id)) = get_api_message_id(db, mail_id) {
         let (api_type, provider, auth_type) = get_api_type(db, &account_id);
@@ -81,7 +88,7 @@ pub async fn fetch_raw_message(db: &Database, pool: &ImapPool, mail_id: &str) ->
                     .map_err(|e| FetchError::from_error("Outlook source fetch", &e));
             }
             ApiType::Imap => {}
-            ApiType::Pop3 => return Err(POP3_NOT_SUPPORTED.into()),
+            ApiType::Pop3 => return pop3_source(db, mail_id),
         }
     }
 

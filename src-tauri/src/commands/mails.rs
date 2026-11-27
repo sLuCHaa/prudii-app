@@ -2460,6 +2460,8 @@ pub(crate) struct CopyPlan {
     pub dest_path: String,
     pub flags: Vec<&'static str>,
     pub internal_date: Option<String>,
+    /// Set for a POP3 destination, which is filed locally; holds the source mail's date.
+    pub pop3_date: Option<String>,
 }
 
 /// Checked before anything is fetched or sent, so a refused copy costs no round trip.
@@ -2476,7 +2478,7 @@ pub(crate) fn copy_plan(db: &Database, mail_id: &str, dest_folder_id: &str) -> R
         |row| Ok((row.get(0)?, row.get::<_, i32>(1)? != 0, row.get::<_, i32>(2)? != 0, row.get(3)?)),
     ).map_err(|e| format!("Mail not found: {}", e))?;
 
-    if dest_is_local || dest_type == "drafts" || dest_account_id == source_account_id {
+    if dest_type == "drafts" || dest_account_id == source_account_id {
         return Err(COPY_NEEDS_SERVER_FOLDER.to_string());
     }
     let (provider, auth_type, incoming_protocol): (String, String, String) = conn.query_row(
@@ -2484,9 +2486,13 @@ pub(crate) fn copy_plan(db: &Database, mail_id: &str, dest_folder_id: &str) -> R
         rusqlite::params![dest_account_id],
         |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
     ).map_err(|e| format!("Account not found: {}", e))?;
-    match api_type_of(&provider, &auth_type, &incoming_protocol) {
-        ApiType::Imap => {}
-        ApiType::Gmail | ApiType::Outlook | ApiType::Pop3 => return Err(COPY_TARGET_UNSUPPORTED.to_string()),
+    let api_type = api_type_of(&provider, &auth_type, &incoming_protocol);
+    let pop3 = matches!(api_type, ApiType::Pop3);
+    if dest_is_local && !pop3 {
+        return Err(COPY_NEEDS_SERVER_FOLDER.to_string());
+    }
+    if matches!(api_type, ApiType::Gmail | ApiType::Outlook) {
+        return Err(COPY_TARGET_UNSUPPORTED.to_string());
     }
 
     let mut flags = Vec::new();
@@ -2496,7 +2502,62 @@ pub(crate) fn copy_plan(db: &Database, mail_id: &str, dest_folder_id: &str) -> R
     if is_starred {
         flags.push("\\Flagged");
     }
-    Ok(CopyPlan { dest_account_id, dest_path, flags, internal_date: imap::internal_date(&date) })
+    let internal_date = imap::internal_date(&date);
+    Ok(CopyPlan { dest_account_id, dest_path, flags, internal_date, pop3_date: pop3.then_some(date) })
+}
+
+/// Succeeds only if the destination holds a mail with exactly these bytes on disk.
+async fn copy_into_pop3(db: &Database, plan: &CopyPlan, dest_folder_id: &str, raw: &[u8]) -> Result<(), String> {
+    if raw.is_empty() {
+        return Err("Failed to copy mail to the other account: its source is empty.".into());
+    }
+    let new_id = uuid::Uuid::new_v4().to_string();
+    let stored = store_pop3_copy(db, plan, dest_folder_id, &new_id, raw).await;
+    if !matches!(stored, Ok(true)) {
+        let removed = db.lock_db().execute("DELETE FROM mails WHERE id = ?1", rusqlite::params![new_id]);
+        if removed.is_ok() {
+            pop3_remove_files(db, std::slice::from_ref(&new_id));
+        }
+    }
+    stored.map(|_| ()).map_err(|e| format!("Failed to copy mail to the other account: {}", e))
+}
+
+/// False when an identical mail was already there and nothing new is to be kept.
+async fn store_pop3_copy(db: &Database, plan: &CopyPlan, dest_folder_id: &str, new_id: &str, raw: &[u8]) -> Result<bool, String> {
+    let account_id = plan.dest_account_id.as_str();
+    let is_read = plan.flags.contains(&"\\Seen");
+    crate::pop3::store::write_source(&db.data_dir, new_id, raw).map_err(|e| e.to_string())?;
+    match imap::insert_local_mail(db, account_id, dest_folder_id, new_id, raw, is_read).map_err(|e| e.to_string())? {
+        imap::InsertOutcome::Inserted(_) => {}
+        imap::InsertOutcome::Existing(existing) => {
+            if crate::pop3::store::read_source(&db.data_dir, &existing).is_ok_and(|stored| stored == raw) {
+                return Ok(false);
+            }
+            // The twin keeps the uid-less slot, and the user may delete the original after this copy.
+            let conn = db.lock_db();
+            let uid = next_synthetic_uid(&conn, account_id).map_err(|e| e.to_string())?;
+            imap::insert_local_twin(&conn, account_id, dest_folder_id, new_id, raw, is_read, uid)
+                .map_err(|e| e.to_string())?;
+        }
+        imap::InsertOutcome::NotStored => return Err("The mail could not be stored.".into()),
+    }
+
+    let dated = mail_parser::MessageParser::default().parse(raw).is_some_and(|m| m.date().is_some());
+    let fallback = plan.pop3_date.as_deref().filter(|date| !dated && !date.is_empty());
+    db.lock_db()
+        .execute(
+            "UPDATE mails SET is_starred = ?1, date = COALESCE(?2, date) WHERE id = ?3",
+            rusqlite::params![plan.flags.contains(&"\\Flagged"), fallback, new_id],
+        )
+        .map_err(|e| e.to_string())?;
+    imap::store_body_and_attachments(db, new_id, raw).await.map_err(|e| e.to_string())?;
+    db.lock_db()
+        .execute(
+            "UPDATE folders SET total_count = total_count + 1, unread_count = unread_count + ?1 WHERE id = ?2",
+            rusqlite::params![!is_read, dest_folder_id],
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(true)
 }
 
 /// Copy a mail into a folder of another account: its source is fetched from
@@ -2512,6 +2573,9 @@ pub async fn copy_mail_to_folder(
     let source = crate::export::source::fetch_raw_message(&db, &pool, &mail_id)
         .await
         .map_err(|e| e.to_string())?;
+    if plan.pop3_date.is_some() {
+        return copy_into_pop3(&db, &plan, &dest_folder_id, &source).await;
+    }
 
     let (imap_host, imap_port, email, auth_type, provider): (String, i32, String, String, String) = {
         let conn = db.lock_db();
@@ -5297,19 +5361,186 @@ mod pop3_tests {
         assert!(!mail_is_pop3(&db, "missing"));
     }
 
-    #[test]
-    fn a_pop3_account_is_no_copy_target() {
+    struct Target {
+        db: Database,
+        mail: String,
+        account: String,
+        inbox: String,
+    }
+
+    fn target() -> Target {
         let db = temp_db();
-        let (mail, dest) = {
+        let (mail, account, inbox) = {
             let conn = db.lock_db();
-            let source = seed_account(&conn, "anna@studio-halde.example");
-            let inbox = seed_folder(&conn, &source, "inbox");
-            let mail = seed_mail(&conn, &SeedMail { account_id: &source, folder_id: &inbox, ..Default::default() });
-            let other = seed_account(&conn, "info@studio-halde.example");
-            conn.execute("UPDATE accounts SET incoming_protocol = 'pop3' WHERE id = ?1", [&other]).unwrap();
-            (mail, seed_folder(&conn, &other, "inbox"))
+            let source = seed_account(&conn, "info@studio-halde.example");
+            let folder = seed_folder(&conn, &source, "inbox");
+            let mail = seed_mail(&conn, &SeedMail { account_id: &source, folder_id: &folder, date: "2026-07-23T19:11:00Z", ..Default::default() });
+            conn.execute("UPDATE mails SET is_read = 1, is_starred = 1 WHERE id = ?1", [&mail]).unwrap();
+            let account = seed_account(&conn, "anna@studio-halde.example");
+            conn.execute("UPDATE accounts SET incoming_protocol = 'pop3' WHERE id = ?1", [&account]).unwrap();
+            let inbox = seed_folder(&conn, &account, "inbox");
+            (mail, account, inbox)
         };
-        assert_eq!(copy_plan(&db, &mail, &dest), Err(COPY_TARGET_UNSUPPORTED.to_string()));
+        Target { db, mail, account, inbox }
+    }
+
+    fn raw(body: &str) -> Vec<u8> {
+        format!("From: Anna Weber <anna@kunde.example>\r\nSubject: Angebot\r\nMessage-ID: <angebot@kunde.example>\r\nDate: Mon, 01 Jun 2026 10:00:00 +0000\r\n\r\n{body}\r\n").into_bytes()
+    }
+
+    async fn copy(t: &Target, bytes: &[u8]) -> Result<(), String> {
+        let plan = copy_plan(&t.db, &t.mail, &t.inbox)?;
+        copy_into_pop3(&t.db, &plan, &t.inbox, bytes).await
+    }
+
+    fn rows(t: &Target) -> Vec<String> {
+        let conn = t.db.lock_db();
+        let mut stmt = conn.prepare("SELECT id FROM mails WHERE folder_id = ?1 ORDER BY rowid").unwrap();
+        let ids = stmt.query_map([&t.inbox], |r| r.get(0)).unwrap().map(Result::unwrap).collect();
+        ids
+    }
+
+    fn sources(t: &Target) -> usize {
+        std::fs::read_dir(t.db.data_dir.join("mail_sources")).map_or(0, |d| d.count())
+    }
+
+    fn counts(t: &Target) -> (i64, i64) {
+        t.db.lock_db()
+            .query_row("SELECT total_count, unread_count FROM folders WHERE id = ?1", [&t.inbox], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap()
+    }
+
+    #[test]
+    fn a_pop3_account_takes_copies_also_into_local_folders() {
+        let t = target();
+        assert_eq!(copy_plan(&t.db, &t.mail, &t.inbox).unwrap().dest_account_id, t.account);
+        t.db.lock_db().execute("UPDATE folders SET is_local = 1, folder_type = 'custom' WHERE id = ?1", [&t.inbox]).unwrap();
+        assert!(copy_plan(&t.db, &t.mail, &t.inbox).is_ok());
+        t.db.lock_db().execute("UPDATE folders SET folder_type = 'drafts' WHERE id = ?1", [&t.inbox]).unwrap();
+        assert_eq!(copy_plan(&t.db, &t.mail, &t.inbox), Err(COPY_NEEDS_SERVER_FOLDER.to_string()));
+    }
+
+    #[test]
+    fn a_pop3_account_takes_no_copy_of_its_own_mail() {
+        let t = target();
+        let own = {
+            let conn = t.db.lock_db();
+            seed_mail(&conn, &SeedMail { account_id: &t.account, folder_id: &t.inbox, ..Default::default() })
+        };
+        assert_eq!(copy_plan(&t.db, &own, &t.inbox), Err(COPY_NEEDS_SERVER_FOLDER.to_string()));
+    }
+
+    #[tokio::test]
+    async fn pop3_copy_stores_the_source_without_a_uidl_row() {
+        let t = target();
+        let bytes = raw("Hallo");
+        copy(&t, &bytes).await.unwrap();
+
+        let ids = rows(&t);
+        assert_eq!(ids.len(), 1);
+        assert_eq!(crate::pop3::store::read_source(&t.db.data_dir, &ids[0]).unwrap(), bytes);
+        assert_eq!(sources(&t), 1);
+        assert_eq!(counts(&t), (1, 0));
+        let conn = t.db.lock_db();
+        let (read, starred, date, body): (bool, bool, String, String) = conn
+            .query_row("SELECT is_read, is_starred, date, body_text FROM mails WHERE id = ?1", [&ids[0]], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+            })
+            .unwrap();
+        assert!(read && starred);
+        assert_eq!(date, "2026-06-01T10:00:00Z");
+        assert!(body.contains("Hallo"));
+        let uidls: i64 = conn.query_row("SELECT COUNT(*) FROM pop3_uidls", [], |r| r.get(0)).unwrap();
+        assert_eq!(uidls, 0);
+    }
+
+    #[tokio::test]
+    async fn pop3_copy_without_a_date_header_takes_the_source_date() {
+        let t = target();
+        t.db.lock_db().execute("UPDATE mails SET is_read = 0 WHERE id = ?1", [&t.mail]).unwrap();
+        copy(&t, b"Subject: Ohne Datum\r\n\r\nHallo\r\n").await.unwrap();
+
+        let id = rows(&t)[0].clone();
+        let date: String = t.db.lock_db().query_row("SELECT date FROM mails WHERE id = ?1", [&id], |r| r.get(0)).unwrap();
+        assert_eq!(date, "2026-07-23T19:11:00Z");
+        assert_eq!(counts(&t), (1, 1));
+    }
+
+    #[tokio::test]
+    async fn pop3_copy_of_identical_bytes_adds_no_second_row() {
+        let t = target();
+        let bytes = raw("Hallo");
+        copy(&t, &bytes).await.unwrap();
+        copy(&t, &bytes).await.unwrap();
+
+        assert_eq!(rows(&t).len(), 1);
+        assert_eq!(sources(&t), 1);
+        assert_eq!(counts(&t), (1, 0));
+    }
+
+    #[tokio::test]
+    async fn pop3_copy_of_a_different_twin_keeps_both_mails() {
+        let t = target();
+        let (first, second) = (raw("Erste Fassung"), raw("Zweite Fassung"));
+        copy(&t, &first).await.unwrap();
+        copy(&t, &second).await.unwrap();
+
+        let ids = rows(&t);
+        assert_eq!(ids.len(), 2);
+        assert_eq!(crate::pop3::store::read_source(&t.db.data_dir, &ids[0]).unwrap(), first);
+        assert_eq!(crate::pop3::store::read_source(&t.db.data_dir, &ids[1]).unwrap(), second);
+        assert_eq!(sources(&t), 2);
+        assert_eq!(counts(&t), (2, 0));
+    }
+
+    #[tokio::test]
+    async fn pop3_copy_beside_a_twin_without_source_stores_its_own_row() {
+        let t = target();
+        let bytes = raw("Hallo");
+        copy(&t, &bytes).await.unwrap();
+        let first = rows(&t)[0].clone();
+        std::fs::remove_file(crate::pop3::store::source_path(&t.db.data_dir, &first)).unwrap();
+        copy(&t, &bytes).await.unwrap();
+
+        let ids = rows(&t);
+        assert_eq!(ids.len(), 2);
+        assert_eq!(crate::pop3::store::read_source(&t.db.data_dir, &ids[1]).unwrap(), bytes);
+    }
+
+    #[tokio::test]
+    async fn a_failed_pop3_copy_leaves_nothing_behind() {
+        let t = target();
+        assert!(copy(&t, b"").await.is_err());
+        t.db.lock_db()
+            .execute_batch("CREATE TRIGGER refuse_body BEFORE UPDATE OF body_text ON mails BEGIN SELECT RAISE(ABORT, 'refused'); END")
+            .unwrap();
+        assert!(copy(&t, &raw("Hallo")).await.is_err());
+        t.db.lock_db()
+            .execute_batch("CREATE TRIGGER refuse_row BEFORE INSERT ON mails BEGIN SELECT RAISE(IGNORE); END")
+            .unwrap();
+        assert!(copy(&t, &raw("Hallo")).await.is_err());
+
+        assert!(rows(&t).is_empty());
+        assert_eq!(sources(&t), 0);
+        assert_eq!(counts(&t), (0, 0));
+    }
+
+    #[tokio::test]
+    async fn the_source_of_a_pop3_mail_is_read_from_disk() {
+        let t = target();
+        let bytes = raw("Hallo");
+        crate::pop3::store::write_source(&t.db.data_dir, &t.mail, &bytes).unwrap();
+        t.db.lock_db()
+            .execute("UPDATE accounts SET incoming_protocol = 'pop3' WHERE id = (SELECT account_id FROM mails WHERE id = ?1)", [&t.mail])
+            .unwrap();
+        let pool = ImapPool::new();
+        let fetch = || crate::export::source::fetch_raw_message(&t.db, &pool, &t.mail);
+
+        assert_eq!(fetch().await.unwrap(), bytes);
+        crate::pop3::store::write_source(&t.db.data_dir, &t.mail, b"").unwrap();
+        assert!(!fetch().await.unwrap_err().auth);
+        std::fs::remove_file(crate::pop3::store::source_path(&t.db.data_dir, &t.mail)).unwrap();
+        assert!(!fetch().await.unwrap_err().auth);
     }
 }
 
