@@ -144,6 +144,13 @@ fn guess_mime_type(filename: &str) -> &'static str {
     }
 }
 
+/// `task_files/{task_id}`, or `None` unless the id is a plain directory name. Ids can come
+/// from a restored backup; an allowlist also covers Windows dropping trailing dots and spaces.
+pub(crate) fn task_dir(data_dir: &Path, task_id: &str) -> Option<PathBuf> {
+    let safe = !task_id.is_empty() && task_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    safe.then(|| data_dir.join("task_files").join(task_id))
+}
+
 /// Appends a " (n)" suffix before the extension until the name is free, matching
 /// how Windows/macOS Finder resolve a copy into an already-populated folder.
 fn unique_dest_path(dir: &Path, filename: &str) -> PathBuf {
@@ -370,7 +377,10 @@ fn delete_task_impl(db: &Database, id: &str) -> Result<(), String> {
         return Err("Task not found".into());
     }
 
-    let dir = db.data_dir.join("task_files").join(id);
+    let Some(dir) = task_dir(&db.data_dir, id) else {
+        log::warn!("Task id is not a safe directory name; no files removed");
+        return Ok(());
+    };
     if dir.exists() {
         if let Err(e) = std::fs::remove_dir_all(&dir) {
             log::warn!("Failed to remove task file directory for {}: {}", id, e);
@@ -683,7 +693,7 @@ fn copy_named_files_into_task(db: &Database, task_id: &str, files: Vec<(PathBuf,
         fetch_task(&conn, task_id).map_err(|_| "Task not found".to_string())?;
     }
 
-    let dest_dir = db.data_dir.join("task_files").join(task_id);
+    let dest_dir = task_dir(&db.data_dir, task_id).ok_or("Invalid task id")?;
     std::fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
 
     let mut added = Vec::new();
@@ -1158,6 +1168,49 @@ mod tests {
         delete_task_impl(&db, &a.id).unwrap();
         assert!(!dir.exists());
         assert!(delete_task_impl(&db, &a.id).is_err());
+    }
+
+    #[test]
+    fn delete_never_removes_anything_outside_the_task_directory() {
+        let cases = ["", ".", "..", "...", ".. ", "../x", "../../x", r"..\x", r"..\..\x", "keep/..", "keep.", "<absolute>"];
+        for case in cases {
+            let sandbox = std::env::temp_dir().join(format!("prudii-test-id-{}", uuid::Uuid::new_v4()));
+            let db = Database::new(sandbox.join("data")).unwrap();
+            let sentinels = [
+                db.data_dir.join("task_files").join("keep").join("k"),
+                db.data_dir.join("x").join("k"),
+                sandbox.join("x").join("k"),
+                sandbox.join("victim").join("k"),
+            ];
+            for s in &sentinels {
+                std::fs::create_dir_all(s.parent().unwrap()).unwrap();
+                std::fs::write(s, b"keep").unwrap();
+            }
+            let id = if case == "<absolute>" { sandbox.join("victim").to_string_lossy().to_string() } else { case.to_string() };
+            db.lock_db().execute("INSERT INTO tasks (id, title) VALUES (?1, 't')", params![id]).unwrap();
+
+            delete_task_impl(&db, &id).unwrap();
+
+            for s in &sentinels {
+                assert!(s.exists(), "id {:?} removed {}", case, s.display());
+            }
+            let _ = std::fs::remove_dir_all(&sandbox);
+        }
+    }
+
+    #[test]
+    fn copy_files_into_task_rejects_a_task_id_that_leaves_the_task_directory() {
+        let db = temp_db();
+        db.lock_db().execute("INSERT INTO tasks (id, title) VALUES ('..', 't')", []).unwrap();
+        let src_dir = std::env::temp_dir().join(format!("prudii-test-src-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&src_dir).unwrap();
+        let src_file = src_dir.join("escape.txt");
+        std::fs::write(&src_file, b"x").unwrap();
+
+        assert!(copy_files_into_task(&db, "..", vec![src_file]).is_err());
+        assert!(!db.data_dir.join("escape.txt").exists());
+
+        let _ = std::fs::remove_dir_all(&src_dir);
     }
 
     fn insert_mail_row(db: &Database, mail_id: &str, subject: &str, snippet: &str) {

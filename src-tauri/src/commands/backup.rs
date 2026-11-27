@@ -1,6 +1,7 @@
 use crate::calendar::store::{is_valid_color, DEFAULT_COLOR};
 use crate::calendar::subscription::{KeyringLinks, LinkStore};
 use crate::calendar::{REFRESH_CHOICES, SUBSCRIPTION};
+use crate::commands::tasks::task_dir;
 use crate::credentials::SecretStore;
 use crate::db::Database;
 use crate::models::{
@@ -1026,11 +1027,11 @@ pub(crate) fn import_task_rows<R: Read + Seek>(
             let filename = a.get("filename").and_then(|v| v.as_str()).unwrap_or("").to_string();
             // A row whose path parts are not plain names could never be extracted, so
             // importing it would only leave a dead attachment pointing outside the base.
-            if !is_plain_path_component(&task_id) || !is_plain_path_component(&filename) {
-                log::warn!("Skipping task attachment with an unsafe path: {}/{}", task_id, filename);
+            let (Some(dir), true) = (task_dir(data_dir, &task_id), is_plain_path_component(&filename)) else {
+                log::warn!("Skipping task attachment with an unsafe path");
                 continue;
-            }
-            let new_local_path = data_dir.join("task_files").join(&task_id).join(&filename);
+            };
+            let new_local_path = dir.join(&filename);
 
             tx.execute(&sql, rusqlite::params![
                 a.get("id").and_then(|v| v.as_str()).unwrap_or(""),
@@ -2663,6 +2664,26 @@ mod tasks_roundtrip {
             |row| row.get(0),
         ).unwrap();
         assert_eq!(std::path::Path::new(&local_path), restored_file);
+    }
+
+    #[test]
+    fn import_skips_attachments_whose_task_id_is_not_a_safe_directory_name() {
+        let db = temp_db();
+        let attachments_json = serde_json::json!([
+            { "id": "a1", "task_id": "...", "filename": "f.txt" },
+        ]);
+        let zip_options = zip::write::SimpleFileOptions::default();
+        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        zip.start_file("tasks.json", zip_options).unwrap();
+        zip.write_all(br#"[{"id":"...","title":"t"}]"#).unwrap();
+        zip.start_file("task_attachments.json", zip_options).unwrap();
+        zip.write_all(attachments_json.to_string().as_bytes()).unwrap();
+        let bytes = zip.finish().unwrap().into_inner();
+        let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+
+        let (_, files) = import_task_rows(&db.lock_db(), &mut archive, &db.data_dir, false).unwrap();
+
+        assert!(files.is_empty());
     }
 
     #[test]
