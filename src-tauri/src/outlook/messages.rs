@@ -187,7 +187,9 @@ pub async fn fetch_message_body(
 
         if !attachments.is_empty() {
             let data_dir = db.data_dir.clone();
-            let attach_dir = data_dir.join("attachments").join(mail_id);
+            let Some(attach_dir) = crate::safe_path::mail_attachment_dir(&data_dir, mail_id) else {
+                anyhow::bail!("unusable mail id, attachments not stored");
+            };
             tokio::fs::create_dir_all(&attach_dir).await?;
 
             struct DownloadedAttachment {

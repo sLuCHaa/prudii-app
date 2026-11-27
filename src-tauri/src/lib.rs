@@ -23,6 +23,7 @@ pub mod pool;
 pub mod pop3;
 pub mod priority;
 pub mod rules;
+mod safe_path;
 pub mod sieve;
 pub mod smtp;
 pub mod system_accent;
@@ -794,6 +795,19 @@ pub fn run() {
                         let db = handle.state::<Database>();
                         let conn = db.lock_db();
                         crate::contacts::update_contacts_incremental(&conn);
+                    });
+                }
+
+                {
+                    let handle = app.handle().clone();
+                    tauri::async_runtime::spawn(async move {
+                        tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                        if crate::commands::backup::backup_in_progress() {
+                            return;
+                        }
+                        let db = handle.state::<Database>();
+                        let conn = db.lock_db();
+                        crate::pop3::cleanup_stray_sources(&conn, &db.data_dir, std::time::SystemTime::now());
                     });
                 }
 

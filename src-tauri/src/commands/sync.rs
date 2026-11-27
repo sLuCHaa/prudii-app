@@ -931,6 +931,10 @@ fn pop3_progress(account_id: &str, status: &str, new_mails: u32, message: String
 /// POP3 sync: no folders, no pending ops, no pool session and no IDLE.
 async fn do_pop3_sync(app: &AppHandle, mailbox: &Account, password: &str) {
     let owner_id = mailbox.id.as_str();
+    if crate::commands::backup::backup_in_progress() {
+        emit_progress(app, &pop3_progress(owner_id, "skipped", 0, "Backup or restore in progress".into()));
+        return;
+    }
     emit_progress(app, &pop3_progress(owner_id, "connecting", 0, "Connecting...".into()));
 
     let db = app.state::<Database>();
@@ -1588,8 +1592,8 @@ pub async fn sync_account(
     let credential = if let Some(pw) = password {
         // When password is provided directly (e.g. from Account Wizard),
         // also store it in the keyring so other commands can access it later
-        if let Err(e) = credentials::store_password(&account_id, &pw) {
-            log::warn!("[sync] Password for {} not persisted, session cache only: {}", account_id, e);
+        if credentials::store_password(&account_id, &pw).is_err() {
+            log::warn!("[sync] Password not persisted, session cache only");
         }
         pw
     } else {
@@ -1754,7 +1758,7 @@ async fn spawn_account_syncs(app: AppHandle, db: &Database, only_automatic: bool
                 Ok(cred) => {
                     do_sync_account(app_handle, account, account_id, cred, auth_type).await;
                 }
-                Err(e) => log::warn!("Skipping account {}: {}", account_id, e),
+                Err(_) => log::warn!("Skipping an account: no credential available"),
             }
         });
     }

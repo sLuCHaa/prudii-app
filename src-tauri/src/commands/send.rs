@@ -1,5 +1,5 @@
 use crate::credentials;
-use crate::commands::mails::{is_pop3_account, POP3_NOT_SUPPORTED};
+use crate::commands::mails::{is_pop3_account, next_synthetic_uid};
 use crate::db::Database;
 use crate::imap;
 use crate::models::{SendAttachment, SendMailRequest};
@@ -65,13 +65,12 @@ struct SendAccount {
     provider: String,
     /// (folder id, IMAP path); the id lets the sent copy show up before the next sync.
     sent_folder: Option<(String, String)>,
+    pop3: bool,
 }
 
 fn load_send_account(db: &Database, account_id: &str) -> Result<SendAccount, String> {
     let conn = db.lock_db();
-    if is_pop3_account(&conn, account_id) {
-        return Err(POP3_NOT_SUPPORTED.into());
-    }
+    let pop3 = is_pop3_account(&conn, account_id);
     let mut account = conn
         .query_row(
             "SELECT email, display_name, smtp_host, smtp_port, COALESCE(smtp_security, 'ssl'), imap_host, imap_port, auth_type, provider FROM accounts WHERE id = ?1",
@@ -89,6 +88,7 @@ fn load_send_account(db: &Database, account_id: &str) -> Result<SendAccount, Str
                     auth_type: row.get(7)?,
                     provider: row.get(8)?,
                     sent_folder: None,
+                    pop3,
                 })
             },
         )
@@ -127,6 +127,30 @@ fn smtp_config(account: &SendAccount, credential: &str) -> Result<SmtpConfig, St
 
 /// Detached: a running sync can hold the IMAP session for a minute.
 fn spawn_sent_copy(app: &AppHandle, account: SendAccount, credential: String, raw: Vec<u8>) {
+    if account.pop3 {
+        let bg_app = app.clone();
+        let key = account.id.clone();
+        crate::task_registry::spawn_for_account(&key, async move {
+            let db = bg_app.state::<Database>();
+            let saved = match &account.sent_folder {
+                Some((sent_id, _)) => save_sent_copy_local(&db, &account.id, sent_id, &raw).await.map(|_| ()),
+                None => Err(NO_SENT_FOLDER.to_string()),
+            };
+            match saved {
+                Ok(()) => {
+                    let _ = bg_app.emit("mails-changed", serde_json::json!({ "account_id": account.id }));
+                }
+                Err(error) => {
+                    log::warn!("send_mail: the local sent copy could not be saved");
+                    let _ = bg_app.emit("sent-folder-save-failed", serde_json::json!({
+                        "account_id": account.id,
+                        "error": error,
+                    }));
+                }
+            }
+        });
+        return;
+    }
     let is_gmail_imap = account.imap_host.contains("gmail.com") || account.imap_host.contains("googlemail.com");
     let bg_app = app.clone();
     let key = account.id.clone();
@@ -297,6 +321,62 @@ pub(crate) async fn send_prepared_mail(app: &AppHandle, account_id: &str, messag
     Ok(())
 }
 
+const NO_SENT_FOLDER: &str = "No 'Sent' folder was detected for this account, so the sent copy could not be saved.";
+
+/// POP3 has no server folder: this row and its raw source are the only copy.
+async fn save_sent_copy_local(db: &Database, account_id: &str, sent_folder_id: &str, raw: &[u8]) -> Result<String, String> {
+    let new_id = Uuid::new_v4().to_string();
+    let source = crate::pop3::store::write_source(&db.data_dir, &new_id, raw);
+    match imap::insert_local_mail(db, account_id, sent_folder_id, &new_id, raw, true).map_err(|e| e.to_string())? {
+        imap::InsertOutcome::Inserted(_) => {}
+        imap::InsertOutcome::Existing(existing) => {
+            if crate::pop3::store::read_source(&db.data_dir, &existing).is_ok_and(|stored| stored == raw) {
+                let _ = std::fs::remove_file(crate::pop3::store::source_path(&db.data_dir, &new_id));
+                return Ok(existing);
+            }
+            let conn = db.lock_db();
+            let uid = next_synthetic_uid(&conn, account_id).map_err(|e| e.to_string())?;
+            imap::insert_local_twin(&conn, account_id, sent_folder_id, &new_id, raw, true, uid)
+                .map_err(|e| e.to_string())?;
+        }
+        imap::InsertOutcome::NotStored => return Err("The sent copy could not be stored.".into()),
+    }
+
+    if imap::store_body_and_attachments(db, &new_id, raw).await.is_err() {
+        log::error!("Failed to store attachments of the local sent copy");
+    }
+    db.lock_db()
+        .execute("UPDATE folders SET total_count = total_count + 1 WHERE id = ?1", rusqlite::params![sent_folder_id])
+        .map_err(|e| e.to_string())?;
+    source.map_err(|e| format!("The source of the sent copy could not be saved: {}", e))?;
+    Ok(new_id)
+}
+
+/// No raw source: replacing a draft without one deletes it instead of filling the trash.
+async fn save_draft_local(db: &Database, account_id: &str, raw: &[u8]) -> Result<String, String> {
+    let drafts_id: String = db
+        .lock_db()
+        .query_row(
+            "SELECT id FROM folders WHERE account_id = ?1 AND folder_type = 'drafts'",
+            rusqlite::params![account_id],
+            |row| row.get(0),
+        )
+        .map_err(|_| "No 'Drafts' folder was detected for this account.".to_string())?;
+    let id = imap::insert_local_sent_mail(db, account_id, &drafts_id, raw)
+        .map_err(|e| format!("Failed to save draft: {}", e))?;
+    if let Err(e) = imap::store_body_and_attachments(db, &id, raw).await {
+        let _ = db.lock_db().execute("DELETE FROM mails WHERE id = ?1", rusqlite::params![id]);
+        if let Some(dir) = crate::safe_path::mail_attachment_dir(&db.data_dir, &id) {
+            let _ = std::fs::remove_dir_all(dir);
+        }
+        return Err(format!("Failed to save draft: {}", e));
+    }
+    db.lock_db()
+        .execute("UPDATE folders SET total_count = total_count + 1 WHERE id = ?1", rusqlite::params![drafts_id])
+        .map_err(|e| e.to_string())?;
+    Ok(id)
+}
+
 /// Archive an already sent mail: APPEND it to the IMAP Sent folder, mirror it
 /// into the local DB and reconcile the folder afterwards.
 ///
@@ -374,10 +454,10 @@ async fn save_sent_copy(
         } else {
             // No folder is classified as Sent for this account — the sent copy
             // would silently vanish. Surface it instead of dropping it quietly.
-            log::warn!("send_mail: no Sent folder detected for account {} — sent copy not saved", account_id);
+            log::warn!("send_mail: no Sent folder detected — sent copy not saved");
             let _ = app.emit("sent-folder-save-failed", serde_json::json!({
                 "account_id": account_id,
-                "error": "No 'Sent' folder was detected for this account, so the sent copy could not be saved.",
+                "error": NO_SENT_FOLDER,
             }));
         }
     }
@@ -440,11 +520,28 @@ pub async fn test_smtp_connection(
 /// deduplicated by the sync).
 #[tauri::command]
 pub async fn save_draft(db: State<'_, Database>, pool: State<'_, ImapPool>, request: SendMailRequest) -> Result<Option<String>, String> {
-    let (email, display_name, imap_host, imap_port, auth_type, provider, drafts_folder_path, drafts_folder_id): (String, String, String, i32, String, String, String, Option<String>) = {
+    let pop3_sender: Option<(String, String)> = {
         let conn = db.lock_db();
         if is_pop3_account(&conn, &request.account_id) {
-            return Err(POP3_NOT_SUPPORTED.into());
+            let sender = conn
+                .query_row(
+                    "SELECT email, display_name FROM accounts WHERE id = ?1",
+                    rusqlite::params![request.account_id],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .map_err(|e| format!("Account not found: {}", e))?;
+            Some(sender)
+        } else {
+            None
         }
+    };
+    if let Some((email, display_name)) = pop3_sender {
+        let message_bytes = build_draft_message(&email, &display_name, &request)?;
+        return save_draft_local(&db, &request.account_id, &message_bytes).await.map(Some);
+    }
+
+    let (email, display_name, imap_host, imap_port, auth_type, provider, drafts_folder_path, drafts_folder_id): (String, String, String, i32, String, String, String, Option<String>) = {
+        let conn = db.lock_db();
 
         let account_info: (String, String, String, i32, String, String) = conn
             .query_row(
@@ -951,5 +1048,115 @@ mod tests {
         assert_eq!(priority_of("s1"), Some(true));
         assert_eq!(priority_of("s2"), Some(false));
         assert_eq!(due[0].request.to, vec!["anna.weber@studio-halde.example".to_string()]);
+    }
+
+    fn seed_pop3(db: &Database) -> (String, String, String) {
+        let conn = db.lock_db();
+        let account = crate::test_support::seed_account(&conn, "anna@studio-halde.example");
+        conn.execute("UPDATE accounts SET incoming_protocol = 'pop3' WHERE id = ?1", [&account]).unwrap();
+        let sent = crate::test_support::seed_folder(&conn, &account, "sent");
+        let drafts = crate::test_support::seed_folder(&conn, &account, "drafts");
+        (account, sent, drafts)
+    }
+
+    fn folder_rows(db: &Database, folder_id: &str) -> Vec<(String, bool)> {
+        let conn = db.lock_db();
+        let mut stmt = conn.prepare("SELECT id, is_read FROM mails WHERE folder_id = ?1").unwrap();
+        stmt.query_map([folder_id], |row| Ok((row.get(0)?, row.get(1)?)))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap()
+    }
+
+    fn total_count(db: &Database, folder_id: &str) -> i64 {
+        db.lock_db()
+            .query_row("SELECT total_count FROM folders WHERE id = ?1", [folder_id], |row| row.get(0))
+            .unwrap()
+    }
+
+    fn raw_mail(body: &str) -> Vec<u8> {
+        format!("From: anna@studio-halde.example\r\nTo: info@studio-halde.example\r\nSubject: Angebot\r\nMessage-ID: <angebot-1@studio-halde.example>\r\nDate: Fri, 27 Nov 2026 10:00:00 +0000\r\n\r\n{body}\r\n").into_bytes()
+    }
+
+    #[tokio::test]
+    async fn pop3_sent_copy_is_local_with_source() {
+        let db = crate::test_support::temp_db();
+        let (account, sent, _) = seed_pop3(&db);
+        let raw = raw_mail("Hallo Anna");
+
+        let id = save_sent_copy_local(&db, &account, &sent, &raw).await.unwrap();
+
+        assert_eq!(folder_rows(&db, &sent), vec![(id.clone(), true)]);
+        assert_eq!(crate::pop3::store::read_source(&db.data_dir, &id).unwrap(), raw);
+        assert_eq!(total_count(&db, &sent), 1);
+        let pending: i64 = db.lock_db().query_row("SELECT COUNT(*) FROM pending_ops", [], |row| row.get(0)).unwrap();
+        assert_eq!(pending, 0);
+    }
+
+    #[tokio::test]
+    async fn pop3_resent_message_with_other_bytes_becomes_a_twin() {
+        let db = crate::test_support::temp_db();
+        let (account, sent, _) = seed_pop3(&db);
+        let first = raw_mail("Hallo Anna");
+        let second = raw_mail("Hallo Anna, neuer Stand");
+
+        let first_id = save_sent_copy_local(&db, &account, &sent, &first).await.unwrap();
+        assert_eq!(save_sent_copy_local(&db, &account, &sent, &first).await.unwrap(), first_id);
+        assert_eq!(folder_rows(&db, &sent).len(), 1);
+        assert_eq!(std::fs::read_dir(db.data_dir.join("mail_sources")).unwrap().count(), 1);
+
+        let second_id = save_sent_copy_local(&db, &account, &sent, &second).await.unwrap();
+        assert_ne!(first_id, second_id);
+        assert_eq!(folder_rows(&db, &sent).len(), 2);
+        assert_eq!(crate::pop3::store::read_source(&db.data_dir, &first_id).unwrap(), first);
+        assert_eq!(crate::pop3::store::read_source(&db.data_dir, &second_id).unwrap(), second);
+        assert_eq!(total_count(&db, &sent), 2);
+    }
+
+    #[tokio::test]
+    async fn pop3_sent_copy_keeps_the_row_when_the_source_cannot_be_written() {
+        let db = crate::test_support::temp_db();
+        let (account, sent, _) = seed_pop3(&db);
+        std::fs::write(db.data_dir.join("mail_sources"), b"x").unwrap();
+
+        assert!(save_sent_copy_local(&db, &account, &sent, &raw_mail("Hallo Anna")).await.is_err());
+
+        assert_eq!(folder_rows(&db, &sent).len(), 1);
+        assert_eq!(total_count(&db, &sent), 1);
+    }
+
+    #[tokio::test]
+    async fn pop3_draft_is_local_without_source() {
+        let db = crate::test_support::temp_db();
+        let (account, _, drafts) = seed_pop3(&db);
+        let draft = || build_draft_message("anna@studio-halde.example", "Anna Weber", &scheduled_request(&account, "Entwurf", false)).unwrap();
+
+        let first = save_draft_local(&db, &account, &draft()).await.unwrap();
+        let second = save_draft_local(&db, &account, &draft()).await.unwrap();
+
+        assert_ne!(first, second);
+        assert_eq!(folder_rows(&db, &drafts).len(), 2);
+        assert_eq!(total_count(&db, &drafts), 2);
+        assert!(!crate::pop3::store::has_source(&db.data_dir, &first));
+        assert!(!crate::pop3::store::has_source(&db.data_dir, &second));
+    }
+
+    #[tokio::test]
+    async fn pop3_draft_without_drafts_folder_is_an_error() {
+        let db = crate::test_support::temp_db();
+        let (account, _, drafts) = seed_pop3(&db);
+        db.lock_db().execute("DELETE FROM folders WHERE id = ?1", [&drafts]).unwrap();
+        let raw = build_draft_message("anna@studio-halde.example", "Anna Weber", &scheduled_request(&account, "Entwurf", false)).unwrap();
+
+        assert!(save_draft_local(&db, &account, &raw).await.is_err());
+    }
+
+    #[test]
+    fn pop3_accounts_load_for_sending() {
+        let db = crate::test_support::temp_db();
+        let (account, sent, _) = seed_pop3(&db);
+        let loaded = load_send_account(&db, &account).unwrap();
+        assert!(loaded.pop3);
+        assert_eq!(loaded.sent_folder.map(|(id, _)| id), Some(sent));
     }
 }

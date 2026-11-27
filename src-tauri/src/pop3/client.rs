@@ -163,6 +163,11 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Pop3Client<S> {
         Ok(body.data)
     }
 
+    /// False after a transport or protocol failure; a `-ERR` reply or an oversized message leaves it usable.
+    pub(crate) fn is_usable(&self) -> bool {
+        !self.broken
+    }
+
     /// The inner Err carries the text of a `-ERR` reply; the outer one is a transport or protocol failure.
     pub async fn dele(&mut self, msg: u32) -> Result<Result<(), String>, Pop3Error> {
         Ok(self.simple(&format!("DELE {msg}")).await?.map(drop))

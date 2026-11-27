@@ -1316,6 +1316,12 @@ pub(crate) fn local_mail_fields(raw_bytes: &[u8]) -> Option<LocalMailFields> {
     })
 }
 
+/// Subject, sender address and date exactly as a local insert of these bytes would store them.
+pub(crate) fn local_mail_identity(raw_bytes: &[u8]) -> (String, String, String) {
+    let f = local_mail_fields(raw_bytes).unwrap_or_else(|| placeholder_mail_fields(raw_bytes));
+    (f.subject, f.from_email, f.date)
+}
+
 fn placeholder_mail_fields(raw_bytes: &[u8]) -> LocalMailFields {
     let head = &raw_bytes[..raw_bytes.len().min(64 * 1024)];
     let head_text = String::from_utf8_lossy(head);
@@ -1623,7 +1629,9 @@ pub async fn store_body_and_attachments(db: &Database, mail_id: &str, body_bytes
             };
             s.replace('\n', " ").replace('\r', "")
         };
-        let attach_dir = db.data_dir.join("attachments").join(mail_id);
+        let Some(attach_dir) = crate::safe_path::mail_attachment_dir(&db.data_dir, mail_id) else {
+            anyhow::bail!("unusable mail id, attachments not stored");
+        };
         let _ = tokio::fs::create_dir_all(&attach_dir).await;
 
         let mut processed_filenames = std::collections::HashSet::new();
@@ -1726,7 +1734,7 @@ fn extract_first_address(addr: Option<&mail_parser::Address<'_>>) -> (String, St
     }
 }
 
-fn sanitize_filename(name: &str) -> String {
+pub(crate) fn sanitize_filename(name: &str) -> String {
     let sanitized: String = name
         .chars()
         .map(|c| match c {

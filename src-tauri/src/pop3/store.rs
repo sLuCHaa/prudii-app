@@ -3,13 +3,22 @@ use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Duration, Utc};
 
+use crate::safe_path::is_safe_mail_id;
+
 pub fn source_path(data_dir: &Path, mail_id: &str) -> PathBuf {
     data_dir.join("mail_sources").join(format!("{mail_id}.eml"))
 }
 
+fn checked_path(data_dir: &Path, mail_id: &str) -> std::io::Result<PathBuf> {
+    if !is_safe_mail_id(mail_id) {
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "unusable mail id"));
+    }
+    Ok(source_path(data_dir, mail_id))
+}
+
 pub fn write_source(data_dir: &Path, mail_id: &str, raw: &[u8]) -> std::io::Result<()> {
     use std::io::Write;
-    let path = source_path(data_dir, mail_id);
+    let path = checked_path(data_dir, mail_id)?;
     let dir = data_dir.join("mail_sources");
     std::fs::create_dir_all(&dir)?;
     let tmp = dir.join(format!("{mail_id}.eml.tmp"));
@@ -27,7 +36,7 @@ pub fn write_source(data_dir: &Path, mail_id: &str, raw: &[u8]) -> std::io::Resu
 }
 
 pub fn move_source(data_dir: &Path, from_id: &str, to_id: &str) -> std::io::Result<()> {
-    std::fs::rename(source_path(data_dir, from_id), source_path(data_dir, to_id))?;
+    std::fs::rename(checked_path(data_dir, from_id)?, checked_path(data_dir, to_id)?)?;
     sync_dir(&data_dir.join("mail_sources"))
 }
 
@@ -43,11 +52,23 @@ fn sync_dir(_dir: &Path) -> std::io::Result<()> {
 }
 
 pub fn read_source(data_dir: &Path, mail_id: &str) -> std::io::Result<Vec<u8>> {
-    std::fs::read(source_path(data_dir, mail_id))
+    std::fs::read(checked_path(data_dir, mail_id)?)
+}
+
+pub fn source_matches(data_dir: &Path, mail_id: &str, raw: &[u8]) -> bool {
+    match read_source(data_dir, mail_id) {
+        Ok(stored) => stored == raw,
+        Err(e) => {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                log::warn!("POP3: could not read a raw source: {}", e.kind());
+            }
+            false
+        }
+    }
 }
 
 pub fn has_source(data_dir: &Path, mail_id: &str) -> bool {
-    std::fs::metadata(source_path(data_dir, mail_id)).is_ok_and(|m| m.is_file() && m.len() > 0)
+    checked_path(data_dir, mail_id).and_then(std::fs::metadata).is_ok_and(|m| m.is_file() && m.len() > 0)
 }
 
 pub struct UidlRow {
@@ -76,7 +97,8 @@ pub fn plan_deletions(
     server_uidls: &HashSet<String>,
 ) -> Vec<String> {
     rows.iter()
-        .filter(|r| r.state == "stored" && r.mail_id.is_some() && server_uidls.contains(&r.uidl))
+        .filter(|r| matches!(r.state.as_str(), "stored" | "restored"))
+        .filter(|r| r.mail_id.is_some() && server_uidls.contains(&r.uidl))
         .filter(|r| {
             let by_mode = match policy.mode {
                 DeleteMode::Keep => false,
@@ -174,6 +196,14 @@ mod tests {
     }
 
     #[test]
+    fn plan_deletions_includes_restored_rows() {
+        let mut rows = rows();
+        rows[0].state = "restored".into();
+        let planned = plan_deletions(now(), &policy(DeleteMode::AfterFetch, false), &rows, &server(&["u1", "u2"]));
+        assert_eq!(planned, vec!["u1", "u2"]);
+    }
+
+    #[test]
     fn never_deletes_server_deleted_state() {
         let mut rows = rows();
         rows[0].state = "server_deleted".into();
@@ -205,6 +235,15 @@ mod tests {
         assert!(!has_source(&dir, "m1"));
         write_source(&dir, "m1", b"").unwrap();
         assert!(!has_source(&dir, "m1"));
+    }
+
+    #[test]
+    fn source_matches_is_false_for_a_missing_file() {
+        let dir = temp_dir();
+        assert!(!source_matches(&dir, "m1", b""));
+        write_source(&dir, "m1", b"alt").unwrap();
+        assert!(source_matches(&dir, "m1", b"alt"));
+        assert!(!source_matches(&dir, "m1", b"neu"));
     }
 
     #[test]
