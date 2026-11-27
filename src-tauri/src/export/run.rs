@@ -36,6 +36,7 @@ struct FolderInfo {
     folder_type: String,
     is_local: bool,
     uses_api: bool,
+    pop3: bool,
     account_id: String,
     account_email: String,
     account_name: String,
@@ -100,15 +101,14 @@ fn load_folders(db: &Database, labels: &ExportLabels, ids: &[String]) -> Vec<Fol
                 let folder_type: String = row.get(2)?;
                 let name: String = row.get(1)?;
                 let (provider, auth_type, incoming_protocol): (String, String, String) = (row.get(7)?, row.get(8)?, row.get(9)?);
+                let api_type = api_type_of(&provider, &auth_type, &incoming_protocol);
                 Ok(FolderInfo {
                     id: row.get(0)?,
                     name: labels.folder_names.get(&folder_type).cloned().unwrap_or(name),
                     folder_type,
                     is_local: row.get::<_, i64>(3)? != 0,
-                    uses_api: match api_type_of(&provider, &auth_type, &incoming_protocol) {
-                        ApiType::Gmail | ApiType::Outlook => true,
-                        ApiType::Imap | ApiType::Pop3 => false,
-                    },
+                    uses_api: matches!(api_type, ApiType::Gmail | ApiType::Outlook),
+                    pop3: matches!(api_type, ApiType::Pop3),
                     account_id: row.get(4)?,
                     account_email: row.get(5)?,
                     account_name: row.get(6)?,
@@ -351,7 +351,7 @@ where
     }
     let row_date = parse_local_date(&row.date);
     // A local IMAP folder's stored UID would fetch another mail; a moved or sent mail has none until the next sync.
-    let local_only = !folder.uses_api && (folder.is_local || !row.has_uid);
+    let local_only = !folder.uses_api && !folder.pop3 && (folder.is_local || !row.has_uid);
 
     let mut original: Option<(Vec<u8>, ParsedMail)> = None;
     if !local_only && !breaker.is_open(&folder.account_id) {
@@ -726,6 +726,29 @@ JVBERi0xLjQ=\n\
             |_| {},
         )
         .await
+    }
+
+    #[tokio::test]
+    async fn pop3_export_uses_the_stored_source() {
+        let w = world();
+        let id = {
+            let conn = w.db.lock_db();
+            conn.execute("UPDATE accounts SET incoming_protocol = 'pop3' WHERE id = ?1", [&w.account]).unwrap();
+            seed_mail(&conn, &SeedMail { account_id: &w.account, folder_id: &w.folder, subject: FIXTURE_SUBJECT, ..Default::default() })
+        };
+        set_body(&w, &id, "", "Hallo aus der lokalen Kopie");
+        let raw = fixture();
+
+        let out = Out::new();
+        let summary = run(&w, &options(vec![w.folder.clone()]), &out.0, HashMap::from([(id, Ok(raw.clone()))])).await;
+        assert_eq!((summary.exported, summary.local_copy, summary.failed), (1, 0, 0));
+        let eml = files(&out.0, "eml");
+        assert_eq!(eml.len(), 1);
+        assert_eq!(std::fs::read(&eml[0]).unwrap(), raw);
+
+        let out = Out::new();
+        let summary = run(&w, &options(vec![w.folder.clone()]), &out.0, HashMap::new()).await;
+        assert_eq!((summary.local_copy, summary.failed), (1, 0));
     }
 
     #[tokio::test]

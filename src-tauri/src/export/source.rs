@@ -138,6 +138,27 @@ pub async fn fetch_raw_message(db: &Database, pool: &ImapPool, mail_id: &str) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::{seed_account, seed_folder, seed_mail, temp_db, SeedMail};
+
+    #[test]
+    fn pop3_source_reads_local_file() {
+        let db = temp_db();
+        let id = {
+            let conn = db.lock_db();
+            let account = seed_account(&conn, "anna@studio-halde.example");
+            conn.execute("UPDATE accounts SET incoming_protocol = 'pop3' WHERE id = ?1", [&account]).unwrap();
+            let inbox = seed_folder(&conn, &account, "inbox");
+            seed_mail(&conn, &SeedMail { account_id: &account, folder_id: &inbox, ..Default::default() })
+        };
+        assert!(pop3_source(&db, &id).is_err());
+
+        crate::pop3::store::write_source(&db.data_dir, &id, b"").unwrap();
+        assert!(pop3_source(&db, &id).is_err());
+
+        let raw = b"Subject: Angebot\r\n\r\nHallo\r\n";
+        crate::pop3::store::write_source(&db.data_dir, &id, raw).unwrap();
+        assert_eq!(pop3_source(&db, &id).unwrap(), raw);
+    }
 
     #[test]
     fn display_source_keeps_bytes_lossless_until_display() {

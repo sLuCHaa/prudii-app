@@ -1028,9 +1028,10 @@ pub async fn fetch_mail_body(
             }
             ApiType::Imap => {} // fall through to IMAP path below
             ApiType::Pop3 => {
+                let result = pop3_load_body(&db, &mail_id).await;
                 let mut fetching = FETCHING_BODIES.lock().unwrap_or_else(|e| e.into_inner());
                 fetching.remove(&mail_id);
-                return Err(POP3_NOT_SUPPORTED.into());
+                return result;
             }
         }
     }
@@ -1045,6 +1046,17 @@ pub async fn fetch_mail_body(
     result
 }
 
+async fn pop3_load_body(db: &Database, mail_id: &str) -> Result<Mail, String> {
+    let raw = match crate::pop3::store::read_source(&db.data_dir, mail_id) {
+        Ok(raw) if !raw.is_empty() => raw,
+        _ => return Err("The stored source of this mail is missing or empty.".into()),
+    };
+    imap::store_body_and_attachments(db, mail_id, &raw)
+        .await
+        .map_err(|e| format!("Failed to read mail body: {}", e))?;
+    get_mail_inner(db, mail_id)?.ok_or_else(|| "Mail not found after body fetch".to_string())
+}
+
 async fn fetch_mail_body_inner(
     db: &State<'_, Database>,
     pool: &State<'_, ImapPool>,
@@ -1052,7 +1064,7 @@ async fn fetch_mail_body_inner(
     t_start: std::time::Instant,
 ) -> Result<Mail, String> {
     if mail_is_pop3(db, mail_id) {
-        return Err(POP3_NOT_SUPPORTED.into());
+        return pop3_load_body(db, mail_id).await;
     }
     let (account_id, folder_path, uid, size_bytes, message_id): (String, String, u32, Option<i64>, Option<String>) = {
         let conn = db.lock_db();
@@ -5400,6 +5412,34 @@ mod pop3_tests {
         assert!(matches!(get_api_type(&db, &account).0, ApiType::Pop3));
         assert!(mail_is_pop3(&db, &mail));
         assert!(!mail_is_pop3(&db, "missing"));
+    }
+
+    #[tokio::test]
+    async fn pop3_body_is_loaded_from_the_source() {
+        let db = temp_db();
+        let (mail, missing) = {
+            let conn = db.lock_db();
+            let account = seed_account(&conn, "anna@studio-halde.example");
+            conn.execute("UPDATE accounts SET incoming_protocol = 'pop3' WHERE id = ?1", [&account]).unwrap();
+            let inbox = seed_folder(&conn, &account, "inbox");
+            let [mail, missing] = [(), ()].map(|_| seed_mail(&conn, &SeedMail { account_id: &account, folder_id: &inbox, ..Default::default() }));
+            conn.execute("UPDATE mails SET body_html = '', body_text = '', has_attachments = 1", []).unwrap();
+            (mail, missing)
+        };
+        let source = "From: Anna Weber <anna@kunde.example>\r\nSubject: Angebot\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"x\"\r\n\r\n--x\r\nContent-Type: text/plain\r\n\r\nHallo aus der Rohdatei\r\n--x\r\nContent-Type: application/pdf; name=\"Angebot.pdf\"\r\nContent-Disposition: attachment; filename=\"Angebot.pdf\"\r\nContent-Transfer-Encoding: base64\r\n\r\nJVBERi0xLjQ=\r\n--x--\r\n";
+        crate::pop3::store::write_source(&db.data_dir, &mail, source.as_bytes()).unwrap();
+
+        let loaded = pop3_load_body(&db, &mail).await.unwrap();
+
+        assert!(loaded.body_text.contains("Hallo aus der Rohdatei"));
+        let attachments: i64 = db
+            .lock_db()
+            .query_row("SELECT COUNT(*) FROM attachments WHERE mail_id = ?1 AND filename = 'Angebot.pdf'", [&mail], |r| r.get(0))
+            .unwrap();
+        assert_eq!(attachments, 1);
+        assert!(pop3_load_body(&db, &missing).await.is_err());
+        crate::pop3::store::write_source(&db.data_dir, &missing, b"").unwrap();
+        assert!(pop3_load_body(&db, &missing).await.is_err());
     }
 
     struct Target {
