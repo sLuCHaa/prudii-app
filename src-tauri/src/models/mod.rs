@@ -1,5 +1,11 @@
 use serde::{Deserialize, Serialize};
 
+pub const DEFAULT_INCOMING_PROTOCOL: &str = "imap";
+pub const DEFAULT_INCOMING_SECURITY: &str = "ssl";
+pub const DEFAULT_POP3_DELETE_MODE: &str = "after_days";
+pub const DEFAULT_POP3_DELETE_WITH_LOCAL: bool = true;
+pub const DEFAULT_POP3_DELETE_AFTER_DAYS: i64 = 14;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Account {
     pub id: String,
@@ -23,6 +29,11 @@ pub struct Account {
     pub load_external_images: String,
     pub created_at: String,
     pub updated_at: String,
+    pub incoming_protocol: String, // "imap" or "pop3"
+    pub incoming_security: String, // "ssl" or "starttls", read for POP3 only
+    pub pop3_delete_mode: String,  // "keep", "after_fetch" or "after_days"
+    pub pop3_delete_after_days: i64,
+    pub pop3_delete_with_local: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -48,6 +59,16 @@ pub struct CreateAccountRequest {
     pub smtp_security: String, // "ssl" or "starttls"
     pub password: String,
     pub auth_type: String,
+    #[serde(default)]
+    pub incoming_protocol: Option<String>,
+    #[serde(default)]
+    pub incoming_security: Option<String>,
+    #[serde(default)]
+    pub pop3_delete_mode: Option<String>,
+    #[serde(default)]
+    pub pop3_delete_after_days: Option<i64>,
+    #[serde(default)]
+    pub pop3_delete_with_local: Option<bool>,
 }
 
 // Custom Debug impl to avoid logging passwords

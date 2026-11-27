@@ -2,22 +2,28 @@ use crate::credentials;
 use crate::db::Database;
 use crate::gmail;
 use crate::outlook;
-use crate::models::{Account, CreateAccountRequest, Folder};
+use crate::commands::mails::{is_pop3_account, POP3_NOT_SUPPORTED};
+use crate::models::{
+    Account, CreateAccountRequest, Folder, DEFAULT_INCOMING_PROTOCOL, DEFAULT_INCOMING_SECURITY,
+    DEFAULT_POP3_DELETE_AFTER_DAYS, DEFAULT_POP3_DELETE_MODE, DEFAULT_POP3_DELETE_WITH_LOCAL,
+};
 use tauri::State;
 
 /// API type for an account — determines which backend to use for folder operations.
-enum FolderApiType { Gmail, Outlook, Imap }
+enum FolderApiType { Gmail, Outlook, Imap, Pop3 }
 
 fn get_folder_api_type(db: &Database, account_id: &str) -> (FolderApiType, String, String) {
     let conn = db.lock_db();
-    let result: Result<(String, String), _> = conn.query_row(
-        "SELECT provider, auth_type FROM accounts WHERE id = ?1",
+    let result: Result<(String, String, String), _> = conn.query_row(
+        "SELECT provider, auth_type, incoming_protocol FROM accounts WHERE id = ?1",
         rusqlite::params![account_id],
-        |row| Ok((row.get(0)?, row.get(1)?)),
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
     );
     match result {
-        Ok((provider, auth_type)) => {
-            let api = if provider == "google" && auth_type == "oauth" {
+        Ok((provider, auth_type, incoming_protocol)) => {
+            let api = if incoming_protocol == "pop3" {
+                FolderApiType::Pop3
+            } else if provider == "google" && auth_type == "oauth" {
                 FolderApiType::Gmail
             } else if provider == "microsoft" && auth_type == "oauth" {
                 FolderApiType::Outlook
@@ -40,7 +46,7 @@ pub fn list_accounts(db: State<'_, Database>) -> Result<Vec<Account>, String> {
 pub fn list_accounts_inner(conn: &rusqlite::Connection) -> Result<Vec<Account>, String> {
     let mut stmt = conn
         .prepare(
-            "SELECT a.id, a.email, a.display_name, a.provider, a.color, a.imap_host, a.imap_port, a.smtp_host, a.smtp_port, COALESCE(a.smtp_security, 'ssl') as smtp_security, a.auth_type, COALESCE(s.html, '') as signature_html, COALESCE(s.text, '') as signature_text, COALESCE(a.signature_on_compose, 1) as signature_on_compose, COALESCE(a.signature_on_reply, 1) as signature_on_reply, COALESCE(a.sync_interval_minutes, 0) as sync_interval_minutes, COALESCE(a.load_external_images, 'always') as load_external_images, a.created_at, a.updated_at, s.id as signature_id FROM accounts a LEFT JOIN signatures s ON s.id = a.signature_id ORDER BY a.created_at ASC",
+            "SELECT a.id, a.email, a.display_name, a.provider, a.color, a.imap_host, a.imap_port, a.smtp_host, a.smtp_port, COALESCE(a.smtp_security, 'ssl') as smtp_security, a.auth_type, COALESCE(s.html, '') as signature_html, COALESCE(s.text, '') as signature_text, COALESCE(a.signature_on_compose, 1) as signature_on_compose, COALESCE(a.signature_on_reply, 1) as signature_on_reply, COALESCE(a.sync_interval_minutes, 0) as sync_interval_minutes, COALESCE(a.load_external_images, 'always') as load_external_images, a.created_at, a.updated_at, s.id as signature_id, a.incoming_protocol, a.incoming_security, a.pop3_delete_mode, a.pop3_delete_after_days, a.pop3_delete_with_local FROM accounts a LEFT JOIN signatures s ON s.id = a.signature_id ORDER BY a.created_at ASC",
         )
         .map_err(|e| e.to_string())?;
 
@@ -67,6 +73,11 @@ pub fn list_accounts_inner(conn: &rusqlite::Connection) -> Result<Vec<Account>, 
                 load_external_images: row.get(16)?,
                 created_at: row.get(17)?,
                 updated_at: row.get(18)?,
+                incoming_protocol: row.get(20)?,
+                incoming_security: row.get(21)?,
+                pop3_delete_mode: row.get(22)?,
+                pop3_delete_after_days: row.get(23)?,
+                pop3_delete_with_local: row.get(24)?,
             })
         })
         .map_err(|e| e.to_string())?
@@ -76,33 +87,66 @@ pub fn list_accounts_inner(conn: &rusqlite::Connection) -> Result<Vec<Account>, 
     Ok(accounts)
 }
 
+/// The account a new one with this address takes the place of.
+/// - Same provider + auth_type → re-add after failed attempt: clean up and replace.
+/// - Different provider/auth_type → reject with a clear error so users notice that
+///   their OAuth provider returned an email belonging to an existing account
+///   (e.g. Outlook configured with a Gmail address as primary).
+fn replaceable_id(conn: &rusqlite::Connection, email: &str, provider: &str, auth_type: &str) -> Result<Option<String>, String> {
+    let existing: Option<(String, String, String)> = conn
+        .query_row(
+            "SELECT id, provider, auth_type FROM accounts WHERE email = ?1",
+            rusqlite::params![email],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .ok();
+    let Some((old_id, old_provider, old_auth_type)) = existing else {
+        return Ok(None);
+    };
+    if old_provider != provider || old_auth_type != auth_type {
+        return Err(format!(
+            "EMAIL_PROVIDER_CONFLICT|{}|{}|{}",
+            email, old_provider, old_auth_type
+        ));
+    }
+    if is_pop3_account(conn, &old_id) {
+        return Err(pop3_account_exists(email));
+    }
+    Ok(Some(old_id))
+}
+
+/// Replacing a POP3 account would delete mail that may exist nowhere else.
+pub(crate) fn pop3_account_exists(email: &str) -> String {
+    format!("POP3_ACCOUNT_EXISTS|{}", email)
+}
+
 #[tauri::command(async)]
 pub fn create_account(
     app: tauri::AppHandle,
     db: State<'_, Database>,
     request: CreateAccountRequest,
 ) -> Result<Account, String> {
+    let incoming_protocol = request.incoming_protocol.unwrap_or_else(|| DEFAULT_INCOMING_PROTOCOL.to_string());
+    let incoming_security = request.incoming_security.unwrap_or_else(|| DEFAULT_INCOMING_SECURITY.to_string());
+    let pop3_delete_mode = request.pop3_delete_mode.unwrap_or_else(|| DEFAULT_POP3_DELETE_MODE.to_string());
+    let pop3_delete_after_days = request.pop3_delete_after_days.unwrap_or(DEFAULT_POP3_DELETE_AFTER_DAYS);
+    let pop3_delete_with_local = request.pop3_delete_with_local.unwrap_or(DEFAULT_POP3_DELETE_WITH_LOCAL);
+    if !["imap", "pop3"].contains(&incoming_protocol.as_str()) {
+        return Err(format!("Invalid incoming protocol: '{}'. Must be 'imap' or 'pop3'.", incoming_protocol));
+    }
+    if !["ssl", "starttls"].contains(&incoming_security.as_str()) {
+        return Err(format!("Invalid incoming security mode: '{}'. Must be 'ssl' or 'starttls'.", incoming_security));
+    }
+    if !["keep", "after_fetch", "after_days"].contains(&pop3_delete_mode.as_str()) {
+        return Err(format!("Invalid POP3 delete mode: '{}'.", pop3_delete_mode));
+    }
+    if pop3_delete_after_days < 0 {
+        return Err(format!("Invalid POP3 delete delay: {}", pop3_delete_after_days));
+    }
+
     let conn = db.lock_db();
 
-    // Check for existing account with the same email.
-    // - Same provider + auth_type → re-add after failed attempt: clean up and replace.
-    // - Different provider/auth_type → reject with a clear error so users notice that
-    //   their OAuth provider returned an email belonging to an existing account
-    //   (e.g. Outlook configured with a Gmail address as primary).
-    let existing: Option<(String, String, String)> = conn
-        .query_row(
-            "SELECT id, provider, auth_type FROM accounts WHERE email = ?1",
-            rusqlite::params![request.email],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-        )
-        .ok();
-    if let Some((old_id, old_provider, old_auth_type)) = existing {
-        if old_provider != request.provider || old_auth_type != request.auth_type {
-            return Err(format!(
-                "EMAIL_PROVIDER_CONFLICT|{}|{}|{}",
-                request.email, old_provider, old_auth_type
-            ));
-        }
+    if let Some(old_id) = replaceable_id(&conn, &request.email, &request.provider, &request.auth_type)? {
         log::info!("Cleaning up existing account {} before re-add (same provider)", old_id);
         // Mirror delete_account's teardown — an orphaned IDLE watcher would
         // reconnect to the mailbox forever.
@@ -138,8 +182,8 @@ pub fn create_account(
     let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
 
     conn.execute(
-        "INSERT INTO accounts (id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port, smtp_security, auth_type, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
-        rusqlite::params![id, request.email, request.display_name, request.provider, request.color, request.imap_host, request.imap_port, request.smtp_host, request.smtp_port, request.smtp_security, request.auth_type, now, now],
+        "INSERT INTO accounts (id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port, smtp_security, auth_type, created_at, updated_at, incoming_protocol, incoming_security, pop3_delete_mode, pop3_delete_after_days, pop3_delete_with_local) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+        rusqlite::params![id, request.email, request.display_name, request.provider, request.color, request.imap_host, request.imap_port, request.smtp_host, request.smtp_port, request.smtp_security, request.auth_type, now, now, incoming_protocol, incoming_security, pop3_delete_mode, pop3_delete_after_days, pop3_delete_with_local],
     )
     .map_err(|e| e.to_string())?;
 
@@ -172,6 +216,11 @@ pub fn create_account(
         load_external_images: "always".to_string(),
         created_at: now.clone(),
         updated_at: now,
+        incoming_protocol,
+        incoming_security,
+        pop3_delete_mode,
+        pop3_delete_after_days,
+        pop3_delete_with_local,
     })
 }
 
@@ -443,6 +492,9 @@ pub async fn create_folder(
 ) -> Result<Folder, String> {
     let path = if !is_local {
         let (api_type, provider, auth_type) = get_folder_api_type(&db, &account_id);
+        if matches!(api_type, FolderApiType::Pop3) {
+            return Err(POP3_NOT_SUPPORTED.into());
+        }
         let credential = credentials::resolve_credential(&account_id, &auth_type, &provider)
             .await
             .map_err(|e| format!("Failed to retrieve credentials: {}", e))?;
@@ -477,6 +529,7 @@ pub async fn create_folder(
                 let _ = session.logout().await;
                 result.map_err(|e| format!("Failed to create folder on server: {}", e))?
             }
+            FolderApiType::Pop3 => return Err(POP3_NOT_SUPPORTED.into()),
         }
     } else {
         name.clone()
@@ -523,6 +576,9 @@ pub async fn delete_folder(
 
     if !is_local {
         let (api_type, provider, auth_type) = get_folder_api_type(&db, &account_id);
+        if matches!(api_type, FolderApiType::Pop3) {
+            return Err(POP3_NOT_SUPPORTED.into());
+        }
         let credential = credentials::resolve_credential(&account_id, &auth_type, &provider)
             .await
             .map_err(|e| format!("Failed to retrieve credentials: {}", e))?;
@@ -561,6 +617,7 @@ pub async fn delete_folder(
                     log::warn!("IMAP delete folder '{}' failed (may already be gone): {}", path, e);
                 }
             }
+            FolderApiType::Pop3 => return Err(POP3_NOT_SUPPORTED.into()),
         }
     }
 
@@ -605,6 +662,9 @@ pub async fn rename_folder(
 
     if !is_local {
         let (api_type, provider, auth_type) = get_folder_api_type(&db, &account_id);
+        if matches!(api_type, FolderApiType::Pop3) {
+            return Err(POP3_NOT_SUPPORTED.into());
+        }
         let credential = credentials::resolve_credential(&account_id, &auth_type, &provider)
             .await
             .map_err(|e| format!("Failed to retrieve credentials: {}", e))?;
@@ -644,6 +704,7 @@ pub async fn rename_folder(
                 let _ = session.logout().await;
                 result.map_err(|e| format!("Failed to rename folder on server: {}", e))?;
             }
+            FolderApiType::Pop3 => return Err(POP3_NOT_SUPPORTED.into()),
         }
     }
 
@@ -652,7 +713,8 @@ pub async fn rename_folder(
     let (api_type, _, _) = get_folder_api_type(&db, &account_id);
     let new_path = match api_type {
         FolderApiType::Gmail | FolderApiType::Outlook => old_path,
-        FolderApiType::Imap => {
+        // A POP3 folder only reaches this point when it is local, which renames like an IMAP one.
+        FolderApiType::Imap | FolderApiType::Pop3 => {
             if let Some(sep_pos) = old_path.rfind('.').or_else(|| old_path.rfind('/')) {
                 format!("{}{}", &old_path[..=sep_pos], new_name)
             } else {
@@ -688,4 +750,22 @@ pub async fn start_oauth(provider: String) -> Result<OAuthResult, String> {
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token,
     })
+}
+
+#[cfg(test)]
+mod replace_tests {
+    use super::replaceable_id;
+    use crate::test_support::{seed_account, temp_db};
+
+    #[test]
+    fn a_pop3_account_is_never_replaced() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        let id = seed_account(&conn, "anna@studio-halde.example");
+        let replace = || replaceable_id(&conn, "anna@studio-halde.example", "imap", "password");
+        assert_eq!(replace(), Ok(Some(id)));
+        conn.execute("UPDATE accounts SET incoming_protocol = 'pop3'", []).unwrap();
+        assert_eq!(replace(), Err("POP3_ACCOUNT_EXISTS|anna@studio-halde.example".to_string()));
+        assert_eq!(replaceable_id(&conn, "info@studio-halde.example", "imap", "password"), Ok(None));
+    }
 }

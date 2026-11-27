@@ -6,7 +6,7 @@ use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
-pub(crate) const SCHEMA_VERSION: u32 = 49;
+pub(crate) const SCHEMA_VERSION: u32 = 50;
 
 pub struct Database {
     pub conn: Mutex<Connection>,
@@ -105,6 +105,18 @@ impl Database {
         let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_attachments_inline ON attachments(is_inline, mail_id);");
         // Body prefetch and backfill look for mails without a body; without this they read every body in the folder.
         let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_mails_folder_missing_body ON mails(folder_id, date DESC) WHERE body_text = '' AND uid IS NOT NULL;");
+        {
+            use crate::models::*;
+            for column in [
+                format!("incoming_protocol TEXT NOT NULL DEFAULT '{DEFAULT_INCOMING_PROTOCOL}'"),
+                format!("incoming_security TEXT NOT NULL DEFAULT '{DEFAULT_INCOMING_SECURITY}'"),
+                format!("pop3_delete_mode TEXT NOT NULL DEFAULT '{DEFAULT_POP3_DELETE_MODE}'"),
+                format!("pop3_delete_after_days INTEGER NOT NULL DEFAULT {DEFAULT_POP3_DELETE_AFTER_DAYS}"),
+                format!("pop3_delete_with_local INTEGER NOT NULL DEFAULT {}", DEFAULT_POP3_DELETE_WITH_LOCAL as i32),
+            ] {
+                let _ = conn.execute_batch(&format!("ALTER TABLE accounts ADD COLUMN {column};"));
+            }
+        }
 
         let _ = conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS ai_cache (
@@ -535,6 +547,7 @@ impl Database {
         // Expensive cleanup: only run when schema version has changed (i.e., on upgrade).
         // On normal startup (prev_version == SCHEMA_VERSION) these are skipped entirely.
         if prev_version < SCHEMA_VERSION {
+            // POP3 accounts are exempt from both deletes: the local mail is the only copy.
             // Clean up duplicate API mails (Gmail/Outlook where uid IS NULL).
             // UNIQUE(account_id, folder_id, uid) does NOT prevent NULL uid duplicates.
             // Keep the earliest inserted row per (account_id, folder_id, message_id).
@@ -543,7 +556,7 @@ impl Database {
                 "DELETE FROM mails WHERE uid IS NULL AND message_id IS NOT NULL AND message_id != '' AND rowid NOT IN (
                     SELECT MIN(rowid) FROM mails WHERE uid IS NULL AND message_id IS NOT NULL AND message_id != ''
                     GROUP BY account_id, folder_id, message_id
-                )",
+                ) AND account_id NOT IN (SELECT id FROM accounts WHERE incoming_protocol = 'pop3')",
                 [],
             ).unwrap_or(0);
             // Also clean duplicates where message_id matches across same folder (catches uid != NULL edge cases too)
@@ -552,7 +565,7 @@ impl Database {
                 "DELETE FROM mails WHERE rowid NOT IN (
                     SELECT MIN(rowid) FROM mails
                     GROUP BY account_id, folder_id, COALESCE(NULLIF(message_id, ''), id)
-                )",
+                ) AND account_id NOT IN (SELECT id FROM accounts WHERE incoming_protocol = 'pop3')",
                 [],
             ).unwrap_or(0);
             if api_dupes > 0 || general_dupes > 0 {
@@ -776,4 +789,54 @@ impl Database {
         Ok(())
     }
 
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::test_support::*;
+
+    fn count_after_upgrade(protocol: &str, uids: [Option<i64>; 2]) -> i64 {
+        let db = temp_db();
+        let account = {
+            let conn = db.lock_db();
+            let account = seed_account(&conn, "anna.weber@studio-halde.example");
+            conn.execute(
+                "UPDATE accounts SET incoming_protocol = ?1 WHERE id = ?2",
+                rusqlite::params![protocol, account],
+            )
+            .unwrap();
+            let folder = seed_folder(&conn, &account, "inbox");
+            conn.execute_batch("DROP INDEX idx_mails_gmail_dedup;").unwrap();
+            for uid in uids {
+                let id = seed_mail(&conn, &SeedMail { account_id: &account, folder_id: &folder, ..Default::default() });
+                conn.execute(
+                    "UPDATE mails SET uid = ?1, message_id = '<angebot@studio-halde.example>' WHERE id = ?2",
+                    rusqlite::params![uid, id],
+                )
+                .unwrap();
+            }
+            conn.pragma_update(None, "user_version", 0).unwrap();
+            account
+        };
+        db.run_migrations().unwrap();
+        let conn = db.lock_db();
+        conn.query_row("SELECT COUNT(*) FROM mails WHERE account_id = ?1", [&account], |row| row.get(0))
+            .unwrap()
+    }
+
+    #[test]
+    fn upgrade_keeps_pop3_mails_sharing_a_message_id() {
+        assert_eq!(count_after_upgrade("pop3", [Some(1), Some(2)]), 2);
+    }
+
+    #[test]
+    fn upgrade_keeps_pop3_mails_without_uid() {
+        assert_eq!(count_after_upgrade("pop3", [None, None]), 2);
+    }
+
+    #[test]
+    fn upgrade_still_deduplicates_imap_mails() {
+        assert_eq!(count_after_upgrade("imap", [Some(1), Some(2)]), 1);
+        assert_eq!(count_after_upgrade("imap", [None, None]), 1);
+    }
 }

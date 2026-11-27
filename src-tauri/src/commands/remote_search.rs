@@ -114,7 +114,7 @@ pub async fn search_mails_remote(
         let mut stmt = conn
             .prepare(
                 "SELECT id, provider, auth_type FROM accounts
-                 WHERE auth_type = 'oauth' AND provider IN ('google', 'microsoft')
+                 WHERE auth_type = 'oauth' AND provider IN ('google', 'microsoft') AND incoming_protocol != 'pop3'
                    AND (?1 IS NULL OR id = ?1)",
             )
             .map_err(|e| e.to_string())?;

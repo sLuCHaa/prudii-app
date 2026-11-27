@@ -274,6 +274,9 @@ fn apply_actions(
 /// Queue a pending op (best-effort; logs on failure). Mirrors the manual
 /// command's `INSERT OR REPLACE` dedup on the `(mail_id, op_type)` unique index.
 fn enqueue_op(conn: &rusqlite::Connection, account_id: &str, mail_id: &str, op_type: &str, payload: &str) {
+    if crate::commands::mails::is_pop3_account(conn, account_id) {
+        return;
+    }
     if let Err(e) = conn.execute(
         "INSERT OR REPLACE INTO pending_ops (account_id, mail_id, op_type, payload, retry_count) VALUES (?1, ?2, ?3, ?4, 0)",
         rusqlite::params![account_id, mail_id, op_type, payload],
@@ -340,4 +343,27 @@ fn folder_of_type(conn: &rusqlite::Connection, account_id: &str, folder_type: &s
         |row| Ok((row.get(0)?, row.get(1)?)),
     )
     .ok()
+}
+
+#[cfg(test)]
+mod pop3_tests {
+    use super::trash_mail;
+    use crate::test_support::{seed_account, seed_folder, seed_mail, temp_db, SeedMail};
+
+    #[test]
+    fn trashing_a_pop3_mail_queues_no_server_operation() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        let account = seed_account(&conn, "anna@studio-halde.example");
+        conn.execute("UPDATE accounts SET incoming_protocol = 'pop3' WHERE id = ?1", [&account]).unwrap();
+        let inbox = seed_folder(&conn, &account, "inbox");
+        let trash = seed_folder(&conn, &account, "trash");
+        let mail = seed_mail(&conn, &SeedMail { account_id: &account, folder_id: &inbox, ..Default::default() });
+
+        assert!(trash_mail(&conn, &account, &mail, "m1@studio-halde.example", "INBOX", false));
+
+        let folder: String = conn.query_row("SELECT folder_id FROM mails WHERE id = ?1", [&mail], |r| r.get(0)).unwrap();
+        let queued: i64 = conn.query_row("SELECT COUNT(*) FROM pending_ops", [], |r| r.get(0)).unwrap();
+        assert_eq!((folder, queued), (trash, 0));
+    }
 }

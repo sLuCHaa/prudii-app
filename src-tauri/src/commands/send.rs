@@ -1,4 +1,5 @@
 use crate::credentials;
+use crate::commands::mails::{is_pop3_account, POP3_NOT_SUPPORTED};
 use crate::db::Database;
 use crate::imap;
 use crate::models::{SendAttachment, SendMailRequest};
@@ -68,6 +69,9 @@ struct SendAccount {
 
 fn load_send_account(db: &Database, account_id: &str) -> Result<SendAccount, String> {
     let conn = db.lock_db();
+    if is_pop3_account(&conn, account_id) {
+        return Err(POP3_NOT_SUPPORTED.into());
+    }
     let mut account = conn
         .query_row(
             "SELECT email, display_name, smtp_host, smtp_port, COALESCE(smtp_security, 'ssl'), imap_host, imap_port, auth_type, provider FROM accounts WHERE id = ?1",
@@ -438,6 +442,9 @@ pub async fn test_smtp_connection(
 pub async fn save_draft(db: State<'_, Database>, pool: State<'_, ImapPool>, request: SendMailRequest) -> Result<Option<String>, String> {
     let (email, display_name, imap_host, imap_port, auth_type, provider, drafts_folder_path, drafts_folder_id): (String, String, String, i32, String, String, String, Option<String>) = {
         let conn = db.lock_db();
+        if is_pop3_account(&conn, &request.account_id) {
+            return Err(POP3_NOT_SUPPORTED.into());
+        }
 
         let account_info: (String, String, String, i32, String, String) = conn
             .query_row(

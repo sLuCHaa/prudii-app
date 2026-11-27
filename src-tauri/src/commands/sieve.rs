@@ -18,12 +18,13 @@ struct SieveAccount {
     imap_host: String,
     auth_type: String,
     provider: String,
+    incoming_protocol: String,
 }
 
 fn load(db: &Database, account_id: &str) -> Result<SieveAccount, String> {
     let conn = db.lock_db();
     conn.query_row(
-        "SELECT email, imap_host, auth_type, provider FROM accounts WHERE id = ?1",
+        "SELECT email, imap_host, auth_type, provider, incoming_protocol FROM accounts WHERE id = ?1",
         rusqlite::params![account_id],
         |row| {
             Ok(SieveAccount {
@@ -31,6 +32,7 @@ fn load(db: &Database, account_id: &str) -> Result<SieveAccount, String> {
                 imap_host: row.get(1)?,
                 auth_type: row.get(2)?,
                 provider: row.get(3)?,
+                incoming_protocol: row.get(4)?,
             })
         },
     )
@@ -40,6 +42,9 @@ fn load(db: &Database, account_id: &str) -> Result<SieveAccount, String> {
 /// Only password-authenticated IMAP accounts can use ManageSieve; the API
 /// providers have their own auto-reply endpoints (not wired up yet).
 fn ineligible_reason(a: &SieveAccount) -> Option<&'static str> {
+    if a.incoming_protocol == "pop3" {
+        return Some("pop3");
+    }
     if a.auth_type != "password" {
         return Some("oauth");
     }
@@ -125,4 +130,21 @@ async fn write_vacation(session: &mut client::SieveClient, settings: &VacationSe
     session.set_active(&name).await.map_err(|e| e.to_string())?;
     log::info!("[sieve] vacation notice {} for script {}", if settings.enabled { "set" } else { "cleared" }, name);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pop3_accounts_cannot_use_sieve() {
+        let account = SieveAccount {
+            email: "anna@studio-halde.example".into(),
+            imap_host: "pop.studio-halde.example".into(),
+            auth_type: "password".into(),
+            provider: "custom".into(),
+            incoming_protocol: "pop3".into(),
+        };
+        assert_eq!(ineligible_reason(&account), Some("pop3"));
+    }
 }

@@ -130,7 +130,10 @@ pub(crate) enum ApiType {
     Gmail,
     Outlook,
     Imap,
+    Pop3,
 }
+
+pub(crate) const POP3_NOT_SUPPORTED: &str = "POP3: not supported yet";
 
 /// WHERE clause of the starred view. Spam and trash stay out, as in Gmail's
 /// Starred and Outlook's Flagged views: a flag set before the junk filter moved
@@ -202,23 +205,46 @@ fn get_internet_id_escaped(db: &Database, mail_id: &str) -> String {
 /// Returns (ApiType, provider, auth_type).
 pub(crate) fn get_api_type(db: &Database, account_id: &str) -> (ApiType, String, String) {
     let conn = db.lock_db();
-    let result: Result<(String, String), _> = conn.query_row(
-        "SELECT provider, auth_type FROM accounts WHERE id = ?1",
+    let result: Result<(String, String, String), _> = conn.query_row(
+        "SELECT provider, auth_type, incoming_protocol FROM accounts WHERE id = ?1",
         rusqlite::params![account_id],
-        |row| Ok((row.get(0)?, row.get(1)?)),
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
     );
     match result {
-        Ok((provider, auth_type)) => (api_type_of(&provider, &auth_type), provider, auth_type),
+        Ok((provider, auth_type, incoming_protocol)) => (api_type_of(&provider, &auth_type, &incoming_protocol), provider, auth_type),
         Err(_) => (ApiType::Imap, String::new(), String::new()),
     }
 }
 
-pub(crate) fn api_type_of(provider: &str, auth_type: &str) -> ApiType {
+pub(crate) fn api_type_of(provider: &str, auth_type: &str, incoming_protocol: &str) -> ApiType {
+    if incoming_protocol == "pop3" {
+        return ApiType::Pop3;
+    }
     match (provider, auth_type) {
         ("google", "oauth") => ApiType::Gmail,
         ("microsoft", "oauth") => ApiType::Outlook,
         _ => ApiType::Imap,
     }
+}
+
+pub(crate) fn is_pop3_account(conn: &rusqlite::Connection, account_id: &str) -> bool {
+    conn.query_row(
+        "SELECT incoming_protocol = 'pop3' FROM accounts WHERE id = ?1",
+        rusqlite::params![account_id],
+        |row| row.get(0),
+    )
+    .unwrap_or(false)
+}
+
+// By account, because a mail without a Message-ID never reaches the `ApiType` match.
+pub(crate) fn mail_is_pop3(db: &Database, mail_id: &str) -> bool {
+    let conn = db.lock_db();
+    let account_id: Result<String, _> = conn.query_row(
+        "SELECT account_id FROM mails WHERE id = ?1",
+        rusqlite::params![mail_id],
+        |row| row.get(0),
+    );
+    account_id.is_ok_and(|id| is_pop3_account(&conn, &id))
 }
 
 /// Get the API message ID (stored in mails.message_id) for a local mail.
@@ -870,6 +896,7 @@ pub(crate) async fn fetch_body_for_scan(db: &Database, mail_id: &str) -> Result<
             .await
             .map_err(|e| format!("Outlook body fetch: {}", e))?,
         ApiType::Imap => return Err("IMAP bodies come from the search backfill".to_string()),
+        ApiType::Pop3 => return Err(POP3_NOT_SUPPORTED.into()),
     }
     Ok(ready(db))
 }
@@ -993,6 +1020,11 @@ pub async fn fetch_mail_body(
                 return result;
             }
             ApiType::Imap => {} // fall through to IMAP path below
+            ApiType::Pop3 => {
+                let mut fetching = FETCHING_BODIES.lock().unwrap_or_else(|e| e.into_inner());
+                fetching.remove(&mail_id);
+                return Err(POP3_NOT_SUPPORTED.into());
+            }
         }
     }
 
@@ -1012,6 +1044,9 @@ async fn fetch_mail_body_inner(
     mail_id: &str,
     t_start: std::time::Instant,
 ) -> Result<Mail, String> {
+    if mail_is_pop3(db, mail_id) {
+        return Err(POP3_NOT_SUPPORTED.into());
+    }
     let (account_id, folder_path, uid, size_bytes, message_id): (String, String, u32, Option<i64>, Option<String>) = {
         let conn = db.lock_db();
         conn.query_row(
@@ -1099,11 +1134,15 @@ pub async fn fetch_mail_source(
         let conn = db.lock_db();
         conn.query_row("SELECT size_bytes FROM mails WHERE id = ?1", rusqlite::params![mail_id], |row| row.get(0)).ok().flatten()
     };
-    let is_imap = match get_api_message_id(&db, &mail_id) {
-        Some((_, account_id)) => matches!(get_api_type(&db, &account_id).0, ApiType::Imap),
+    // API sources are not bounded by the stored size.
+    let size_limited = match get_api_message_id(&db, &mail_id) {
+        Some((_, account_id)) => match get_api_type(&db, &account_id).0 {
+            ApiType::Gmail | ApiType::Outlook => false,
+            ApiType::Imap | ApiType::Pop3 => true,
+        },
         None => true,
     };
-    if is_imap {
+    if size_limited {
         if let Some(size) = size_bytes {
             if size > MAX_SOURCE_SIZE {
                 return Err(format!("Mail is too large to show as source ({:.1} MB)", size as f64 / 1024.0 / 1024.0));
@@ -1183,6 +1222,7 @@ pub async fn toggle_star(db: State<'_, Database>, pool: State<'_, ImapPool>, mai
                     }
                 }
             }
+            ApiType::Pop3 => {}
         }
     }
 
@@ -1364,6 +1404,9 @@ pub async fn toggle_read(db: State<'_, Database>, pool: State<'_, ImapPool>, mai
     // Sync to API in background (with pending_ops for reliability)
     if let Some((api_msg_id, account_id)) = get_api_message_id(&db, &mail_id) {
         let (api_type, provider, auth_type) = get_api_type(&db, &account_id);
+        if matches!(api_type, ApiType::Pop3) {
+            return Ok(new_val);
+        }
 
         // Queue pending op before attempting server sync
         let payload = format!(
@@ -1438,6 +1481,7 @@ pub async fn toggle_read(db: State<'_, Database>, pool: State<'_, ImapPool>, mai
                     }
                 }
             }
+            ApiType::Pop3 => {}
         }
     }
 
@@ -1506,7 +1550,8 @@ pub async fn mark_as_read(db: State<'_, Database>, pool: State<'_, ImapPool>, ma
                 });
                 return Ok(());
             }
-            ApiType::Imap => {}
+            // The shared local update below queues nothing for POP3.
+            ApiType::Imap | ApiType::Pop3 => {}
         }
     }
 
@@ -1538,7 +1583,7 @@ pub async fn mark_as_read(db: State<'_, Database>, pool: State<'_, ImapPool>, ma
         )
         .map_err(|e| e.to_string())?;
 
-        if let Some(uid) = uid_opt {
+        if let Some(uid) = uid_opt.filter(|_| !is_pop3_account(&conn, &account_id)) {
             let account: Result<(String, i32, String), _> = conn.query_row(
                 "SELECT imap_host, imap_port, email FROM accounts WHERE id = ?1",
                 rusqlite::params![account_id],
@@ -1627,6 +1672,9 @@ enum TrashAction {
 #[tauri::command]
 pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id: String, permanent: Option<bool>) -> Result<(), String> {
     let permanent = permanent.unwrap_or(false);
+    if mail_is_pop3(&db, &mail_id) {
+        return Err(POP3_NOT_SUPPORTED.into());
+    }
     if let Some((api_msg_id, account_id)) = get_api_message_id(&db, &mail_id) {
         let (api_type, provider, auth_type) = get_api_type(&db, &account_id);
         match api_type {
@@ -1859,6 +1907,7 @@ pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id:
                 return Ok(());
             }
             ApiType::Imap => {}
+            ApiType::Pop3 => return Err(POP3_NOT_SUPPORTED.into()),
         }
     }
 
@@ -2270,13 +2319,14 @@ pub(crate) fn copy_plan(db: &Database, mail_id: &str, dest_folder_id: &str) -> R
     if dest_is_local || dest_type == "drafts" || dest_account_id == source_account_id {
         return Err(COPY_NEEDS_SERVER_FOLDER.to_string());
     }
-    let (provider, auth_type): (String, String) = conn.query_row(
-        "SELECT COALESCE(provider, ''), COALESCE(auth_type, '') FROM accounts WHERE id = ?1",
+    let (provider, auth_type, incoming_protocol): (String, String, String) = conn.query_row(
+        "SELECT COALESCE(provider, ''), COALESCE(auth_type, ''), incoming_protocol FROM accounts WHERE id = ?1",
         rusqlite::params![dest_account_id],
-        |row| Ok((row.get(0)?, row.get(1)?)),
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
     ).map_err(|e| format!("Account not found: {}", e))?;
-    if !matches!(api_type_of(&provider, &auth_type), ApiType::Imap) {
-        return Err(COPY_TARGET_UNSUPPORTED.to_string());
+    match api_type_of(&provider, &auth_type, &incoming_protocol) {
+        ApiType::Imap => {}
+        ApiType::Gmail | ApiType::Outlook | ApiType::Pop3 => return Err(COPY_TARGET_UNSUPPORTED.to_string()),
     }
 
     let mut flags = Vec::new();
@@ -2363,6 +2413,9 @@ pub async fn move_mail(
     if dest_is_local {
         return move_mail_locally(&db, &mail_id, &dest_folder_id);
     }
+    if mail_is_pop3(&db, &mail_id) {
+        return Err(POP3_NOT_SUPPORTED.into());
+    }
 
     if let Some((api_msg_id, account_id)) = get_api_message_id(&db, &mail_id) {
         let (api_type, provider, auth_type) = get_api_type(&db, &account_id);
@@ -2448,6 +2501,7 @@ pub async fn move_mail(
                 return Ok(());
             }
             ApiType::Imap => {}
+            ApiType::Pop3 => return Err(POP3_NOT_SUPPORTED.into()),
         }
     }
 
@@ -2750,6 +2804,9 @@ pub fn get_thread_mails_inner(conn: &rusqlite::Connection, mail_id: &str) -> Res
 
 #[tauri::command]
 pub async fn archive_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id: String) -> Result<(), String> {
+    if mail_is_pop3(&db, &mail_id) {
+        return Err(POP3_NOT_SUPPORTED.into());
+    }
     if let Some((api_msg_id, account_id)) = get_api_message_id(&db, &mail_id) {
         let (api_type, provider, auth_type) = get_api_type(&db, &account_id);
         match api_type {
@@ -2873,6 +2930,7 @@ pub async fn archive_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_i
                 return Ok(());
             }
             ApiType::Imap => {}
+            ApiType::Pop3 => return Err(POP3_NOT_SUPPORTED.into()),
         }
     }
 
@@ -3330,6 +3388,7 @@ async fn empty_folder_by_type(app: tauri::AppHandle, db: State<'_, Database>, ac
             return Ok(count);
         }
         ApiType::Imap => {}
+        ApiType::Pop3 => return Err(POP3_NOT_SUPPORTED.into()),
     }
 
     let folder_info: Option<(String, String)> = {
@@ -3512,8 +3571,9 @@ pub async fn prefetch_folder(
         // API accounts (Gmail/Outlook) don't use IMAP prefetch â€” bodies fetched on-demand
         {
             let (api_type, _, _) = get_api_type(&db, &account_id);
-            if matches!(api_type, ApiType::Gmail | ApiType::Outlook) {
-                return;
+            match api_type {
+                ApiType::Gmail | ApiType::Outlook | ApiType::Pop3 => return,
+                ApiType::Imap => {}
             }
         }
 
@@ -3665,6 +3725,9 @@ pub async fn batch_update_mails(
             for mail_id in &mail_ids {
                 if let Some((api_msg_id, account_id)) = get_api_message_id(&db, mail_id) {
                     let (api_type, provider, auth_type) = get_api_type(&db, &account_id);
+                    if matches!(api_type, ApiType::Pop3) {
+                        continue;
+                    }
 
                     // Queue pending op for every mail (including IMAP)
                     let payload = format!(
@@ -3689,6 +3752,7 @@ pub async fn batch_update_mails(
                         ApiType::Imap => {
                             // IMAP pending ops will be processed at next sync
                         }
+                        ApiType::Pop3 => {}
                     }
                 }
             }
@@ -3757,6 +3821,9 @@ pub async fn batch_update_mails(
             for mail_id in &mail_ids {
                 if let Some((api_msg_id, account_id)) = get_api_message_id(&db, mail_id) {
                     let (api_type, provider, auth_type) = get_api_type(&db, &account_id);
+                    if matches!(api_type, ApiType::Pop3) {
+                        continue;
+                    }
 
                     let payload = format!(
                         r#"{{"value":{},"api_id":"{}","internet_id":"{}"}}"#,
@@ -3780,6 +3847,7 @@ pub async fn batch_update_mails(
                         ApiType::Imap => {
                             // IMAP pending ops will be processed at next sync
                         }
+                        ApiType::Pop3 => {}
                     }
                 }
             }
@@ -5036,5 +5104,54 @@ mod copy_tests {
 
         assert!(copy_plan(&db, "nope", &offers).is_err());
         assert!(copy_plan(&db, &mail, "nope").is_err());
+    }
+}
+
+#[cfg(test)]
+mod pop3_tests {
+    use super::*;
+    use crate::test_support::{seed_account, seed_folder, seed_mail, temp_db, SeedMail};
+
+    #[test]
+    fn api_type_of_pop3_wins_over_the_provider() {
+        assert!(matches!(api_type_of("custom", "password", "pop3"), ApiType::Pop3));
+        assert!(matches!(api_type_of("google", "oauth", "pop3"), ApiType::Pop3));
+        assert!(matches!(api_type_of("google", "oauth", "imap"), ApiType::Gmail));
+        assert!(matches!(api_type_of("microsoft", "oauth", "imap"), ApiType::Outlook));
+        assert!(matches!(api_type_of("custom", "password", "imap"), ApiType::Imap));
+    }
+
+    #[test]
+    fn pop3_accounts_are_recognised_by_account_and_by_mail() {
+        let db = temp_db();
+        let (account, mail) = {
+            let conn = db.lock_db();
+            let account = seed_account(&conn, "anna@studio-halde.example");
+            let folder = seed_folder(&conn, &account, "inbox");
+            let mail = seed_mail(&conn, &SeedMail { account_id: &account, folder_id: &folder, ..Default::default() });
+            assert!(!is_pop3_account(&conn, &account));
+            conn.execute("UPDATE accounts SET incoming_protocol = 'pop3' WHERE id = ?1", [&account]).unwrap();
+            assert!(is_pop3_account(&conn, &account));
+            assert!(!is_pop3_account(&conn, "missing"));
+            (account, mail)
+        };
+        assert!(matches!(get_api_type(&db, &account).0, ApiType::Pop3));
+        assert!(mail_is_pop3(&db, &mail));
+        assert!(!mail_is_pop3(&db, "missing"));
+    }
+
+    #[test]
+    fn a_pop3_account_is_no_copy_target() {
+        let db = temp_db();
+        let (mail, dest) = {
+            let conn = db.lock_db();
+            let source = seed_account(&conn, "anna@studio-halde.example");
+            let inbox = seed_folder(&conn, &source, "inbox");
+            let mail = seed_mail(&conn, &SeedMail { account_id: &source, folder_id: &inbox, ..Default::default() });
+            let other = seed_account(&conn, "info@studio-halde.example");
+            conn.execute("UPDATE accounts SET incoming_protocol = 'pop3' WHERE id = ?1", [&other]).unwrap();
+            (mail, seed_folder(&conn, &other, "inbox"))
+        };
+        assert_eq!(copy_plan(&db, &mail, &dest), Err(COPY_TARGET_UNSUPPORTED.to_string()));
     }
 }

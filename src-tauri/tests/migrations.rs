@@ -213,7 +213,7 @@ fn calendar_tables_exist_with_unique_slots_and_cascade() {
     let conn = db.lock_db();
 
     let version: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
-    assert_eq!(version, 49);
+    assert_eq!(version, 50);
 
     conn.execute("INSERT INTO calendars (id, name, color) VALUES ('c1', 'Cal', '#3b82f6')", []).unwrap();
     let insert = |id: &str, rid: Option<&str>| {
@@ -253,7 +253,7 @@ fn subscription_columns_are_added_to_existing_calendars() {
     let db = Database::new(dir.clone()).unwrap();
     let conn = db.lock_db();
     let version: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
-    assert_eq!(version, 49);
+    assert_eq!(version, 50);
     let (muted, refresh): (i64, Option<i64>) =
         conn.query_row("SELECT reminders_muted, refresh_minutes FROM calendars WHERE id = 'c1'", [], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
     assert_eq!((muted, refresh), (0, None));
@@ -274,7 +274,7 @@ fn priority_columns_are_added_to_existing_mails_and_drafts() {
     let db = Database::new(dir.clone()).unwrap();
     let conn = db.lock_db();
     let version: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
-    assert_eq!(version, 49);
+    assert_eq!(version, 50);
     for table in ["mails", "drafts"] {
         let has: bool = conn
             .query_row(&format!("SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = 'high_priority'"), [], |r| r.get::<_, i64>(0))
@@ -301,7 +301,7 @@ fn invite_columns_are_added_to_existing_mails() {
     let db = Database::new(dir.clone()).unwrap();
     let conn = db.lock_db();
     let version: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
-    assert_eq!(version, 49);
+    assert_eq!(version, 50);
     let cols: Vec<String> = conn
         .prepare("SELECT name FROM pragma_table_info('mails')")
         .unwrap()
@@ -489,5 +489,42 @@ fn a_downgrade_and_second_upgrade_leave_the_list_alone() {
     let a1: Option<String> = conn.query_row("SELECT signature_id FROM accounts WHERE id = 'a1'", [], |r| r.get(0)).unwrap();
     assert_eq!((count, a1), (1, None));
     drop(conn);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn migration_adds_pop3_columns_with_defaults() {
+    let dir = temp_dir("pop3-columns");
+    {
+        let db = Database::new(dir.clone()).unwrap();
+        let conn = db.lock_db();
+        for column in ["incoming_protocol", "incoming_security", "pop3_delete_mode", "pop3_delete_after_days", "pop3_delete_with_local"] {
+            conn.execute_batch(&format!("ALTER TABLE accounts DROP COLUMN {column}")).unwrap();
+        }
+        conn.execute_batch(
+            "DROP TABLE pop3_uidls;
+             INSERT INTO accounts (id, email, display_name, provider, imap_host, smtp_host) VALUES
+               ('a1', 'anna@studio-halde.example', 'Anna Weber', 'custom', 'imap.studio-halde.example', 'smtp.studio-halde.example');",
+        )
+        .unwrap();
+        conn.pragma_update(None, "user_version", 49u32).unwrap();
+    }
+    for _ in 0..2 {
+        let db = Database::new(dir.clone()).unwrap();
+        let conn = db.lock_db();
+        let row: (String, String, String, i64, i64) = conn
+            .query_row(
+                "SELECT incoming_protocol, incoming_security, pop3_delete_mode, pop3_delete_after_days, pop3_delete_with_local FROM accounts WHERE id = 'a1'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+            )
+            .unwrap();
+        assert_eq!(row, ("imap".to_string(), "ssl".to_string(), "after_days".to_string(), 14, 1));
+        conn.execute("INSERT OR IGNORE INTO pop3_uidls (account_id, uidl) VALUES ('a1', 'u1')", []).unwrap();
+        let state: String = conn.query_row("SELECT state FROM pop3_uidls WHERE uidl = 'u1'", [], |r| r.get(0)).unwrap();
+        assert_eq!(state, "stored");
+        let version: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
+        assert_eq!(version, 50);
+    }
     let _ = std::fs::remove_dir_all(&dir);
 }
