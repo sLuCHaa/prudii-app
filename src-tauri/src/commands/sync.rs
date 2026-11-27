@@ -931,6 +931,10 @@ fn pop3_progress(account_id: &str, status: &str, new_mails: u32, message: String
 /// POP3 sync: no folders, no pending ops, no pool session and no IDLE.
 async fn do_pop3_sync(app: &AppHandle, mailbox: &Account, password: &str) {
     let owner_id = mailbox.id.as_str();
+    if crate::commands::backup::backup_in_progress() {
+        emit_progress(app, &pop3_progress(owner_id, "skipped", 0, "Backup or restore in progress".into()));
+        return;
+    }
     emit_progress(app, &pop3_progress(owner_id, "connecting", 0, "Connecting...".into()));
 
     let db = app.state::<Database>();

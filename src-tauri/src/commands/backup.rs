@@ -667,6 +667,114 @@ pub(crate) fn export_pop3<W: Write + Seek>(
     Ok(())
 }
 
+/// Restores raw sources and UIDL rows after the mails are in; nothing already present is overwritten.
+pub(crate) fn import_pop3<R: Read + Seek>(
+    db: &Database,
+    archive: &mut zip::ZipArchive<R>,
+    data_dir: &Path,
+) -> Result<(), String> {
+    let imported = import_pop3_sources(db, archive, data_dir)
+        .and_then(|()| import_pop3_uidls(db, archive, data_dir));
+    // Also after a failure: a restored mail must not leave the server because of an earlier deletion.
+    db.lock_db()
+        .execute(
+            "UPDATE pop3_uidls SET local_deleted_at = NULL WHERE local_deleted_at IS NOT NULL
+             AND EXISTS(SELECT 1 FROM mails m WHERE m.id = pop3_uidls.mail_id)",
+            [],
+        )
+        .map_err(|e| e.to_string())?;
+    imported
+}
+
+fn import_pop3_sources<R: Read + Seek>(
+    db: &Database,
+    archive: &mut zip::ZipArchive<R>,
+    data_dir: &Path,
+) -> Result<(), String> {
+    let base = data_dir.join("mail_sources");
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i).map_err(|e| e.to_string())?;
+        let name = entry.name().map_err(|e| e.to_string())?.into_owned();
+        let Some(file_name) = name.strip_prefix("mail_sources/") else { continue };
+        let Some(mail_id) = file_name.strip_suffix(".eml") else { continue };
+        if entry.is_dir() || !is_plain_path_component(file_name) || !is_plain_path_component(mail_id) {
+            continue;
+        }
+        let wanted: bool = db
+            .lock_db()
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM mails m JOIN accounts a ON a.id = m.account_id
+                 WHERE m.id = ?1 AND a.incoming_protocol = 'pop3')",
+                [mail_id],
+                |r| r.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        if !wanted || crate::pop3::store::has_source(data_dir, mail_id) {
+            continue;
+        }
+        if !matches!(safe_extract_path(&base, file_name), ExtractCheck::Ok(_)) {
+            log::warn!("POP3 restore: skipped a raw source with an unusable target");
+            continue;
+        }
+        let mut raw = Vec::new();
+        (&mut entry)
+            .take(crate::pop3::MAX_MESSAGE_BYTES + 1)
+            .read_to_end(&mut raw)
+            .map_err(|e| e.to_string())?;
+        if raw.is_empty() || raw.len() as u64 > crate::pop3::MAX_MESSAGE_BYTES {
+            continue;
+        }
+        crate::pop3::store::write_source(data_dir, mail_id, &raw)
+            .map_err(|e| format!("Failed to write a mail source: {}", e))?;
+    }
+    Ok(())
+}
+
+/// A row that is left out only means the mail is downloaded again.
+fn import_pop3_uidls<R: Read + Seek>(
+    db: &Database,
+    archive: &mut zip::ZipArchive<R>,
+    data_dir: &Path,
+) -> Result<(), String> {
+    let Some(json) = read_zip_json(archive, "pop3_uidls.json")? else { return Ok(()) };
+    let rows: Vec<serde_json::Value> = serde_json::from_str(&json).map_err(|e| e.to_string())?;
+    let conn = db.lock_db();
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+    for row in &rows {
+        let text = |key: &str| row.get(key).and_then(|v| v.as_str());
+        let (Some(account_id), Some(uidl), Some(mail_id), Some(state)) =
+            (text("account_id"), text("uidl"), text("mail_id"), text("state"))
+        else {
+            continue;
+        };
+        let state = match state {
+            "stored" | "restored" => "restored",
+            "server_deleted" => "server_deleted",
+            _ => continue,
+        };
+        if uidl.is_empty() || !is_plain_path_component(mail_id) || !crate::commands::mails::is_pop3_account(&tx, account_id) {
+            continue;
+        }
+        let has_mail: bool = tx
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM mails WHERE id = ?1 AND account_id = ?2)",
+                [mail_id, account_id],
+                |r| r.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        if !has_mail || (state == "restored" && !crate::pop3::store::has_source(data_dir, mail_id)) {
+            continue;
+        }
+        tx.execute(
+            "INSERT OR IGNORE INTO pop3_uidls (account_id, uidl, mail_id, fetched_at, state, local_deleted_at, server)
+             VALUES (?1, ?2, ?3, COALESCE(?4, datetime('now')), ?5, NULL, ?6)",
+            rusqlite::params![account_id, uidl, mail_id, text("fetched_at"), state, text("server")],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    tx.commit().map_err(|e| e.to_string())
+}
+
 /// Writes the four task tables plus `task_files/{task_id}/{filename}`; a missing
 /// attachment file is logged, not fatal — the row is still exported.
 pub(crate) fn export_tasks<W: Write + Seek>(
@@ -2299,6 +2407,8 @@ fn do_restore_backup_inner(
             }
         }
 
+        import_pop3(&db, &mut archive, &data_dir)?;
+
         {
             let conn = db.lock_db();
             conn.execute_batch(
@@ -3710,5 +3820,290 @@ mod pop3_roundtrip {
         }
         let count: i64 = conn.query_row("SELECT COUNT(*) FROM accounts", [], |r| r.get(0)).unwrap();
         assert_eq!(count, 0);
+    }
+
+    fn zip_of(entries: &[(&str, &[u8])]) -> zip::ZipArchive<Cursor<Vec<u8>>> {
+        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        for (name, bytes) in entries {
+            zip.start_file(*name, zip::write::SimpleFileOptions::default()).unwrap();
+            zip.write_all(bytes).unwrap();
+        }
+        zip::ZipArchive::new(Cursor::new(zip.finish().unwrap().into_inner())).unwrap()
+    }
+
+    fn uidl_row(account: &str, uidl: &str, mail_id: &str, state: &str) -> serde_json::Value {
+        serde_json::json!({
+            "account_id": account, "uidl": uidl, "mail_id": mail_id, "state": state,
+            "fetched_at": "2026-11-01 08:00:00", "local_deleted_at": null,
+            "server": "pop.studio-halde.example|995|anna@studio-halde.example"
+        })
+    }
+
+    fn insert_uidl(db: &Database, account: &str, uidl: &str, mail_id: &str, state: &str, deleted_at: Option<&str>) {
+        db.lock_db()
+            .execute(
+                "INSERT INTO pop3_uidls (account_id, uidl, mail_id, state, local_deleted_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                rusqlite::params![account, uidl, mail_id, state, deleted_at],
+            )
+            .unwrap();
+    }
+
+    fn uidl_states(db: &Database) -> Vec<(String, String, Option<String>)> {
+        let conn = db.lock_db();
+        let mut stmt = conn.prepare("SELECT uidl, state, local_deleted_at FROM pop3_uidls ORDER BY uidl").unwrap();
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).unwrap();
+        rows.collect::<Result<_, _>>().unwrap()
+    }
+
+    fn source(db: &Database, mail_id: &str) -> Option<Vec<u8>> {
+        crate::pop3::store::read_source(&db.data_dir, mail_id).ok()
+    }
+
+    fn extra_mail(conn: &rusqlite::Connection, account: &str, folder_type: &str) -> String {
+        let folder = seed_folder(conn, account, folder_type);
+        seed_mail(conn, &SeedMail { account_id: account, folder_id: &folder, ..Default::default() })
+    }
+
+    #[test]
+    fn backup_roundtrip_keeps_pop3_settings_uidls_and_sources() {
+        let old = temp_db();
+        let (account, mail) = {
+            let conn = old.lock_db();
+            let (account, mail) = mail_of(&conn, "anna@studio-halde.example", "pop3");
+            conn.execute(
+                "UPDATE accounts SET pop3_delete_mode = 'after_fetch', pop3_delete_after_days = 30, pop3_delete_with_local = 1,
+                 incoming_security = 'starttls', imap_host = 'pop.studio-halde.example', imap_port = 110",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO pop3_uidls (account_id, uidl, mail_id, fetched_at, state, server)
+                 VALUES (?1, 'u1', ?2, '2026-11-01 08:00:00', 'stored', 'pop.studio-halde.example|110|anna@studio-halde.example')",
+                [&account, &mail],
+            )
+            .unwrap();
+            (account, mail)
+        };
+        write_source(&old, &mail, b"Subject: Angebot\r\n\r\nHallo");
+
+        let settings = |db: &Database| -> Vec<String> {
+            db.lock_db()
+                .query_row(
+                    "SELECT id, email, incoming_protocol, incoming_security, imap_host, CAST(imap_port AS TEXT), pop3_delete_mode,
+                     CAST(pop3_delete_after_days AS TEXT), CAST(pop3_delete_with_local AS TEXT) FROM accounts",
+                    [],
+                    |r| (0..9).map(|i| r.get(i)).collect(),
+                )
+                .unwrap()
+        };
+        let uidl = |db: &Database| -> Vec<String> {
+            db.lock_db()
+                .query_row("SELECT account_id, uidl, mail_id, server, fetched_at FROM pop3_uidls", [], |r| {
+                    (0..5).map(|i| r.get(i)).collect()
+                })
+                .unwrap()
+        };
+
+        let (accounts, folders, mails) = {
+            let conn = old.lock_db();
+            let folders = table_json(&conn, "folders", &["id", "account_id", "name", "folder_type", "path"]).unwrap();
+            (account_rows(&conn).unwrap(), folders, read_mail_batch(&conn, 100, 0).unwrap())
+        };
+        let mut archive = pop3_zip(&old).unwrap();
+
+        let new = temp_db();
+        {
+            let conn = new.lock_db();
+            for acc in &accounts {
+                assert!(import_backup_account(&conn, acc, false, false).unwrap());
+            }
+            for folder in &folders {
+                import_backup_folder(&conn, &serde_json::json!(folder), false).unwrap();
+            }
+            import_mail_chunk(&conn, &mails, false).unwrap();
+        }
+        import_pop3(&new, &mut archive, &new.data_dir).unwrap();
+
+        assert_eq!(settings(&new), settings(&old));
+        assert_eq!(uidl(&new), uidl(&old));
+        assert_eq!(uidl(&new)[..3], [account, "u1".to_string(), mail.clone()]);
+        assert_eq!(uidl_states(&new), vec![("u1".to_string(), "restored".to_string(), None)]);
+        assert_eq!(source(&new, &mail).unwrap(), b"Subject: Angebot\r\n\r\nHallo");
+    }
+
+    #[test]
+    fn restore_skips_uidls_without_mail_or_source() {
+        let db = temp_db();
+        let (account, good, bare, other, imap, imap_mail) = {
+            let conn = db.lock_db();
+            let (account, good) = mail_of(&conn, "anna@studio-halde.example", "pop3");
+            let bare = extra_mail(&conn, &account, "archive");
+            let folder: String = conn
+                .query_row("SELECT folder_id FROM mails WHERE id = ?1", [&bare], |r| r.get(0))
+                .unwrap();
+            conn.execute("UPDATE mails SET message_id = '<angebot@studio-halde.example>' WHERE id = ?1", [&bare]).unwrap();
+            let twin = serde_json::json!({
+                "id": "ignored", "account_id": account, "folder_id": folder,
+                "message_id": "<angebot@studio-halde.example>", "date": "2026-01-01 00:00:00"
+            });
+            import_mail_chunk(&conn, &[twin], true).unwrap();
+            let (other, _) = mail_of(&conn, "weber@studio-halde.example", "pop3");
+            let (imap, imap_mail) = mail_of(&conn, "halde@studio-halde.example", "imap");
+            (account, good, bare, other, imap, imap_mail)
+        };
+        write_source(&db, &imap_mail, b"Subject: IMAP\r\n\r\n");
+        let mut null_mail = uidl_row(&account, "null", &good, "server_deleted");
+        null_mail["mail_id"] = serde_json::Value::Null;
+        let rows = serde_json::json!([
+            uidl_row(&account, "good", &good, "stored"),
+            uidl_row(&account, "gone", &bare, "server_deleted"),
+            uidl_row(&account, "dedup", "ignored", "stored"),
+            uidl_row(&account, "bare-stored", &bare, "stored"),
+            uidl_row(&account, "bare-restored", &bare, "restored"),
+            uidl_row(&other, "foreign", &good, "stored"),
+            uidl_row("unknown", "unknown", &good, "stored"),
+            uidl_row(&imap, "imap", &imap_mail, "stored"),
+            uidl_row(&account, "", &good, "stored"),
+            uidl_row(&account, "state", &good, "pending"),
+            null_mail,
+        ])
+        .to_string();
+        let eml = format!("mail_sources/{good}.eml");
+        let mut archive = zip_of(&[
+            ("pop3_uidls.json", rows.as_bytes()),
+            (&eml, b"Subject: Angebot\r\n\r\n"),
+            ("mail_sources/ignored.eml", b"Subject: Doppelt\r\n\r\n"),
+        ]);
+
+        import_pop3(&db, &mut archive, &db.data_dir).unwrap();
+
+        assert_eq!(
+            uidl_states(&db),
+            vec![
+                ("gone".to_string(), "server_deleted".to_string(), None),
+                ("good".to_string(), "restored".to_string(), None),
+            ]
+        );
+        assert!(source(&db, "ignored").is_none());
+    }
+
+    #[test]
+    fn restore_drops_deleted_marks() {
+        let db = temp_db();
+        let (account, mail) = mail_of(&db.lock_db(), "anna@studio-halde.example", "pop3");
+        write_source(&db, &mail, b"Subject: Angebot\r\n\r\n");
+        let mut row = uidl_row(&account, "u1", &mail, "server_deleted");
+        row["local_deleted_at"] = "2026-11-02 09:00:00".into();
+        row["server"] = serde_json::Value::Null;
+        let rows = serde_json::json!([row]).to_string();
+
+        import_pop3(&db, &mut zip_of(&[("pop3_uidls.json", rows.as_bytes())]), &db.data_dir).unwrap();
+
+        assert_eq!(uidl_states(&db), vec![("u1".to_string(), "server_deleted".to_string(), None)]);
+        let server: Option<String> = db.lock_db().query_row("SELECT server FROM pop3_uidls", [], |r| r.get(0)).unwrap();
+        assert_eq!(server, None);
+    }
+
+    #[test]
+    fn restore_never_overwrites_newer_rows_or_files() {
+        let db = temp_db();
+        let (account, mail, empty) = {
+            let conn = db.lock_db();
+            let (account, mail) = mail_of(&conn, "anna@studio-halde.example", "pop3");
+            let empty = extra_mail(&conn, &account, "archive");
+            (account, mail, empty)
+        };
+        write_source(&db, &mail, b"Subject: Neu\r\n\r\n");
+        write_source(&db, &empty, b"");
+        insert_uidl(&db, &account, "u1", &mail, "server_deleted", None);
+        let rows = serde_json::json!([uidl_row(&account, "u1", &mail, "stored")]).to_string();
+        let (eml, empty_eml) = (format!("mail_sources/{mail}.eml"), format!("mail_sources/{empty}.eml"));
+        let mut archive = zip_of(&[
+            ("pop3_uidls.json", rows.as_bytes()),
+            (&eml, b"Subject: Alt\r\n\r\n"),
+            (&empty_eml, b"Subject: Ersatz\r\n\r\n"),
+        ]);
+        {
+            let conn = db.lock_db();
+            let mails = read_mail_batch(&conn, 100, 0).unwrap();
+            import_mail_chunk(&conn, &mails, true).unwrap();
+        }
+
+        import_pop3(&db, &mut archive, &db.data_dir).unwrap();
+
+        assert_eq!(uidl_states(&db), vec![("u1".to_string(), "server_deleted".to_string(), None)]);
+        assert_eq!(source(&db, &mail).unwrap(), b"Subject: Neu\r\n\r\n");
+        assert_eq!(source(&db, &empty).unwrap(), b"Subject: Ersatz\r\n\r\n");
+    }
+
+    #[test]
+    fn restore_clears_marks_of_restored_mails_only() {
+        let db = temp_db();
+        let (account, mail) = mail_of(&db.lock_db(), "anna@studio-halde.example", "pop3");
+        insert_uidl(&db, &account, "back", &mail, "stored", Some("2026-11-02 09:00:00"));
+        insert_uidl(&db, &account, "gone", "deleted-mail", "stored", Some("2026-11-02 09:00:00"));
+
+        import_pop3(&db, &mut zip_of(&[]), &db.data_dir).unwrap();
+
+        assert_eq!(
+            uidl_states(&db),
+            vec![
+                ("back".to_string(), "stored".to_string(), None),
+                ("gone".to_string(), "stored".to_string(), Some("2026-11-02 09:00:00".to_string())),
+            ]
+        );
+    }
+
+    #[test]
+    fn restore_clears_marks_even_when_a_source_cannot_be_written() {
+        let db = temp_db();
+        let (account, mail) = mail_of(&db.lock_db(), "anna@studio-halde.example", "pop3");
+        std::fs::create_dir_all(crate::pop3::store::source_path(&db.data_dir, &mail)).unwrap();
+        insert_uidl(&db, &account, "u1", &mail, "stored", Some("2026-11-02 09:00:00"));
+        let eml = format!("mail_sources/{mail}.eml");
+        let mut archive = zip_of(&[(&eml, b"Subject: Angebot\r\n\r\n")]);
+
+        assert!(import_pop3(&db, &mut archive, &db.data_dir).is_err());
+
+        assert_eq!(uidl_states(&db), vec![("u1".to_string(), "stored".to_string(), None)]);
+    }
+
+    #[test]
+    fn restore_rejects_unsafe_source_entries() {
+        let db = temp_db();
+        let imap_mail = {
+            let conn = db.lock_db();
+            let (account, _) = mail_of(&conn, "anna@studio-halde.example", "pop3");
+            for (folder, id) in [("archive", "../x"), ("sent", "a/b"), ("trash", "empty")] {
+                let mail = extra_mail(&conn, &account, folder);
+                conn.execute("UPDATE mails SET id = ?2 WHERE id = ?1", [mail.as_str(), id]).unwrap();
+            }
+            mail_of(&conn, "weber@studio-halde.example", "imap").1
+        };
+        let imap_eml = format!("mail_sources/{imap_mail}.eml");
+        let mut archive = zip_of(&[
+            ("mail_sources/../x.eml", b"x"),
+            ("mail_sources/a/b.eml", b"x"),
+            ("mail_sources/C:evil.eml", b"x"),
+            ("mail_sources/unknown.eml", b"x"),
+            ("mail_sources/empty.eml", b""),
+            (&imap_eml, b"x"),
+        ]);
+
+        import_pop3(&db, &mut archive, &db.data_dir).unwrap();
+
+        assert!(!db.data_dir.join("x.eml").exists());
+        let written = std::fs::read_dir(db.data_dir.join("mail_sources")).map_or(0, |d| d.count());
+        assert_eq!(written, 0);
+    }
+
+    #[test]
+    fn old_backup_without_pop3_files_still_imports() {
+        let db = temp_db();
+        mail_of(&db.lock_db(), "anna@studio-halde.example", "pop3");
+
+        import_pop3(&db, &mut zip_of(&[("mails.json", b"[]")]), &db.data_dir).unwrap();
+
+        assert!(uidl_states(&db).is_empty());
     }
 }
