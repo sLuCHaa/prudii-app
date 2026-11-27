@@ -1882,8 +1882,8 @@
       "title": "¿Eliminar también en el servidor?",
       "mails_one": "Con ello, {{count}} correo se elimina también del servidor de inmediato.",
       "mails_other": "Con ello, {{count}} correos se eliminan también del servidor de inmediato.",
-      "folder": "Con ello, los correos de esta cuenta POP3 se eliminan también del servidor de inmediato.",
-      "combined": "Los correos de las cuentas POP3 configuradas así se eliminan también del servidor de inmediato."
+      "folder": "Con ello, estos correos se eliminan también del servidor de inmediato.",
+      "combined": "De estos correos, los de las cuentas POP3 configuradas así se eliminan también del servidor de inmediato."
     },
     "appPasswordGmail": "Gmail requiere una contraseña de aplicación para POP3, y POP debe estar activado en la configuración de Gmail.",
     "appPasswordFastmail": "Fastmail requiere una contraseña de aplicación para POP3.",

@@ -1882,8 +1882,8 @@
       "title": "Supprimer aussi sur le serveur ?",
       "mails_one": "{{count}} e-mail sera ainsi aussi supprimé immédiatement du serveur.",
       "mails_other": "{{count}} e-mails seront ainsi aussi supprimés immédiatement du serveur.",
-      "folder": "Les e-mails de ce compte POP3 seront ainsi aussi supprimés immédiatement du serveur.",
-      "combined": "Les e-mails des comptes POP3 réglés ainsi seront aussi supprimés immédiatement du serveur."
+      "folder": "Ces e-mails seront ainsi aussi supprimés immédiatement du serveur.",
+      "combined": "Parmi ces e-mails, ceux des comptes POP3 réglés ainsi seront aussi supprimés immédiatement du serveur."
     },
     "appPasswordGmail": "Gmail exige un mot de passe d'application pour POP3, et POP doit être activé dans les paramètres de Gmail.",
     "appPasswordFastmail": "Fastmail exige un mot de passe d'application pour POP3.",

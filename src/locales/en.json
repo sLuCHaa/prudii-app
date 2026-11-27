@@ -1882,8 +1882,8 @@
       "title": "Delete on the server too?",
       "mails_one": "This also deletes {{count}} mail on the server immediately.",
       "mails_other": "This also deletes {{count}} mails on the server immediately.",
-      "folder": "This also deletes the mails of this POP3 account on the server immediately.",
-      "combined": "Mails of POP3 accounts set up this way are also deleted on the server immediately."
+      "folder": "These mails are also deleted on the server immediately.",
+      "combined": "Of these, mails from POP3 accounts set up this way are also deleted on the server immediately."
     },
     "appPasswordGmail": "Gmail needs an app password for POP3, and POP must be switched on in the Gmail settings.",
     "appPasswordFastmail": "Fastmail needs an app password for POP3.",

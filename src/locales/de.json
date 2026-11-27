@@ -1882,8 +1882,8 @@
       "title": "Auch auf dem Server löschen?",
       "mails_one": "{{count}} Mail wird damit auch sofort auf dem Server gelöscht.",
       "mails_other": "{{count}} Mails werden damit auch sofort auf dem Server gelöscht.",
-      "folder": "Die Mails dieses POP3-Kontos werden damit auch sofort auf dem Server gelöscht.",
-      "combined": "Mails aus POP3-Konten, bei denen das eingestellt ist, werden damit auch sofort auf dem Server gelöscht."
+      "folder": "Diese Mails werden damit auch sofort auf dem Server gelöscht.",
+      "combined": "Davon werden Mails aus POP3-Konten, bei denen das eingestellt ist, auch sofort auf dem Server gelöscht."
     },
     "appPasswordGmail": "Gmail braucht für POP3 ein App-Passwort, und POP muss in den Gmail-Einstellungen eingeschaltet sein.",
     "appPasswordFastmail": "Fastmail braucht für POP3 ein App-Passwort.",
