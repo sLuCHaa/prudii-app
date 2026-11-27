@@ -110,12 +110,9 @@ pub(crate) async fn sync_with_client<S: AsyncRead + AsyncWrite + Unpin>(
             log::warn!("POP3 {}: raw source of mail {} missing, kept on server", account.id, mail_id);
             continue;
         }
-        match client.dele(msg).await {
+        match client.dele(msg).await? {
             Ok(()) => deleted.push(uidl),
-            Err(Pop3Error::Protocol(text) | Pop3Error::Locked(text)) => {
-                log::warn!("POP3 {}: DELE {} refused: {}", account.id, msg, text);
-            }
-            Err(e) => return Err(e),
+            Err(text) => log::warn!("POP3 {}: DELE {} refused: {}", account.id, msg, text),
         }
     }
 
@@ -123,10 +120,10 @@ pub(crate) async fn sync_with_client<S: AsyncRead + AsyncWrite + Unpin>(
         log::warn!("POP3 {}: QUIT failed, server deletes are retried next run: {}", account.id, e);
         return Ok(report);
     }
-    if let Err(e) = mark_server_deleted(db, &account.id, &deleted) {
-        log::warn!("POP3 {}: could not mark server deletes: {}", account.id, e);
+    match mark_server_deleted(db, &account.id, &deleted) {
+        Ok(marked) => report.deleted_on_server = marked,
+        Err(e) => log::warn!("POP3 {}: could not mark server deletes: {}", account.id, e),
     }
-    report.deleted_on_server = deleted.len() as u32;
     Ok(report)
 }
 
@@ -155,21 +152,34 @@ async fn store_fetched(
     };
     match outcome {
         InsertOutcome::Inserted(id) => {
-            record_uidl(db, account_id, uidl, &id)?;
+            record_uidl(db, account_id, uidl, Some(&id))?;
             if let Err(e) = crate::imap::store_body_and_attachments(db, &id, raw).await {
                 log::warn!("POP3 {}: storing body and attachments of {} failed: {}", account_id, id, e);
             }
             Ok(Some(id))
         }
         InsertOutcome::Existing(existing) => {
-            if store::has_source(data_dir, &existing) {
+            let mapped = if store::has_source(data_dir, &existing) {
                 remove_source(data_dir, &mail_id);
-            } else if let Err(e) =
-                std::fs::rename(store::source_path(data_dir, &mail_id), store::source_path(data_dir, &existing))
-            {
-                log::warn!("POP3 {}: could not attach the raw source to mail {}: {}", account_id, existing, e);
-            }
-            record_uidl(db, account_id, uidl, &existing)?;
+                let same = store::read_source(data_dir, &existing).is_ok_and(|stored| stored == raw);
+                if !same {
+                    log::warn!(
+                        "POP3 {}: message {} reuses the Message-ID of mail {}, left on the server",
+                        account_id, uidl, existing
+                    );
+                }
+                same
+            } else {
+                match store::move_source(data_dir, &mail_id, &existing) {
+                    Ok(()) => true,
+                    Err(e) => {
+                        log::warn!("POP3 {}: could not attach the raw source to mail {}: {}", account_id, existing, e);
+                        remove_source(data_dir, &mail_id);
+                        false
+                    }
+                }
+            };
+            record_uidl(db, account_id, uidl, mapped.then_some(existing.as_str()))?;
             Ok(None)
         }
         InsertOutcome::NotStored => {
@@ -200,7 +210,8 @@ fn inbox_folder_id(db: &Database, account_id: &str) -> Result<String, Pop3Error>
         .ok_or(Pop3Error::NoInbox)
 }
 
-fn record_uidl(db: &Database, account_id: &str, uidl: &str, mail_id: &str) -> Result<(), Pop3Error> {
+/// A row without mail_id keeps the message known but never deletable.
+fn record_uidl(db: &Database, account_id: &str, uidl: &str, mail_id: Option<&str>) -> Result<(), Pop3Error> {
     let fetched_at = Utc::now().format(FETCHED_AT_FORMAT).to_string();
     db.lock_db()
         .execute(
@@ -257,10 +268,10 @@ fn prune_vanished(db: &Database, account_id: &str, server_uidls: &HashSet<String
         .map(|r| r.uidl)
         .filter(|uidl| !server_uidls.contains(uidl))
         .collect();
-    update_each(db, account_id, &vanished, "DELETE FROM pop3_uidls WHERE account_id = ?1 AND uidl = ?2")
+    update_each(db, account_id, &vanished, "DELETE FROM pop3_uidls WHERE account_id = ?1 AND uidl = ?2").map(drop)
 }
 
-fn mark_server_deleted(db: &Database, account_id: &str, uidls: &[String]) -> Result<(), Pop3Error> {
+fn mark_server_deleted(db: &Database, account_id: &str, uidls: &[String]) -> Result<u32, Pop3Error> {
     update_each(
         db,
         account_id,
@@ -269,16 +280,19 @@ fn mark_server_deleted(db: &Database, account_id: &str, uidls: &[String]) -> Res
     )
 }
 
-fn update_each(db: &Database, account_id: &str, uidls: &[String], sql: &str) -> Result<(), Pop3Error> {
+/// Returns the number of changed rows.
+fn update_each(db: &Database, account_id: &str, uidls: &[String], sql: &str) -> Result<u32, Pop3Error> {
     if uidls.is_empty() {
-        return Ok(());
+        return Ok(0);
     }
     let mut conn = db.lock_db();
     let tx = conn.transaction().map_err(db_error)?;
+    let mut changed = 0;
     for uidl in uidls {
-        tx.execute(sql, rusqlite::params![account_id, uidl]).map_err(db_error)?;
+        changed += tx.execute(sql, rusqlite::params![account_id, uidl]).map_err(db_error)?;
     }
-    tx.commit().map_err(db_error)
+    tx.commit().map_err(db_error)?;
+    Ok(u32::try_from(changed).unwrap_or(u32::MAX))
 }
 
 #[cfg(test)]
@@ -297,6 +311,12 @@ mod tests {
         dir: PathBuf,
         account: Account,
         inbox: String,
+    }
+
+    impl Drop for Env {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.dir);
+        }
     }
 
     fn env(mode: &str) -> Env {
@@ -539,13 +559,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn duplicate_message_id_maps_to_existing_mail() {
-        let t = env("keep");
+    async fn duplicate_message_id_with_identical_bytes_maps_to_existing_mail() {
+        let t = env("after_fetch");
         let report = run(&t, vec![
             uidl(&[(1, "u1"), (2, "u2")]),
             list(&[(1, 400), (2, 400)]),
             retr(2, &mail("gleich", "Doppelt")),
             retr(1, &mail("gleich", "Doppelt")),
+            dele(1),
+            dele(2),
             QUIT,
         ])
         .await
@@ -553,10 +575,96 @@ mod tests {
         let mails = inbox_mails(&t);
         assert_eq!(mails.len(), 1);
         assert_eq!(report.new_mail_ids, vec![mails[0].0.clone()]);
+        assert_eq!(report.deleted_on_server, 2);
         assert_eq!(mail_of(&t, "u1"), mails[0].0);
         assert_eq!(mail_of(&t, "u2"), mails[0].0);
         assert_eq!(source_files(&t), 1);
         assert!(crate::pop3::store::has_source(&t.dir, &mails[0].0));
+    }
+
+    #[tokio::test]
+    async fn duplicate_message_id_with_different_bytes_is_never_deleted() {
+        let t = env("after_fetch");
+        let report = run(&t, vec![
+            uidl(&[(1, "u1"), (2, "u2")]),
+            list(&[(1, 400), (2, 400)]),
+            retr(2, &mail("gleich", "Doppelt")),
+            retr(1, &mail("gleich", "Anders")),
+            dele(2),
+            QUIT,
+        ])
+        .await
+        .unwrap();
+        assert_eq!(report.deleted_on_server, 1);
+        assert_eq!(inbox_mails(&t).len(), 1);
+        assert_eq!(source_files(&t), 1);
+        let rows = uidl_rows(&t);
+        assert_eq!(rows[0], ("u1".to_string(), None, "stored".to_string()));
+        assert_eq!(rows[1].2, "server_deleted");
+
+        let report = run(&t, vec![uidl(&[(1, "u1")]), list(&[(1, 400)]), QUIT]).await.unwrap();
+        assert!(report.new_mail_ids.is_empty());
+        assert_eq!(report.deleted_on_server, 0);
+    }
+
+    #[tokio::test]
+    async fn existing_mail_without_source_gets_the_new_source() {
+        let t = env("keep");
+        run(&t, vec![uidl(&[(1, "u1")]), list(&[(1, 400)]), retr(1, &mail("m1", "Erste")), QUIT])
+            .await
+            .unwrap();
+        let mail_id = mail_of(&t, "u1");
+        std::fs::remove_file(crate::pop3::store::source_path(&t.dir, &mail_id)).unwrap();
+        let report = run(&t, vec![
+            uidl(&[(1, "u1"), (2, "u9")]),
+            list(&[(1, 400), (2, 400)]),
+            retr(2, &mail("m1", "Erste")),
+            QUIT,
+        ])
+        .await
+        .unwrap();
+        assert!(report.new_mail_ids.is_empty());
+        assert_eq!(mail_of(&t, "u9"), mail_id);
+        assert!(crate::pop3::store::has_source(&t.dir, &mail_id));
+        assert_eq!(source_files(&t), 1);
+    }
+
+    #[tokio::test]
+    async fn dele_refusal_is_skipped_and_session_quits() {
+        let t = env("after_fetch");
+        let report = run(&t, vec![
+            uidl(&[(1, "u1"), (2, "u2")]),
+            list(&[(1, 400), (2, 400)]),
+            retr(2, &mail("m2", "Zweite")),
+            retr(1, &mail("m1", "Erste")),
+            ("DELE 1", "-ERR message locked\r\n"),
+            dele(2),
+            QUIT,
+        ])
+        .await
+        .unwrap();
+        assert_eq!(report.deleted_on_server, 1);
+        let rows = uidl_rows(&t);
+        assert_eq!(rows[0].2, "stored");
+        assert_eq!(rows[1].2, "server_deleted");
+    }
+
+    #[tokio::test]
+    async fn connection_drop_on_dele_aborts_without_marking() {
+        let t = env("after_fetch");
+        let result = run(&t, vec![
+            uidl(&[(1, "u1"), (2, "u2")]),
+            list(&[(1, 400), (2, 400)]),
+            retr(2, &mail("m2", "Zweite")),
+            retr(1, &mail("m1", "Erste")),
+            dele(1),
+            ("DELE 2", "<DROP>"),
+        ])
+        .await;
+        assert!(result.is_err());
+        let rows = uidl_rows(&t);
+        assert_eq!(rows.len(), 2);
+        assert!(rows.iter().all(|r| r.2 == "stored"));
     }
 
     #[tokio::test]

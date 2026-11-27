@@ -17,12 +17,29 @@ pub fn write_source(data_dir: &Path, mail_id: &str, raw: &[u8]) -> std::io::Resu
         let mut file = std::fs::File::create(&tmp)?;
         file.write_all(raw)?;
         file.sync_all()?;
-        std::fs::rename(&tmp, &path)
+        std::fs::rename(&tmp, &path)?;
+        sync_dir(&dir)
     })();
     if result.is_err() {
         let _ = std::fs::remove_file(&tmp);
     }
     result
+}
+
+pub fn move_source(data_dir: &Path, from_id: &str, to_id: &str) -> std::io::Result<()> {
+    std::fs::rename(source_path(data_dir, from_id), source_path(data_dir, to_id))?;
+    sync_dir(&data_dir.join("mail_sources"))
+}
+
+// Without this a power loss can drop the renamed entry although the server copy is already gone.
+#[cfg(unix)]
+fn sync_dir(dir: &Path) -> std::io::Result<()> {
+    std::fs::File::open(dir)?.sync_all()
+}
+
+#[cfg(not(unix))]
+fn sync_dir(_dir: &Path) -> std::io::Result<()> {
+    Ok(())
 }
 
 pub fn read_source(data_dir: &Path, mail_id: &str) -> std::io::Result<Vec<u8>> {
@@ -103,8 +120,23 @@ mod tests {
         DeletePolicy { mode, with_local }
     }
 
-    fn temp_dir() -> PathBuf {
-        std::env::temp_dir().join(format!("prudii-pop3-store-{}", uuid::Uuid::new_v4()))
+    struct TempDir(PathBuf);
+
+    impl std::ops::Deref for TempDir {
+        type Target = Path;
+        fn deref(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn temp_dir() -> TempDir {
+        TempDir(std::env::temp_dir().join(format!("prudii-pop3-store-{}", uuid::Uuid::new_v4())))
     }
 
     #[test]

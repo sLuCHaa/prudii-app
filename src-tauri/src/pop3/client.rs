@@ -163,8 +163,9 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Pop3Client<S> {
         Ok(body.data)
     }
 
-    pub async fn dele(&mut self, msg: u32) -> Result<(), Pop3Error> {
-        self.expect_ok(&format!("DELE {msg}")).await.map(drop)
+    /// The inner Err carries the text of a `-ERR` reply; the outer one is a transport or protocol failure.
+    pub async fn dele(&mut self, msg: u32) -> Result<Result<(), String>, Pop3Error> {
+        Ok(self.simple(&format!("DELE {msg}")).await?.map(drop))
     }
 
     pub async fn rset(&mut self) -> Result<(), Pop3Error> {
@@ -701,10 +702,10 @@ mod tests {
             ("QUIT", "-ERR some messages not removed\r\n"),
         ])
         .await;
-        client.dele(1).await.unwrap();
+        client.dele(1).await.unwrap().unwrap();
         client.rset().await.unwrap();
         client.noop().await.unwrap();
-        assert!(matches!(client.dele(9).await, Err(Pop3Error::Protocol(_))));
+        assert_eq!(client.dele(9).await.unwrap(), Err("no such message".to_string()));
         assert!(client.quit().await.is_err());
         server.await.unwrap();
     }
