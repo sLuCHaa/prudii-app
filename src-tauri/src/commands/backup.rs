@@ -1122,8 +1122,7 @@ pub(crate) fn import_drafts(conn: &rusqlite::Connection, drafts: &[serde_json::V
 }
 
 pub(crate) fn import_mail_chunk(conn: &rusqlite::Connection, mails: &[serde_json::Value], is_replace: bool) -> Result<(), String> {
-    let insert_or = if is_replace { "INSERT OR REPLACE" } else { "INSERT OR IGNORE" };
-    let sql = format!(
+    let sql = |insert_or: &str| format!(
         "{} INTO mails (id, account_id, folder_id, message_id, uid, subject,
          from_name, from_email, to_json, cc_json, bcc_json,
          date, snippet, body_text, body_html,
@@ -1134,15 +1133,20 @@ pub(crate) fn import_mail_chunk(conn: &rusqlite::Connection, mails: &[serde_json
          VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25,?26,?27,?28,?29,?30,?31,?32,?33,?34,?35)",
         insert_or
     );
+    let keep_sql = sql("INSERT OR IGNORE");
+    let replace_sql = sql(if is_replace { "INSERT OR REPLACE" } else { "INSERT OR IGNORE" });
 
     conn.execute_batch("BEGIN TRANSACTION;").map_err(|e| e.to_string())?;
     let result = (|| -> Result<(), String> {
         for mail in mails {
+            let account_id = mail.get("account_id").and_then(|v| v.as_str()).unwrap_or("");
+            // A POP3 account's local mail is the only copy.
+            let pop3 = crate::commands::mails::is_pop3_account(conn, account_id);
             conn.execute(
-                &sql,
+                if pop3 { &keep_sql } else { &replace_sql },
                 rusqlite::params![
                     mail.get("id").and_then(|v| v.as_str()).unwrap_or(""),
-                    mail.get("account_id").and_then(|v| v.as_str()).unwrap_or(""),
+                    account_id,
                     mail.get("folder_id").and_then(|v| v.as_str()).unwrap_or(""),
                     mail.get("message_id").and_then(|v| v.as_str()),
                     mail.get("uid").and_then(|v| v.as_u64()).map(|u| u as u32),
@@ -1189,6 +1193,64 @@ pub(crate) fn import_mail_chunk(conn: &rusqlite::Connection, mails: &[serde_json
             Err(e)
         }
     }
+}
+
+pub(crate) fn import_attachment_rows(
+    conn: &rusqlite::Connection,
+    attachments: &[serde_json::Value],
+    data_dir: &Path,
+    is_replace: bool,
+) -> Result<(), String> {
+    let sql = |insert_or: &str| format!(
+        "{} INTO attachments (id, mail_id, filename, mime_type, size_bytes, content_id, is_inline, local_path, created_at, declared_inline)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
+        insert_or
+    );
+    let keep_sql = sql("INSERT OR IGNORE");
+    let replace_sql = sql(if is_replace { "INSERT OR REPLACE" } else { "INSERT OR IGNORE" });
+
+    for att in attachments {
+        let mail_id = att.get("mail_id").and_then(|v| v.as_str()).unwrap_or("");
+        let filename = att.get("filename").and_then(|v| v.as_str()).unwrap_or("");
+
+        // Determine new local_path based on current data_dir
+        let att_dir = data_dir.join("attachments").join(mail_id);
+        let new_local_path = att_dir.join(filename);
+
+        conn.execute(
+            if is_pop3_mail(conn, mail_id) { &keep_sql } else { &replace_sql },
+            rusqlite::params![
+                att.get("id").and_then(|v| v.as_str()).unwrap_or(""),
+                mail_id,
+                filename,
+                att.get("mime_type").and_then(|v| v.as_str()),
+                att.get("size_bytes").and_then(|v| v.as_i64()),
+                att.get("content_id").and_then(|v| v.as_str()),
+                att.get("is_inline").and_then(|v| v.as_i64()).unwrap_or(0),
+                new_local_path.to_string_lossy().to_string(),
+                att.get("created_at").and_then(|v| v.as_str()).unwrap_or(""),
+                // Absent in archives written before the column existed;
+                // 0 is the safe default (the body check still applies).
+                att.get("declared_inline").and_then(|v| v.as_i64()).unwrap_or(0),
+            ],
+        ).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+fn is_pop3_mail(conn: &rusqlite::Connection, mail_id: &str) -> bool {
+    conn.query_row(
+        "SELECT 1 FROM mails m JOIN accounts a ON a.id = m.account_id WHERE m.id = ?1 AND a.incoming_protocol = 'pop3'",
+        rusqlite::params![mail_id],
+        |_| Ok(()),
+    )
+    .is_ok()
+}
+
+/// `rel_path` is `{mail_id}/{filename}`, already checked by `safe_extract_path`.
+fn keeps_existing_file(conn: &rusqlite::Connection, rel_path: &str, dest: &Path) -> bool {
+    let mail_id = Path::new(rel_path).components().next().and_then(|c| c.as_os_str().to_str());
+    dest.exists() && mail_id.is_some_and(|id| is_pop3_mail(conn, id))
 }
 
 pub(crate) fn export_sender_categories<W: Write + Seek>(
@@ -2182,39 +2244,7 @@ fn do_restore_backup_inner(
             let attachments: Vec<serde_json::Value> = serde_json::from_str(&s).map_err(|e| e.to_string())?;
 
             let conn = db.lock_db();
-            let insert_or = if is_replace { "INSERT OR REPLACE" } else { "INSERT OR IGNORE" };
-            let sql = format!(
-                "{} INTO attachments (id, mail_id, filename, mime_type, size_bytes, content_id, is_inline, local_path, created_at, declared_inline)
-                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
-                insert_or
-            );
-
-            for att in &attachments {
-                let mail_id = att.get("mail_id").and_then(|v| v.as_str()).unwrap_or("");
-                let filename = att.get("filename").and_then(|v| v.as_str()).unwrap_or("");
-
-                // Determine new local_path based on current data_dir
-                let att_dir = data_dir.join("attachments").join(mail_id);
-                let new_local_path = att_dir.join(filename);
-
-                conn.execute(
-                    &sql,
-                    rusqlite::params![
-                        att.get("id").and_then(|v| v.as_str()).unwrap_or(""),
-                        mail_id,
-                        filename,
-                        att.get("mime_type").and_then(|v| v.as_str()),
-                        att.get("size_bytes").and_then(|v| v.as_i64()),
-                        att.get("content_id").and_then(|v| v.as_str()),
-                        att.get("is_inline").and_then(|v| v.as_i64()).unwrap_or(0),
-                        new_local_path.to_string_lossy().to_string(),
-                        att.get("created_at").and_then(|v| v.as_str()).unwrap_or(""),
-                        // Absent in archives written before the column existed;
-                        // 0 is the safe default (the body check still applies).
-                        att.get("declared_inline").and_then(|v| v.as_i64()).unwrap_or(0),
-                    ],
-                ).map_err(|e| e.to_string())?;
-            }
+            import_attachment_rows(&conn, &attachments, &data_dir, is_replace)?;
 
             // We need to re-open the archive to iterate over attachment files
             // (since we already consumed `f`)
@@ -2233,6 +2263,9 @@ fn do_restore_backup_inner(
                     let rel_path = &name["attachment_files/".len()..];
                     match safe_extract_path(&attachments_base, rel_path) {
                         ExtractCheck::Ok(dest) => {
+                            if keeps_existing_file(&db.lock_db(), rel_path, &dest) {
+                                continue;
+                            }
                             let mut out_file = std::fs::File::create(&dest).map_err(|e| e.to_string())?;
                             std::io::copy(&mut entry, &mut out_file).map_err(|e| e.to_string())?;
                         }
@@ -3380,5 +3413,63 @@ mod signatures_roundtrip {
         let list = list_signatures_inner(&conn).unwrap();
         assert_eq!(list.len(), 1);
         assert_eq!(list_accounts_inner(&conn).unwrap()[0].signature_id.as_deref(), Some(list[0].id.as_str()));
+    }
+
+    #[test]
+    fn a_replace_restore_keeps_the_mail_and_attachments_of_a_pop3_account() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        pop3_account_with_a_mail(&conn);
+        conn.execute("UPDATE mails SET subject = 'Angebot', body_text = 'neu'", []).unwrap();
+        let mut mail = read_mail_batch(&conn, 5000, 0).unwrap().remove(0);
+        let mail_id = mail["id"].as_str().unwrap().to_string();
+        conn.execute("INSERT INTO attachments (id, mail_id, filename, local_path) VALUES ('att1', ?1, 'angebot.pdf', 'local')", [&mail_id]).unwrap();
+        mail["subject"] = "Entwurf".into();
+        mail["body_text"] = "alt".into();
+
+        import_mail_chunk(&conn, &[mail], true).unwrap();
+        let row = |sql: &str| conn.query_row(sql, [], |r| r.get::<_, String>(0)).unwrap();
+        assert_eq!(row("SELECT subject || '/' || body_text FROM mails"), "Angebot/neu");
+        assert_eq!(row("SELECT group_concat(local_path) FROM attachments"), "local");
+
+        let old = serde_json::json!({ "id": "att1", "mail_id": mail_id, "filename": "alt.pdf" });
+        import_attachment_rows(&conn, &[old], Path::new("data"), true).unwrap();
+        assert_eq!(row("SELECT filename || '/' || local_path FROM attachments"), "angebot.pdf/local");
+    }
+
+    #[test]
+    fn a_replace_restore_still_overwrites_attachments_of_other_accounts() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        pop3_account_with_a_mail(&conn);
+        conn.execute("UPDATE accounts SET incoming_protocol = 'imap'", []).unwrap();
+        let mut mail = read_mail_batch(&conn, 5000, 0).unwrap().remove(0);
+        let mail_id = mail["id"].as_str().unwrap().to_string();
+        mail["subject"] = "Entwurf".into();
+        import_mail_chunk(&conn, &[mail], true).unwrap();
+        for filename in ["angebot.pdf", "alt.pdf"] {
+            let att = serde_json::json!({ "id": "att1", "mail_id": mail_id, "filename": filename });
+            import_attachment_rows(&conn, &[att], Path::new("data"), true).unwrap();
+        }
+        let row = |sql: &str| conn.query_row(sql, [], |r| r.get::<_, String>(0)).unwrap();
+        assert_eq!(row("SELECT subject FROM mails"), "Entwurf");
+        assert_eq!(row("SELECT filename FROM attachments"), "alt.pdf");
+    }
+
+    #[test]
+    fn only_existing_files_of_pop3_mails_are_kept() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        pop3_account_with_a_mail(&conn);
+        let mail_id: String = conn.query_row("SELECT id FROM mails", [], |r| r.get(0)).unwrap();
+        let rel = format!("{mail_id}/angebot.pdf");
+        let existing = std::env::temp_dir().join(format!("prudii-test-{}", uuid::Uuid::new_v4()));
+        assert!(!keeps_existing_file(&conn, &rel, &existing));
+        std::fs::write(&existing, "neu").unwrap();
+        assert!(keeps_existing_file(&conn, &rel, &existing));
+        assert!(!keeps_existing_file(&conn, "other/angebot.pdf", &existing));
+        conn.execute("UPDATE accounts SET incoming_protocol = 'imap'", []).unwrap();
+        assert!(!keeps_existing_file(&conn, &rel, &existing));
+        std::fs::remove_file(existing).unwrap();
     }
 }
