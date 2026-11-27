@@ -145,7 +145,7 @@ fn get_password_from_db(account_id: &str) -> Option<String> {
         rusqlite::params![account_id],
         |row| row.get::<_, String>(0),
     )
-    .map_err(|e| log::warn!("[credentials] DB read failed for {}: {}", account_id, e))
+    .map_err(|e| log::warn!("[credentials] DB read failed: {}", e))
     .ok()?;
 
     #[cfg(windows)]
@@ -161,7 +161,7 @@ fn get_password_from_db(account_id: &str) -> Option<String> {
                 "UPDATE accounts SET stored_password = ?1 WHERE id = ?2",
                 rusqlite::params![encrypted, account_id],
             ) {
-                Ok(_) => log::info!("[credentials] Migrated plaintext password to DPAPI for account {}", account_id),
+                Ok(_) => log::info!("[credentials] Migrated a plaintext password to DPAPI"),
                 Err(e) => log::warn!("[credentials] DPAPI migration write failed: {}", e),
             }
         }
@@ -210,13 +210,13 @@ fn store_password_to_db(account_id: &str, password: &str) -> bool {
     ) {
         Ok(rows) => {
             if rows == 0 {
-                log::warn!("[credentials] DB store: 0 rows updated for account {} (account may not exist yet)", account_id);
+                log::warn!("[credentials] DB store: 0 rows updated (account may not exist yet)");
                 return false;
             }
             true
         }
         Err(e) => {
-            log::error!("[credentials] DB store failed for {}: {}", account_id, e);
+            log::error!("[credentials] DB store failed: {}", e);
             false
         }
     }
@@ -230,7 +230,7 @@ fn clear_password_in_db(account_id: &str) {
         "UPDATE accounts SET stored_password = '' WHERE id = ?1",
         rusqlite::params![account_id],
     ) {
-        log::warn!("[credentials] DB clear failed for {}: {}", account_id, e);
+        log::warn!("[credentials] DB clear failed: {}", e);
     }
 }
 
@@ -319,10 +319,8 @@ pub async fn resolve_credential(account_id: &str, auth_type: &str, provider: &st
         crate::oauth::cache_token(account_id, &tokens.access_token, tokens.expires_in);
         // A rotated refresh token that can't be persisted must not abort the running sync —
         // the session cache carries it, and the problem resurfaces on the next refresh.
-        if tokens.refresh_token != refresh_token {
-            if let Err(e) = store_password(account_id, &tokens.refresh_token) {
-                log::warn!("[credentials] Rotated refresh token not persisted for {}: {}", account_id, e);
-            }
+        if tokens.refresh_token != refresh_token && store_password(account_id, &tokens.refresh_token).is_err() {
+            log::warn!("[credentials] Rotated refresh token not persisted");
         }
         Ok(tokens.access_token)
     } else {

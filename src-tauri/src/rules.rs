@@ -19,7 +19,7 @@ pub fn apply_rules_to_mails(account_id: &str, mail_ids: &[String], db: &Database
     ) {
         Ok(s) => s,
         Err(e) => {
-            log::warn!("Failed to load rules for {}: {}", account_id, e);
+            log::warn!("Failed to load rules: {}", e);
             return 0;
         }
     };
@@ -91,7 +91,7 @@ pub fn apply_rules_to_mails(account_id: &str, mail_ids: &[String], db: &Database
     if let Ok(tx) = tx { let _ = tx.commit(); }
 
     if applied_count > 0 {
-        log::info!("Rules: applied to {}/{} mails for account {}", applied_count, mail_ids.len(), account_id);
+        log::info!("Rules: applied to {}/{} mails", applied_count, mail_ids.len());
     }
     applied_count
 }
@@ -342,7 +342,7 @@ fn folder_of_type(conn: &rusqlite::Connection, account_id: &str, folder_type: &s
 
 #[cfg(test)]
 mod pop3_tests {
-    use super::trash_mail;
+    use super::{apply_rules_to_mails, trash_mail};
     use crate::test_support::{seed_account, seed_folder, seed_mail, temp_db, SeedMail};
 
     #[test]
@@ -360,6 +360,52 @@ mod pop3_tests {
         let folder: String = conn.query_row("SELECT folder_id FROM mails WHERE id = ?1", [&mail], |r| r.get(0)).unwrap();
         let queued: i64 = conn.query_row("SELECT COUNT(*) FROM pending_ops", [], |r| r.get(0)).unwrap();
         assert_eq!((folder, queued), (trash, 0));
+    }
+
+    #[test]
+    fn pop3_rule_move_is_local() {
+        let db = temp_db();
+        let (account, mails, target, archive) = {
+            let conn = db.lock_db();
+            let account = seed_account(&conn, "anna@studio-halde.example");
+            conn.execute("UPDATE accounts SET incoming_protocol = 'pop3' WHERE id = ?1", [&account]).unwrap();
+            let inbox = seed_folder(&conn, &account, "inbox");
+            let target = seed_folder(&conn, &account, "custom");
+            let archive = seed_folder(&conn, &account, "archive");
+            let rules = [
+                ("move@", Some(target.as_str()), 0, 0, 0),
+                ("archive@", None, 1, 0, 0),
+                ("read@", None, 0, 1, 0),
+                ("star@", None, 0, 0, 1),
+            ];
+            let mails = rules.map(|(from, folder, archived, read, star)| {
+                conn.execute(
+                    "INSERT INTO mail_rules (id, account_id, name, enabled, priority, from_contains, action_move_to_folder, action_archive, action_mark_read, action_star)
+                     VALUES (?1, ?2, ?3, 1, 0, ?3, ?4, ?5, ?6, ?7)",
+                    rusqlite::params![uuid::Uuid::new_v4().to_string(), account, from, folder, archived, read, star],
+                )
+                .unwrap();
+                let from_email = format!("{from}studio-halde.example");
+                let id = seed_mail(&conn, &SeedMail { account_id: &account, folder_id: &inbox, from_email: &from_email, ..Default::default() });
+                conn.execute("UPDATE mails SET is_read = 0, is_starred = 0 WHERE id = ?1", [&id]).unwrap();
+                id
+            });
+            (account, mails, target, archive)
+        };
+
+        assert_eq!(apply_rules_to_mails(&account, &mails, &db), 4);
+
+        let conn = db.lock_db();
+        let state = |id: &str| -> (String, bool, bool) {
+            conn.query_row("SELECT folder_id, is_read, is_starred FROM mails WHERE id = ?1", [id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+                .unwrap()
+        };
+        assert_eq!(state(&mails[0]).0, target);
+        assert_eq!(state(&mails[1]).0, archive);
+        assert!(state(&mails[2]).1);
+        assert!(state(&mails[3]).2);
+        let queued: i64 = conn.query_row("SELECT COUNT(*) FROM pending_ops", [], |r| r.get(0)).unwrap();
+        assert_eq!(queued, 0);
     }
 
     #[test]
