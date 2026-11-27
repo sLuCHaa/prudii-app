@@ -559,7 +559,7 @@ async fn do_sync_account(app: AppHandle, account: Account, account_id: String, c
 async fn do_sync_account_inner(app: &AppHandle, account: Account, account_id: &str, credential: &str, auth_type: &str) {
     // Ahead of the provider checks: POP3 wins over OAuth.
     if account.incoming_protocol == "pop3" {
-        do_pop3_sync(app, &account, account_id, credential).await;
+        do_pop3_sync(app, &account, credential).await;
         return;
     }
 
@@ -911,28 +911,29 @@ fn pop3_progress(account_id: &str, status: &str, new_mails: u32, message: String
 }
 
 /// POP3 sync: no folders, no pending ops, no pool session and no IDLE.
-async fn do_pop3_sync(app: &AppHandle, account: &Account, account_id: &str, password: &str) {
-    emit_progress(app, &pop3_progress(account_id, "connecting", 0, "Connecting...".into()));
+async fn do_pop3_sync(app: &AppHandle, mailbox: &Account, password: &str) {
+    let owner_id = mailbox.id.as_str();
+    emit_progress(app, &pop3_progress(owner_id, "connecting", 0, "Connecting...".into()));
 
     let db = app.state::<Database>();
     {
         let conn = db.lock_db();
-        let _ = conn.execute("DELETE FROM pending_ops WHERE account_id = ?1", rusqlite::params![account_id]);
+        let _ = conn.execute("DELETE FROM pending_ops WHERE account_id = ?1", rusqlite::params![owner_id]);
     }
 
     let data_dir = db.data_dir.clone();
-    let report = match crate::pop3::sync::sync_pop3_account(&db, &data_dir, account, password).await {
+    let report = match crate::pop3::sync::fetch_pop3_mails(&db, &data_dir, mailbox, password).await {
         Ok(r) => r,
         Err(e) => {
-            log::warn!("POP3 sync failed for account {}: {}", account_id, e);
-            emit_progress(app, &pop3_progress(account_id, "error", 0, pop3_error_message(&e)));
+            log::warn!("POP3 sync failed for account {}: {}", owner_id, e);
+            emit_progress(app, &pop3_progress(owner_id, "error", 0, pop3_error_message(&e)));
             return;
         }
     };
 
     for chunk in report.new_mail_ids.chunks(500) {
-        let remaining = crate::unsubscribe::sweep::sweep_new_mails(account_id, chunk, &db);
-        crate::rules::apply_rules_to_mails(account_id, &remaining, &db);
+        let remaining = crate::unsubscribe::sweep::sweep_new_mails(owner_id, chunk, &db);
+        crate::rules::apply_rules_to_mails(owner_id, &remaining, &db);
     }
 
     {
@@ -943,25 +944,25 @@ async fn do_pop3_sync(app: &AppHandle, account: &Account, account_id: &str, pass
                 unread_count = (SELECT COUNT(*) FROM mails WHERE folder_id = folders.id AND is_read = 0),
                 last_sync = CASE WHEN folder_type = 'inbox' THEN datetime('now') ELSE last_sync END
              WHERE account_id = ?1",
-            rusqlite::params![account_id],
+            rusqlite::params![owner_id],
         );
         let _ = conn.execute(
             "UPDATE accounts SET last_sync = datetime('now'), updated_at = datetime('now') WHERE id = ?1",
-            rusqlite::params![account_id],
+            rusqlite::params![owner_id],
         );
     }
 
     let total_new = report.new_mail_ids.len() as u32;
     log::info!(
         "POP3 sync complete for account {}: {} new, {} deleted on server, {} too large",
-        account_id, total_new, report.deleted_on_server, report.skipped_too_large
+        owner_id, total_new, report.deleted_on_server, report.skipped_too_large
     );
 
     if total_new > 0 {
-        crate::notifications::send_new_mail_notification(app, account_id, total_new, &db);
+        crate::notifications::send_new_mail_notification(app, owner_id, total_new, &db);
     }
 
-    emit_progress(app, &pop3_progress(account_id, "done", total_new, format!("Sync complete. {} new mails.", total_new)));
+    emit_progress(app, &pop3_progress(owner_id, "done", total_new, format!("Sync complete. {} new mails.", total_new)));
 }
 
 /// Gmail REST API sync — uses batch HTTP requests instead of IMAP.

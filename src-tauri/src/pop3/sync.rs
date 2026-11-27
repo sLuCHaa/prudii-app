@@ -21,19 +21,19 @@ pub struct Pop3SyncReport {
     pub skipped_too_large: u32,
 }
 
-pub async fn sync_pop3_account(
+pub async fn fetch_pop3_mails(
     db: &Database,
     data_dir: &Path,
-    account: &Account,
+    mailbox: &Account,
     password: &str,
 ) -> Result<Pop3SyncReport, Pop3Error> {
-    let security: Pop3Security = account.incoming_security.parse()?;
-    let port = u16::try_from(account.imap_port)
-        .map_err(|_| Pop3Error::Io(format!("invalid port {}", account.imap_port)))?;
-    let mut client = super::connect(&account.imap_host, port, security).await?;
+    let security: Pop3Security = mailbox.incoming_security.parse()?;
+    let port = u16::try_from(mailbox.imap_port)
+        .map_err(|_| Pop3Error::Io(format!("invalid port {}", mailbox.imap_port)))?;
+    let mut client = super::connect(&mailbox.imap_host, port, security).await?;
     client.capa().await?;
-    client.login(&account.email, password).await?;
-    sync_with_client(client, db, data_dir, account).await
+    client.login(&mailbox.email, password).await?;
+    sync_with_client(client, db, data_dir, mailbox).await
 }
 
 /// Errors return without QUIT on purpose: the server then discards every DELE of the session.
@@ -41,11 +41,11 @@ pub(crate) async fn sync_with_client<S: AsyncRead + AsyncWrite + Unpin>(
     mut client: Pop3Client<S>,
     db: &Database,
     data_dir: &Path,
-    account: &Account,
+    mailbox: &Account,
 ) -> Result<Pop3SyncReport, Pop3Error> {
     let listing = client.uidl_all().await?;
     let sizes: HashMap<u32, u64> = client.list_all().await?.into_iter().collect();
-    let inbox = inbox_folder_id(db, &account.id)?;
+    let inbox = inbox_folder_id(db, &mailbox.id)?;
 
     let server_uidls: HashSet<String> = listing.iter().map(|(_, uidl)| uidl.clone()).collect();
     let mut numbers: HashMap<&str, Option<u32>> = HashMap::new();
@@ -56,7 +56,7 @@ pub(crate) async fn sync_with_client<S: AsyncRead + AsyncWrite + Unpin>(
             .or_insert(Some(*msg));
     }
 
-    let known: HashSet<String> = load_rows(db, &account.id)?.into_iter().map(|r| r.uidl).collect();
+    let known: HashSet<String> = load_rows(db, &mailbox.id)?.into_iter().map(|r| r.uidl).collect();
     let mut fresh: Vec<(u32, &str)> = listing
         .iter()
         .filter(|(_, uidl)| !known.contains(uidl))
@@ -66,46 +66,46 @@ pub(crate) async fn sync_with_client<S: AsyncRead + AsyncWrite + Unpin>(
 
     let mut report = Pop3SyncReport::default();
     let mut seen = HashSet::new();
-    for (msg, uidl) in fresh {
-        if !seen.insert(uidl) {
+    for (msg, server_ref) in fresh {
+        if !seen.insert(server_ref) {
             continue;
         }
         if let Some(&size) = sizes.get(&msg).filter(|&&size| size > MAX_MESSAGE_BYTES) {
-            skip_too_large(&mut report, account, uidl, size);
+            skip_too_large(&mut report, mailbox, server_ref, size);
             continue;
         }
         let raw = match client.retr(msg, MAX_MESSAGE_BYTES).await {
             Ok(raw) => raw,
             Err(Pop3Error::TooLarge(size)) => {
-                skip_too_large(&mut report, account, uidl, size);
+                skip_too_large(&mut report, mailbox, server_ref, size);
                 continue;
             }
             Err(e) => return Err(e),
         };
-        if let Some(mail_id) = store_fetched(db, data_dir, &account.id, &inbox, uidl, &raw).await? {
+        if let Some(mail_id) = store_fetched(db, data_dir, &mailbox.id, &inbox, server_ref, &raw).await? {
             report.new_mail_ids.push(mail_id);
         }
     }
 
-    prune_vanished(db, &account.id, &server_uidls)?;
+    prune_vanished(db, &mailbox.id, &server_uidls)?;
 
-    let rows = load_rows(db, &account.id)?;
+    let rows = load_rows(db, &mailbox.id)?;
     let mail_ids: HashMap<&str, &str> = rows
         .iter()
         .filter_map(|r| r.mail_id.as_deref().map(|m| (r.uidl.as_str(), m)))
         .collect();
     let mut targets: Vec<(u32, String)> = Vec::new();
-    for uidl in store::plan_deletions(Utc::now(), &delete_policy(account), &rows, &server_uidls) {
+    for uidl in store::plan_deletions(Utc::now(), &delete_policy(mailbox), &rows, &server_uidls) {
         match numbers.get(uidl.as_str()) {
             Some(Some(msg)) => targets.push((*msg, uidl)),
-            _ => log::warn!("POP3 {}: no unique message number for a planned delete, kept on server", account.id),
+            _ => log::warn!("POP3 {}: no unique message number for a planned delete, kept on server", mailbox.id),
         }
     }
     targets.sort();
 
     if !targets.is_empty() {
         if let Err(e) = flush_database(db) {
-            log::warn!("POP3 {}: database not flushed, server deletes skipped this run: {}", account.id, e);
+            log::warn!("POP3 {}: database not flushed, server deletes skipped this run: {}", mailbox.id, e);
             targets.clear();
         }
     }
@@ -114,22 +114,22 @@ pub(crate) async fn sync_with_client<S: AsyncRead + AsyncWrite + Unpin>(
     for (msg, uidl) in targets {
         let Some(mail_id) = mail_ids.get(uidl.as_str()) else { continue };
         if !store::has_source(data_dir, mail_id) {
-            log::warn!("POP3 {}: raw source of mail {} missing, kept on server", account.id, mail_id);
+            log::warn!("POP3 {}: raw source of mail {} missing, kept on server", mailbox.id, mail_id);
             continue;
         }
         match client.dele(msg).await? {
             Ok(()) => deleted.push(uidl),
-            Err(text) => log::warn!("POP3 {}: DELE {} refused: {}", account.id, msg, text),
+            Err(text) => log::warn!("POP3 {}: DELE {} refused: {}", mailbox.id, msg, text),
         }
     }
 
     if let Err(e) = client.quit().await {
-        log::warn!("POP3 {}: QUIT failed, server deletes are retried next run: {}", account.id, e);
+        log::warn!("POP3 {}: QUIT failed, server deletes are retried next run: {}", mailbox.id, e);
         return Ok(report);
     }
-    match mark_server_deleted(db, &account.id, &deleted) {
+    match mark_server_deleted(db, &mailbox.id, &deleted) {
         Ok(marked) => report.deleted_on_server = marked,
-        Err(e) => log::warn!("POP3 {}: could not mark server deletes: {}", account.id, e),
+        Err(e) => log::warn!("POP3 {}: could not mark server deletes: {}", mailbox.id, e),
     }
     Ok(report)
 }
@@ -146,8 +146,8 @@ fn flush_database(db: &Database) -> Result<(), Pop3Error> {
     Ok(())
 }
 
-fn skip_too_large(report: &mut Pop3SyncReport, account: &Account, uidl: &str, size: u64) {
-    log::warn!("POP3 {}: message {} has {} bytes, left on the server", account.id, uidl, size);
+fn skip_too_large(report: &mut Pop3SyncReport, mailbox: &Account, server_ref: &str, size: u64) {
+    log::warn!("POP3 {}: message {} has {} bytes, left on the server", mailbox.id, server_ref, size);
     report.skipped_too_large += 1;
 }
 
@@ -155,14 +155,14 @@ fn skip_too_large(report: &mut Pop3SyncReport, account: &Account, uidl: &str, si
 async fn store_fetched(
     db: &Database,
     data_dir: &Path,
-    account_id: &str,
+    owner_id: &str,
     inbox: &str,
-    uidl: &str,
+    server_ref: &str,
     raw: &[u8],
 ) -> Result<Option<String>, Pop3Error> {
     let mail_id = uuid::Uuid::new_v4().to_string();
     store::write_source(data_dir, &mail_id, raw).map_err(|e| Pop3Error::Storage(e.to_string()))?;
-    let outcome = match crate::imap::insert_local_mail(db, account_id, inbox, &mail_id, raw, false) {
+    let outcome = match crate::imap::insert_local_mail(db, owner_id, inbox, &mail_id, raw, false) {
         Ok(outcome) => outcome,
         Err(e) => {
             remove_source(data_dir, &mail_id);
@@ -171,9 +171,9 @@ async fn store_fetched(
     };
     match outcome {
         InsertOutcome::Inserted(id) => {
-            record_uidl(db, account_id, uidl, Some(&id))?;
+            record_uidl(db, owner_id, server_ref, Some(&id))?;
             if let Err(e) = crate::imap::store_body_and_attachments(db, &id, raw).await {
-                log::warn!("POP3 {}: storing body and attachments of {} failed: {}", account_id, id, e);
+                log::warn!("POP3 {}: storing body and attachments of {} failed: {}", owner_id, id, e);
             }
             Ok(Some(id))
         }
@@ -185,7 +185,7 @@ async fn store_fetched(
                 if !same {
                     log::warn!(
                         "POP3 {}: message {} reuses the Message-ID of mail {}, left on the server",
-                        account_id, uidl, existing
+                        owner_id, server_ref, existing
                     );
                 }
                 same
@@ -196,11 +196,11 @@ async fn store_fetched(
                 }
                 true
             };
-            record_uidl(db, account_id, uidl, mapped.then_some(existing.as_str()))?;
+            record_uidl(db, owner_id, server_ref, mapped.then_some(existing.as_str()))?;
             Ok(None)
         }
         InsertOutcome::NotStored => {
-            log::warn!("POP3 {}: message {} could not be stored, left on the server", account_id, uidl);
+            log::warn!("POP3 {}: message {} could not be stored, left on the server", owner_id, server_ref);
             remove_source(data_dir, &mail_id);
             Ok(None)
         }
@@ -832,6 +832,6 @@ mod tests {
     fn sync_future_is_send() {
         fn assert_send<T: Send>(_: T) {}
         let t = env("keep");
-        assert_send(sync_pop3_account(&t.db, &t.dir, &t.account, "geheim"));
+        assert_send(fetch_pop3_mails(&t.db, &t.dir, &t.account, &uuid::Uuid::new_v4().to_string()));
     }
 }
