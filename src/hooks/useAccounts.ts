@@ -25,6 +25,11 @@ export function useCreateAccount() {
   });
 }
 
+export function useRefreshAccounts() {
+  const queryClient = useQueryClient();
+  return () => queryClient.invalidateQueries({ queryKey: ["accounts"] });
+}
+
 export function useDeleteAccount() {
   const queryClient = useQueryClient();
   return useMutation({

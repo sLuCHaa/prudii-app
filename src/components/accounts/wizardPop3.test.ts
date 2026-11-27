@@ -4,8 +4,9 @@ import { createRoot, type Root } from "react-dom/client";
 import i18n from "../../lib/i18n";
 import de from "../../locales/de.json";
 
-const { createAccountMock, syncMock, progress } = vi.hoisted(() => ({
+const { createAccountMock, refreshAccountsMock, syncMock, progress } = vi.hoisted(() => ({
   createAccountMock: vi.fn(),
+  refreshAccountsMock: vi.fn(),
   syncMock: vi.fn(),
   progress: { emit: (_payload: object) => {} },
 }));
@@ -19,6 +20,7 @@ vi.mock("../../lib/tauri", () => ({
 }));
 vi.mock("../../hooks/useAccounts", () => ({
   useCreateAccount: () => ({ mutateAsync: createAccountMock, isPending: false }),
+  useRefreshAccounts: () => refreshAccountsMock,
 }));
 vi.mock("../../hooks/useSync", () => ({ useSyncAccount: () => ({ mutate: syncMock }) }));
 vi.mock("../../hooks/useAppConfig", () => ({ useAppConfig: () => ({ data: undefined }) }));
@@ -450,6 +452,8 @@ describe("account wizard going back after a failed first sync", () => {
       [{ accountId: "acc-1", password }],
     ]);
     expect(update.mock.invocationCallOrder[0]).toBeLessThan(syncMock.mock.invocationCallOrder[1]);
+    expect(refreshAccountsMock).toHaveBeenCalledTimes(1);
+    expect(update.mock.invocationCallOrder[0]).toBeLessThan(refreshAccountsMock.mock.invocationCallOrder[0]);
   });
 
   it("applies the settings again when the retry follows a failed second sync", async () => {

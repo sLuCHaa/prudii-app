@@ -168,10 +168,21 @@ describe("account settings for POP3", () => {
     expect(host.textContent).not.toContain(i18n.t("settings.account.oauthHint"));
   });
 
-  it("places the rule right after the sync interval", async () => {
+  it("places the rule first", async () => {
     await render(pop3Account());
-    const titles = Array.from(host.querySelectorAll("h3")).map((h) => h.textContent);
-    expect(titles[titles.indexOf(i18n.t("settings.account.autoSync")) + 1]).toBe(i18n.t("pop3.ruleTitle"));
+    expect(host.querySelector("h3")!.textContent).toBe(i18n.t("pop3.ruleTitle"));
+  });
+
+  it("shows the change hints in the readable warning style", async () => {
+    await render(pop3Account());
+    click(localSwitch());
+    type(days(), "7");
+    type(field(i18n.t("pop3.host")), "mail.studio-halde.example");
+
+    const hints = ["pop3.ruleChange.sooner", "pop3.ruleChange.withLocal", "pop3.serverChangeHint"].map((key) =>
+      Array.from(host.querySelectorAll("p")).find((p) => p.textContent === i18n.t(key))!,
+    );
+    for (const hint of hints) expect(hint.classList).toContain("text-warning-fg");
   });
 
   it("offers no vacation notice", async () => {

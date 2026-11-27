@@ -300,6 +300,22 @@ export function AccountSettings({
       <div ref={scrollHostRef} className="flex flex-1 min-h-0">
         <div ref={scrollRef} className="overflow-y-auto flex-1 settings-canvas">
           <div className="p-4 space-y-5">
+            {isPop3 && (
+              <SettingsGroup title={t("pop3.ruleTitle")} icon={<Mail className="w-4 h-4" />}>
+                <SettingsBlock>
+                  <Pop3DeleteRule
+                    hideTitle
+                    rule={rule}
+                    fallbackDays={stored.rule.days}
+                    onChange={(r) => { setRule(r); setSaved(false); }}
+                  />
+                  {pop3RuleChangeHints(stored.rule, rule).map((key) => (
+                    <p key={key} className="mt-2 p-2 rounded-lg bg-yellow-500/10 text-xs text-warning-fg">{t(key)}</p>
+                  ))}
+                </SettingsBlock>
+              </SettingsGroup>
+            )}
+
             <SettingsGroup title={t("settings.account.displayName")}>
               <SettingsBlock description={t("settings.account.displayNameDesc")}>
                 <input
@@ -351,22 +367,6 @@ export function AccountSettings({
                 )}
               </SettingsBlock>
             </SettingsGroup>
-
-            {isPop3 && (
-              <SettingsGroup title={t("pop3.ruleTitle")} icon={<Mail className="w-4 h-4" />}>
-                <SettingsBlock>
-                  <Pop3DeleteRule
-                    hideTitle
-                    rule={rule}
-                    fallbackDays={stored.rule.days}
-                    onChange={(r) => { setRule(r); setSaved(false); }}
-                  />
-                  {pop3RuleChangeHints(stored.rule, rule).map((key) => (
-                    <p key={key} className="mt-2 text-xs text-warning">{t(key)}</p>
-                  ))}
-                </SettingsBlock>
-              </SettingsGroup>
-            )}
 
             {!isPop3 && !isOAuth && account.auth_type === "password" && (
               <VacationSection accountId={account.id} />
@@ -462,7 +462,7 @@ export function AccountSettings({
                         ]}
                       />
                       {serverChanged && (
-                        <p className="mt-2 text-xs text-warning">{t("pop3.serverChangeHint")}</p>
+                        <p className="mt-2 p-2 rounded-lg bg-yellow-500/10 text-xs text-warning-fg">{t("pop3.serverChangeHint")}</p>
                       )}
                     </div>
                   )}

@@ -4,7 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { motion } from "motion/react";
 import { useModalExit } from "../motion/modalExit";
 import type { ProviderPreset } from "../../lib/providers";
-import { useCreateAccount } from "../../hooks/useAccounts";
+import { useCreateAccount, useRefreshAccounts } from "../../hooks/useAccounts";
 import { useSyncAccount } from "../../hooks/useSync";
 import { useAppConfig } from "../../hooks/useAppConfig";
 import { useAppStore } from "../../stores/appStore";
@@ -91,6 +91,7 @@ export function AccountWizard() {
   const trapRef = useFocusTrap<HTMLDivElement>(true);
   const modalExit = useModalExit();
   const createAccount = useCreateAccount();
+  const refreshAccounts = useRefreshAccounts();
   const syncAccount = useSyncAccount();
   const { data: appConfig } = useAppConfig();
 
@@ -208,6 +209,7 @@ export function AccountWizard() {
           ? [{ incoming_security, pop3_delete_mode, pop3_delete_after_days, pop3_delete_with_local }]
           : []),
       );
+      refreshAccounts();
       return existing.id;
     }
     const account = await createAccount.mutateAsync(request);
