@@ -27,7 +27,7 @@ const client = { invalidateQueries: async () => {} } as unknown as QueryClient;
 const offers: Folder = { id: "f-offers", account_id: "info", name: "Angebote", folder_type: "custom", path: "Angebote", unread_count: 0, total_count: 0, is_local: false, color: "" };
 const info = { id: "info", email: "info@studio-halde.example" } as Account;
 const toasts = () => useAppStore.getState().toasts;
-const run = (_ids: string[], action: () => void) => action();
+const run = (_mails: unknown, action: () => unknown) => void action();
 
 beforeEach(() => {
   calls.copy.length = 0;
@@ -77,10 +77,10 @@ describe("copyToOtherAccount", () => {
   });
 
   it("bins the original only once the delete guard lets it", async () => {
-    const held: string[][] = [];
-    await copyToOtherAccount(client, { id: "m1" }, offers, info, (ids) => held.push(ids));
+    const held: unknown[] = [];
+    await copyToOtherAccount(client, { id: "m1", account_id: "pop" }, offers, info, (mails) => held.push(mails));
     toasts()[0].action!.onClick();
-    expect(held).toEqual([["m1"]]);
+    expect(held).toEqual([[{ id: "m1", account_id: "pop" }]]);
     expect(useAppStore.getState().pendingRemoveIds).toEqual([]);
     expect(calls.trash).toEqual([]);
   });

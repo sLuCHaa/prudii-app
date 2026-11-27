@@ -453,7 +453,7 @@ export function AccountSection({ account, collapsed }: { account: AccountType; c
     if (mailAccountId !== account.id) {
       if (takesCopy(account, folder)) {
         noteDropTarget(folderEl);
-        void copyToOtherAccount(queryClient, { id: mailId }, folder, account, guardDelete);
+        void copyToOtherAccount(queryClient, { id: mailId, account_id: mailAccountId }, folder, account, guardDelete);
         return;
       }
       await dialog.alert({

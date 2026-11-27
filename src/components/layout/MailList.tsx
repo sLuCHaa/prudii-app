@@ -47,7 +47,7 @@ import { moveTargets, type CopyGroup } from "../../lib/moveTargets";
 import { useCopyGroups } from "../../hooks/useCopyGroups";
 import { copyToOtherAccount } from "../../lib/copyMail";
 import { useMailDeleteGuard } from "../../hooks/useMailDeleteGuard";
-import { isAskingServerDelete, withServerDeleteWarning } from "../../lib/pop3Delete";
+import { isAskingServerDelete, withServerDeleteWarning, type GuardedMail } from "../../lib/pop3Delete";
 import { ContextMenu } from "../ui/ContextMenu";
 import { FolderPicker, FOLDER_PICKER_WIDTH } from "../ui/FolderPicker";
 import { Tooltip } from "../ui/Tooltip";
@@ -487,7 +487,7 @@ interface VirtualMailListProps {
   setPendingRemoveIds: (ids: string[]) => void;
   invalidateMailQueries: () => void;
   archiveMail: (id: string) => Promise<unknown>;
-  onTrashMail: (id: string, onStart?: () => void) => void;
+  onTrashMail: (mail: GuardedMail, onStart?: () => void) => void;
   snoozeMail: (id: string, until: string) => Promise<unknown>;
   onArchiveSuccess: (archivedIds: string[], preActionVisible: number) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
@@ -766,7 +766,7 @@ function VirtualMailList({
         onSuccess: () => onArchiveSuccess([mailId], preActionVisible),
       });
     } else {
-      onTrashMail(mailId, onStart);
+      onTrashMail(filteredMails.find((m) => m.id === mailId) ?? { id: mailId }, onStart);
     }
   }, [filteredMails, setPendingRemoveIds, invalidateMailQueries, archiveMail, onTrashMail, onArchiveSuccess]);
 
@@ -1102,7 +1102,7 @@ function VirtualMailList({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            onTrashMail(mail.id);
+                            onTrashMail(mail);
                           }}
                           className="w-7 h-7 rounded-md bg-surface hover:bg-hover border border-border flex items-center justify-center text-danger"
                           aria-label={t("mailDetail.trash")}
@@ -1617,6 +1617,8 @@ export function MailList() {
   );
   const pickerCopyGroups = useCopyGroups(moveMenu?.mail.account_id ?? null);
 
+  const guardDelete = useMailDeleteGuard();
+
   const handleCopy = useCallback((mail: Mail, destFolderId: string, groups: CopyGroup[]) => {
     for (const group of groups) {
       const dest = group.folders.find((f) => f.id === destFolderId);
@@ -1625,7 +1627,7 @@ export function MailList() {
         return;
       }
     }
-  }, [queryClient]);
+  }, [queryClient, guardDelete]);
 
   // Move targets for bulk move: only when all selected mails share one account.
   const selectedMailObjects = useMemo(
@@ -1672,13 +1674,11 @@ export function MailList() {
     });
   }, [setPendingRemoveIds, queryClient]);
 
-  const guardDelete = useMailDeleteGuard();
-
-  const trashOne = useCallback((mailId: string, onStart?: () => void) => {
-    guardDelete([mailId], () => {
+  const trashOne = useCallback((mail: GuardedMail, onStart?: () => void) => {
+    guardDelete([mail], () => {
       onStart?.();
-      setPendingRemoveIds([mailId]);
-      runMailAction(() => trashMail(mailId), {
+      setPendingRemoveIds([mail.id]);
+      return runMailAction(() => trashMail(mail.id), {
         errorKey: "errors.trash",
         invalidate: invalidateMailQueries,
         onPendingClear: () => setPendingRemoveIds([]),
@@ -1705,14 +1705,18 @@ export function MailList() {
         patchCachedMails(queryClient, ids, patch);
       }
       s.clearSelection();
-      runMailAction(() => batchUpdateMails(ids, action), {
+      return runMailAction(() => batchUpdateMails(ids, action), {
         errorKey: "errors.batchUpdate",
         invalidate: invalidateMailQueries,
       });
     };
-    if (action === "trash") guardDelete(ids, apply);
-    else apply();
-  }, [setMails, invalidateMailQueries, queryClient, guardDelete]);
+    if (action === "trash") {
+      const accountOf = new Map(mails.map((m) => [m.id, m.account_id]));
+      guardDelete(ids.map((id) => ({ id, account_id: accountOf.get(id) })), apply);
+    } else {
+      apply();
+    }
+  }, [mails, setMails, invalidateMailQueries, queryClient, guardDelete]);
 
   const runBulkPerMail = useCallback((fn: (id: string) => Promise<unknown>, errorKey: string, awaitsServer = false) => {
     const s = useAppStore.getState();
@@ -1999,7 +2003,7 @@ export function MailList() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [filteredMails, selectedMailIndex, selectMail, setSelectedMailId, multiSelectMode, selectedMailIds, clearSelection, selectAllMails, setMails, mails, isSearchActive, searchResultsData, selectedMailId, contextMenu, invalidateMailQueries, handleArchiveSuccess, setPendingRemoveIds, toggleMailSelection, setSelectionSpan, setSelectedMailIndex, rowEstimate]);
+  }, [filteredMails, selectedMailIndex, selectMail, setSelectedMailId, multiSelectMode, selectedMailIds, clearSelection, selectAllMails, setMails, mails, isSearchActive, searchResultsData, selectedMailId, contextMenu, invalidateMailQueries, handleArchiveSuccess, setPendingRemoveIds, toggleMailSelection, setSelectionSpan, setSelectedMailIndex, rowEstimate, runBulkAction]);
 
 
   // No entrance animation on folder switches (post-paint effects flash).
@@ -2471,7 +2475,7 @@ export function MailList() {
               onPendingClear: () => setPendingRemoveIds([]),
             });
           }}
-          onTrash={(m) => trashOne(m.id)}
+          onTrash={(m) => trashOne(m)}
           onTogglePin={(m) => {
             const prev = m.is_pinned;
             setMails((prev_) => prev_.map((ml) => ml.id === m.id ? { ...ml, is_pinned: !prev } : ml));

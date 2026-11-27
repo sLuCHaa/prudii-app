@@ -16,6 +16,7 @@ const account = (id: string, incoming_protocol: "imap" | "pop3", pop3_delete_wit
   ({ id, email: "anna@studio-halde.example", incoming_protocol, pop3_delete_with_local }) as Account;
 const use = (...accounts: Account[]) => useAppStore.setState({ accounts });
 const t = i18n.t.bind(i18n);
+const mails = (...ids: string[]) => ids.map((id) => ({ id, account_id: "pop" }));
 const settle = () => new Promise((r) => setTimeout(r));
 const warning = () => i18n.t("pop3.deleteWarning.mails", { count: 2 });
 
@@ -46,6 +47,11 @@ describe("withServerDeleteWarning", () => {
     expect(withServerDeleteWarning(t, "Frage?", "combined")).toBe("Frage?");
   });
 
+  it("speaks of the mails being deleted, not of the whole account", () => {
+    expect(i18n.t("pop3.deleteWarning.folder")).toBe("These mails are also deleted on the server immediately.");
+    expect(i18n.t("pop3.deleteWarning.combined")).toMatch(/^Of these, /);
+  });
+
   it("says that the server copy goes at once", () => {
     expect(i18n.t("pop3.deleteWarning.mails", { count: 1 })).toContain("on the server immediately");
   });
@@ -59,50 +65,50 @@ describe("confirmMailDelete", () => {
 
   it("asks nothing and queries nothing without an affected account", async () => {
     use(account("pop", "pop3", false));
-    expect(await confirmMailDelete(danger, t, ["m1"])).toBe(true);
+    expect(await confirmMailDelete(danger, t, mails("m1"))).toBe(true);
     expect(count).not.toHaveBeenCalled();
     expect(danger).not.toHaveBeenCalled();
   });
 
   it("asks nothing when no server copy would go", async () => {
     count.mockResolvedValue(0);
-    expect(await confirmMailDelete(danger, t, ["m1"])).toBe(true);
+    expect(await confirmMailDelete(danger, t, mails("m1"))).toBe(true);
     expect(danger).not.toHaveBeenCalled();
   });
 
   it("warns and follows the answer", async () => {
-    expect(await confirmMailDelete(danger, t, ["m1", "m2"])).toBe(true);
+    expect(await confirmMailDelete(danger, t, mails("m1", "m2"))).toBe(true);
     expect(count).toHaveBeenCalledWith(["m1", "m2"]);
     expect(danger.mock.calls[0][0]).toMatchObject({ title: i18n.t("pop3.deleteWarning.title"), message: warning() });
     await settle();
     danger.mockResolvedValue(false);
-    expect(await confirmMailDelete(danger, t, ["m1", "m2"])).toBe(false);
+    expect(await confirmMailDelete(danger, t, mails("m1", "m2"))).toBe(false);
   });
 
   it("adds the warning to an existing question", async () => {
-    await confirmMailDelete(danger, t, ["m1", "m2"], { title: "Titel", message: "Frage?" });
+    await confirmMailDelete(danger, t, mails("m1", "m2"), { title: "Titel", message: "Frage?" });
     expect(danger).toHaveBeenCalledWith({ title: "Titel", message: `Frage? ${warning()}` });
   });
 
   it("keeps the existing question when no server copy would go", async () => {
     count.mockResolvedValue(0);
-    await confirmMailDelete(danger, t, ["m1"], { title: "Titel", message: "Frage?" });
+    await confirmMailDelete(danger, t, mails("m1"), { title: "Titel", message: "Frage?" });
     expect(danger).toHaveBeenCalledWith({ title: "Titel", message: "Frage?" });
   });
 
   it("warns when the check fails", async () => {
     count.mockRejectedValue(new Error("offline"));
-    await confirmMailDelete(danger, t, ["m1", "m2"]);
+    await confirmMailDelete(danger, t, mails("m1", "m2"));
     expect(danger).toHaveBeenCalled();
   });
 
   it("refuses a second delete while the question is open", async () => {
     let answer!: (ok: boolean) => void;
     danger.mockImplementation(() => new Promise<boolean>((r) => { answer = r; }));
-    const first = confirmMailDelete(danger, t, ["m1"]);
+    const first = confirmMailDelete(danger, t, mails("m1"));
     await settle();
     expect(isAskingServerDelete()).toBe(true);
-    expect(await confirmMailDelete(danger, t, ["m2"])).toBe(false);
+    expect(await confirmMailDelete(danger, t, mails("m2"))).toBe(false);
     answer(false);
     expect(await first).toBe(false);
     await settle();

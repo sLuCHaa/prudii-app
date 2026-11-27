@@ -108,6 +108,23 @@ describe.each([
   });
 });
 
+describe("a second Delete while the check is running", () => {
+  it("sends one trash call", async () => {
+    let counted!: (count: number) => void;
+    const base = invoke.getMockImplementation()!;
+    invoke.mockImplementation(async (command: string, args: unknown) =>
+      command === "count_pop3_server_deletes" ? new Promise<number>((r) => { counted = r; }) : base(command, args));
+    await render();
+    await press("Delete");
+    await press("Delete");
+    await clickTrash();
+    await act(async () => { counted(0); });
+    await flush();
+    expect(calls("count_pop3_server_deletes")).toHaveLength(1);
+    expect(calls("batch_update_mails")).toHaveLength(1);
+  });
+});
+
 describe("keys while the warning is open", () => {
   it("leave the selection alone", async () => {
     danger.mockImplementation(() => new Promise<boolean>(() => {}));

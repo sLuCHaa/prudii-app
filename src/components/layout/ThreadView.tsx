@@ -48,7 +48,7 @@ import { MailSourceView } from "./MailSourceView";
 import { AiSummaryButton, AiSummaryPanel } from "../ai/AiSummary";
 import { AiReplyButton, AiReplySuggestionsPanel } from "../ai/AiReplySuggestions";
 import { useDialog } from "../ui/DialogProvider";
-import { confirmMailDelete, deletesOnPop3Server } from "../../lib/pop3Delete";
+import { confirmMailDelete, mayDeleteOnPop3Server, withDeleteLock } from "../../lib/pop3Delete";
 import { ContextMenu } from "../ui/ContextMenu";
 import type { MenuEntry } from "../../lib/menuModel";
 import { useMailTasks, useLinkMailToTask } from "../../hooks/useTasks";
@@ -1762,24 +1762,30 @@ export function ThreadView({ mail }: ThreadViewProps) {
   }, [mail.id]);
 
   const handleTrash = useCallback(async () => {
-    // Only confirm when permanently deleting; opened from search, the selected folder does not tell.
-    if (isInTrash || deletesOnPop3Server()) {
-      const question = {
-        title: t("mailDetail.trash"),
-        message: t("mailDetail.permanentDeleteConfirm", { name: mail.subject || t("compose.noSubject") }),
-      };
-      const confirmed = await confirmMailDelete(dialog.danger, t, [mail.id], isInTrash ? question : undefined);
-      if (!confirmed) return;
-    }
-    // Same exit path as archive: the list plays the row sweep and picks the next mail.
-    setPendingRemoveIds([mail.id]);
-    trashMail(mail.id)
-      .then(() => invalidateMailListQueries(queryClient))
-      .catch((e) => {
-        setPendingRemoveIds([]);
-        dialog.alert({ type: "danger", title: t("common.error"), message: causeMessage(e) });
-      });
-  }, [mail.id, mail.subject, isInTrash, setPendingRemoveIds, dialog, t, queryClient]);
+    const target = [{ id: mail.id, account_id: mail.account_id }];
+    const affected = mayDeleteOnPop3Server(target);
+    const trash = async () => {
+      // Only confirm when permanently deleting; opened from search, the selected folder does not tell.
+      if (isInTrash || affected) {
+        const question = {
+          title: t("mailDetail.trash"),
+          message: t("mailDetail.permanentDeleteConfirm", { name: mail.subject || t("compose.noSubject") }),
+        };
+        const confirmed = await confirmMailDelete(dialog.danger, t, target, isInTrash ? question : undefined);
+        if (!confirmed) return;
+      }
+      // Same exit path as archive: the list plays the row sweep and picks the next mail.
+      setPendingRemoveIds([mail.id]);
+      await trashMail(mail.id)
+        .then(() => invalidateMailListQueries(queryClient))
+        .catch((e) => {
+          setPendingRemoveIds([]);
+          dialog.alert({ type: "danger", title: t("common.error"), message: causeMessage(e) });
+        });
+    };
+    if (affected) await withDeleteLock(target, trash);
+    else await trash();
+  }, [mail.id, mail.account_id, mail.subject, isInTrash, setPendingRemoveIds, dialog, t, queryClient]);
 
   const handleArchive = useCallback(async () => {
     setPendingRemoveIds([mail.id]);
