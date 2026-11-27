@@ -235,7 +235,11 @@ fn claim_existing(
         record_uidl(db, data_dir, mailbox, server_ref, None, existing)?;
         return Ok(None);
     };
-    if !store::has_source(data_dir, existing) && identity == crate::imap::local_mail_identity(raw) {
+    let adoptable = !store::has_source(data_dir, existing)
+        && identity == crate::imap::local_mail_identity(raw)
+        // A referencing UIDL would become deletable on the strength of bytes that may not be its own.
+        && !is_referenced(db, existing)?;
+    if adoptable {
         if let Err(e) = store::move_source(data_dir, mail_id, existing) {
             remove_source(data_dir, mail_id);
             return Err(Pop3Error::Storage(e.to_string()));
@@ -271,6 +275,12 @@ fn mail_with_source(
         ids
     };
     Ok(candidates.into_iter().find(|id| store::source_matches(data_dir, id, raw)))
+}
+
+fn is_referenced(db: &Database, mail_id: &str) -> Result<bool, Pop3Error> {
+    db.lock_db()
+        .query_row("SELECT EXISTS(SELECT 1 FROM pop3_uidls WHERE mail_id = ?1)", [mail_id], |r| r.get(0))
+        .map_err(db_error)
 }
 
 /// None when the mail row is gone.
@@ -582,6 +592,10 @@ mod tests {
         uidl_rows(t).into_iter().find(|r| r.0 == uidl).and_then(|r| r.1).unwrap()
     }
 
+    fn forget_uidls(t: &Env) {
+        t.db.lock_db().execute("DELETE FROM pop3_uidls", []).unwrap();
+    }
+
     fn set_column(t: &Env, uidl: &str, sql: &str) {
         let conn = t.db.lock_db();
         conn.execute(
@@ -816,9 +830,10 @@ mod tests {
             .unwrap();
         let mail_id = mail_of(&t, "u1");
         std::fs::remove_file(crate::pop3::store::source_path(&t.dir, &mail_id)).unwrap();
+        forget_uidls(&t);
         let report = run(&t, vec![
-            uidl(&[(1, "u1"), (2, "u9")]),
-            list(&[(1, 400), (2, 400)]),
+            uidl(&[(2, "u9")]),
+            list(&[(2, 400)]),
             retr(2, &mail("m1", "Andere")),
             QUIT,
         ])
@@ -840,9 +855,10 @@ mod tests {
             .unwrap();
         let mail_id = mail_of(&t, "u1");
         std::fs::remove_file(crate::pop3::store::source_path(&t.dir, &mail_id)).unwrap();
+        forget_uidls(&t);
         let report = run(&t, vec![
-            uidl(&[(1, "u1"), (2, "u9")]),
-            list(&[(1, 400), (2, 400)]),
+            uidl(&[(2, "u9")]),
+            list(&[(2, 400)]),
             retr(2, &mail("m1", "Erste")),
             QUIT,
         ])
@@ -855,6 +871,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn referenced_mail_without_source_never_adopts_other_bytes() {
+        for state in ["stored", "server_deleted"] {
+            let mut t = env("keep");
+            let mail_id = store_first(&t).await;
+            set_column(&t, "u1", &format!("state = '{state}'"));
+            std::fs::remove_file(crate::pop3::store::source_path(&t.dir, &mail_id)).unwrap();
+            t.account.pop3_delete_mode = "after_fetch".into();
+            let other = mail("m1", "Erste").replace("Hallo aus dem Studio.", "Anderer Text.");
+            let report = run(&t, vec![
+                uidl(&[(1, "u1"), (2, "u9")]),
+                list(&[(1, 400), (2, 400)]),
+                retr(2, &other),
+                dele(2),
+                QUIT,
+            ])
+            .await
+            .unwrap();
+            assert_eq!(report.deleted_on_server, 1);
+            let twin = mail_of(&t, "u9");
+            assert_ne!(twin, mail_id);
+            assert_eq!(report.new_mail_ids, vec![twin.clone()]);
+            assert!(!crate::pop3::store::has_source(&t.dir, &mail_id));
+            assert!(crate::pop3::store::has_source(&t.dir, &twin));
+        }
+    }
+
+    #[tokio::test]
     async fn failed_source_attach_aborts_without_uidl_row() {
         let t = env("after_fetch");
         run(&t, vec![uidl(&[(1, "u1")]), list(&[(1, 400)]), retr(1, &mail("m1", "Erste")), dele(1), QUIT])
@@ -864,9 +907,10 @@ mod tests {
         let path = crate::pop3::store::source_path(&t.dir, &mail_id);
         std::fs::remove_file(&path).unwrap();
         std::fs::create_dir(&path).unwrap();
+        forget_uidls(&t);
         let result = run(&t, vec![uidl(&[(1, "u1"), (2, "u9")]), list(&[(1, 400), (2, 400)]), retr(2, &mail("m1", "Erste"))]).await;
         assert!(matches!(result, Err(Pop3Error::Storage(_))));
-        assert_eq!(uidl_rows(&t).len(), 1);
+        assert!(uidl_rows(&t).is_empty());
         assert_eq!(source_files(&t), 1);
     }
 
