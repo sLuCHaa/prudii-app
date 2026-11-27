@@ -13,9 +13,10 @@ const MODES: { value: Pop3DeleteMode; labelKey: string }[] = [
 interface Pop3DeleteRuleProps {
   rule: Pop3Rule;
   onChange: (rule: Pop3Rule) => void;
+  hideTitle?: boolean;
 }
 
-export function Pop3DeleteRule({ rule, onChange }: Pop3DeleteRuleProps) {
+export function Pop3DeleteRule({ rule, onChange, hideTitle }: Pop3DeleteRuleProps) {
   const { t } = useTranslation();
   const id = useId();
   const daysId = `${id}-days`;
@@ -23,7 +24,7 @@ export function Pop3DeleteRule({ rule, onChange }: Pop3DeleteRuleProps) {
 
   return (
     <div className="space-y-2">
-      <span className="block text-sm font-medium text-text-secondary">{t("pop3.ruleTitle")}</span>
+      {!hideTitle && <span className="block text-sm font-medium text-text-secondary">{t("pop3.ruleTitle")}</span>}
       <p className="text-sm text-text">
         {describePop3Rule(t, { ...rule, days: clampDeleteDays(rule.days) })}
       </p>

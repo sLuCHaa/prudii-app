@@ -35,7 +35,9 @@ import { TabButton } from "../ui/TabButton";
 import { SegmentedControl } from "../ui/SegmentedControl";
 import { useDialog } from "../ui/DialogProvider";
 import { isMacOS } from "../../lib/platform";
-import type { Account, SmtpSecurity } from "../../types";
+import type { Account, IncomingSecurity, IncomingSettings, SmtpSecurity } from "../../types";
+import { accountSetupError, defaultPop3Port, ruleFromAccount, ruleToSettings, switchPop3Port, type Pop3Rule } from "../../lib/pop3";
+import { Pop3DeleteRule } from "../accounts/Pop3DeleteRule";
 
 type ThemeMode = "light" | "dark" | "system";
 type SettingsView = "main" | "account";
@@ -120,7 +122,7 @@ const ACCOUNT_COLORS = [
   "#6b7280", // gray
 ];
 
-function AccountSettings({
+export function AccountSettings({
   account,
   onBack,
   onEditSignature,
@@ -136,6 +138,7 @@ function AccountSettings({
   const addToast = useAppStore((s) => s.addToast);
   const queryClient = useQueryClient();
   const dialog = useDialog();
+  const isPop3 = account.incoming_protocol === "pop3";
 
   const [displayName, setDisplayName] = useState(account.display_name);
   const [color, setColor] = useState(account.color);
@@ -145,6 +148,8 @@ function AccountSettings({
   const [smtpPort, setSmtpPort] = useState(account.smtp_port);
   const [smtpSecurity, setSmtpSecurity] = useState<SmtpSecurity>(account.smtp_security);
   const [loadExternalImages, setLoadExternalImages] = useState(account.load_external_images || "always");
+  const [incomingSecurity, setIncomingSecurity] = useState<IncomingSecurity>(account.incoming_security);
+  const [rule, setRule] = useState<Pop3Rule>(() => ruleFromAccount(account));
 
   const [signatureId, setSignatureId] = useState(account.signature_id);
   const [signatureOnCompose, setSignatureOnCompose] = useState(account.signature_on_compose);
@@ -167,6 +172,8 @@ function AccountSettings({
     smtpHost: account.smtp_host,
     smtpPort: account.smtp_port,
     smtpSecurity: account.smtp_security,
+    incomingSecurity: account.incoming_security,
+    rule: ruleFromAccount(account),
     loadExternalImages: account.load_external_images || "always",
     signatureId: account.signature_id,
     signatureOnCompose: account.signature_on_compose,
@@ -176,7 +183,7 @@ function AccountSettings({
 
   const isDirty = password.trim() !== "" || JSON.stringify({
     displayName, color, imapHost, imapPort, smtpHost, smtpPort, smtpSecurity,
-    loadExternalImages, signatureId, signatureOnCompose,
+    incomingSecurity, rule, loadExternalImages,signatureId, signatureOnCompose,
     signatureOnReply, syncInterval,
   }) !== snapshot.current;
 
@@ -202,12 +209,17 @@ function AccountSettings({
     if (await leaveConfirmed()) onEditSignature(id);
   }
 
-  const isOAuth = account.provider === "google" || account.provider === "microsoft";
+  const isOAuth = !isPop3 && (account.provider === "google" || account.provider === "microsoft");
+  const serverChanged =
+    imapHost.trim().toLowerCase() !== account.imap_host.trim().toLowerCase() || imapPort !== account.imap_port;
 
   async function handleSave() {
     setSaving(true);
     setSaved(false);
     try {
+      const incoming: [Partial<IncomingSettings>?] = isPop3
+        ? [{ incoming_security: incomingSecurity, ...ruleToSettings(rule) }]
+        : [];
       await updateAccountSettings(
         account.id,
         displayName,
@@ -217,7 +229,8 @@ function AccountSettings({
         smtpHost,
         smtpPort,
         smtpSecurity,
-        loadExternalImages
+        loadExternalImages,
+        ...incoming
       );
       if (password.trim()) {
         await storeAccountPassword(account.id, password);
@@ -232,12 +245,13 @@ function AccountSettings({
       setSaved(true);
       snapshot.current = JSON.stringify({
         displayName, color, imapHost, imapPort, smtpHost, smtpPort, smtpSecurity,
-        loadExternalImages, signatureId, signatureOnCompose,
+        incomingSecurity, rule, loadExternalImages,signatureId, signatureOnCompose,
         signatureOnReply, syncInterval,
       });
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {
-      addToast("error", t("settings.account.saveFailed"), err instanceof Error ? err.message : String(err));
+      const raw = err instanceof Error ? err.message : String(err);
+      addToast("error", t("settings.account.saveFailed"), accountSetupError(t, raw, account.incoming_protocol, []));
     } finally {
       setSaving(false);
     }
@@ -328,7 +342,15 @@ function AccountSettings({
               </SettingsBlock>
             </SettingsGroup>
 
-            {!isOAuth && account.auth_type === "password" && (
+            {isPop3 && (
+              <SettingsGroup title={t("pop3.ruleTitle")} icon={<Mail className="w-4 h-4" />}>
+                <SettingsBlock>
+                  <Pop3DeleteRule hideTitle rule={rule} onChange={(r) => { setRule(r); setSaved(false); }} />
+                </SettingsBlock>
+              </SettingsGroup>
+            )}
+
+            {!isPop3 && !isOAuth && account.auth_type === "password" && (
               <VacationSection accountId={account.id} />
             )}
 
@@ -383,11 +405,11 @@ function AccountSettings({
             )}
 
             <SettingsGroup title={t("settings.account.serverSettings")} icon={<Server className="w-4 h-4" />}>
-              <SettingsBlock description={t("settings.account.serverSettingsDesc")}>
+              <SettingsBlock description={t(isPop3 ? "pop3.serverSettingsDesc" : "settings.account.serverSettingsDesc")}>
                 <div className="space-y-3">
                   <div className="grid grid-cols-[1fr,80px] gap-2">
                     <div>
-                      <label className="text-xs text-text-tertiary mb-1 block">{t("settings.account.imapServer")}</label>
+                      <label className="text-xs text-text-tertiary mb-1 block">{t(isPop3 ? "pop3.host" : "settings.account.imapServer")}</label>
                       <input
                         type="text"
                         value={imapHost}
@@ -400,11 +422,32 @@ function AccountSettings({
                       <input
                         type="number"
                         value={imapPort}
-                        onChange={(e) => { setImapPort(parseInt(e.target.value) || 993); setSaved(false); }}
+                        onChange={(e) => { setImapPort(parseInt(e.target.value) || (isPop3 ? defaultPop3Port(incomingSecurity) : 993)); setSaved(false); }}
                         className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm font-mono focus:border-accent"
                       />
                     </div>
                   </div>
+                  {isPop3 && (
+                    <div>
+                      <label className="text-xs text-text-tertiary mb-1 block">{t("pop3.security")}</label>
+                      <SegmentedControl
+                        aria-label={t("pop3.security")}
+                        value={incomingSecurity}
+                        onChange={(v) => {
+                          setIncomingSecurity(v);
+                          setImapPort(switchPop3Port(imapPort, v));
+                          setSaved(false);
+                        }}
+                        options={[
+                          { value: "ssl", label: "SSL/TLS (Port 995)" },
+                          { value: "starttls", label: "STARTTLS (Port 110)" },
+                        ]}
+                      />
+                      {serverChanged && (
+                        <p className="mt-2 text-xs text-warning">{t("pop3.serverChangeHint")}</p>
+                      )}
+                    </div>
+                  )}
                   <div className="grid grid-cols-[1fr,80px] gap-2">
                     <div>
                       <label className="text-xs text-text-tertiary mb-1 block">{t("settings.account.smtpServer")}</label>
@@ -445,6 +488,11 @@ function AccountSettings({
                   <div className="p-2 rounded bg-bg-secondary">
                     <span className="text-xs text-text-tertiary">{t("settings.account.provider")}: </span>
                     <span className="text-xs text-text capitalize">{account.provider}</span>
+                    {isPop3 && (
+                      <p className="text-xs text-text-tertiary">
+                        {t("pop3.protocol")}: <span className="text-text">POP3</span>
+                      </p>
+                    )}
                   </div>
                 </div>
               </SettingsBlock>

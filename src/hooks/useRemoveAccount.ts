@@ -10,9 +10,10 @@ export function useRemoveAccount() {
   const deleteAccount = useDeleteAccount();
 
   return async function removeAccount(accountId: string) {
+    const account = useAppStore.getState().accounts.find((a) => a.id === accountId);
     const confirmed = await dialog.danger({
       title: t("settings.deleteAccountConfirm.title"),
-      message: t("settings.deleteAccountConfirm.body"),
+      message: t(account?.incoming_protocol === "pop3" ? "pop3.deleteAccountBody" : "settings.deleteAccountConfirm.body"),
       confirmLabel: t("settings.deleteAccountConfirm.confirm"),
       cancelLabel: t("settings.deleteAccountConfirm.cancel"),
     });
