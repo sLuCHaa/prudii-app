@@ -14,9 +14,10 @@ interface Pop3DeleteRuleProps {
   rule: Pop3Rule;
   onChange: (rule: Pop3Rule) => void;
   hideTitle?: boolean;
+  fallbackDays?: number;
 }
 
-export function Pop3DeleteRule({ rule, onChange, hideTitle }: Pop3DeleteRuleProps) {
+export function Pop3DeleteRule({ rule, onChange, hideTitle, fallbackDays }: Pop3DeleteRuleProps) {
   const { t } = useTranslation();
   const id = useId();
   const daysId = `${id}-days`;
@@ -26,16 +27,20 @@ export function Pop3DeleteRule({ rule, onChange, hideTitle }: Pop3DeleteRuleProp
     <div className="space-y-2">
       {!hideTitle && <span className="block text-sm font-medium text-text-secondary">{t("pop3.ruleTitle")}</span>}
       <p className="text-sm text-text">
-        {describePop3Rule(t, { ...rule, days: clampDeleteDays(rule.days) })}
+        {describePop3Rule(t, { ...rule, days: clampDeleteDays(rule.days, fallbackDays) })}
       </p>
-      <div className="flex flex-col gap-2">
+      <div role="group" aria-label={t("pop3.ruleTitle")} className="flex flex-col gap-2">
         {MODES.map((mode) => (
           <button
             key={mode.value}
             type="button"
             aria-pressed={rule.mode === mode.value}
             onClick={() => onChange({ ...rule, mode: mode.value })}
-            className="option-tile px-3 py-2 rounded-control text-xs"
+            className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+              rule.mode === mode.value
+                ? "border-accent bg-accent/10 text-accent"
+                : "border-border text-text-secondary hover:bg-hover"
+            }`}
           >
             {t(mode.labelKey)}
           </button>
@@ -54,7 +59,7 @@ export function Pop3DeleteRule({ rule, onChange, hideTitle }: Pop3DeleteRuleProp
             max={365}
             value={Number.isNaN(rule.days) ? "" : rule.days}
             onChange={(e) => onChange({ ...rule, days: e.target.value === "" ? NaN : Number(e.target.value) })}
-            onBlur={() => onChange({ ...rule, days: clampDeleteDays(rule.days) })}
+            onBlur={() => onChange({ ...rule, days: clampDeleteDays(rule.days, fallbackDays) })}
             className="w-28 px-3 py-2 rounded-control inset-shadow-field border border-border bg-surface text-text focus:border-accent"
           />
         </div>
@@ -70,7 +75,7 @@ export function Pop3DeleteRule({ rule, onChange, hideTitle }: Pop3DeleteRuleProp
           className="shrink-0"
         />
       </div>
-      {(rule.mode !== "keep" || rule.withLocal) && (
+      {rule.mode !== "keep" && (
         <p className="text-xs text-text-tertiary">{t("pop3.rule.localOnly")}</p>
       )}
     </div>

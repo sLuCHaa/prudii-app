@@ -8,11 +8,11 @@ import { useCreateAccount } from "../../hooks/useAccounts";
 import { useSyncAccount } from "../../hooks/useSync";
 import { useAppConfig } from "../../hooks/useAppConfig";
 import { useAppStore } from "../../stores/appStore";
-import { testImapConnection, testPop3Connection, startOAuth } from "../../lib/tauri";
+import { testImapConnection, testPop3Connection, startOAuth, updateAccountSettings, storeAccountPassword } from "../../lib/tauri";
 import { accountSetupError, DEFAULT_POP3_RULE, ruleToSettings, type Pop3Rule } from "../../lib/pop3";
 import { IconButton } from "../ui/Button";
 import { useTranslation } from "react-i18next";
-import type { IncomingProtocol, IncomingSecurity, SmtpSecurity, SyncProgress } from "../../types";
+import type { CreateAccountRequest, IncomingProtocol, IncomingSecurity, SmtpSecurity, SyncProgress } from "../../types";
 import { WizardStepProvider } from "./WizardStepProvider";
 import { WizardStepAuth } from "./WizardStepAuth";
 import { WizardStepTesting } from "./WizardStepTesting";
@@ -24,6 +24,17 @@ import { useFocusTrap } from "../../hooks/useFocusTrap";
 type WizardStep = "provider" | "credentials" | "oauth_waiting" | "testing" | "done";
 
 const STEP_KEYS = ["wizard.stepProvider", "wizard.stepAuth", "wizard.stepSync", "wizard.stepDone"];
+
+interface CreatedAccount {
+  id: string;
+  identity: string;
+  loadExternalImages: string;
+}
+
+// What update_account_settings cannot change: anything different needs its own account.
+function accountIdentity(r: CreateAccountRequest): string {
+  return [r.email.trim().toLowerCase(), r.provider, r.auth_type, r.incoming_protocol ?? "imap"].join("|");
+}
 
 const STEP_INDEX: Record<string, number> = {
   provider: 0,
@@ -110,6 +121,7 @@ export function AccountWizard() {
   const createdAccountIdRef = useRef<string | null>(null);
   createdAccountIdRef.current = createdAccountId;
   const authTypeRef = useRef<"oauth" | "password" | null>(null);
+  const createdAccountsRef = useRef<CreatedAccount[]>([]);
   const { t } = useTranslation();
 
   // Listen for sync progress events — drives the wizard forward on "done" / "error".
@@ -170,12 +182,51 @@ export function AccountWizard() {
     return accountSetupError(t, raw, protocol, useAppStore.getState().accounts);
   }
 
+  function findCreated(request: CreateAccountRequest) {
+    const identity = accountIdentity(request);
+    return createdAccountsRef.current.find((a) => a.identity === identity);
+  }
+
+  async function createOrUpdate(
+    request: CreateAccountRequest,
+    existing: CreatedAccount | undefined,
+  ): Promise<string> {
+    // Creating again would replace the account and the mail it already holds.
+    if (existing) {
+      const { incoming_security, pop3_delete_mode, pop3_delete_after_days, pop3_delete_with_local } = request;
+      await updateAccountSettings(
+        existing.id,
+        request.display_name,
+        request.color,
+        request.imap_host,
+        request.imap_port,
+        request.smtp_host,
+        request.smtp_port,
+        request.smtp_security,
+        existing.loadExternalImages,
+        ...(request.incoming_protocol === "pop3"
+          ? [{ incoming_security, pop3_delete_mode, pop3_delete_after_days, pop3_delete_with_local }]
+          : []),
+      );
+      return existing.id;
+    }
+    const account = await createAccount.mutateAsync(request);
+    createdAccountsRef.current.push({
+      id: account.id,
+      identity: accountIdentity(request),
+      loadExternalImages: account.load_external_images || "always",
+    });
+    return account.id;
+  }
+
   async function handleOAuth() {
     if (!provider) return;
     authTypeRef.current = "oauth";
 
     setStep("oauth_waiting");
     setTestError(null);
+    setSyncProgress(null);
+    setCreatedAccountId(null);
 
     try {
       const result = await startOAuth(provider.id);
@@ -185,7 +236,7 @@ export function AccountWizard() {
       setStep("testing");
       setTestStatus(t("wizard.creatingAccount"));
 
-      const account = await createAccount.mutateAsync({
+      const request: CreateAccountRequest = {
         email: result.email,
         display_name: displayName || result.email.split("@")[0],
         provider: provider.id,
@@ -197,11 +248,14 @@ export function AccountWizard() {
         smtp_security: smtpSecurity,
         password: result.refresh_token,
         auth_type: "oauth",
-      });
+      };
+      const existing = findCreated(request);
+      const accountId = await createOrUpdate(request, existing);
+      if (existing) await storeAccountPassword(accountId, result.refresh_token);
 
-      setCreatedAccountId(account.id);
+      setCreatedAccountId(accountId);
       setTestStatus(t("wizard.syncingEmails"));
-      syncAccount.mutate({ accountId: account.id });
+      syncAccount.mutate({ accountId });
     } catch (err) {
       setStep("credentials");
       setTestError(formatError(err));
@@ -215,6 +269,8 @@ export function AccountWizard() {
 
     setStep("testing");
     setTestError(null);
+    setSyncProgress(null);
+    setCreatedAccountId(null);
     const isPop3 = protocol === "pop3";
     setTestStatus(t(isPop3 ? "pop3.testing" : "wizard.testingConnection"));
 
@@ -226,7 +282,7 @@ export function AccountWizard() {
       }
       setTestStatus(t("wizard.creatingAccount"));
 
-      const account = await createAccount.mutateAsync({
+      const request: CreateAccountRequest = {
         email,
         display_name: displayName || email.split("@")[0],
         provider: provider.id,
@@ -241,11 +297,12 @@ export function AccountWizard() {
         ...(isPop3
           ? { incoming_protocol: protocol, incoming_security: incomingSecurity, ...ruleToSettings(rule) }
           : {}),
-      });
+      };
+      const accountId = await createOrUpdate(request, findCreated(request));
 
-      setCreatedAccountId(account.id);
+      setCreatedAccountId(accountId);
       setTestStatus(t("wizard.syncingEmails"));
-      syncAccount.mutate({ accountId: account.id, password });
+      syncAccount.mutate({ accountId, password });
     } catch (err) {
       setTestError(formatError(err));
     }
@@ -254,16 +311,10 @@ export function AccountWizard() {
   function handleRetry() {
     setTestError(null);
     setSyncProgress(null);
-    // If the account already exists, only the sync failed — re-sync instead of
-    // re-creating (which would hit a duplicate-account error, and for OAuth would
-    // wrongly attempt a password login with the refresh token).
-    if (createdAccountId) {
+    // A password retry must never reach an OAuth account: it would overwrite the refresh token.
+    if (authTypeRef.current === "oauth" && createdAccountId) {
       setTestStatus(t("wizard.syncingEmails"));
-      if (authTypeRef.current === "oauth") {
-        syncAccount.mutate({ accountId: createdAccountId });
-      } else {
-        syncAccount.mutate({ accountId: createdAccountId, password });
-      }
+      syncAccount.mutate({ accountId: createdAccountId });
     } else {
       handleSubmit({ preventDefault: () => {} } as React.FormEvent);
     }

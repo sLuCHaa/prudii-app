@@ -837,6 +837,7 @@
     "addAccount": "Konto hinzufügen"
   },
   "wizard": {
+    "customProvider": "Benutzerdefiniert",
     "addAccount": "Konto hinzufügen",
     "chooseProvider": "Wähle deinen Anbieter",
     "chooseProviderDesc": "Wähle deinen E-Mail-Anbieter für einen schnellen Einstieg",
@@ -1871,6 +1872,10 @@
       "withLocal": "Endgültig gelöschte Mails werden sofort auch auf dem Server gelöscht.",
       "withoutLocal": "Endgültiges Löschen hier löst keine Löschung auf dem Server aus.",
       "localOnly": "Vom Server gelöschte Mails liegen nur noch auf diesem Gerät. Eine regelmäßige Sicherung ist sinnvoll."
+    },
+    "ruleChange": {
+      "sooner": "Gilt auch für bereits abgerufene Mails: Was nach der neuen Regel fällig ist, wird beim nächsten Abruf vom Server gelöscht.",
+      "withLocal": "Auch hier bereits endgültig gelöschte Mails werden dann beim nächsten Abruf auf dem Server gelöscht."
     },
     "appPasswordGmail": "Gmail braucht für POP3 ein App-Passwort, und POP muss in den Gmail-Einstellungen eingeschaltet sein.",
     "appPasswordFastmail": "Fastmail braucht für POP3 ein App-Passwort.",

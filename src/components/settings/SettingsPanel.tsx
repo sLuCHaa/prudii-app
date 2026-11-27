@@ -36,7 +36,7 @@ import { SegmentedControl } from "../ui/SegmentedControl";
 import { useDialog } from "../ui/DialogProvider";
 import { isMacOS } from "../../lib/platform";
 import type { Account, IncomingSecurity, IncomingSettings, SmtpSecurity } from "../../types";
-import { accountSetupError, defaultPop3Port, ruleFromAccount, ruleToSettings, switchPop3Port, type Pop3Rule } from "../../lib/pop3";
+import { accountSetupError, defaultPop3Port, pop3RuleChangeHints, clampDeleteDays, ruleFromAccount, ruleToSettings, switchPop3Port, type Pop3Rule } from "../../lib/pop3";
 import { Pop3DeleteRule } from "../accounts/Pop3DeleteRule";
 
 type ThemeMode = "light" | "dark" | "system";
@@ -162,6 +162,13 @@ export function AccountSettings({
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  // The account prop is not refreshed after a save.
+  const [stored, setStored] = useState(() => ({
+    host: account.imap_host,
+    port: account.imap_port,
+    rule: ruleFromAccount(account),
+  }));
+
   // Snapshot of the editable fields at mount — dirty = current differs from
   // snapshot (password counts as dirty when non-empty). No per-handler flags.
   const snapshot = useRef(JSON.stringify({
@@ -183,7 +190,7 @@ export function AccountSettings({
 
   const isDirty = password.trim() !== "" || JSON.stringify({
     displayName, color, imapHost, imapPort, smtpHost, smtpPort, smtpSecurity,
-    incomingSecurity, rule, loadExternalImages,signatureId, signatureOnCompose,
+    incomingSecurity, rule, loadExternalImages, signatureId, signatureOnCompose,
     signatureOnReply, syncInterval,
   }) !== snapshot.current;
 
@@ -211,14 +218,14 @@ export function AccountSettings({
 
   const isOAuth = !isPop3 && (account.provider === "google" || account.provider === "microsoft");
   const serverChanged =
-    imapHost.trim().toLowerCase() !== account.imap_host.trim().toLowerCase() || imapPort !== account.imap_port;
+    imapHost.trim().toLowerCase() !== stored.host.trim().toLowerCase() || imapPort !== stored.port;
 
   async function handleSave() {
     setSaving(true);
     setSaved(false);
     try {
       const incoming: [Partial<IncomingSettings>?] = isPop3
-        ? [{ incoming_security: incomingSecurity, ...ruleToSettings(rule) }]
+        ? [{ incoming_security: incomingSecurity, ...ruleToSettings(rule, stored.rule.days) }]
         : [];
       await updateAccountSettings(
         account.id,
@@ -232,6 +239,9 @@ export function AccountSettings({
         loadExternalImages,
         ...incoming
       );
+      const savedRule = { ...rule, days: clampDeleteDays(rule.days, stored.rule.days) };
+      setStored({ host: imapHost, port: imapPort, rule: savedRule });
+      setRule(savedRule);
       if (password.trim()) {
         await storeAccountPassword(account.id, password);
         setPassword("");
@@ -245,7 +255,7 @@ export function AccountSettings({
       setSaved(true);
       snapshot.current = JSON.stringify({
         displayName, color, imapHost, imapPort, smtpHost, smtpPort, smtpSecurity,
-        incomingSecurity, rule, loadExternalImages,signatureId, signatureOnCompose,
+        incomingSecurity, rule: savedRule, loadExternalImages, signatureId, signatureOnCompose,
         signatureOnReply, syncInterval,
       });
       setTimeout(() => setSaved(false), 2000);
@@ -345,7 +355,15 @@ export function AccountSettings({
             {isPop3 && (
               <SettingsGroup title={t("pop3.ruleTitle")} icon={<Mail className="w-4 h-4" />}>
                 <SettingsBlock>
-                  <Pop3DeleteRule hideTitle rule={rule} onChange={(r) => { setRule(r); setSaved(false); }} />
+                  <Pop3DeleteRule
+                    hideTitle
+                    rule={rule}
+                    fallbackDays={stored.rule.days}
+                    onChange={(r) => { setRule(r); setSaved(false); }}
+                  />
+                  {pop3RuleChangeHints(stored.rule, rule).map((key) => (
+                    <p key={key} className="mt-2 text-xs text-warning">{t(key)}</p>
+                  ))}
                 </SettingsBlock>
               </SettingsGroup>
             )}

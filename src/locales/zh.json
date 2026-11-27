@@ -836,6 +836,7 @@
     "addAccount": "添加账户"
   },
   "wizard": {
+    "customProvider": "自定义",
     "addAccount": "添加账户",
     "chooseProvider": "选择您的提供商",
     "chooseProviderDesc": "选择您的邮件提供商以快速开始",
@@ -1864,8 +1865,12 @@
       "afterFetch": "邮件下载后会立即从服务器删除。",
       "afterDays_other": "邮件会在下载 {{count}} 天后从服务器删除。",
       "withLocal": "永久删除的邮件会立即同时从服务器删除。",
-      "withoutLocal": "在此永久删除邮件不会将其从服务器删除。",
+      "withoutLocal": "在此永久删除邮件不会触发服务器上的删除。",
       "localOnly": "从服务器删除的邮件只保存在本设备上。请定期备份。"
+    },
+    "ruleChange": {
+      "sooner": "也适用于已收取的邮件：按照新规则到期的邮件将在下次同步时从服务器删除。",
+      "withLocal": "此前在此永久删除的邮件，也会在下次同步时从服务器删除。"
     },
     "appPasswordGmail": "Gmail 使用 POP3 需要应用专用密码，并且须在 Gmail 设置中开启 POP。",
     "appPasswordFastmail": "Fastmail 使用 POP3 需要应用专用密码。",

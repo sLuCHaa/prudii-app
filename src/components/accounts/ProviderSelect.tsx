@@ -37,7 +37,9 @@ export function ProviderSelect({ onSelect }: ProviderSelectProps) {
               <ProviderIcon id={provider.id} />
             </div>
             <div>
-              <div className="font-medium text-text">{provider.name}</div>
+              <div className="font-medium text-text">
+                {provider.id !== "custom" ? provider.name : t("wizard.customProvider")}
+              </div>
               <div className="text-xs text-text-tertiary">
                 {provider.id !== "custom" ? provider.imapHost : t("wizard.configureManually")}
               </div>

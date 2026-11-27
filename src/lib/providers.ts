@@ -12,6 +12,7 @@ export interface ProviderPreset {
   color: string;
   authMethod: "oauth" | "password";
   appPasswordUrl?: string;
+  pop3AppPasswordUrl?: string;
   pop3Host?: string;
   pop3Port?: number;
   pop3EnableUrl?: string;
@@ -71,7 +72,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     smtpSecurity: "starttls",
     color: "#69639f",
     authMethod: "password",
-    appPasswordUrl: "https://www.fastmail.help/hc/en-us/articles/360058752854",
+    pop3AppPasswordUrl: "https://www.fastmail.help/hc/en-us/articles/360058752854",
     pop3Host: "pop.fastmail.com",
     pop3Port: 995,
   },

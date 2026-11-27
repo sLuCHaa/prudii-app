@@ -119,6 +119,8 @@ export function WizardStepAuth({
   const errorHint = testError
     ? mapImapError({ message: testError }, { email, provider: provider.id, protocol })
     : null;
+  const providerName = provider.id === "custom" ? t("wizard.customProvider") : provider.name;
+  const appPasswordUrl = provider.appPasswordUrl ?? (isPop3 ? provider.pop3AppPasswordUrl : undefined);
   const appPasswordKey =
     isPop3 && provider.id === "google" ? "pop3.appPasswordGmail" :
     isPop3 && provider.id === "fastmail" ? "pop3.appPasswordFastmail" :
@@ -127,7 +129,7 @@ export function WizardStepAuth({
   return (
     <form onSubmit={handleFormSubmit} className="space-y-4">
       <h3 className="text-lg font-semibold text-text">
-        {provider.name}
+        {providerName}
       </h3>
 
       {!isPop3 && oauthDisabled && provider.authMethod === "oauth" && (
@@ -171,6 +173,8 @@ export function WizardStepAuth({
           ]}
         />
       )}
+
+      {isPop3 && <Pop3DeleteRule rule={rule} onChange={onRuleChange} />}
 
       {isOAuth ? (
         <>
@@ -269,12 +273,12 @@ export function WizardStepAuth({
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
-            {provider.appPasswordUrl && (
+            {appPasswordUrl && (
               <p className="text-xs text-text-tertiary mt-1.5">
                 {t(appPasswordKey)}{" "}
                 <button
                   type="button"
-                  onClick={() => openUrl(provider.appPasswordUrl!)}
+                  onClick={() => openUrl(appPasswordUrl)}
                   className="text-accent hover:underline inline-flex items-center gap-0.5"
                 >
                   {t("wizard.createAppPassword")}
@@ -358,6 +362,9 @@ export function WizardStepAuth({
                   </label>
                   <input
                     type="number"
+                    min={1}
+                    max={65535}
+                    required
                     value={isPop3 ? pop3Port : imapPort}
                     onChange={(e) => (isPop3 ? onPop3PortChange : onImapPortChange)(Number(e.target.value))}
                     className={inputClass}
@@ -455,8 +462,6 @@ export function WizardStepAuth({
               </motion.div>
             </>
           )}
-
-          {isPop3 && <Pop3DeleteRule rule={rule} onChange={onRuleChange} />}
 
           <div className="flex gap-2 pt-2">
             <Button type="button" variant="secondary" fullWidth onClick={onBack}>

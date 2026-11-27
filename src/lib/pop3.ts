@@ -32,8 +32,8 @@ export function switchPop3Port(port: number, security: IncomingSecurity): number
   return port === 995 || port === 110 ? defaultPop3Port(security) : port;
 }
 
-export function clampDeleteDays(value: number): number {
-  if (Number.isNaN(value)) return DEFAULT_POP3_RULE.days;
+export function clampDeleteDays(value: number, fallback = DEFAULT_POP3_RULE.days): number {
+  if (Number.isNaN(value)) return fallback;
   return Math.min(365, Math.max(1, Math.trunc(value)));
 }
 
@@ -47,12 +47,26 @@ export function ruleFromAccount(a: IncomingSettings): Pop3Rule {
   return { mode: a.pop3_delete_mode, days: a.pop3_delete_after_days, withLocal: a.pop3_delete_with_local };
 }
 
+function serverDelay(rule: Pop3Rule, fallbackDays: number): number {
+  if (rule.mode === "keep") return Infinity;
+  return rule.mode === "after_fetch" ? 0 : clampDeleteDays(rule.days, fallbackDays);
+}
+
+/** Notes for a changed rule that also removes mail fetched before the change. */
+export function pop3RuleChangeHints(stored: Pop3Rule, draft: Pop3Rule): string[] {
+  const hints: string[] = [];
+  if (serverDelay(draft, stored.days) < serverDelay(stored, stored.days)) hints.push("pop3.ruleChange.sooner");
+  if (draft.withLocal && !stored.withLocal) hints.push("pop3.ruleChange.withLocal");
+  return hints;
+}
+
 export function ruleToSettings(
   r: Pop3Rule,
+  fallbackDays?: number,
 ): Pick<IncomingSettings, "pop3_delete_mode" | "pop3_delete_after_days" | "pop3_delete_with_local"> {
   return {
     pop3_delete_mode: r.mode,
-    pop3_delete_after_days: clampDeleteDays(r.days),
+    pop3_delete_after_days: clampDeleteDays(r.days, fallbackDays),
     pop3_delete_with_local: r.withLocal,
   };
 }

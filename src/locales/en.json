@@ -837,6 +837,7 @@
     "addAccount": "Add account"
   },
   "wizard": {
+    "customProvider": "Custom",
     "addAccount": "Add Account",
     "chooseProvider": "Choose your provider",
     "chooseProviderDesc": "Select your email provider to get started quickly",
@@ -1869,8 +1870,12 @@
       "afterDays_one": "Mails are deleted from the server {{count}} day after download.",
       "afterDays_other": "Mails are deleted from the server {{count}} days after download.",
       "withLocal": "Permanently deleted mails are also deleted on the server immediately.",
-      "withoutLocal": "Deleting a mail permanently here does not delete it on the server.",
+      "withoutLocal": "Deleting a mail permanently here does not trigger a deletion on the server.",
       "localOnly": "Mails deleted from the server exist only on this device. Back them up regularly."
+    },
+    "ruleChange": {
+      "sooner": "This also applies to mails already downloaded: whatever is due under the new rule is deleted from the server at the next sync.",
+      "withLocal": "Mails you have already deleted permanently here are then also deleted on the server at the next sync."
     },
     "appPasswordGmail": "Gmail needs an app password for POP3, and POP must be switched on in the Gmail settings.",
     "appPasswordFastmail": "Fastmail needs an app password for POP3.",

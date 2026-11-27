@@ -837,6 +837,7 @@
     "addAccount": "Añadir cuenta"
   },
   "wizard": {
+    "customProvider": "Personalizado",
     "addAccount": "Añadir cuenta",
     "chooseProvider": "Elige tu proveedor",
     "chooseProviderDesc": "Selecciona tu proveedor de correo para comenzar rápidamente",
@@ -1869,8 +1870,12 @@
       "afterDays_one": "Los correos se eliminan del servidor {{count}} día después de la descarga.",
       "afterDays_other": "Los correos se eliminan del servidor {{count}} días después de la descarga.",
       "withLocal": "Los correos borrados definitivamente se eliminan también del servidor de inmediato.",
-      "withoutLocal": "Borrar un correo definitivamente aquí no lo elimina del servidor.",
+      "withoutLocal": "Borrar un correo definitivamente aquí no provoca ningún borrado en el servidor.",
       "localOnly": "Los correos eliminados del servidor solo existen en este dispositivo. Haz copias de seguridad con regularidad."
+    },
+    "ruleChange": {
+      "sooner": "También se aplica a los correos ya descargados: lo que venza según la nueva regla se eliminará del servidor en la próxima sincronización.",
+      "withLocal": "Los correos que ya hayas borrado definitivamente aquí se eliminarán también del servidor en la próxima sincronización."
     },
     "appPasswordGmail": "Gmail requiere una contraseña de aplicación para POP3, y POP debe estar activado en la configuración de Gmail.",
     "appPasswordFastmail": "Fastmail requiere una contraseña de aplicación para POP3.",

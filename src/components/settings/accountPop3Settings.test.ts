@@ -244,6 +244,70 @@ describe("account settings for POP3", () => {
     expect(host.textContent).toContain(hint);
   });
 
+  const sooner = () => i18n.t("pop3.ruleChange.sooner");
+  const retroactive = () => i18n.t("pop3.ruleChange.withLocal");
+  const days = () => field(i18n.t("pop3.days"));
+  const localSwitch = () => host.querySelector('[aria-labelledby$="-with-local"]')!;
+
+  it.each([
+    ["keep", "pop3.mode.afterDays"],
+    ["keep", "pop3.mode.afterFetch"],
+    ["after_days", "pop3.mode.afterFetch"],
+  ] as const)("warns that leaving %s for %s reaches fetched mail", async (mode, label) => {
+    await render(pop3Account({ pop3_delete_mode: mode }));
+    expect(host.textContent).not.toContain(sooner());
+    click(button(i18n.t(label)));
+    expect(host.textContent).toContain(sooner());
+  });
+
+  it("warns about a shorter delay only", async () => {
+    await render(pop3Account());
+    type(days(), "60");
+    expect(host.textContent).not.toContain(sooner());
+    type(days(), "7");
+    expect(host.textContent).toContain(sooner());
+    click(button(i18n.t("pop3.mode.keep")));
+    expect(host.textContent).not.toContain(sooner());
+  });
+
+  it("warns that switching on server deletes is retroactive", async () => {
+    await render(pop3Account());
+    expect(host.textContent).not.toContain(retroactive());
+    click(localSwitch());
+    expect(host.textContent).toContain(retroactive());
+  });
+
+  it("drops the hints once the change is saved", async () => {
+    await render(pop3Account());
+    click(localSwitch());
+    type(days(), "7");
+    type(field(i18n.t("pop3.host")), "mail.studio-halde.example");
+    await save();
+
+    expect(host.textContent).not.toContain(sooner());
+    expect(host.textContent).not.toContain(retroactive());
+    expect(host.textContent).not.toContain(i18n.t("pop3.serverChangeHint"));
+  });
+
+  it("keeps the stored delay when the field is emptied", async () => {
+    await render(pop3Account());
+    type(days(), "");
+    expect(host.textContent).not.toContain(sooner());
+    click(button(i18n.t("pop3.mode.keep")));
+    await save();
+    expect(update.mock.calls[0][9]).toMatchObject({ pop3_delete_after_days: 30 });
+  });
+
+  it("restores the stored delay when the emptied field loses focus", async () => {
+    await render(pop3Account());
+    type(days(), "");
+    act(() => {
+      days().focus();
+      days().blur();
+    });
+    expect(days().value).toBe("30");
+  });
+
   it("explains a refused protocol change", async () => {
     update.mockRejectedValue("PROTOCOL_CHANGE_UNSUPPORTED");
     await render(pop3Account());

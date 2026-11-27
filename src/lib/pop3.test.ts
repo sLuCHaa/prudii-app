@@ -103,7 +103,8 @@ describe("providers", () => {
       ["pop3.web.de", 995, "https://hilfe.web.de/pop-imap/einschalten.html"],
       ["pop.gmx.net", 995, "https://hilfe.gmx.net/pop-imap/einschalten.html"],
     ]);
-    expect(preset("fastmail").appPasswordUrl).toBe("https://www.fastmail.help/hc/en-us/articles/360058752854");
+    expect(preset("fastmail").pop3AppPasswordUrl).toBe("https://www.fastmail.help/hc/en-us/articles/360058752854");
+    expect(preset("fastmail").appPasswordUrl).toBeUndefined();
   });
 });
 

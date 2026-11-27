@@ -837,6 +837,7 @@
     "addAccount": "Adicionar conta"
   },
   "wizard": {
+    "customProvider": "Personalizado",
     "addAccount": "Adicionar Conta",
     "chooseProvider": "Escolha seu provedor",
     "chooseProviderDesc": "Selecione seu provedor de email para começar rapidamente",
@@ -1869,8 +1870,12 @@
       "afterDays_one": "Os e-mails são excluídos do servidor {{count}} dia após o download.",
       "afterDays_other": "Os e-mails são excluídos do servidor {{count}} dias após o download.",
       "withLocal": "Os e-mails apagados definitivamente também são excluídos imediatamente no servidor.",
-      "withoutLocal": "Apagar um e-mail definitivamente aqui não o exclui no servidor.",
+      "withoutLocal": "Apagar um e-mail definitivamente aqui não provoca nenhuma exclusão no servidor.",
       "localOnly": "Os e-mails excluídos do servidor existem apenas neste dispositivo. Faça backup regularmente."
+    },
+    "ruleChange": {
+      "sooner": "Vale também para e-mails já baixados: o que vencer pela nova regra será excluído do servidor na próxima sincronização.",
+      "withLocal": "Os e-mails que você já apagou definitivamente aqui também serão excluídos do servidor na próxima sincronização."
     },
     "appPasswordGmail": "O Gmail exige uma senha de app para POP3, e o POP precisa estar ativado nas configurações do Gmail.",
     "appPasswordFastmail": "O Fastmail exige uma senha de app para POP3.",

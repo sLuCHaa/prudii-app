@@ -102,6 +102,7 @@ describe("mapImapError for POP3", () => {
     ["the server did not respond in time", "timeout"],
     ["POP3 sync failed: connection error: timed out", "timeout"],
     ["connection error: failed to resolve host", "dns"],
+    ["connection error: failed to lookup address information: Name or service not known", "dns"],
     ["POP3 sync failed: connection error: No such host is known", "dns"],
     ["connection error: refused", "connection"],
     ["POP3 sync failed: connection error: reset", "connection"],

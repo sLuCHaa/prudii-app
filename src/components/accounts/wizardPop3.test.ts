@@ -4,26 +4,34 @@ import { createRoot, type Root } from "react-dom/client";
 import i18n from "../../lib/i18n";
 import de from "../../locales/de.json";
 
-const { createAccountMock, syncMock } = vi.hoisted(() => ({
+const { createAccountMock, syncMock, progress } = vi.hoisted(() => ({
   createAccountMock: vi.fn(),
   syncMock: vi.fn(),
+  progress: { emit: (_payload: object) => {} },
 }));
 
 vi.mock("../../lib/tauri", () => ({
   testImapConnection: vi.fn(),
   testPop3Connection: vi.fn(),
   startOAuth: vi.fn(),
+  updateAccountSettings: vi.fn(),
+  storeAccountPassword: vi.fn(),
 }));
 vi.mock("../../hooks/useAccounts", () => ({
   useCreateAccount: () => ({ mutateAsync: createAccountMock, isPending: false }),
 }));
 vi.mock("../../hooks/useSync", () => ({ useSyncAccount: () => ({ mutate: syncMock }) }));
 vi.mock("../../hooks/useAppConfig", () => ({ useAppConfig: () => ({ data: undefined }) }));
-vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(() => Promise.resolve(() => {})) }));
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn((_name: string, handler: (event: { payload: object }) => void) => {
+    progress.emit = (payload) => handler({ payload });
+    return Promise.resolve(() => {});
+  }),
+}));
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
 
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { testImapConnection, testPop3Connection, startOAuth } from "../../lib/tauri";
+import { testImapConnection, testPop3Connection, startOAuth, updateAccountSettings, storeAccountPassword } from "../../lib/tauri";
 import { PROVIDER_PRESETS } from "../../lib/providers";
 import type { Pop3Rule } from "../../lib/pop3";
 import { AccountWizard } from "./AccountWizard";
@@ -112,8 +120,9 @@ const toggle = () => host.querySelector('[role="group"][aria-label="Abrufprotoko
 function open(id: string) {
   const preset = PROVIDER_PRESETS.find((p) => p.id === id)!;
   act(() => root.render(createElement(AccountWizard)));
+  const label = id === "custom" ? i18n.t("wizard.customProvider") : preset.name;
   const name = Array.from(host.querySelectorAll("div")).find(
-    (d) => d.children.length === 0 && d.textContent === preset.name,
+    (d) => d.children.length === 0 && d.textContent === label,
   )!;
   click(name);
 }
@@ -155,7 +164,7 @@ describe("account wizard protocol choice", () => {
 
   it("words the app password hint for Fastmail", () => {
     open("fastmail");
-    expect(host.textContent).toContain(i18n.t("wizard.appPasswordHint"));
+    expect(host.textContent).not.toContain(i18n.t("wizard.appPasswordHint"));
     choosePop3();
     expect(host.textContent).toContain(i18n.t("pop3.appPasswordFastmail"));
     expect(findButton(i18n.t("pop3.enableLink"))).toBeUndefined();
@@ -393,6 +402,179 @@ describe("account wizard switching after a failed attempt", () => {
     expect(host.textContent).not.toContain("database is locked");
     click(button("IMAP"));
     expect(host.textContent).not.toContain("database is locked");
+  });
+});
+
+describe("account wizard going back after a failed first sync", () => {
+  const update = vi.mocked(updateAccountSettings);
+
+  async function connect() {
+    click(button(i18n.t("common.connect")));
+    await flush();
+  }
+
+  async function failSync(accountId = "acc-1") {
+    act(() => progress.emit({ account_id: accountId, status: "error", message: "POP3 sync failed: the mailbox is locked: busy" }));
+    await flush();
+  }
+
+  async function createdThenFailed(password: string) {
+    open("webde");
+    choosePop3();
+    type(input("input[type=email]"), EMAIL);
+    type(input("input[type=password]"), password);
+    await connect();
+    await failSync();
+    click(button(i18n.t("common.back")));
+  }
+
+  const retry = async () => {
+    click(button(i18n.t("common.retry")));
+    await flush();
+  };
+
+  it("applies the changed rule to the created account instead of creating it again", async () => {
+    const password = crypto.randomUUID();
+    await createdThenFailed(password);
+    click(button(i18n.t("pop3.mode.keep")));
+    await connect();
+
+    expect(createAccountMock).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledWith(
+      "acc-1", "anna", expect.any(String), "pop3.web.de", 995, "smtp.web.de", expect.any(Number), expect.any(String),
+      "always",
+      { incoming_security: "ssl", pop3_delete_mode: "keep", pop3_delete_after_days: 14, pop3_delete_with_local: true },
+    );
+    expect(syncMock.mock.calls).toEqual([
+      [{ accountId: "acc-1", password }],
+      [{ accountId: "acc-1", password }],
+    ]);
+    expect(update.mock.invocationCallOrder[0]).toBeLessThan(syncMock.mock.invocationCallOrder[1]);
+  });
+
+  it("applies the settings again when the retry follows a failed second sync", async () => {
+    await createdThenFailed(crypto.randomUUID());
+    click(button(i18n.t("pop3.mode.afterFetch")));
+    await connect();
+    await failSync();
+    await retry();
+
+    expect(createAccountMock).toHaveBeenCalledTimes(1);
+    expect(update.mock.calls[update.mock.calls.length - 1][9]).toMatchObject({ pop3_delete_mode: "after_fetch" });
+    expect(syncMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("shows why the settings could not be applied and does not sync", async () => {
+    await createdThenFailed(crypto.randomUUID());
+    update.mockRejectedValueOnce("database is locked");
+    await connect();
+
+    expect(host.textContent).toContain("database is locked");
+    expect(syncMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("creates a separate account for another address and returns to the first without replacing it", async () => {
+    await createdThenFailed(crypto.randomUUID());
+    createAccountMock.mockResolvedValue({ id: "acc-2" });
+    type(input("input[type=email]"), "info@studio-halde.example");
+    await connect();
+
+    expect(createAccountMock).toHaveBeenCalledTimes(2);
+    expect(update).not.toHaveBeenCalled();
+    expect(syncMock.mock.calls[syncMock.mock.calls.length - 1][0]).toMatchObject({ accountId: "acc-2" });
+
+    await failSync("acc-2");
+    click(button(i18n.t("common.back")));
+    type(input("input[type=email]"), EMAIL);
+    await connect();
+
+    expect(createAccountMock).toHaveBeenCalledTimes(2);
+    expect(update.mock.calls[0][0]).toBe("acc-1");
+    expect(syncMock.mock.calls[syncMock.mock.calls.length - 1][0]).toMatchObject({ accountId: "acc-1" });
+  });
+
+  it("never reuses the created account after a protocol change", async () => {
+    await createdThenFailed(crypto.randomUUID());
+    createAccountMock.mockRejectedValue(`EMAIL_PROVIDER_CONFLICT|${EMAIL}|webde|password`);
+    click(button("IMAP"));
+    await connect();
+
+    expect(update).not.toHaveBeenCalled();
+    expect(host.textContent).toContain(i18n.t("wizard.emailConflict", { email: EMAIL, existingProvider: "WEBDE" }));
+    expect(syncMock).toHaveBeenCalledTimes(1);
+  });
+
+  async function oauthCreatedThenFailed() {
+    const token = crypto.randomUUID();
+    vi.mocked(startOAuth).mockResolvedValue({ email: EMAIL, refresh_token: token } as never);
+    open("google");
+    click(button(i18n.t("wizard.signInWith", { provider: "Google" })));
+    await flush();
+    await failSync();
+    click(button(i18n.t("common.back")));
+    return token;
+  }
+
+  it("never writes a typed password over the sign-in of an OAuth account", async () => {
+    await oauthCreatedThenFailed();
+    createAccountMock.mockRejectedValue(`EMAIL_PROVIDER_CONFLICT|${EMAIL}|google|oauth`);
+    choosePop3();
+    type(input("input[type=email]"), EMAIL);
+    type(input("input[type=password]"), crypto.randomUUID());
+    await connect();
+
+    expect(syncMock).toHaveBeenCalledTimes(1);
+    expect(update).not.toHaveBeenCalled();
+    expect(storeAccountPassword).not.toHaveBeenCalled();
+  });
+
+  it("renews the token of the created OAuth account on a second sign-in", async () => {
+    const token = await oauthCreatedThenFailed();
+    click(button(i18n.t("wizard.signInWith", { provider: "Google" })));
+    await flush();
+
+    expect(createAccountMock).toHaveBeenCalledTimes(1);
+    expect(storeAccountPassword).toHaveBeenCalledWith("acc-1", token);
+    expect(syncMock.mock.calls[syncMock.mock.calls.length - 1][0]).toEqual({ accountId: "acc-1" });
+  });
+});
+
+describe("account wizard layout", () => {
+  it("puts the delete rule directly under the protocol choice", () => {
+    open("custom");
+    choosePop3();
+    const rule = host.querySelector('[role="group"][aria-label="Mails auf dem Server"]')!;
+    expect(rule).not.toBeNull();
+    const email = input("input[type=email]");
+    expect(rule.compareDocumentPosition(email) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(button(i18n.t("pop3.mode.afterDays")).className).toContain("border-accent bg-accent/10");
+    expect(button(i18n.t("pop3.mode.keep")).className).not.toContain("border-accent");
+  });
+
+  it("translates the heading of the custom provider", () => {
+    open("custom");
+    expect(host.querySelector("form h3")!.textContent).toBe("Benutzerdefiniert");
+  });
+
+  it("limits the incoming port to valid numbers", () => {
+    open("custom");
+    choosePop3();
+    const port = input(`input[type=number][value="995"]`);
+    expect([port.min, port.max, port.required]).toEqual(["1", "65535", true]);
+  });
+
+  it("shows the Fastmail app password link only for POP3", () => {
+    open("fastmail");
+    expect(findButton(i18n.t("wizard.createAppPassword"))).toBeUndefined();
+    choosePop3();
+    expect(findButton(i18n.t("wizard.createAppPassword"))).toBeDefined();
+  });
+
+  it("warns about device-only mail only when the rule removes mail from the server on its own", () => {
+    open("webde");
+    choosePop3();
+    click(button(i18n.t("pop3.mode.keep")));
+    expect(host.textContent).not.toContain(i18n.t("pop3.rule.localOnly"));
   });
 });
 

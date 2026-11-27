@@ -837,6 +837,7 @@
     "addAccount": "Ajouter un compte"
   },
   "wizard": {
+    "customProvider": "Personnalisé",
     "addAccount": "Ajouter un compte",
     "chooseProvider": "Choisis ton fournisseur",
     "chooseProviderDesc": "Sélectionne ton fournisseur d'email pour démarrer rapidement",
@@ -1869,8 +1870,12 @@
       "afterDays_one": "Les e-mails sont supprimés du serveur {{count}} jour après le téléchargement.",
       "afterDays_other": "Les e-mails sont supprimés du serveur {{count}} jours après le téléchargement.",
       "withLocal": "Les e-mails effacés définitivement sont aussi supprimés immédiatement du serveur.",
-      "withoutLocal": "Effacer définitivement un e-mail ici ne le supprime pas du serveur.",
+      "withoutLocal": "Effacer définitivement un e-mail ici ne déclenche aucune suppression sur le serveur.",
       "localOnly": "Les e-mails supprimés du serveur n'existent plus que sur cet appareil. Sauvegarde-les régulièrement."
+    },
+    "ruleChange": {
+      "sooner": "S’applique aussi aux e-mails déjà relevés : tout ce qui arrive à échéance selon la nouvelle règle sera supprimé du serveur à la prochaine synchronisation.",
+      "withLocal": "Les e-mails déjà effacés définitivement ici seront alors aussi supprimés du serveur à la prochaine synchronisation."
     },
     "appPasswordGmail": "Gmail exige un mot de passe d'application pour POP3, et POP doit être activé dans les paramètres de Gmail.",
     "appPasswordFastmail": "Fastmail exige un mot de passe d'application pour POP3.",

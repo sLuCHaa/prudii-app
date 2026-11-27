@@ -124,7 +124,7 @@ export function mapImapError(
     };
   }
 
-  if (/dns|resolve|no such host|getaddrinfo/.test(msg)) {
+  if (/dns|resolve|no such host|getaddrinfo|lookup address/.test(msg)) {
     return {
       title: i18n.t("imapError.dns.title"),
       detail: i18n.t("imapError.dns.detail"),
@@ -161,7 +161,7 @@ function mapPop3Error(original: string, provider: string, details?: string): Ima
   if (/tls error|certificate/.test(msg)) return hint("imapError.tls", details);
   if (/did not respond in time|timed out/.test(msg)) return hint("imapError.timeout", details);
   if (/connection error/.test(msg)) {
-    return hint(/dns|resolve|no such host/.test(msg) ? "imapError.dns" : "imapError.connection", details);
+    return hint(/dns|resolve|no such host|lookup address/.test(msg) ? "imapError.dns" : "imapError.connection", details);
   }
   return {
     title: i18n.t("imapError.unknown.title"),
@@ -183,7 +183,7 @@ function pop3AuthHint(provider: string): ImapErrorHint {
     return {
       title,
       detail: i18n.t("pop3.error.auth.fastmail"),
-      link: PROVIDER_PRESETS.find((p) => p.id === "fastmail")?.appPasswordUrl,
+      link: PROVIDER_PRESETS.find((p) => p.id === "fastmail")?.pop3AppPasswordUrl,
       linkLabel: i18n.t("wizard.createAppPassword"),
     };
   }
