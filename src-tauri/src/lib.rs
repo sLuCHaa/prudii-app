@@ -20,6 +20,7 @@ pub mod notifications;
 pub mod oauth;
 pub mod outlook;
 pub mod pool;
+pub mod pop3;
 pub mod priority;
 pub mod rules;
 pub mod sieve;
