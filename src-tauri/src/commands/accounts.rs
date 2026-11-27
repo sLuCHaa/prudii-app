@@ -3,7 +3,7 @@ use crate::db::Database;
 use crate::gmail;
 use crate::outlook;
 use crate::pop3::{self, Pop3Client, Pop3Error, Pop3Security};
-use crate::commands::mails::POP3_NOT_SUPPORTED;
+use crate::commands::mails::{pop3_delete_rows, pop3_remove_files, POP3_NOT_SUPPORTED};
 use crate::models::{
     Account, CreateAccountRequest, Folder, UpdateAccountSettings, DEFAULT_INCOMING_PROTOCOL,
     DEFAULT_INCOMING_SECURITY, DEFAULT_POP3_DELETE_AFTER_DAYS, DEFAULT_POP3_DELETE_MODE,
@@ -679,6 +679,86 @@ fn pop3_test_error(error: Pop3Error) -> String {
     }
 }
 
+fn pop3_create_folder(db: &Database, account_id: &str, name: &str) -> Result<Folder, String> {
+    insert_folder(&db.lock_db(), account_id, name, name, true)
+}
+
+/// Account of a folder the user made; the built-in ones stay as they are.
+fn pop3_custom_folder(conn: &rusqlite::Connection, folder_id: &str) -> Result<String, String> {
+    let (account_id, folder_type): (String, String) = conn
+        .query_row(
+            "SELECT account_id, folder_type FROM folders WHERE id = ?1",
+            rusqlite::params![folder_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|e| format!("Folder not found: {}", e))?;
+    if folder_type != "custom" {
+        return Err("System folders cannot be renamed or deleted.".into());
+    }
+    Ok(account_id)
+}
+
+fn pop3_rename_folder(db: &Database, folder_id: &str, new_name: &str) -> Result<(), String> {
+    let conn = db.lock_db();
+    pop3_custom_folder(&conn, folder_id)?;
+    conn.execute(
+        "UPDATE folders SET name = ?1, path = ?1 WHERE id = ?2",
+        rusqlite::params![new_name, folder_id],
+    )
+    .map_err(|e| format!("Failed to rename folder: {}", e))?;
+    Ok(())
+}
+
+/// Deletes the folder's mail for good.
+fn pop3_delete_folder(db: &Database, folder_id: &str) -> Result<(), String> {
+    let mail_ids: Vec<String> = {
+        let conn = db.lock_db();
+        let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+        let account_id = pop3_custom_folder(&tx, folder_id)?;
+        let mail_ids = tx
+            .prepare("SELECT id FROM mails WHERE folder_id = ?1")
+            .and_then(|mut stmt| {
+                stmt.query_map(rusqlite::params![folder_id], |row| row.get(0))?
+                    .collect::<rusqlite::Result<Vec<String>>>()
+            })
+            .map_err(|e| e.to_string())?;
+        pop3_delete_rows(&tx, &account_id, &mail_ids)
+            .and_then(|()| tx.execute("DELETE FROM folders WHERE id = ?1", rusqlite::params![folder_id]))
+            .map_err(|e| format!("Failed to delete folder: {}", e))?;
+        tx.commit().map_err(|e| e.to_string())?;
+        mail_ids
+    };
+    pop3_remove_files(db, &mail_ids);
+    Ok(())
+}
+
+fn insert_folder(
+    conn: &rusqlite::Connection,
+    account_id: &str,
+    name: &str,
+    path: &str,
+    is_local: bool,
+) -> Result<Folder, String> {
+    let folder_id = uuid::Uuid::new_v4().to_string();
+    conn.execute(
+        "INSERT INTO folders (id, account_id, name, folder_type, path, is_local) VALUES (?1, ?2, ?3, 'custom', ?4, ?5)",
+        rusqlite::params![folder_id, account_id, name, path, is_local as i32],
+    )
+    .map_err(|e| format!("Failed to create folder: {}", e))?;
+
+    Ok(Folder {
+        id: folder_id,
+        account_id: account_id.to_string(),
+        name: name.to_string(),
+        folder_type: "custom".to_string(),
+        path: path.to_string(),
+        unread_count: 0,
+        total_count: 0,
+        is_local,
+        color: String::new(),
+    })
+}
+
 #[tauri::command]
 pub async fn create_folder(
     db: State<'_, Database>,
@@ -686,11 +766,12 @@ pub async fn create_folder(
     name: String,
     is_local: bool,
 ) -> Result<Folder, String> {
+    if matches!(get_folder_api_type(&db, &account_id).0, FolderApiType::Pop3) {
+        return pop3_create_folder(&db, &account_id, &name);
+    }
+
     let path = if !is_local {
         let (api_type, provider, auth_type) = get_folder_api_type(&db, &account_id);
-        if matches!(api_type, FolderApiType::Pop3) {
-            return Err(POP3_NOT_SUPPORTED.into());
-        }
         let credential = credentials::resolve_credential(&account_id, &auth_type, &provider)
             .await
             .map_err(|e| format!("Failed to retrieve credentials: {}", e))?;
@@ -731,28 +812,7 @@ pub async fn create_folder(
         name.clone()
     };
 
-    let folder_id = uuid::Uuid::new_v4().to_string();
-
-    {
-        let conn = db.lock_db();
-        conn.execute(
-            "INSERT INTO folders (id, account_id, name, folder_type, path, is_local) VALUES (?1, ?2, ?3, 'custom', ?4, ?5)",
-            rusqlite::params![folder_id, account_id, name, path, is_local as i32],
-        )
-        .map_err(|e| format!("Failed to create folder: {}", e))?;
-    }
-
-    Ok(Folder {
-        id: folder_id,
-        account_id,
-        name,
-        folder_type: "custom".to_string(),
-        path,
-        unread_count: 0,
-        total_count: 0,
-        is_local,
-        color: String::new(),
-    })
+    insert_folder(&db.lock_db(), &account_id, &name, &path, is_local)
 }
 
 #[tauri::command]
@@ -770,11 +830,12 @@ pub async fn delete_folder(
         .map_err(|e| format!("Folder not found: {}", e))?
     };
 
+    if matches!(get_folder_api_type(&db, &account_id).0, FolderApiType::Pop3) {
+        return pop3_delete_folder(&db, &folder_id);
+    }
+
     if !is_local {
         let (api_type, provider, auth_type) = get_folder_api_type(&db, &account_id);
-        if matches!(api_type, FolderApiType::Pop3) {
-            return Err(POP3_NOT_SUPPORTED.into());
-        }
         let credential = credentials::resolve_credential(&account_id, &auth_type, &provider)
             .await
             .map_err(|e| format!("Failed to retrieve credentials: {}", e))?;
@@ -856,11 +917,12 @@ pub async fn rename_folder(
         .map_err(|e| format!("Folder not found: {}", e))?
     };
 
+    if matches!(get_folder_api_type(&db, &account_id).0, FolderApiType::Pop3) {
+        return pop3_rename_folder(&db, &folder_id, &new_name);
+    }
+
     if !is_local {
         let (api_type, provider, auth_type) = get_folder_api_type(&db, &account_id);
-        if matches!(api_type, FolderApiType::Pop3) {
-            return Err(POP3_NOT_SUPPORTED.into());
-        }
         let credential = credentials::resolve_credential(&account_id, &auth_type, &provider)
             .await
             .map_err(|e| format!("Failed to retrieve credentials: {}", e))?;
@@ -909,7 +971,6 @@ pub async fn rename_folder(
     let (api_type, _, _) = get_folder_api_type(&db, &account_id);
     let new_path = match api_type {
         FolderApiType::Gmail | FolderApiType::Outlook => old_path,
-        // A POP3 folder only reaches this point when it is local, which renames like an IMAP one.
         FolderApiType::Imap | FolderApiType::Pop3 => {
             if let Some(sep_pos) = old_path.rfind('.').or_else(|| old_path.rfind('/')) {
                 format!("{}{}", &old_path[..=sep_pos], new_name)
@@ -1367,5 +1428,141 @@ mod pop3_connection_tests {
             result.err().as_deref(),
             Some("unexpected server response: unknown security mode: none")
         );
+    }
+}
+
+#[cfg(test)]
+mod pop3_folder_tests {
+    use super::{
+        insert_account, list_folders_inner, pop3_create_folder, pop3_delete_folder, pop3_rename_folder,
+    };
+    use crate::db::Database;
+    use crate::models::{CreateAccountRequest, Folder};
+    use crate::pop3::store::source_path;
+    use crate::test_support::{seed_mail, temp_db, SeedMail};
+
+    fn pop3_account(db: &Database) -> String {
+        let request = CreateAccountRequest {
+            email: "anna@studio-halde.example".into(),
+            display_name: "Anna Weber".into(),
+            provider: "custom".into(),
+            color: "#336699".into(),
+            imap_host: "pop.studio-halde.example".into(),
+            imap_port: 995,
+            smtp_host: "smtp.studio-halde.example".into(),
+            smtp_port: 465,
+            smtp_security: "ssl".into(),
+            password: uuid::Uuid::new_v4().to_string(),
+            auth_type: "password".into(),
+            incoming_protocol: Some("pop3".into()),
+            incoming_security: None,
+            pop3_delete_mode: None,
+            pop3_delete_after_days: None,
+            pop3_delete_with_local: None,
+        };
+        insert_account(&db.lock_db(), &request).unwrap().id
+    }
+
+    fn folders(db: &Database, account_id: &str) -> Vec<Folder> {
+        list_folders_inner(&db.lock_db(), account_id).unwrap()
+    }
+
+    fn count(db: &Database, sql: &str) -> i64 {
+        db.lock_db().query_row(sql, [], |row| row.get(0)).unwrap()
+    }
+
+    fn stored_mail(db: &Database, account_id: &str, folder_id: &str, uidl: Option<&str>) -> String {
+        let id = seed_mail(&db.lock_db(), &SeedMail { account_id, folder_id, ..Default::default() });
+        if let Some(uidl) = uidl {
+            db.lock_db()
+                .execute(
+                    "INSERT INTO pop3_uidls (account_id, uidl, mail_id, state) VALUES (?1, ?2, ?3, 'stored')",
+                    [account_id, uidl, id.as_str()],
+                )
+                .unwrap();
+        }
+        let source = source_path(&db.data_dir, &id);
+        std::fs::create_dir_all(source.parent().unwrap()).unwrap();
+        std::fs::write(source, b"Subject: Angebot\r\n\r\nHallo Anna").unwrap();
+        std::fs::create_dir_all(db.data_dir.join("attachments").join(&id)).unwrap();
+        id
+    }
+
+    #[test]
+    fn pop3_create_folder_is_local() {
+        let db = temp_db();
+        let account = pop3_account(&db);
+        let created = pop3_create_folder(&db, &account, "Studio Halde").unwrap();
+        assert!(created.is_local);
+        let stored = folders(&db, &account).into_iter().find(|f| f.id == created.id).unwrap();
+        assert_eq!(
+            (stored.path.as_str(), stored.folder_type.as_str(), stored.is_local),
+            ("Studio Halde", "custom", true)
+        );
+        assert!(pop3_create_folder(&db, &account, "Studio Halde").is_err());
+        assert_eq!(count(&db, "SELECT COUNT(*) FROM pending_ops"), 0);
+    }
+
+    #[test]
+    fn pop3_rename_folder_is_local() {
+        let db = temp_db();
+        let account = pop3_account(&db);
+        let created = pop3_create_folder(&db, &account, "Projekt v1.0").unwrap();
+        pop3_rename_folder(&db, &created.id, "Angebote").unwrap();
+        let stored = folders(&db, &account).into_iter().find(|f| f.id == created.id).unwrap();
+        assert_eq!(
+            (stored.name.as_str(), stored.path.as_str(), stored.is_local),
+            ("Angebote", "Angebote", true)
+        );
+        assert_eq!(count(&db, "SELECT COUNT(*) FROM pending_ops"), 0);
+    }
+
+    #[test]
+    fn pop3_system_folders_are_protected() {
+        let db = temp_db();
+        let account = pop3_account(&db);
+        for folder in folders(&db, &account) {
+            let mail = stored_mail(&db, &account, &folder.id, Some(&folder.id));
+            assert!(pop3_delete_folder(&db, &folder.id).is_err());
+            assert!(pop3_rename_folder(&db, &folder.id, "Angebote").is_err());
+            assert!(source_path(&db.data_dir, &mail).exists());
+        }
+        assert_eq!(folders(&db, &account).len(), 5);
+        assert_eq!(count(&db, "SELECT COUNT(*) FROM mails"), 5);
+        assert_eq!(count(&db, "SELECT COUNT(*) FROM pop3_uidls WHERE local_deleted_at IS NOT NULL"), 0);
+    }
+
+    #[test]
+    fn pop3_delete_folder_marks_uidls() {
+        let db = temp_db();
+        let account = pop3_account(&db);
+        let doomed = pop3_create_folder(&db, &account, "Angebote").unwrap().id;
+        let inbox = folders(&db, &account).into_iter().find(|f| f.folder_type == "inbox").unwrap().id;
+        let first = stored_mail(&db, &account, &doomed, Some("u1"));
+        let second = stored_mail(&db, &account, &doomed, Some("u2"));
+        let kept = stored_mail(&db, &account, &inbox, Some("u3"));
+        let copy = stored_mail(&db, &account, &doomed, None);
+
+        pop3_delete_folder(&db, &doomed).unwrap();
+
+        assert!(folders(&db, &account).iter().all(|f| f.id != doomed));
+        assert_eq!(count(&db, "SELECT COUNT(*) FROM mails"), 1);
+        assert_eq!(
+            count(&db, "SELECT COUNT(*) FROM pop3_uidls WHERE local_deleted_at IS NOT NULL AND uidl IN ('u1', 'u2')"),
+            2
+        );
+        assert_eq!(
+            count(&db, "SELECT COUNT(*) FROM pop3_uidls WHERE local_deleted_at IS NULL AND uidl = 'u3'"),
+            1
+        );
+        assert_eq!(count(&db, "SELECT COUNT(*) FROM pending_ops"), 0);
+        for id in [&first, &second, &copy] {
+            assert!(!db.data_dir.join("attachments").join(id).exists());
+        }
+        for id in [&first, &second, &kept] {
+            assert!(source_path(&db.data_dir, id).exists());
+        }
+        assert!(!source_path(&db.data_dir, &copy).exists());
+        assert!(db.data_dir.join("attachments").join(&kept).exists());
     }
 }

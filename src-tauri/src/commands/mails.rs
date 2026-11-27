@@ -1293,7 +1293,7 @@ fn pop3_empty_folder(db: &Database, account_id: &str, folder_type: &str) -> Resu
 }
 
 /// Needs a transaction: the UIDL mark and the row delete must not come apart.
-fn pop3_delete_rows(tx: &rusqlite::Connection, account_id: &str, mail_ids: &[String]) -> rusqlite::Result<()> {
+pub(crate) fn pop3_delete_rows(tx: &rusqlite::Connection, account_id: &str, mail_ids: &[String]) -> rusqlite::Result<()> {
     crate::pop3::mark_locally_deleted(tx, account_id, mail_ids)?;
     for mail_id in mail_ids {
         tx.execute(
@@ -1308,7 +1308,7 @@ fn pop3_delete_rows(tx: &rusqlite::Connection, account_id: &str, mail_ids: &[Str
     Ok(())
 }
 
-fn pop3_remove_files(db: &Database, mail_ids: &[String]) {
+pub(crate) fn pop3_remove_files(db: &Database, mail_ids: &[String]) {
     for mail_id in mail_ids {
         let _ = std::fs::remove_dir_all(db.data_dir.join("attachments").join(mail_id));
     }
