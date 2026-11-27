@@ -1154,8 +1154,14 @@ pub async fn fetch_mail_source(
     Ok(crate::export::source::display_source(raw))
 }
 
-#[tauri::command]
-pub async fn toggle_star(db: State<'_, Database>, pool: State<'_, ImapPool>, mail_id: String) -> Result<bool, String> {
+/// `(api message id, account id)` of the server copy to update; POP3 has none.
+type ServerTarget = Option<(String, String)>;
+
+fn server_target(db: &Database, mail_id: &str) -> ServerTarget {
+    get_api_message_id(db, mail_id).filter(|(_, account_id)| !is_pop3_account(&db.lock_db(), account_id))
+}
+
+fn toggle_star_locally(db: &Database, mail_id: &str) -> Result<(bool, ServerTarget), String> {
     let new_val: bool = {
         let conn = db.lock_db();
         conn.execute(
@@ -1170,8 +1176,150 @@ pub async fn toggle_star(db: State<'_, Database>, pool: State<'_, ImapPool>, mai
         )
         .map_err(|e| format!("Mail not found: {}", e))?
     };
+    Ok((new_val, server_target(db, mail_id)))
+}
 
-    if let Some((api_msg_id, account_id)) = get_api_message_id(&db, &mail_id) {
+fn toggle_read_locally(db: &Database, mail_id: &str) -> Result<(bool, ServerTarget), String> {
+    let new_val: bool = {
+        let conn = db.lock_db();
+        conn.execute(
+            "UPDATE mails SET is_read = 1 - is_read WHERE id = ?1",
+            rusqlite::params![mail_id],
+        )
+        .map_err(|e| e.to_string())?;
+        let new_val = conn.query_row(
+            "SELECT is_read FROM mails WHERE id = ?1",
+            rusqlite::params![mail_id],
+            |row| Ok(row.get::<_, i32>(0)? != 0),
+        )
+        .map_err(|e| format!("Mail not found: {}", e))?;
+
+        let folder_id: Option<String> = conn.query_row(
+            "SELECT folder_id FROM mails WHERE id = ?1", rusqlite::params![mail_id], |row| row.get(0)
+        ).ok();
+        if let Some(fid) = folder_id {
+            if new_val {
+                let _ = conn.execute(
+                    "UPDATE folders SET unread_count = MAX(0, unread_count - 1) WHERE id = ?1",
+                    rusqlite::params![fid],
+                );
+            } else {
+                let _ = conn.execute(
+                    "UPDATE folders SET unread_count = unread_count + 1 WHERE id = ?1",
+                    rusqlite::params![fid],
+                );
+            }
+        }
+        new_val
+    };
+    Ok((new_val, server_target(db, mail_id)))
+}
+
+fn pop3_archive_mail(db: &Database, mail_id: &str) -> Result<(), String> {
+    let (current, archive): (String, Option<String>) = db
+        .lock_db()
+        .query_row(
+            "SELECT m.folder_id, (SELECT id FROM folders WHERE account_id = m.account_id AND folder_type = 'archive' LIMIT 1)
+             FROM mails m WHERE m.id = ?1",
+            rusqlite::params![mail_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|e| format!("Mail not found: {}", e))?;
+    let archive = archive.ok_or("No archive folder found")?;
+    if current == archive {
+        return Ok(());
+    }
+    move_mail_locally(db, mail_id, &archive)
+}
+
+/// To the trash first; from the trash (or with `permanent`) the mail is deleted for good.
+fn pop3_trash_mail(db: &Database, mail_id: &str, permanent: bool) -> Result<(), String> {
+    let found = db.lock_db().query_row(
+        "SELECT m.account_id, m.folder_id, (SELECT id FROM folders WHERE account_id = m.account_id AND folder_type = 'trash' LIMIT 1)
+         FROM mails m WHERE m.id = ?1",
+        rusqlite::params![mail_id],
+        |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, Option<String>>(2)?)),
+    );
+    let (account_id, current, trash) = match found {
+        Ok(found) => found,
+        Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(()),
+        Err(e) => return Err(format!("Mail not found: {}", e)),
+    };
+    if !permanent {
+        let trash = trash.ok_or("No trash folder found")?;
+        if trash != current {
+            return move_mail_locally(db, mail_id, &trash);
+        }
+    }
+    let ids = [mail_id.to_string()];
+    {
+        let conn = db.lock_db();
+        let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+        pop3_delete_rows(&tx, &account_id, &ids).map_err(|e| e.to_string())?;
+        tx.commit().map_err(|e| e.to_string())?;
+    }
+    pop3_remove_files(db, &ids);
+    Ok(())
+}
+
+fn pop3_empty_folder(db: &Database, account_id: &str, folder_type: &str) -> Result<u32, String> {
+    let ids: Vec<String> = {
+        let conn = db.lock_db();
+        let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+        let folder_id: String = tx
+            .query_row(
+                "SELECT id FROM folders WHERE account_id = ?1 AND folder_type = ?2",
+                rusqlite::params![account_id, folder_type],
+                |row| row.get(0),
+            )
+            .map_err(|_| format!("No {} folder found", folder_type))?;
+        let ids = tx
+            .prepare("SELECT id FROM mails WHERE folder_id = ?1")
+            .and_then(|mut stmt| {
+                stmt.query_map(rusqlite::params![folder_id], |row| row.get(0))?
+                    .collect::<rusqlite::Result<Vec<String>>>()
+            })
+            .map_err(|e| e.to_string())?;
+        pop3_delete_rows(&tx, account_id, &ids)
+            .and_then(|()| {
+                tx.execute("UPDATE folders SET unread_count = 0, total_count = 0 WHERE id = ?1", rusqlite::params![folder_id])
+            })
+            .map_err(|e| e.to_string())?;
+        tx.commit().map_err(|e| e.to_string())?;
+        ids
+    };
+    pop3_remove_files(db, &ids);
+    Ok(ids.len() as u32)
+}
+
+/// Needs a transaction: the UIDL mark and the row delete must not come apart.
+fn pop3_delete_rows(tx: &rusqlite::Connection, account_id: &str, mail_ids: &[String]) -> rusqlite::Result<()> {
+    crate::pop3::mark_locally_deleted(tx, account_id, mail_ids)?;
+    for mail_id in mail_ids {
+        tx.execute(
+            "UPDATE folders SET total_count = MAX(0, total_count - 1),
+                 unread_count = MAX(0, unread_count - (SELECT is_read = 0 FROM mails WHERE id = ?1))
+             WHERE id = (SELECT folder_id FROM mails WHERE id = ?1)",
+            rusqlite::params![mail_id],
+        )?;
+        tx.execute("DELETE FROM attachments WHERE mail_id = ?1", rusqlite::params![mail_id])?;
+        tx.execute("DELETE FROM mails WHERE id = ?1", rusqlite::params![mail_id])?;
+    }
+    Ok(())
+}
+
+fn pop3_remove_files(db: &Database, mail_ids: &[String]) {
+    for mail_id in mail_ids {
+        let _ = std::fs::remove_dir_all(db.data_dir.join("attachments").join(mail_id));
+    }
+    crate::pop3::discard_orphan_sources(&db.lock_db(), &db.data_dir, mail_ids);
+}
+
+#[tauri::command]
+pub async fn toggle_star(db: State<'_, Database>, pool: State<'_, ImapPool>, mail_id: String) -> Result<bool, String> {
+    let (new_val, server) = toggle_star_locally(&db, &mail_id)?;
+
+    if let Some((api_msg_id, account_id)) = server {
         let (api_type, provider, auth_type) = get_api_type(&db, &account_id);
         match api_type {
             ApiType::Gmail => {
@@ -1368,45 +1516,11 @@ pub fn count_snoozed_mails(db: State<'_, Database>) -> Result<u32, String> {
 
 #[tauri::command]
 pub async fn toggle_read(db: State<'_, Database>, pool: State<'_, ImapPool>, mail_id: String) -> Result<bool, String> {
-    let new_val: bool = {
-        let conn = db.lock_db();
-        conn.execute(
-            "UPDATE mails SET is_read = 1 - is_read WHERE id = ?1",
-            rusqlite::params![mail_id],
-        )
-        .map_err(|e| e.to_string())?;
-        let new_val = conn.query_row(
-            "SELECT is_read FROM mails WHERE id = ?1",
-            rusqlite::params![mail_id],
-            |row| Ok(row.get::<_, i32>(0)? != 0),
-        )
-        .map_err(|e| format!("Mail not found: {}", e))?;
-
-        let folder_id: Option<String> = conn.query_row(
-            "SELECT folder_id FROM mails WHERE id = ?1", rusqlite::params![mail_id], |row| row.get(0)
-        ).ok();
-        if let Some(fid) = folder_id {
-            if new_val {
-                let _ = conn.execute(
-                    "UPDATE folders SET unread_count = MAX(0, unread_count - 1) WHERE id = ?1",
-                    rusqlite::params![fid],
-                );
-            } else {
-                let _ = conn.execute(
-                    "UPDATE folders SET unread_count = unread_count + 1 WHERE id = ?1",
-                    rusqlite::params![fid],
-                );
-            }
-        }
-        new_val
-    };
+    let (new_val, server) = toggle_read_locally(&db, &mail_id)?;
 
     // Sync to API in background (with pending_ops for reliability)
-    if let Some((api_msg_id, account_id)) = get_api_message_id(&db, &mail_id) {
+    if let Some((api_msg_id, account_id)) = server {
         let (api_type, provider, auth_type) = get_api_type(&db, &account_id);
-        if matches!(api_type, ApiType::Pop3) {
-            return Ok(new_val);
-        }
 
         // Queue pending op before attempting server sync
         let payload = format!(
@@ -1673,7 +1787,7 @@ enum TrashAction {
 pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id: String, permanent: Option<bool>) -> Result<(), String> {
     let permanent = permanent.unwrap_or(false);
     if mail_is_pop3(&db, &mail_id) {
-        return Err(POP3_NOT_SUPPORTED.into());
+        return pop3_trash_mail(&db, &mail_id, permanent);
     }
     if let Some((api_msg_id, account_id)) = get_api_message_id(&db, &mail_id) {
         let (api_type, provider, auth_type) = get_api_type(&db, &account_id);
@@ -1907,7 +2021,7 @@ pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id:
                 return Ok(());
             }
             ApiType::Imap => {}
-            ApiType::Pop3 => return Err(POP3_NOT_SUPPORTED.into()),
+            ApiType::Pop3 => return pop3_trash_mail(&db, &mail_id, permanent),
         }
     }
 
@@ -2261,6 +2375,55 @@ fn mail_is_in_local_folder(db: &Database, mail_id: &str) -> bool {
     .unwrap_or(false)
 }
 
+pub(crate) fn next_synthetic_uid(conn: &rusqlite::Connection, account_id: &str) -> rusqlite::Result<i64> {
+    conn.query_row(
+        "SELECT IFNULL(MAX(uid), 0) + 1 FROM mails WHERE account_id = ?1",
+        rusqlite::params![account_id],
+        |row| row.get(0),
+    )
+}
+
+/// Changes a mail's folder row only. `clear_uid` is for non-POP3 mails; a POP3 uid never names a server copy.
+pub(crate) fn relocate_mail(
+    conn: &rusqlite::Connection,
+    mail_id: &str,
+    dest_folder_id: &str,
+    clear_uid: bool,
+) -> Result<(), String> {
+    const KEEP_UID: &str = "UPDATE mails SET folder_id = ?1 WHERE id = ?2";
+    const CLEAR_UID: &str = "UPDATE mails SET folder_id = ?1, uid = NULL WHERE id = ?2";
+    let account: Option<(String, bool)> = conn
+        .query_row(
+            "SELECT account_id, EXISTS(SELECT 1 FROM folders f WHERE f.id = ?2 AND f.account_id = m.account_id)
+             FROM mails m WHERE m.id = ?1",
+            rusqlite::params![mail_id, dest_folder_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .ok()
+        .filter(|(account_id, _): &(String, bool)| is_pop3_account(conn, account_id));
+    let Some((account_id, own_folder)) = account else {
+        let sql = if clear_uid { CLEAR_UID } else { KEEP_UID };
+        conn.execute(sql, rusqlite::params![dest_folder_id, mail_id]).map_err(|e| e.to_string())?;
+        return Ok(());
+    };
+    if !own_folder {
+        return Err("A POP3 mail can only be moved within its own account.".into());
+    }
+    match conn.execute(CLEAR_UID, rusqlite::params![dest_folder_id, mail_id]) {
+        // A twin already holds the uid-less slot for this Message-ID in the target folder.
+        Err(e) if e.sqlite_error_code() == Some(rusqlite::ErrorCode::ConstraintViolation) => {
+            let free = next_synthetic_uid(conn, &account_id).map_err(|e| e.to_string())?;
+            conn.execute(
+                "UPDATE mails SET folder_id = ?1, uid = MAX(rowid, ?3) WHERE id = ?2",
+                rusqlite::params![dest_folder_id, mail_id, free],
+            )
+        }
+        moved => moved,
+    }
+    .map(|_| ())
+    .map_err(|e| e.to_string())
+}
+
 /// Re-home a mail in the local DB without touching the server, keeping the
 /// folder counters straight. Used for local-only folders.
 fn move_mail_locally(db: &Database, mail_id: &str, dest_folder_id: &str) -> Result<(), String> {
@@ -2273,10 +2436,7 @@ fn move_mail_locally(db: &Database, mail_id: &str, dest_folder_id: &str) -> Resu
 
     // `uid` is deliberately kept: the message is untouched on the server, so the
     // identifier stays valid if it is ever moved back out of the local folder.
-    conn.execute(
-        "UPDATE mails SET folder_id = ?1 WHERE id = ?2",
-        rusqlite::params![dest_folder_id, mail_id],
-    ).map_err(|e| e.to_string())?;
+    relocate_mail(&conn, mail_id, dest_folder_id, false)?;
 
     if !source_fid.is_empty() {
         let _ = conn.execute("UPDATE folders SET total_count = MAX(0, total_count - 1) WHERE id = ?1", rusqlite::params![source_fid]);
@@ -2410,11 +2570,8 @@ pub async fn move_mail(
         ).map_err(|e| format!("Mail not found: {}", e))?
     };
 
-    if dest_is_local {
+    if dest_is_local || mail_is_pop3(&db, &mail_id) {
         return move_mail_locally(&db, &mail_id, &dest_folder_id);
-    }
-    if mail_is_pop3(&db, &mail_id) {
-        return Err(POP3_NOT_SUPPORTED.into());
     }
 
     if let Some((api_msg_id, account_id)) = get_api_message_id(&db, &mail_id) {
@@ -2501,7 +2658,7 @@ pub async fn move_mail(
                 return Ok(());
             }
             ApiType::Imap => {}
-            ApiType::Pop3 => return Err(POP3_NOT_SUPPORTED.into()),
+            ApiType::Pop3 => return move_mail_locally(&db, &mail_id, &dest_folder_id),
         }
     }
 
@@ -2805,7 +2962,7 @@ pub fn get_thread_mails_inner(conn: &rusqlite::Connection, mail_id: &str) -> Res
 #[tauri::command]
 pub async fn archive_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id: String) -> Result<(), String> {
     if mail_is_pop3(&db, &mail_id) {
-        return Err(POP3_NOT_SUPPORTED.into());
+        return pop3_archive_mail(&db, &mail_id);
     }
     if let Some((api_msg_id, account_id)) = get_api_message_id(&db, &mail_id) {
         let (api_type, provider, auth_type) = get_api_type(&db, &account_id);
@@ -2930,7 +3087,7 @@ pub async fn archive_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_i
                 return Ok(());
             }
             ApiType::Imap => {}
-            ApiType::Pop3 => return Err(POP3_NOT_SUPPORTED.into()),
+            ApiType::Pop3 => return pop3_archive_mail(&db, &mail_id),
         }
     }
 
@@ -3388,7 +3545,7 @@ async fn empty_folder_by_type(app: tauri::AppHandle, db: State<'_, Database>, ac
             return Ok(count);
         }
         ApiType::Imap => {}
-        ApiType::Pop3 => return Err(POP3_NOT_SUPPORTED.into()),
+        ApiType::Pop3 => return pop3_empty_folder(&db, &account_id, folder_type),
     }
 
     let folder_info: Option<(String, String)> = {
@@ -5153,5 +5310,219 @@ mod pop3_tests {
             (mail, seed_folder(&conn, &other, "inbox"))
         };
         assert_eq!(copy_plan(&db, &mail, &dest), Err(COPY_TARGET_UNSUPPORTED.to_string()));
+    }
+}
+
+#[cfg(test)]
+mod pop3_action_tests {
+    use super::*;
+    use crate::test_support::{seed_account, seed_folder, seed_mail, temp_db, SeedMail};
+
+    struct Env {
+        db: Database,
+        account: String,
+        inbox: String,
+        archive: String,
+        trash: String,
+        spam: String,
+    }
+
+    fn env() -> Env {
+        let db = temp_db();
+        let (account, [inbox, archive, trash, spam]) = {
+            let conn = db.lock_db();
+            let account = seed_account(&conn, "anna@studio-halde.example");
+            conn.execute("UPDATE accounts SET incoming_protocol = 'pop3' WHERE id = ?1", [&account]).unwrap();
+            let folders = ["inbox", "archive", "trash", "spam"].map(|t| seed_folder(&conn, &account, t));
+            (account, folders)
+        };
+        Env { db, account, inbox, archive, trash, spam }
+    }
+
+    fn mail(e: &Env, folder: &str, message_id: &str) -> String {
+        let conn = e.db.lock_db();
+        let id = seed_mail(&conn, &SeedMail { account_id: &e.account, folder_id: folder, ..Default::default() });
+        conn.execute("UPDATE mails SET message_id = ?1 WHERE id = ?2", [message_id, &id]).unwrap();
+        conn.execute("INSERT INTO pop3_uidls (account_id, uidl, mail_id) VALUES (?1, ?2, ?2)", [&e.account, &id])
+            .unwrap();
+        conn.execute("UPDATE folders SET total_count = total_count + 1, unread_count = unread_count + 1 WHERE id = ?1", [folder])
+            .unwrap();
+        crate::pop3::store::write_source(&e.db.data_dir, &id, b"Subject: Angebot\r\n\r\nHallo").unwrap();
+        std::fs::create_dir_all(e.db.data_dir.join("attachments").join(&id)).unwrap();
+        id
+    }
+
+    fn folder_of(e: &Env, mail_id: &str) -> Option<String> {
+        e.db.lock_db().query_row("SELECT folder_id FROM mails WHERE id = ?1", [mail_id], |r| r.get(0)).ok()
+    }
+
+    fn counts(e: &Env, folder: &str) -> (i64, i64) {
+        e.db.lock_db()
+            .query_row("SELECT total_count, unread_count FROM folders WHERE id = ?1", [folder], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap()
+    }
+
+    fn marked(e: &Env, mail_id: &str) -> bool {
+        e.db.lock_db()
+            .query_row("SELECT local_deleted_at IS NOT NULL FROM pop3_uidls WHERE mail_id = ?1", [mail_id], |r| r.get(0))
+            .unwrap()
+    }
+
+    fn queued(e: &Env) -> i64 {
+        e.db.lock_db().query_row("SELECT COUNT(*) FROM pending_ops", [], |r| r.get(0)).unwrap()
+    }
+
+    fn files_exist(e: &Env, mail_id: &str) -> (bool, bool) {
+        (crate::pop3::store::has_source(&e.db.data_dir, mail_id), e.db.data_dir.join("attachments").join(mail_id).exists())
+    }
+
+    #[test]
+    fn pop3_toggle_read_is_local_only() {
+        let e = env();
+        let id = mail(&e, &e.inbox, "<a@studio-halde.example>");
+        assert_eq!(toggle_read_locally(&e.db, &id), Ok((true, None)));
+        assert_eq!(counts(&e, &e.inbox), (1, 0));
+        assert_eq!(toggle_read_locally(&e.db, &id), Ok((false, None)));
+        assert_eq!((counts(&e, &e.inbox), queued(&e)), ((1, 1), 0));
+    }
+
+    #[test]
+    fn pop3_toggle_star_is_local_only() {
+        let e = env();
+        let id = mail(&e, &e.inbox, "<a@studio-halde.example>");
+        assert_eq!(toggle_star_locally(&e.db, &id), Ok((true, None)));
+        assert_eq!(toggle_star_locally(&e.db, &id), Ok((false, None)));
+        assert_eq!(queued(&e), 0);
+    }
+
+    #[test]
+    fn pop3_move_between_folders_is_local() {
+        let e = env();
+        let id = mail(&e, &e.inbox, "<a@studio-halde.example>");
+        move_mail_locally(&e.db, &id, &e.spam).unwrap();
+        assert_eq!(folder_of(&e, &id), Some(e.spam.clone()));
+        assert_eq!((counts(&e, &e.inbox), counts(&e, &e.spam)), ((0, 0), (1, 1)));
+        assert_eq!((queued(&e), marked(&e, &id)), (0, false));
+    }
+
+    #[test]
+    fn a_pop3_mail_cannot_move_into_another_account() {
+        let e = env();
+        let id = mail(&e, &e.inbox, "<a@studio-halde.example>");
+        let foreign = {
+            let conn = e.db.lock_db();
+            let other = seed_account(&conn, "info@studio-halde.example");
+            seed_folder(&conn, &other, "inbox")
+        };
+        assert!(move_mail_locally(&e.db, &id, &foreign).is_err());
+        assert_eq!(folder_of(&e, &id), Some(e.inbox.clone()));
+        assert_eq!(counts(&e, &e.inbox), (1, 1));
+    }
+
+    #[test]
+    fn pop3_archive_is_local() {
+        let e = env();
+        let local = {
+            let conn = e.db.lock_db();
+            let local = seed_folder(&conn, &e.account, "custom");
+            conn.execute("UPDATE folders SET is_local = 1 WHERE id = ?1", [&local]).unwrap();
+            local
+        };
+        for source in [&e.inbox, &local] {
+            let id = mail(&e, source, "");
+            pop3_archive_mail(&e.db, &id).unwrap();
+            pop3_archive_mail(&e.db, &id).unwrap();
+            assert_eq!(folder_of(&e, &id), Some(e.archive.clone()));
+            assert_eq!(counts(&e, source), (0, 0));
+            assert!(!marked(&e, &id));
+        }
+        assert_eq!((counts(&e, &e.archive), queued(&e)), ((2, 2), 0));
+    }
+
+    #[test]
+    fn moving_to_trash_does_not_mark_server_delete() {
+        let e = env();
+        let id = mail(&e, &e.inbox, "<a@studio-halde.example>");
+        pop3_trash_mail(&e.db, &id, false).unwrap();
+        assert_eq!(folder_of(&e, &id), Some(e.trash.clone()));
+        assert_eq!((marked(&e, &id), queued(&e), files_exist(&e, &id)), (false, 0, (true, true)));
+    }
+
+    #[test]
+    fn permanent_delete_marks_uidl() {
+        let e = env();
+        let trashed = mail(&e, &e.trash, "<a@studio-halde.example>");
+        let draft = mail(&e, &e.inbox, "<b@studio-halde.example>");
+        pop3_trash_mail(&e.db, &trashed, false).unwrap();
+        pop3_trash_mail(&e.db, &draft, true).unwrap();
+        for id in [&trashed, &draft] {
+            assert_eq!(folder_of(&e, id), None);
+            assert_eq!((marked(&e, id), files_exist(&e, id)), (true, (true, false)));
+        }
+        assert_eq!((counts(&e, &e.trash), counts(&e, &e.inbox), queued(&e)), ((0, 0), (0, 0), 0));
+        assert_eq!(pop3_trash_mail(&e.db, &trashed, false), Ok(()));
+    }
+
+    #[test]
+    fn permanent_delete_drops_the_source_of_a_mail_without_a_server_copy() {
+        let e = env();
+        let id = mail(&e, &e.trash, "<a@studio-halde.example>");
+        e.db.lock_db().execute("DELETE FROM pop3_uidls", []).unwrap();
+        pop3_trash_mail(&e.db, &id, false).unwrap();
+        assert_eq!(files_exist(&e, &id), (false, false));
+    }
+
+    #[test]
+    fn without_a_trash_folder_nothing_is_deleted() {
+        let e = env();
+        let id = mail(&e, &e.inbox, "<a@studio-halde.example>");
+        e.db.lock_db().execute("DELETE FROM folders WHERE id = ?1", [&e.trash]).unwrap();
+        assert!(pop3_trash_mail(&e.db, &id, false).is_err());
+        assert_eq!((folder_of(&e, &id), marked(&e, &id)), (Some(e.inbox.clone()), false));
+    }
+
+    #[test]
+    fn empty_trash_marks_all_uidls() {
+        let e = env();
+        let first = mail(&e, &e.trash, "<a@studio-halde.example>");
+        let second = mail(&e, &e.trash, "<b@studio-halde.example>");
+        let kept = mail(&e, &e.inbox, "<c@studio-halde.example>");
+        assert_eq!(pop3_empty_folder(&e.db, &e.account, "trash"), Ok(2));
+        for id in [&first, &second] {
+            assert_eq!((folder_of(&e, id), marked(&e, id), files_exist(&e, id).1), (None, true, false));
+        }
+        assert_eq!((marked(&e, &kept), files_exist(&e, &kept)), (false, (true, true)));
+        assert_eq!((counts(&e, &e.trash), queued(&e)), ((0, 0), 0));
+        assert_eq!(pop3_empty_folder(&e.db, &e.account, "trash"), Ok(0));
+        assert!(pop3_empty_folder(&e.db, &e.account, "drafts").is_err());
+    }
+
+    #[test]
+    fn a_twin_in_the_target_folder_keeps_both_mails() {
+        let e = env();
+        let ids: Vec<String> = (0..3)
+            .map(|_| {
+                let id = mail(&e, &e.inbox, "<a@studio-halde.example>");
+                pop3_trash_mail(&e.db, &id, false).unwrap();
+                id
+            })
+            .collect();
+        for id in &ids {
+            assert_eq!(folder_of(&e, id), Some(e.trash.clone()));
+        }
+        let synthetic: i64 = e.db.lock_db()
+            .query_row("SELECT COUNT(DISTINCT uid) FROM mails WHERE uid > 0", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!((synthetic, counts(&e, &e.trash)), (2, (3, 3)));
+
+        move_mail_locally(&e.db, &ids[1], &e.inbox).unwrap();
+        move_mail_locally(&e.db, &ids[2], &e.inbox).unwrap();
+        pop3_archive_mail(&e.db, &ids[2]).unwrap();
+        assert_eq!(folder_of(&e, &ids[1]), Some(e.inbox.clone()));
+        assert_eq!(folder_of(&e, &ids[2]), Some(e.archive.clone()));
+        let uid: Option<i64> = e.db.lock_db()
+            .query_row("SELECT uid FROM mails WHERE id = ?1", [&ids[2]], |r| r.get(0))
+            .unwrap();
+        assert_eq!(uid, None);
     }
 }

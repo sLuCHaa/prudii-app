@@ -7,7 +7,6 @@ pub(crate) mod test_server;
 pub use client::{connect, Pop3Client, Pop3Session, MAX_MESSAGE_BYTES};
 
 /// Only for permanent deletes by the user: the next sync may then remove the server copy.
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn mark_locally_deleted(
     conn: &rusqlite::Connection,
     account_id: &str,
