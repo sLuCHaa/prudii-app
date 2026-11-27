@@ -181,7 +181,6 @@ export function AccountWizard() {
       const result = await startOAuth(provider.id);
 
       setEmail(result.email);
-      setPassword(result.refresh_token);
 
       setStep("testing");
       setTestStatus(t("wizard.creatingAccount"));
@@ -343,7 +342,7 @@ export function AccountWizard() {
               onSmtpHostChange={setSmtpHost}
               onSmtpPortChange={setSmtpPort}
               onSmtpSecurityChange={setSmtpSecurity}
-              onProtocolChange={setProtocol}
+              onProtocolChange={(v) => { setProtocol(v); setTestError(null); }}
               onPop3HostChange={setPop3Host}
               onPop3PortChange={setPop3Port}
               onIncomingSecurityChange={setIncomingSecurity}

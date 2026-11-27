@@ -363,6 +363,39 @@ describe("account wizard submit", () => {
   });
 });
 
+describe("account wizard switching after a failed attempt", () => {
+  async function failGoogleSignIn() {
+    const token = crypto.randomUUID();
+    vi.mocked(startOAuth).mockResolvedValue({ email: EMAIL, refresh_token: token } as never);
+    createAccountMock.mockRejectedValueOnce("database is locked");
+    open("google");
+    click(button(i18n.t("wizard.signInWith", { provider: "Google" })));
+    await flush();
+    expect(host.textContent).toContain("database is locked");
+    return token;
+  }
+
+  it("never offers the OAuth token as a POP3 password", async () => {
+    await failGoogleSignIn();
+    choosePop3();
+    expect(input("input[type=password]").value).toBe("");
+  });
+
+  it("never offers the OAuth token in the password fallback", async () => {
+    await failGoogleSignIn();
+    click(button(i18n.t("wizard.usePassword")));
+    expect(input("input[type=password]").value).toBe("");
+  });
+
+  it("drops the old error when the protocol is switched", async () => {
+    await failGoogleSignIn();
+    choosePop3();
+    expect(host.textContent).not.toContain("database is locked");
+    click(button("IMAP"));
+    expect(host.textContent).not.toContain("database is locked");
+  });
+});
+
 describe("WizardStepDone folder count", () => {
   const render = (folderCount: number) =>
     act(() =>
