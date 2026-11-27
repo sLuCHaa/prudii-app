@@ -14,6 +14,7 @@ vi.mock("../components/ui/DialogProvider", () => ({ useDialog: () => ({ danger }
 
 import { useMailDeleteGuard } from "./useMailDeleteGuard";
 import { useAppStore } from "../stores/appStore";
+import { isAskingServerDelete } from "../lib/pop3Delete";
 
 const account = (id: string, incoming_protocol: "imap" | "pop3") =>
   ({ id, email: "anna@studio-halde.example", incoming_protocol, pop3_delete_with_local: true }) as Account;
@@ -27,7 +28,11 @@ function Probe({ index }: { index: number }) {
   return null;
 }
 
-const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 5)); });
+// The warning's lock is released by a later timer, which a fixed wait can overtake.
+const settle = () => act(async () => {
+  await new Promise((r) => setTimeout(r));
+  await vi.waitFor(() => expect(isAskingServerDelete()).toBe(false));
+});
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
