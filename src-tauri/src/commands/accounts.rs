@@ -656,6 +656,9 @@ fn pop3_error_kind(error: &Pop3Error) -> &'static str {
         Pop3Error::NoUidl => "no-uidl",
         Pop3Error::Locked(_) => "locked",
         Pop3Error::TooLarge(_) => "too-large",
+        Pop3Error::Database(_) => "database",
+        Pop3Error::Storage(_) => "storage",
+        Pop3Error::NoInbox => "no-inbox",
     }
 }
 

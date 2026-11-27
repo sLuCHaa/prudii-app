@@ -117,6 +117,7 @@ impl Database {
                 let _ = conn.execute_batch(&format!("ALTER TABLE accounts ADD COLUMN {column};"));
             }
         }
+        let _ = conn.execute_batch("ALTER TABLE pop3_uidls ADD COLUMN server TEXT;");
 
         let _ = conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS ai_cache (
