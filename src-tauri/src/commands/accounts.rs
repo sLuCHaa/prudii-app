@@ -320,7 +320,7 @@ pub fn create_account(
     // Stored in the system credential manager (never as plaintext in the DB). A failed
     // persist keeps the account usable this session via the in-memory cache, so the row stays.
     if credentials::store_password(&account.id, &request.password).is_err() {
-        log::warn!("[accounts] Password for {} not persisted, session cache only", account.id);
+        log::warn!("[accounts] Password for the new account not persisted, session cache only");
     }
 
     Ok(account)
@@ -1226,6 +1226,7 @@ mod pop3_account_tests {
 
 #[cfg(test)]
 mod pop3_connection_tests {
+    use std::sync::OnceLock;
     use std::time::Duration;
 
     use super::{
@@ -1239,14 +1240,27 @@ mod pop3_connection_tests {
     const CAPA: (&str, &str) = ("CAPA", "+OK\r\nUIDL\r\n.\r\n");
     const EMAIL: &str = "anna@studio-halde.example";
     const USER: (&str, &str) = ("USER anna@studio-halde.example", "+OK\r\n");
-    const PASS_OK: (&str, &str) = ("PASS secret", "+OK logged in\r\n");
+
+    fn password() -> &'static str {
+        static VALUE: OnceLock<String> = OnceLock::new();
+        VALUE.get_or_init(|| uuid::Uuid::new_v4().simple().to_string())
+    }
+
+    fn pass_line() -> &'static str {
+        static LINE: OnceLock<String> = OnceLock::new();
+        LINE.get_or_init(|| format!("PASS {}", password()))
+    }
+
+    fn pass_ok() -> (&'static str, &'static str) {
+        (pass_line(), "+OK logged in\r\n")
+    }
 
     async fn run(steps: Vec<(&'static str, &'static str)>) -> Result<Pop3TestResult, String> {
         let mut script = vec![GREETING, CAPA];
         script.extend(steps);
         let (stream, server) = scripted(script);
         let client = Pop3Client::from_stream(stream).await.expect("greeting");
-        let result = test_pop3_connection_with_client(client, EMAIL, "secret").await;
+        let result = test_pop3_connection_with_client(client, EMAIL, password()).await;
         server.await.expect("server script");
         result
     }
@@ -1269,7 +1283,7 @@ mod pop3_connection_tests {
     async fn pop3_test_reports_message_count() {
         let result = run(vec![
             USER,
-            PASS_OK,
+            pass_ok(),
             ("UIDL", "+OK\r\n1 a1\r\n2 b2\r\n.\r\n"),
             ("QUIT", "+OK bye\r\n"),
         ])
@@ -1285,7 +1299,7 @@ mod pop3_connection_tests {
     async fn pop3_test_reports_no_uidl() {
         let result = run(vec![
             USER,
-            PASS_OK,
+            pass_ok(),
             ("UIDL", "-ERR unknown command\r\n"),
             ("QUIT", "+OK bye\r\n"),
         ])
@@ -1295,13 +1309,13 @@ mod pop3_connection_tests {
 
     #[tokio::test]
     async fn pop3_test_reports_auth_error() {
-        let result = run(vec![USER, ("PASS secret", "-ERR [AUTH] invalid\r\n")]).await;
+        let result = run(vec![USER, (pass_line(), "-ERR [AUTH] invalid\r\n")]).await;
         assert_eq!(result.err().as_deref(), Some("POP3_AUTH"));
     }
 
     #[tokio::test]
     async fn pop3_test_reports_locked_maildrop() {
-        let result = run(vec![USER, ("PASS secret", "-ERR [IN-USE] maildrop locked\r\n")]).await;
+        let result = run(vec![USER, (pass_line(), "-ERR [IN-USE] maildrop locked\r\n")]).await;
         assert_eq!(result.err().as_deref(), Some("POP3_LOCKED"));
     }
 
@@ -1311,14 +1325,14 @@ mod pop3_connection_tests {
             "-ERR [LOGIN-DELAY] wait a few minutes\r\n",
             "-ERR [SYS/TEMP] try again later\r\n",
         ] {
-            let error = run(vec![USER, ("PASS secret", reply)]).await.err().unwrap();
+            let error = run(vec![USER, (pass_line(), reply)]).await.err().unwrap();
             assert_eq!(error, "the server refused the login for now, try again later");
         }
     }
 
     #[tokio::test]
     async fn pop3_test_reports_other_failures_readably() {
-        let error = run(vec![USER, ("PASS secret", "<DROP>")]).await.err().unwrap();
+        let error = run(vec![USER, (pass_line(), "<DROP>")]).await.err().unwrap();
         assert_eq!(error, "connection error: connection closed by the server");
     }
 
@@ -1329,7 +1343,7 @@ mod pop3_connection_tests {
             Duration::from_millis(50),
             Pop3Client::from_stream(stream),
             EMAIL,
-            "secret",
+            password(),
         )
         .await;
         assert_eq!(result.err().as_deref(), Some("the server did not respond in time"));
@@ -1343,7 +1357,7 @@ mod pop3_connection_tests {
             110,
             "none".into(),
             EMAIL.into(),
-            "secret".into(),
+            password().into(),
         )
         .await;
         assert_eq!(
