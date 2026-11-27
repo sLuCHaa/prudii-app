@@ -9,6 +9,7 @@ import {
   clampDeleteDays,
   defaultPop3Port,
   describePop3Rule,
+  needsOAuth,
   ruleFromAccount,
   ruleToSettings,
   supportsPop3,
@@ -165,5 +166,20 @@ describe("accountSetupError", () => {
   it("passes other errors through", async () => {
     const t = await german();
     expect(accountSetupError(t, "weird failure", "pop3", [])).toBe("weird failure");
+  });
+});
+
+describe("needsOAuth", () => {
+  it("asks Google and Microsoft IMAP accounts to sign in again", () => {
+    expect(needsOAuth({ provider: "google", incoming_protocol: "imap" })).toBe(true);
+    expect(needsOAuth({ provider: "microsoft", incoming_protocol: "imap" })).toBe(true);
+  });
+
+  it("asks POP3 accounts for a password", () => {
+    expect(needsOAuth({ provider: "google", incoming_protocol: "pop3" })).toBe(false);
+  });
+
+  it("asks custom accounts for a password", () => {
+    expect(needsOAuth({ provider: "custom", incoming_protocol: "imap" })).toBe(false);
   });
 });

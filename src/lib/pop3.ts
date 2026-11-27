@@ -20,6 +20,10 @@ export function supportsPop3(preset: ProviderPreset): boolean {
   return preset.id === "custom" || !!preset.pop3Host;
 }
 
+export function needsOAuth(account: Pick<Account, "provider" | "incoming_protocol">): boolean {
+  return account.incoming_protocol !== "pop3" && (account.provider === "google" || account.provider === "microsoft");
+}
+
 export function defaultPop3Port(security: IncomingSecurity): number {
   return security === "ssl" ? 995 : 110;
 }
