@@ -1573,18 +1573,18 @@
     "title": "Nouveautés de Prudii {{version}}",
     "subtitle": "Voici ce qui a changé depuis votre dernière mise à jour.",
     "done": "Compris",
-    "v1_9_3": {
-      "priority": {
-        "title": "Envoyer avec priorité haute",
-        "text": "Dans le menu du bouton Envoyer, vous marquez un e-mail comme important. Outlook, Apple Mail et Thunderbird l'affichent ainsi au destinataire."
+    "v1_9_4": {
+      "accounts": {
+        "title": "Comptes en POP3",
+        "text": "En ajoutant un compte, vous pouvez désormais choisir POP3. Seule la boîte de réception est téléchargée et la connexion se fait uniquement par mot de passe. Les comptes Microsoft ne peuvent pas être configurés ainsi."
       },
-      "important": {
-        "title": "Repérer les e-mails importants",
-        "text": "Les nouveaux e-mails que l'expéditeur a marqués comme importants portent un point d'exclamation rouge dans la liste et dans le message ouvert."
+      "serverRule": {
+        "title": "E-mails sur le serveur",
+        "text": "Pour chaque compte POP3, vous choisissez si les e-mails restent sur le serveur ou y sont supprimés juste après le téléchargement ou après quelques jours."
       },
-      "starredCount": {
-        "title": "Compteur à côté de Suivis",
-        "text": "Si vous le souhaitez, la barre latérale indique combien d'e-mails portent une étoile. Vous l'activez dans les paramètres de l'application."
+      "serverDelete": {
+        "title": "Suppression définitive",
+        "text": "Si vous le souhaitez, les e-mails que vous supprimez définitivement dans Prudii sont aussi supprimés sur le serveur. C'est désactivé au départ et Prudii demande confirmation."
       }
     }
   },

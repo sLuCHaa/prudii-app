@@ -1571,18 +1571,18 @@
     "title": "Prudii {{version}} 新功能",
     "subtitle": "自上次更新以来的新变化。",
     "done": "知道了",
-    "v1_9_3": {
-      "priority": {
-        "title": "以高优先级发送",
-        "text": "在“发送”按钮的菜单中可将邮件标记为重要。Outlook、Apple Mail 和 Thunderbird 会向收件人这样显示。"
+    "v1_9_4": {
+      "accounts": {
+        "title": "支持 POP3 账户",
+        "text": "添加账户时现在可以选择 POP3。仅下载收件箱，且只能用密码登录。Microsoft 账户无法以这种方式设置。"
       },
-      "important": {
-        "title": "一眼认出重要邮件",
-        "text": "发件人标记为重要的新邮件会在列表和打开的邮件中显示红色感叹号。"
+      "serverRule": {
+        "title": "服务器上的邮件",
+        "text": "每个 POP3 账户都可以单独设置：邮件保留在服务器上，或在下载后立即删除，或几天后删除。"
       },
-      "starredCount": {
-        "title": "“已加星标”旁的计数",
-        "text": "侧边栏可以显示有多少封邮件加了星标。在应用设置中开启。"
+      "serverDelete": {
+        "title": "永久删除",
+        "text": "如有需要，在 Prudii 中永久删除的邮件也会从服务器上删除。此功能默认关闭，删除前 Prudii 会先询问。"
       }
     }
   },

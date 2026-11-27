@@ -1573,18 +1573,18 @@
     "title": "Novedades de Prudii {{version}}",
     "subtitle": "Esto es lo que ha cambiado desde tu última actualización.",
     "done": "Entendido",
-    "v1_9_3": {
-      "priority": {
-        "title": "Enviar con prioridad alta",
-        "text": "En el menú del botón Enviar marcas un correo como importante. Outlook, Apple Mail y Thunderbird lo muestran así al destinatario."
+    "v1_9_4": {
+      "accounts": {
+        "title": "Cuentas por POP3",
+        "text": "Al añadir una cuenta ahora puedes elegir POP3. Solo se descarga la bandeja de entrada y el inicio de sesión funciona únicamente con contraseña. Las cuentas de Microsoft no se pueden configurar así."
       },
-      "important": {
-        "title": "Reconoce los correos importantes",
-        "text": "Los correos nuevos que el remitente marcó como importantes llevan un signo de exclamación rojo en la lista y en el mensaje abierto."
+      "serverRule": {
+        "title": "Correos en el servidor",
+        "text": "En cada cuenta POP3 decides si los correos se quedan en el servidor o se eliminan allí justo después de la descarga o tras unos días."
       },
-      "starredCount": {
-        "title": "Contador junto a Destacados",
-        "text": "Si quieres, la barra lateral muestra cuántos correos tienen estrella. Lo activas en la configuración de la app."
+      "serverDelete": {
+        "title": "Eliminación definitiva",
+        "text": "Si quieres, los correos que eliminas definitivamente en Prudii también se eliminan del servidor. Al principio está desactivado y Prudii pregunta antes."
       }
     }
   },
