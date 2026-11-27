@@ -78,16 +78,17 @@ fn dedupe_thread_copies(mails: Vec<Mail>) -> Vec<Mail> {
 }
 
 /// Deduplicate mails in two passes:
-/// 1. By message_id (same account/folder duplicates)
+/// 1. By message_id (same account/folder duplicates), never for POP3 rows
 /// 2. By subject+date+from (cross-account duplicates, e.g. same email in Gmail + IMAP)
-pub(crate) fn dedup_mails(mails: Vec<Mail>) -> Vec<Mail> {
+pub(crate) fn dedup_mails(mails: Vec<Mail>, pop3_accounts: &HashSet<String>) -> Vec<Mail> {
     let original_count = mails.len();
 
     // Pass 1: dedup by message_id (within same sync source). Bracket-normalized:
     // the same message can be stored as "<x>" by one sync path and "x" by another.
     let mut seen_ids = HashSet::new();
     let pass1: Vec<Mail> = mails.into_iter().filter(|m| {
-        let key = if m.message_id.is_empty() {
+        // POP3 twins are separate local mails; folding them would hide stored rows.
+        let key = if m.message_id.is_empty() || pop3_accounts.contains(&m.account_id) {
             m.id.clone()
         } else {
             m.message_id.trim_matches(|c| c == '<' || c == '>').to_string()
@@ -125,6 +126,12 @@ pub(crate) fn dedup_mails(mails: Vec<Mail>) -> Vec<Mail> {
     result
 }
 
+pub(crate) fn pop3_account_ids(conn: &rusqlite::Connection) -> Result<HashSet<String>, String> {
+    conn.prepare("SELECT id FROM accounts WHERE incoming_protocol = 'pop3'")
+        .and_then(|mut stmt| stmt.query_map([], |row| row.get(0))?.collect())
+        .map_err(|e| e.to_string())
+}
+
 /// API type for an account â€” determines which backend to use.
 pub(crate) enum ApiType {
     Gmail,
@@ -156,7 +163,7 @@ fn count_starred(conn: &rusqlite::Connection) -> Result<u32, String> {
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
-    Ok(dedup_mails(mails).len() as u32)
+    Ok(dedup_mails(mails, &pop3_account_ids(conn)?).len() as u32)
 }
 
 #[tauri::command(async)]
@@ -377,7 +384,7 @@ pub fn list_mails_inner(conn: &rusqlite::Connection, folder_id: &str, limit: Opt
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
 
-    Ok(dedup_mails(mails))
+    Ok(dedup_mails(mails, &pop3_account_ids(conn)?))
 }
 
 #[tauri::command(async)]
@@ -404,7 +411,7 @@ pub fn list_all_inbox_mails(db: State<'_, Database>, limit: Option<u32>, offset:
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
 
-    Ok(dedup_mails(mails))
+    Ok(dedup_mails(mails, &pop3_account_ids(&conn)?))
     })
 }
 
@@ -474,7 +481,7 @@ pub fn list_filtered_mails(
         }
     };
 
-    Ok(dedup_mails(mails))
+    Ok(dedup_mails(mails, &pop3_account_ids(&conn)?))
     })
 }
 
@@ -1232,34 +1239,47 @@ fn pop3_archive_mail(db: &Database, mail_id: &str) -> Result<(), String> {
     move_mail_locally(db, mail_id, &archive)
 }
 
-/// To the trash first; from the trash (or with `permanent`) the mail is deleted for good.
+/// To the trash first, from the trash for good. `permanent` only removes drafts that never came from a server.
 fn pop3_trash_mail(db: &Database, mail_id: &str, permanent: bool) -> Result<(), String> {
-    let found = db.lock_db().query_row(
-        "SELECT m.account_id, m.folder_id, (SELECT id FROM folders WHERE account_id = m.account_id AND folder_type = 'trash' LIMIT 1)
+    match pop3_purge_or_target(db, mail_id, permanent)? {
+        Some(trash) => move_mail_locally(db, mail_id, &trash),
+        None => Ok(()),
+    }
+}
+
+/// Checks and deletes in one transaction; returns the trash folder when the mail has to move there instead.
+fn pop3_purge_or_target(db: &Database, mail_id: &str, permanent: bool) -> Result<Option<String>, String> {
+    let conn = db.lock_db();
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+    let found = tx.query_row(
+        "SELECT m.account_id, m.folder_id, (SELECT id FROM folders WHERE account_id = m.account_id AND folder_type = 'trash' LIMIT 1),
+             EXISTS(SELECT 1 FROM pop3_uidls WHERE mail_id = m.id)
          FROM mails m WHERE m.id = ?1",
         rusqlite::params![mail_id],
-        |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, Option<String>>(2)?)),
+        |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, Option<String>>(2)?, row.get::<_, bool>(3)?)),
     );
-    let (account_id, current, trash) = match found {
+    let (account_id, current, trash, has_uidl) = match found {
         Ok(found) => found,
-        Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(()),
+        Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
         Err(e) => return Err(format!("Mail not found: {}", e)),
     };
-    if !permanent {
-        let trash = trash.ok_or("No trash folder found")?;
-        if trash != current {
-            return move_mail_locally(db, mail_id, &trash);
+    let in_trash = trash.as_deref() == Some(current.as_str());
+    // A raw source outlives the UIDL row of a mail that has left the server.
+    let local_draft = permanent && !has_uidl && !crate::pop3::store::has_source(&db.data_dir, mail_id);
+    if !local_draft {
+        if !in_trash {
+            return trash.map(Some).ok_or_else(|| "No trash folder found".to_string());
+        }
+        if permanent {
+            return Ok(None);
         }
     }
     let ids = [mail_id.to_string()];
-    {
-        let conn = db.lock_db();
-        let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
-        pop3_delete_rows(&tx, &account_id, &ids).map_err(|e| e.to_string())?;
-        tx.commit().map_err(|e| e.to_string())?;
-    }
+    pop3_delete_rows(&tx, &account_id, &ids).map_err(|e| e.to_string())?;
+    tx.commit().map_err(|e| e.to_string())?;
+    drop(conn);
     pop3_remove_files(db, &ids);
-    Ok(())
+    Ok(None)
 }
 
 fn pop3_empty_folder(db: &Database, account_id: &str, folder_type: &str) -> Result<u32, String> {
@@ -2513,13 +2533,34 @@ async fn copy_into_pop3(db: &Database, plan: &CopyPlan, dest_folder_id: &str, ra
     }
     let new_id = uuid::Uuid::new_v4().to_string();
     let stored = store_pop3_copy(db, plan, dest_folder_id, &new_id, raw).await;
-    if !matches!(stored, Ok(true)) {
-        let removed = db.lock_db().execute("DELETE FROM mails WHERE id = ?1", rusqlite::params![new_id]);
-        if removed.is_ok() {
-            pop3_remove_files(db, std::slice::from_ref(&new_id));
-        }
+    if !matches!(stored, Ok(true)) && matches!(pop3_discard_copy(db, dest_folder_id, &new_id), Ok(true)) {
+        pop3_remove_files(db, std::slice::from_ref(&new_id));
     }
     stored.map(|_| ()).map_err(|e| format!("Failed to copy mail to the other account: {}", e))
+}
+
+/// False when a sync has claimed the row meanwhile: it may then be the only copy left.
+fn pop3_discard_copy(db: &Database, dest_folder_id: &str, new_id: &str) -> rusqlite::Result<bool> {
+    let conn = db.lock_db();
+    let tx = conn.unchecked_transaction()?;
+    let claimed: bool = tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM pop3_uidls WHERE mail_id = ?1)",
+        rusqlite::params![new_id],
+        |row| row.get(0),
+    )?;
+    if claimed {
+        // A failed copy has not counted its row yet.
+        tx.execute(
+            "UPDATE folders SET total_count = total_count + 1,
+                 unread_count = unread_count + (SELECT is_read = 0 FROM mails WHERE id = ?2)
+             WHERE id = ?1 AND EXISTS(SELECT 1 FROM mails WHERE id = ?2)",
+            rusqlite::params![dest_folder_id, new_id],
+        )?;
+    } else {
+        tx.execute("DELETE FROM mails WHERE id = ?1", rusqlite::params![new_id])?;
+    }
+    tx.commit()?;
+    Ok(!claimed)
 }
 
 /// False when an identical mail was already there and nothing new is to be kept.
@@ -3006,7 +3047,7 @@ pub fn get_thread_mails_inner(conn: &rusqlite::Connection, mail_id: &str) -> Res
         return query_single_mail(conn, mail_id).map(|m| vec![m]);
     }
 
-    let mut result = dedup_mails(mails);
+    let mut result = dedup_mails(mails, &pop3_account_ids(conn)?);
     // Stable, so of two copies with the same date the opened account's stays ahead.
     result.sort_by(|a, b| a.date.cmp(&b.date));
     let mut result = dedupe_thread_copies(result);
@@ -3355,7 +3396,7 @@ pub fn list_combined_folder_mails(db: State<'_, Database>, folder_type: String, 
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
 
-    Ok(dedup_mails(mails))
+    Ok(dedup_mails(mails, &pop3_account_ids(&conn)?))
     })
 }
 
@@ -4558,7 +4599,7 @@ mod dedup_mails_tests {
             mail("1", "<abc@example.com>", "Hi", "2026-01-01T10:00:00Z", "a@x.de"),
             mail("2", "abc@example.com", "Hi", "2026-01-01T10:00:00Z", "a@x.de"),
         ];
-        let out = dedup_mails(mails);
+        let out = dedup_mails(mails, &Default::default());
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].id, "1", "first (earliest) copy wins");
     }
@@ -4569,7 +4610,7 @@ mod dedup_mails_tests {
             mail("1", "<a@x>", "One", "2026-01-01T10:00:00Z", "a@x.de"),
             mail("2", "<b@x>", "Two", "2026-01-01T11:00:00Z", "a@x.de"),
         ];
-        assert_eq!(dedup_mails(mails).len(), 2);
+        assert_eq!(dedup_mails(mails, &Default::default()).len(), 2);
     }
 
     #[test]
@@ -4579,7 +4620,7 @@ mod dedup_mails_tests {
             mail("1", "", "Draft", "2026-01-01T10:00:00Z", "a@x.de"),
             mail("2", "", "Draft", "2026-01-02T10:00:00Z", "a@x.de"),
         ];
-        assert_eq!(dedup_mails(mails).len(), 2);
+        assert_eq!(dedup_mails(mails, &Default::default()).len(), 2);
     }
 
     #[test]
@@ -4591,7 +4632,7 @@ mod dedup_mails_tests {
         a.account_id = "acc1".into();
         let mut b = mail("2", "<b@y>", "Same", "2026-01-01T10:00:00Z", "a@x.de");
         b.account_id = "acc2".into();
-        assert_eq!(dedup_mails(vec![a, b]).len(), 1);
+        assert_eq!(dedup_mails(vec![a, b], &Default::default()).len(), 1);
     }
 
     #[test]
@@ -4602,7 +4643,7 @@ mod dedup_mails_tests {
         a.subject = "".into();
         let mut b = mail("2", "<b@x>", "", "2026-01-01T10:00:00Z", "");
         b.subject = "".into();
-        assert_eq!(dedup_mails(vec![a, b]).len(), 2);
+        assert_eq!(dedup_mails(vec![a, b], &Default::default()).len(), 2);
     }
 }
 
@@ -5004,7 +5045,7 @@ mod list_tests {
         let out = dedup_mails(vec![
             mail("a1", "acc1", "Rechnung", D, "me@example.com"),
             mail("a2", "acc1", "Rechnung", D, "me@example.com"),
-        ]);
+        ], &Default::default());
         assert_eq!(out.len(), 2);
     }
 
@@ -5013,7 +5054,7 @@ mod list_tests {
         let out = dedup_mails(vec![
             mail("a1", "acc1", "Rechnung", D, "me@example.com"),
             mail("b1", "acc2", "Rechnung", D, "me@example.com"),
-        ]);
+        ], &Default::default());
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].id, "a1", "the first copy wins");
     }
@@ -5024,7 +5065,7 @@ mod list_tests {
             mail("a1", "acc1", "Rechnung", D, "me@example.com"),
             mail("b1", "acc2", "Rechnung", D, "me@example.com"),
             mail("a2", "acc1", "Rechnung", D, "me@example.com"),
-        ]);
+        ], &Default::default());
         assert_eq!(out.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(), vec!["a1", "a2"]);
     }
 
@@ -5032,7 +5073,7 @@ mod list_tests {
     fn pass_one_still_folds_identical_message_ids() {
         let mut twin = mail("a2", "acc1", "Rechnung", D, "me@example.com");
         twin.message_id = "a1".into();
-        let out = dedup_mails(vec![mail("a1", "acc1", "Rechnung", D, "me@example.com"), twin]);
+        let out = dedup_mails(vec![mail("a1", "acc1", "Rechnung", D, "me@example.com"), twin], &Default::default());
         assert_eq!(out.len(), 1);
     }
 
@@ -5041,7 +5082,7 @@ mod list_tests {
         let out = dedup_mails(vec![
             mail("a1", "acc1", "(No Subject)", D, "me@example.com"),
             mail("b1", "acc2", "(No Subject)", D, "me@example.com"),
-        ]);
+        ], &Default::default());
         assert_eq!(out.len(), 2);
     }
 
@@ -5479,6 +5520,36 @@ mod pop3_tests {
     }
 
     #[tokio::test]
+    async fn a_failed_copy_keeps_a_mail_a_sync_has_claimed_meanwhile() {
+        let t = target();
+        t.db.lock_db()
+            .execute_batch(
+                "CREATE TRIGGER claim AFTER INSERT ON mails BEGIN
+                     INSERT INTO pop3_uidls (account_id, uidl, mail_id) VALUES (NEW.account_id, 'u1', NEW.id);
+                 END;
+                 CREATE TRIGGER fail BEFORE UPDATE OF is_starred ON mails BEGIN SELECT RAISE(ABORT, 'disk full'); END;",
+            )
+            .unwrap();
+        let bytes = raw("Hallo");
+        assert!(copy(&t, &bytes).await.is_err());
+
+        let ids = rows(&t);
+        assert_eq!(ids.len(), 1);
+        assert_eq!(crate::pop3::store::read_source(&t.db.data_dir, &ids[0]).unwrap(), bytes);
+        assert_eq!(counts(&t), (1, 0));
+    }
+
+    #[tokio::test]
+    async fn a_failed_copy_leaves_nothing_behind() {
+        let t = target();
+        t.db.lock_db()
+            .execute_batch("CREATE TRIGGER fail BEFORE UPDATE OF is_starred ON mails BEGIN SELECT RAISE(ABORT, 'disk full'); END;")
+            .unwrap();
+        assert!(copy(&t, &raw("Hallo")).await.is_err());
+        assert_eq!((rows(&t).len(), sources(&t), counts(&t)), (0, 0, (0, 0)));
+    }
+
+    #[tokio::test]
     async fn pop3_copy_of_a_different_twin_keeps_both_mails() {
         let t = target();
         let (first, second) = (raw("Erste Fassung"), raw("Zweite Fassung"));
@@ -5683,15 +5754,48 @@ mod pop3_action_tests {
     fn permanent_delete_marks_uidl() {
         let e = env();
         let trashed = mail(&e, &e.trash, "<a@studio-halde.example>");
-        let draft = mail(&e, &e.inbox, "<b@studio-halde.example>");
         pop3_trash_mail(&e.db, &trashed, false).unwrap();
-        pop3_trash_mail(&e.db, &draft, true).unwrap();
-        for id in [&trashed, &draft] {
-            assert_eq!(folder_of(&e, id), None);
-            assert_eq!((marked(&e, id), files_exist(&e, id)), (true, (true, false)));
-        }
-        assert_eq!((counts(&e, &e.trash), counts(&e, &e.inbox), queued(&e)), ((0, 0), (0, 0), 0));
+        assert_eq!(folder_of(&e, &trashed), None);
+        assert_eq!((marked(&e, &trashed), files_exist(&e, &trashed)), (true, (true, false)));
+        assert_eq!((counts(&e, &e.trash), queued(&e)), ((0, 0), 0));
         assert_eq!(pop3_trash_mail(&e.db, &trashed, false), Ok(()));
+    }
+
+    #[test]
+    fn replacing_a_draft_never_destroys_a_received_mail() {
+        let e = env();
+        let fetched = mail(&e, &e.inbox, "<a@studio-halde.example>");
+        let pruned = mail(&e, &e.inbox, "<b@studio-halde.example>");
+        e.db.lock_db().execute("DELETE FROM pop3_uidls WHERE mail_id = ?1", [&pruned]).unwrap();
+        for id in [&fetched, &pruned] {
+            for _ in 0..2 {
+                pop3_trash_mail(&e.db, id, true).unwrap();
+                assert_eq!(folder_of(&e, id), Some(e.trash.clone()));
+                assert_eq!(files_exist(&e, id), (true, true));
+            }
+        }
+        assert!(!marked(&e, &fetched));
+        assert_eq!((counts(&e, &e.trash), counts(&e, &e.inbox)), ((2, 2), (0, 0)));
+    }
+
+    #[test]
+    fn replacing_a_local_draft_removes_it() {
+        let e = env();
+        let draft = {
+            let conn = e.db.lock_db();
+            let drafts = seed_folder(&conn, &e.account, "drafts");
+            seed_mail(&conn, &SeedMail { account_id: &e.account, folder_id: &drafts, ..Default::default() })
+        };
+        pop3_trash_mail(&e.db, &draft, true).unwrap();
+        assert_eq!(folder_of(&e, &draft), None);
+    }
+
+    #[test]
+    fn purging_checks_the_folder_itself() {
+        let e = env();
+        let id = mail(&e, &e.inbox, "<a@studio-halde.example>");
+        assert_eq!(pop3_purge_or_target(&e.db, &id, false), Ok(Some(e.trash.clone())));
+        assert_eq!((folder_of(&e, &id), marked(&e, &id)), (Some(e.inbox.clone()), false));
     }
 
     #[test]
@@ -5726,6 +5830,20 @@ mod pop3_action_tests {
         assert_eq!((counts(&e, &e.trash), queued(&e)), ((0, 0), 0));
         assert_eq!(pop3_empty_folder(&e.db, &e.account, "trash"), Ok(0));
         assert!(pop3_empty_folder(&e.db, &e.account, "drafts").is_err());
+    }
+
+    #[test]
+    fn pop3_twins_stay_visible_and_match_the_counter() {
+        let e = env();
+        let first = mail(&e, &e.inbox, "<a@studio-halde.example>");
+        let second = mail(&e, &e.inbox, "<other@studio-halde.example>");
+        let conn = e.db.lock_db();
+        conn.execute("UPDATE mails SET message_id = '<a@studio-halde.example>', uid = 7 WHERE id = ?1", [&second]).unwrap();
+        conn.execute("UPDATE mails SET is_starred = 1 WHERE id IN (?1, ?2)", [&first, &second]).unwrap();
+
+        let listed = list_mails_inner(&conn, &e.inbox, None, None, &None, None).unwrap();
+        assert_eq!(listed.len(), 2);
+        assert_eq!(count_starred(&conn), Ok(2));
     }
 
     #[test]

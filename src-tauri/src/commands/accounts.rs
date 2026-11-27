@@ -464,20 +464,25 @@ pub async fn delete_account(
 
     let _ = credentials::delete_password(&account_id);
 
+    delete_account_data(&db, &account_id)
+}
+
+fn delete_account_data(db: &Database, account_id: &str) -> Result<(), String> {
+    // A UIDL can outlive its mail row while its raw source waits for the server delete.
+    let mail_ids: Vec<String> = db
+        .lock_db()
+        .prepare(
+            "SELECT id FROM mails WHERE account_id = ?1
+             UNION SELECT mail_id FROM pop3_uidls WHERE account_id = ?1 AND mail_id IS NOT NULL",
+        )
+        .and_then(|mut stmt| {
+            stmt.query_map(rusqlite::params![account_id], |row| row.get(0))?
+                .collect::<rusqlite::Result<Vec<String>>>()
+        })
+        .map_err(|e| e.to_string())?;
+
     let attach_dir = db.data_dir.join("attachments");
     if attach_dir.exists() {
-        let conn = db.lock_db();
-        let mut stmt = conn
-            .prepare("SELECT id FROM mails WHERE account_id = ?1")
-            .map_err(|e| e.to_string())?;
-        let mail_ids: Vec<String> = stmt
-            .query_map(rusqlite::params![account_id], |row| row.get(0))
-            .map_err(|e| e.to_string())?
-            .filter_map(|r| r.ok())
-            .collect();
-        drop(stmt);
-        drop(conn);
-
         for mail_id in &mail_ids {
             let dir = attach_dir.join(mail_id);
             let _ = std::fs::remove_dir_all(&dir);
@@ -506,6 +511,8 @@ pub async fn delete_account(
             return Err(format!("Failed to delete account: {}", e));
         }
     }
+
+    crate::pop3::discard_orphan_sources(&conn, &db.data_dir, &mail_ids);
 
     // Reclaim disk space after bulk delete
     let _ = conn.execute_batch("VACUUM;");
@@ -1434,7 +1441,7 @@ mod pop3_connection_tests {
 #[cfg(test)]
 mod pop3_folder_tests {
     use super::{
-        insert_account, list_folders_inner, pop3_create_folder, pop3_delete_folder, pop3_rename_folder,
+        delete_account_data, insert_account, list_folders_inner, pop3_create_folder, pop3_delete_folder, pop3_rename_folder,
     };
     use crate::db::Database;
     use crate::models::{CreateAccountRequest, Folder};
@@ -1486,6 +1493,30 @@ mod pop3_folder_tests {
         std::fs::write(source, b"Subject: Angebot\r\n\r\nHallo Anna").unwrap();
         std::fs::create_dir_all(db.data_dir.join("attachments").join(&id)).unwrap();
         id
+    }
+
+    #[test]
+    fn deleting_a_pop3_account_removes_its_raw_sources() {
+        for with_attachment_dir in [true, false] {
+            let db = temp_db();
+            let account = pop3_account(&db);
+            let inbox = folders(&db, &account).into_iter().find(|f| f.folder_type == "inbox").unwrap().id;
+            let kept = stored_mail(&db, &account, &inbox, Some("u1"));
+            let local = stored_mail(&db, &account, &inbox, None);
+            let awaiting_server_delete = stored_mail(&db, &account, &inbox, Some("u2"));
+            db.lock_db().execute("DELETE FROM mails WHERE id = ?1", [&awaiting_server_delete]).unwrap();
+            if !with_attachment_dir {
+                std::fs::remove_dir_all(db.data_dir.join("attachments")).unwrap();
+            }
+
+            delete_account_data(&db, &account).unwrap();
+
+            for id in [&kept, &local, &awaiting_server_delete] {
+                assert!(!source_path(&db.data_dir, id).exists());
+            }
+            assert!(!db.data_dir.join("attachments").join(&kept).exists());
+            assert_eq!(count(&db, "SELECT COUNT(*) FROM mails"), 0);
+        }
     }
 
     #[test]

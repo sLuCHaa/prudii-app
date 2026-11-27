@@ -73,14 +73,14 @@ pub(crate) async fn sync_with_client<S: AsyncRead + AsyncWrite + Unpin>(
         if !seen.insert(server_ref) {
             continue;
         }
-        if let Some(&size) = sizes.get(&msg).filter(|&&size| size > MAX_MESSAGE_BYTES) {
-            skip_too_large(&mut report, server_ref, size);
+        if sizes.get(&msg).is_some_and(|&size| size > MAX_MESSAGE_BYTES) {
+            skip_too_large(&mut report);
             continue;
         }
         let raw = match client.retr(msg, MAX_MESSAGE_BYTES).await {
             Ok(raw) => raw,
-            Err(Pop3Error::TooLarge(size)) => {
-                skip_too_large(&mut report, server_ref, size);
+            Err(Pop3Error::TooLarge(_)) => {
+                skip_too_large(&mut report);
                 continue;
             }
             Err(e) => return Err(e),
@@ -117,17 +117,17 @@ pub(crate) async fn sync_with_client<S: AsyncRead + AsyncWrite + Unpin>(
     for (msg, uidl) in targets {
         let Some(mail_id) = mail_ids.get(uidl.as_str()) else { continue };
         if !store::has_source(data_dir, mail_id) {
-            log::warn!("POP3: raw source of mail {} missing, kept on server", mail_id);
+            log::warn!("POP3: raw source missing, kept on server");
             continue;
         }
         match client.dele(msg).await? {
             Ok(()) => deleted.push(uidl),
-            Err(text) => log::warn!("POP3: DELE {} refused: {}", msg, text),
+            Err(_) => log::warn!("POP3: DELE refused, message kept on server"),
         }
     }
 
-    if let Err(e) = client.quit().await {
-        log::warn!("POP3: QUIT failed, server deletes are retried next run: {}", e);
+    if client.quit().await.is_err() {
+        log::warn!("POP3: QUIT failed, server deletes are retried next run");
         return Ok(report);
     }
     match mark_server_deleted(db, &mailbox.id, &deleted) {
@@ -156,8 +156,8 @@ fn flush_database(db: &Database) -> Result<(), Pop3Error> {
     Ok(())
 }
 
-fn skip_too_large(report: &mut Pop3SyncReport, server_ref: &str, size: u64) {
-    log::warn!("POP3: message {} has {} bytes, left on the server", server_ref, size);
+fn skip_too_large(report: &mut Pop3SyncReport) {
+    log::warn!("POP3: a message is too large, left on the server");
     report.skipped_too_large += 1;
 }
 
@@ -183,8 +183,8 @@ async fn store_fetched(
     match outcome {
         InsertOutcome::Inserted(id) => {
             record_uidl(db, mailbox, server_ref, Some(&id))?;
-            if let Err(e) = crate::imap::store_body_and_attachments(db, &id, raw).await {
-                log::warn!("POP3: storing body and attachments of {} failed: {}", id, e);
+            if crate::imap::store_body_and_attachments(db, &id, raw).await.is_err() {
+                log::warn!("POP3: storing body and attachments of a message failed");
             }
             Ok(Some(id))
         }
@@ -194,10 +194,7 @@ async fn store_fetched(
                 let stored = store::read_source(data_dir, &existing).map_err(|e| Pop3Error::Storage(e.to_string()))?;
                 let same = stored == raw;
                 if !same {
-                    log::warn!(
-                        "POP3: message {} reuses the Message-ID of mail {}, left on the server",
-                        server_ref, existing
-                    );
+                    log::warn!("POP3: a message reuses the Message-ID of a stored mail, left on the server");
                 }
                 same
             } else {
@@ -211,7 +208,7 @@ async fn store_fetched(
             Ok(None)
         }
         InsertOutcome::NotStored => {
-            log::warn!("POP3: message {} could not be stored, left on the server", server_ref);
+            log::warn!("POP3: a message could not be stored, left on the server");
             remove_source(data_dir, &mail_id);
             Ok(None)
         }
