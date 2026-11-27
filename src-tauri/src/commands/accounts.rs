@@ -2,13 +2,17 @@ use crate::credentials;
 use crate::db::Database;
 use crate::gmail;
 use crate::outlook;
+use crate::pop3::{self, Pop3Client, Pop3Error, Pop3Security};
 use crate::commands::mails::POP3_NOT_SUPPORTED;
 use crate::models::{
     Account, CreateAccountRequest, Folder, UpdateAccountSettings, DEFAULT_INCOMING_PROTOCOL,
     DEFAULT_INCOMING_SECURITY, DEFAULT_POP3_DELETE_AFTER_DAYS, DEFAULT_POP3_DELETE_MODE,
     DEFAULT_POP3_DELETE_WITH_LOCAL,
 };
+use std::future::Future;
+use std::time::Duration;
 use tauri::State;
+use tokio::io::{AsyncRead, AsyncWrite};
 
 /// API type for an account — determines which backend to use for folder operations.
 enum FolderApiType { Gmail, Outlook, Imap, Pop3 }
@@ -561,6 +565,78 @@ pub async fn test_imap_connection(
         })
 }
 
+// The client only limits single reads, so a trickling server needs an overall deadline.
+const POP3_TEST_TIMEOUT: Duration = Duration::from_secs(90);
+
+#[derive(serde::Serialize)]
+pub struct Pop3TestResult {
+    pub message_count: u32,
+    pub supports_uidl: bool,
+}
+
+#[tauri::command]
+pub async fn test_pop3_connection(
+    host: String,
+    port: u16,
+    security: String,
+    email: String,
+    password: String,
+) -> Result<Pop3TestResult, String> {
+    let host = host.trim();
+    let security: Pop3Security = security.parse().map_err(|e: Pop3Error| e.to_string())?;
+    let connect = pop3::connect(host, port, security);
+    pop3_test_within(POP3_TEST_TIMEOUT, connect, email.trim(), &password)
+        .await
+        .inspect_err(|msg| log::warn!("POP3 connection test to {}:{} failed: {}", host, port, msg))
+}
+
+async fn pop3_test_within<S: AsyncRead + AsyncWrite + Unpin>(
+    limit: Duration,
+    connect: impl Future<Output = Result<Pop3Client<S>, Pop3Error>>,
+    email: &str,
+    password: &str,
+) -> Result<Pop3TestResult, String> {
+    let test = async {
+        let client = connect.await.map_err(pop3_test_error)?;
+        test_pop3_connection_with_client(client, email, password).await
+    };
+    tokio::time::timeout(limit, test)
+        .await
+        .map_err(|_| pop3_test_error(Pop3Error::Timeout))?
+}
+
+async fn test_pop3_connection_with_client<S: AsyncRead + AsyncWrite + Unpin>(
+    mut client: Pop3Client<S>,
+    email: &str,
+    password: &str,
+) -> Result<Pop3TestResult, String> {
+    client.capa().await.map_err(pop3_test_error)?;
+    client.login(email, password).await.map_err(pop3_test_error)?;
+    let uidls = client.uidl_all().await;
+    // QUIT releases the maildrop lock; its outcome does not change the verdict.
+    let _ = client.quit().await;
+    Ok(Pop3TestResult {
+        message_count: uidls.map_err(pop3_test_error)?.len() as u32,
+        supports_uidl: true,
+    })
+}
+
+fn pop3_test_error(error: Pop3Error) -> String {
+    match error {
+        Pop3Error::NoUidl => "POP3_NO_UIDL".into(),
+        Pop3Error::Locked(_) => "POP3_LOCKED".into(),
+        Pop3Error::Auth(text) => {
+            let text = text.to_ascii_uppercase();
+            if text.contains("[LOGIN-DELAY]") || text.contains("[SYS/TEMP]") {
+                "the server refused the login for now, try again later".into()
+            } else {
+                "POP3_AUTH".into()
+            }
+        }
+        other => other.to_string(),
+    }
+}
+
 #[tauri::command]
 pub async fn create_folder(
     db: State<'_, Database>,
@@ -1044,5 +1120,117 @@ mod pop3_account_tests {
         let after = list_accounts_inner(&conn).unwrap().remove(0);
         assert_eq!((after.pop3_delete_mode.as_str(), after.pop3_delete_after_days), ("after_days", 14));
         assert_eq!(after.incoming_security, "ssl");
+    }
+}
+
+#[cfg(test)]
+mod pop3_connection_tests {
+    use std::time::Duration;
+
+    use super::{pop3_test_within, test_pop3_connection, test_pop3_connection_with_client, Pop3TestResult};
+    use crate::pop3::test_server::scripted;
+    use crate::pop3::Pop3Client;
+
+    const GREETING: (&str, &str) = ("", "+OK pop.studio-halde.example ready\r\n");
+    const CAPA: (&str, &str) = ("CAPA", "+OK\r\nUIDL\r\n.\r\n");
+    const EMAIL: &str = "anna@studio-halde.example";
+    const USER: (&str, &str) = ("USER anna@studio-halde.example", "+OK\r\n");
+    const PASS_OK: (&str, &str) = ("PASS secret", "+OK logged in\r\n");
+
+    async fn run(steps: Vec<(&'static str, &'static str)>) -> Result<Pop3TestResult, String> {
+        let mut script = vec![GREETING, CAPA];
+        script.extend(steps);
+        let (stream, server) = scripted(script);
+        let client = Pop3Client::from_stream(stream).await.expect("greeting");
+        let result = test_pop3_connection_with_client(client, EMAIL, "secret").await;
+        server.await.expect("server script");
+        result
+    }
+
+    #[tokio::test]
+    async fn pop3_test_reports_message_count() {
+        let result = run(vec![
+            USER,
+            PASS_OK,
+            ("UIDL", "+OK\r\n1 a1\r\n2 b2\r\n.\r\n"),
+            ("QUIT", "+OK bye\r\n"),
+        ])
+        .await
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(result).unwrap(),
+            serde_json::json!({ "message_count": 2, "supports_uidl": true })
+        );
+    }
+
+    #[tokio::test]
+    async fn pop3_test_reports_no_uidl() {
+        let result = run(vec![
+            USER,
+            PASS_OK,
+            ("UIDL", "-ERR unknown command\r\n"),
+            ("QUIT", "+OK bye\r\n"),
+        ])
+        .await;
+        assert_eq!(result.err().as_deref(), Some("POP3_NO_UIDL"));
+    }
+
+    #[tokio::test]
+    async fn pop3_test_reports_auth_error() {
+        let result = run(vec![USER, ("PASS secret", "-ERR [AUTH] invalid\r\n")]).await;
+        assert_eq!(result.err().as_deref(), Some("POP3_AUTH"));
+    }
+
+    #[tokio::test]
+    async fn pop3_test_reports_locked_maildrop() {
+        let result = run(vec![USER, ("PASS secret", "-ERR [IN-USE] maildrop locked\r\n")]).await;
+        assert_eq!(result.err().as_deref(), Some("POP3_LOCKED"));
+    }
+
+    #[tokio::test]
+    async fn pop3_test_does_not_blame_the_password_for_a_temporary_refusal() {
+        for reply in [
+            "-ERR [LOGIN-DELAY] wait a few minutes\r\n",
+            "-ERR [SYS/TEMP] try again later\r\n",
+        ] {
+            let error = run(vec![USER, ("PASS secret", reply)]).await.err().unwrap();
+            assert_eq!(error, "the server refused the login for now, try again later");
+        }
+    }
+
+    #[tokio::test]
+    async fn pop3_test_reports_other_failures_readably() {
+        let error = run(vec![USER, ("PASS secret", "<DROP>")]).await.err().unwrap();
+        assert_eq!(error, "connection error: connection closed by the server");
+    }
+
+    #[tokio::test]
+    async fn pop3_test_gives_up_on_a_silent_server() {
+        let (stream, server) = scripted(vec![GREETING, ("CAPA", "")]);
+        let result = pop3_test_within(
+            Duration::from_millis(50),
+            Pop3Client::from_stream(stream),
+            EMAIL,
+            "secret",
+        )
+        .await;
+        assert_eq!(result.err().as_deref(), Some("the server did not respond in time"));
+        server.await.expect("server script");
+    }
+
+    #[tokio::test]
+    async fn pop3_test_rejects_plaintext() {
+        let result = test_pop3_connection(
+            "pop.studio-halde.example".into(),
+            110,
+            "none".into(),
+            EMAIL.into(),
+            "secret".into(),
+        )
+        .await;
+        assert_eq!(
+            result.err().as_deref(),
+            Some("unexpected server response: unknown security mode: none")
+        );
     }
 }
