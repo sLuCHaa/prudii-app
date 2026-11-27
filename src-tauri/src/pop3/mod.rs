@@ -1,4 +1,5 @@
 pub mod client;
+pub mod store;
 #[cfg(test)]
 pub(crate) mod test_server;
 
