@@ -97,6 +97,7 @@ pub(crate) async fn sync_with_client<S: AsyncRead + AsyncWrite + Unpin>(
         .iter()
         .filter_map(|r| r.mail_id.as_deref().map(|m| (r.uidl.as_str(), m)))
         .collect();
+    let restored: HashSet<&str> = rows.iter().filter(|r| r.state == "restored").map(|r| r.uidl.as_str()).collect();
     let mut targets: Vec<(u32, String)> = Vec::new();
     for uidl in store::plan_deletions(Utc::now(), &delete_policy(mailbox), &rows, &server_uidls) {
         match numbers.get(uidl.as_str()) {
@@ -123,6 +124,18 @@ pub(crate) async fn sync_with_client<S: AsyncRead + AsyncWrite + Unpin>(
         if !mail_kept_or_deleted_by_user(db, &mailbox.id, &uidl)? {
             log::warn!("POP3: local mail missing, kept on server");
             continue;
+        }
+        if restored.contains(uidl.as_str()) {
+            let raw = client.retr(msg, MAX_MESSAGE_BYTES).await?;
+            if !store::source_matches(data_dir, mail_id, &raw) {
+                log::warn!("POP3: a restored entry does not match the server message, kept on server");
+                forget_uidl(db, data_dir, &mailbox.id, &uidl, mail_id)?;
+                continue;
+            }
+            if let Err(e) = confirm_restored(db, &mailbox.id, &uidl) {
+                log::warn!("POP3: could not confirm a restored entry, kept on server: {}", e);
+                continue;
+            }
         }
         match client.dele(msg).await? {
             Ok(()) => deleted.push(uidl),
@@ -354,6 +367,27 @@ fn mail_kept_or_deleted_by_user(db: &Database, account_id: &str, uidl: &str) -> 
             |r| r.get(0),
         )
         .map_err(db_error)
+}
+
+/// Marks a verified row as stored and makes that durable before the server copy may go.
+fn confirm_restored(db: &Database, account_id: &str, uidl: &str) -> Result<(), Pop3Error> {
+    let changed = update_each(
+        db,
+        account_id,
+        &[uidl.to_string()],
+        "UPDATE pop3_uidls SET state = 'stored' WHERE account_id = ?1 AND uidl = ?2 AND state = 'restored'",
+    )?;
+    if changed != 1 {
+        return Err(Pop3Error::Database("restored entry changed meanwhile".into()));
+    }
+    flush_database(db)
+}
+
+/// The next run then treats the server message as new.
+fn forget_uidl(db: &Database, data_dir: &Path, account_id: &str, uidl: &str, mail_id: &str) -> Result<(), Pop3Error> {
+    update_each(db, account_id, &[uidl.to_string()], "DELETE FROM pop3_uidls WHERE account_id = ?1 AND uidl = ?2")?;
+    super::discard_orphan_sources(&db.lock_db(), data_dir, &[mail_id.to_string()]);
+    Ok(())
 }
 
 fn load_rows(db: &Database, account_id: &str, server: &str) -> Result<Vec<UidlRow>, Pop3Error> {
@@ -1203,6 +1237,76 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM pop3_uidls WHERE local_deleted_at IS NULL", [], |r| r.get(0))
             .unwrap();
         assert_eq!(open, 1);
+    }
+
+    async fn store_restored(t: &mut Env, mode: &str) -> String {
+        let mail_id = store_first(t).await;
+        set_column(t, "u1", "state = 'restored'");
+        t.account.pop3_delete_mode = mode.into();
+        mail_id
+    }
+
+    #[tokio::test]
+    async fn restored_row_is_verified_before_dele() {
+        let mut t = env("keep");
+        let mail_id = store_restored(&mut t, "after_fetch").await;
+        let report = run(&t, vec![
+            uidl(&[(1, "u1")]),
+            list(&[(1, 400)]),
+            retr(1, &mail("m1", "Erste")),
+            dele(1),
+            QUIT,
+        ])
+        .await
+        .unwrap();
+        assert_eq!(report.deleted_on_server, 1);
+        assert!(report.new_mail_ids.is_empty());
+        assert_eq!(uidl_rows(&t), vec![("u1".to_string(), Some(mail_id), "server_deleted".to_string())]);
+    }
+
+    #[tokio::test]
+    async fn restored_row_with_other_content_is_never_deleted() {
+        let mut t = env("keep");
+        let mail_id = store_restored(&mut t, "after_fetch").await;
+        let before = crate::pop3::store::read_source(&t.dir, &mail_id).unwrap();
+        let report = run(&t, vec![uidl(&[(1, "u1")]), list(&[(1, 400)]), retr(1, &mail("m9", "Andere")), QUIT])
+            .await
+            .unwrap();
+        assert_eq!(report.deleted_on_server, 0);
+        assert!(uidl_rows(&t).is_empty());
+        assert_eq!(inbox_mails(&t).len(), 1);
+        assert_eq!(crate::pop3::store::read_source(&t.dir, &mail_id).unwrap(), before);
+    }
+
+    #[tokio::test]
+    async fn restored_row_is_not_downloaded_in_keep_mode() {
+        let mut t = env("keep");
+        store_restored(&mut t, "keep").await;
+        let report = run(&t, vec![uidl(&[(1, "u1")]), list(&[(1, 400)]), QUIT]).await.unwrap();
+        assert!(report.new_mail_ids.is_empty());
+        assert_eq!(uidl_rows(&t)[0].2, "restored");
+    }
+
+    #[tokio::test]
+    async fn permanently_deleted_restored_mail_keeps_its_source_for_the_check() {
+        let mut t = env("keep");
+        t.account.pop3_delete_with_local = true;
+        let mail_id = store_restored(&mut t, "keep").await;
+        delete_locally(&t, &mail_id);
+        crate::pop3::discard_orphan_sources(&t.db.lock_db(), &t.dir, std::slice::from_ref(&mail_id));
+        assert!(crate::pop3::store::has_source(&t.dir, &mail_id));
+
+        let report = run(&t, vec![
+            uidl(&[(1, "u1")]),
+            list(&[(1, 400)]),
+            retr(1, &mail("m1", "Erste")),
+            dele(1),
+            QUIT,
+        ])
+        .await
+        .unwrap();
+        assert_eq!(report.deleted_on_server, 1);
+        assert!(!crate::pop3::store::has_source(&t.dir, &mail_id));
     }
 
     #[tokio::test]

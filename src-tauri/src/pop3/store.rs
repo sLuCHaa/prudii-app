@@ -88,7 +88,8 @@ pub fn plan_deletions(
     server_uidls: &HashSet<String>,
 ) -> Vec<String> {
     rows.iter()
-        .filter(|r| r.state == "stored" && r.mail_id.is_some() && server_uidls.contains(&r.uidl))
+        .filter(|r| matches!(r.state.as_str(), "stored" | "restored"))
+        .filter(|r| r.mail_id.is_some() && server_uidls.contains(&r.uidl))
         .filter(|r| {
             let by_mode = match policy.mode {
                 DeleteMode::Keep => false,
@@ -183,6 +184,14 @@ mod tests {
     fn never_deletes_uidl_missing_on_server() {
         let plan = plan_deletions(now(), &policy(DeleteMode::AfterFetch, false), &rows(), &server(&["u2"]));
         assert_eq!(plan, vec!["u2"]);
+    }
+
+    #[test]
+    fn plan_deletions_includes_restored_rows() {
+        let mut rows = rows();
+        rows[0].state = "restored".into();
+        let planned = plan_deletions(now(), &policy(DeleteMode::AfterFetch, false), &rows, &server(&["u1", "u2"]));
+        assert_eq!(planned, vec!["u1", "u2"]);
     }
 
     #[test]

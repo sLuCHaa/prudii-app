@@ -797,6 +797,19 @@ pub fn run() {
                     });
                 }
 
+                {
+                    let handle = app.handle().clone();
+                    tauri::async_runtime::spawn(async move {
+                        tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                        if crate::commands::backup::backup_in_progress() {
+                            return;
+                        }
+                        let db = handle.state::<Database>();
+                        let conn = db.lock_db();
+                        crate::pop3::cleanup_stray_sources(&conn, &db.data_dir, std::time::SystemTime::now());
+                    });
+                }
+
                 // Save geometry when the window is closed (e.g. title-bar close / OS quit).
                 {
                     let win = window.clone();
