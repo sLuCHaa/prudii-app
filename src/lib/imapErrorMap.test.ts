@@ -71,7 +71,89 @@ describe("mapImapError", () => {
   });
 });
 
-const AUTH_KEYS = ["generic", "imapAccess", "imapAccessLink", "icloud", "icloudLink"];
+describe("mapImapError for POP3", () => {
+  const pop3 = (message: string, provider = "custom") =>
+    mapImapError({ message }, { email: "anna@studio-halde.example", provider, protocol: "pop3" });
+  const authTitle = "imapError.authFailed.title";
+
+  it.each([
+    ["POP3_NO_UIDL", "noUidl"],
+    ["This POP3 server does not support UIDL, so Prudii cannot fetch mail from it safely.", "noUidl"],
+    ["POP3_LOCKED", "locked"],
+    ["POP3 sync failed: the mailbox is locked: in use", "locked"],
+    ["the server refused the login for now, try again later", "tryLater"],
+  ])("explains %s", (message, key) => {
+    expect(pop3(message)).toEqual({ title: `pop3.error.${key}.title`, detail: `pop3.error.${key}.detail` });
+  });
+
+  it.each([
+    ["POP3_NO_UIDL", "pop3.error.noUidl.detail"],
+    ["POP3_LOCKED", "pop3.error.locked.detail"],
+    ["POP3_AUTH", "pop3.error.auth.generic"],
+    ["POP3 sync failed: authentication failed: x", "pop3.error.auth.generic"],
+    ["This POP3 server does not support UIDL, so Prudii cannot fetch mail from it safely.", "pop3.error.noUidl.detail"],
+  ])("recognises %s without a protocol", (message, detail) => {
+    expect(mapImapError({ message }).detail).toBe(detail);
+  });
+
+  it.each([
+    ["TLS error: bad certificate", "tls"],
+    ["POP3 sync failed: TLS error: handshake", "tls"],
+    ["the server did not respond in time", "timeout"],
+    ["POP3 sync failed: connection error: timed out", "timeout"],
+    ["connection error: failed to resolve host", "dns"],
+    ["connection error: failed to lookup address information: Name or service not known", "dns"],
+    ["POP3 sync failed: connection error: No such host is known", "dns"],
+    ["connection error: refused", "connection"],
+    ["POP3 sync failed: connection error: reset", "connection"],
+  ])("maps %s with details", (message, key) => {
+    expect(pop3(message)).toEqual({
+      title: `imapError.${key}.title`,
+      detail: `imapError.${key}.detail`,
+      technical: `imapError.details ${JSON.stringify({ details: message })}`,
+    });
+  });
+
+  it.each([
+    "unexpected server response: x",
+    "POP3 sync failed: something else",
+    "Das Passwort für dieses Konto fehlt.",
+  ])("keeps %s as it is", (message) => {
+    expect(pop3(message)).toEqual({ title: "imapError.unknown.title", detail: message });
+  });
+
+  it("points Gmail users to the app password", () => {
+    expect(pop3("POP3_AUTH", "google")).toEqual({
+      title: authTitle,
+      detail: "pop3.error.auth.gmail",
+      link: "https://support.google.com/mail/answer/185833",
+      linkLabel: "imapError.authFailed.gmailLink",
+    });
+  });
+
+  it("points Fastmail users to the app password", () => {
+    expect(pop3("POP3_AUTH", "fastmail")).toEqual({
+      title: authTitle,
+      detail: "pop3.error.auth.fastmail",
+      link: "https://www.fastmail.help/hc/en-us/articles/360058752854",
+      linkLabel: "wizard.createAppPassword",
+    });
+  });
+
+  it.each([
+    ["webde", "WEB.DE", "https://hilfe.web.de/pop-imap/einschalten.html"],
+    ["gmx", "GMX", "https://hilfe.gmx.net/pop-imap/einschalten.html"],
+  ])("points %s users to the POP3 switch", (provider, name, link) => {
+    expect(pop3("POP3_AUTH", provider)).toEqual({
+      title: authTitle,
+      detail: `pop3.error.auth.enable ${JSON.stringify({ provider: name })}`,
+      link,
+      linkLabel: "pop3.enableLink",
+    });
+  });
+});
+
+const AUTH_KEYS =["generic", "imapAccess", "imapAccessLink", "icloud", "icloudLink"];
 
 describe("IMAP error translations", () => {
   for (const [lang, data] of Object.entries({ en, de, es, fr, pt, ru, zh })) {

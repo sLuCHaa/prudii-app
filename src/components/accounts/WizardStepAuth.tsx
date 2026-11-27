@@ -3,9 +3,12 @@ import { Eye, EyeOff, ExternalLink } from "../icons";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { motion } from "motion/react";
 import type { ProviderPreset } from "../../lib/providers";
-import type { SmtpSecurity } from "../../types";
+import type { IncomingProtocol, IncomingSecurity, SmtpSecurity } from "../../types";
 import { mapImapError } from "../../lib/imapErrorMap";
+import { supportsPop3, switchPop3Port, type Pop3Rule } from "../../lib/pop3";
 import { Button } from "../ui/Button";
+import { SegmentedControl } from "../ui/SegmentedControl";
+import { Pop3DeleteRule } from "./Pop3DeleteRule";
 import { GlowRing } from "../motion/GlowRing";
 import { SPRING_BOUNCY } from "../motion/tokens";
 import { useTranslation } from "react-i18next";
@@ -31,6 +34,11 @@ interface WizardStepAuthProps {
   smtpHost: string;
   smtpPort: number;
   smtpSecurity: SmtpSecurity;
+  protocol: IncomingProtocol;
+  pop3Host: string;
+  pop3Port: number;
+  incomingSecurity: IncomingSecurity;
+  rule: Pop3Rule;
   usePasswordFallback: boolean;
   oauthDisabled: boolean;
   testError: string | null;
@@ -44,6 +52,11 @@ interface WizardStepAuthProps {
   onSmtpHostChange: (v: string) => void;
   onSmtpPortChange: (v: number) => void;
   onSmtpSecurityChange: (v: SmtpSecurity) => void;
+  onProtocolChange: (v: IncomingProtocol) => void;
+  onPop3HostChange: (v: string) => void;
+  onPop3PortChange: (v: number) => void;
+  onIncomingSecurityChange: (v: IncomingSecurity) => void;
+  onRuleChange: (v: Pop3Rule) => void;
   onUsePasswordFallback: () => void;
   onBack: () => void;
   onOAuth: () => void;
@@ -61,6 +74,11 @@ export function WizardStepAuth({
   smtpHost,
   smtpPort,
   smtpSecurity,
+  protocol,
+  pop3Host,
+  pop3Port,
+  incomingSecurity,
+  rule,
   usePasswordFallback,
   oauthDisabled,
   testError,
@@ -74,6 +92,11 @@ export function WizardStepAuth({
   onSmtpHostChange,
   onSmtpPortChange,
   onSmtpSecurityChange,
+  onProtocolChange,
+  onPop3HostChange,
+  onPop3PortChange,
+  onIncomingSecurityChange,
+  onRuleChange,
   onUsePasswordFallback,
   onBack,
   onOAuth,
@@ -87,22 +110,29 @@ export function WizardStepAuth({
     [color],
   );
 
-  const isOAuth = provider.authMethod === "oauth" && !usePasswordFallback && !oauthDisabled;
+  const isPop3 = protocol === "pop3";
+  const isOAuth = !isPop3 && provider.authMethod === "oauth" && !usePasswordFallback && !oauthDisabled;
   const handleFormSubmit = isOAuth
     ? (e: React.FormEvent) => { e.preventDefault(); onOAuth(); }
     : onSubmit;
 
   const errorHint = testError
-    ? mapImapError({ message: testError }, { email, provider: provider.id })
+    ? mapImapError({ message: testError }, { email, provider: provider.id, protocol })
     : null;
+  const providerName = provider.id === "custom" ? t("wizard.customProvider") : provider.name;
+  const appPasswordUrl = provider.appPasswordUrl ?? (isPop3 ? provider.pop3AppPasswordUrl : undefined);
+  const appPasswordKey =
+    isPop3 && provider.id === "google" ? "pop3.appPasswordGmail" :
+    isPop3 && provider.id === "fastmail" ? "pop3.appPasswordFastmail" :
+    "wizard.appPasswordHint";
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-4">
       <h3 className="text-lg font-semibold text-text">
-        {provider.name}
+        {providerName}
       </h3>
 
-      {oauthDisabled && provider.authMethod === "oauth" && (
+      {!isPop3 && oauthDisabled && provider.authMethod === "oauth" && (
         <div className="rounded-lg border border-accent/30 bg-accent/5 p-3 text-sm text-text-secondary">
           {t("wizard.oauthAtCapacity", { provider: provider.name })}
           {provider.id === "microsoft" && (
@@ -131,6 +161,20 @@ export function WizardStepAuth({
           )}
         </div>
       )}
+
+      {supportsPop3(provider) && (
+        <SegmentedControl
+          aria-label={t("pop3.protocol")}
+          value={protocol}
+          onChange={onProtocolChange}
+          options={[
+            { value: "imap", label: "IMAP" },
+            { value: "pop3", label: "POP3" },
+          ]}
+        />
+      )}
+
+      {isPop3 && <Pop3DeleteRule rule={rule} onChange={onRuleChange} />}
 
       {isOAuth ? (
         <>
@@ -229,18 +273,33 @@ export function WizardStepAuth({
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
-            {provider.appPasswordUrl && (
+            {appPasswordUrl && (
               <p className="text-xs text-text-tertiary mt-1.5">
-                {t("wizard.appPasswordHint")}{" "}
+                {t(appPasswordKey)}{" "}
                 <button
                   type="button"
-                  onClick={() => openUrl(provider.appPasswordUrl!)}
+                  onClick={() => openUrl(appPasswordUrl)}
                   className="text-accent hover:underline inline-flex items-center gap-0.5"
                 >
                   {t("wizard.createAppPassword")}
                   <ExternalLink className="w-3 h-3" />
                 </button>
               </p>
+            )}
+            {isPop3 && (provider.id === "webde" || provider.id === "gmx") && (
+              <p className="text-xs text-text-tertiary mt-1.5">
+                {t("pop3.enableHint", { provider: provider.name })}
+              </p>
+            )}
+            {isPop3 && provider.pop3EnableUrl && (
+              <button
+                type="button"
+                onClick={() => openUrl(provider.pop3EnableUrl!)}
+                className="mt-1.5 text-xs text-accent hover:underline inline-flex items-center gap-0.5"
+              >
+                {t("pop3.enableLink")}
+                <ExternalLink className="w-3 h-3" />
+              </button>
             )}
           </div>
 
@@ -286,14 +345,14 @@ export function WizardStepAuth({
               >
                 <div className="col-span-2">
                   <label className="block text-sm font-medium text-text-secondary mb-1">
-                    {t("wizard.imapHost")}
+                    {t(isPop3 ? "pop3.host" : "wizard.imapHost")}
                   </label>
                   <input
                     type="text"
-                    value={imapHost}
-                    onChange={(e) => onImapHostChange(e.target.value)}
+                    value={isPop3 ? pop3Host : imapHost}
+                    onChange={(e) => (isPop3 ? onPop3HostChange : onImapHostChange)(e.target.value)}
                     required
-                    placeholder="imap.example.com"
+                    placeholder={isPop3 ? "pop.example.com" : "imap.example.com"}
                     className={inputClass}
                   />
                 </div>
@@ -303,12 +362,34 @@ export function WizardStepAuth({
                   </label>
                   <input
                     type="number"
-                    value={imapPort}
-                    onChange={(e) => onImapPortChange(Number(e.target.value))}
+                    min={1}
+                    max={65535}
+                    required
+                    value={isPop3 ? pop3Port : imapPort}
+                    onChange={(e) => (isPop3 ? onPop3PortChange : onImapPortChange)(Number(e.target.value))}
                     className={inputClass}
                   />
                 </div>
               </motion.div>
+              {isPop3 && (
+                <div>
+                  <span className="block text-sm font-medium text-text-secondary mb-1">
+                    {t("pop3.security")}
+                  </span>
+                  <SegmentedControl
+                    aria-label={t("pop3.security")}
+                    value={incomingSecurity}
+                    onChange={(v) => {
+                      onIncomingSecurityChange(v);
+                      onPop3PortChange(switchPop3Port(pop3Port, v));
+                    }}
+                    options={[
+                      { value: "ssl", label: "SSL/TLS (Port 995)" },
+                      { value: "starttls", label: "STARTTLS (Port 110)" },
+                    ]}
+                  />
+                </div>
+              )}
               <motion.div
                 className="grid grid-cols-3 gap-2"
                 initial={{ opacity: 0, y: -8 }}

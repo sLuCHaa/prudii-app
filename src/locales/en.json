@@ -837,6 +837,7 @@
     "addAccount": "Add account"
   },
   "wizard": {
+    "customProvider": "Custom",
     "addAccount": "Add Account",
     "chooseProvider": "Choose your provider",
     "chooseProviderDesc": "Select your email provider to get started quickly",
@@ -1849,6 +1850,63 @@
       "linkMissing": "The link of this subscription is missing — please enter it again.",
       "linkStoreFailed": "The link could not be stored securely.",
       "subscriptionBusy": "This calendar is updating right now — try again in a moment."
+    }
+  },
+  "pop3": {
+    "protocol": "Incoming protocol",
+    "host": "POP3 server",
+    "security": "Encryption",
+    "ruleTitle": "Mail on the server",
+    "mode": {
+      "keep": "Leave on the server",
+      "afterFetch": "Delete from the server after download",
+      "afterDays": "Delete from the server after some days"
+    },
+    "days": "Days after download",
+    "withLocal": "Also delete permanently deleted mails on the server",
+    "rule": {
+      "keep": "Mails stay on the server after download.",
+      "afterFetch": "Mails are deleted from the server right after download.",
+      "afterDays_one": "Mails are deleted from the server {{count}} day after download.",
+      "afterDays_other": "Mails are deleted from the server {{count}} days after download.",
+      "withLocal": "Permanently deleted mails are also deleted on the server immediately.",
+      "withoutLocal": "Deleting a mail permanently here does not trigger a deletion on the server.",
+      "localOnly": "Mails deleted from the server exist only on this device. Back them up regularly."
+    },
+    "ruleChange": {
+      "sooner": "This also applies to mails already downloaded: whatever is due under the new rule is deleted from the server at the next sync.",
+      "withLocal": "Mails you have already deleted permanently here are then also deleted on the server at the next sync."
+    },
+    "appPasswordGmail": "Gmail needs an app password for POP3, and POP must be switched on in the Gmail settings.",
+    "appPasswordFastmail": "Fastmail needs an app password for POP3.",
+    "enableHint": "POP3 must be switched on in your {{provider}} settings.",
+    "enableLink": "Switch on POP3",
+    "testing": "Testing POP3 connection...",
+    "serverSettingsDesc": "POP3 and SMTP connection details. Only change them if you know what you are doing.",
+    "serverChangeHint": "After changing the server, mails that are still on it may arrive again.",
+    "deleteAccountBody": "The mails of this POP3 account may exist only on this device and are lost for good with the account. Create a backup first (Settings → Data) or export the mails.",
+    "error": {
+      "noUidl": {
+        "title": "Server not supported",
+        "detail": "This POP3 server does not support UIDL. Without it Prudii cannot recognise mails reliably. Use IMAP if your provider offers it."
+      },
+      "locked": {
+        "title": "Mailbox is locked",
+        "detail": "Another program is using the mailbox. Close it or wait a few minutes and try again."
+      },
+      "tryLater": {
+        "title": "Sign-in not possible right now",
+        "detail": "The server is refusing the sign-in for the moment. Try again later."
+      },
+      "auth": {
+        "generic": "The server rejected the sign-in. Check email address and password. Some providers require an app password or POP3 to be switched on first.",
+        "gmail": "Gmail needs an app password, and POP must be switched on in the Gmail settings.",
+        "fastmail": "Fastmail only accepts an app password, not your account password.",
+        "enable": "{{provider}} only lets mail apps in once POP3 is switched on: E-Mail-Einstellungen → POP3/IMAP. With two-step verification you also need an app password."
+      },
+      "protocolConflict": "The address {{email}} is already set up as a {{protocol}} account. The protocol cannot be changed. Back up and remove the existing account first.",
+      "accountExists": "There is already a POP3 account for {{email}}. Change it in settings. Removing it would delete local mail.",
+      "protocolChange": "The protocol of an account cannot be changed."
     }
   }
 }

@@ -73,13 +73,17 @@ export function WizardStepDone({
           </span>
           <span className="text-text-tertiary">{t("wizard.mails")}</span>
         </div>
-        <div className="w-px h-8 bg-border" />
-        <div className="flex flex-col items-center">
-          <span className="text-2xl font-bold font-heading">
-            <NumberTween from={0} to={folderCount} duration={800} />
-          </span>
-          <span className="text-text-tertiary">{t("wizard.folders")}</span>
-        </div>
+        {folderCount > 0 && (
+          <>
+            <div className="w-px h-8 bg-border" />
+            <div className="flex flex-col items-center">
+              <span className="text-2xl font-bold font-heading">
+                <NumberTween from={0} to={folderCount} duration={800} />
+              </span>
+              <span className="text-text-tertiary">{t("wizard.folders")}</span>
+            </div>
+          </>
+        )}
       </motion.div>
 
       <motion.div

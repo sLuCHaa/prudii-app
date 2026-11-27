@@ -837,6 +837,7 @@
     "addAccount": "Konto hinzufügen"
   },
   "wizard": {
+    "customProvider": "Benutzerdefiniert",
     "addAccount": "Konto hinzufügen",
     "chooseProvider": "Wähle deinen Anbieter",
     "chooseProviderDesc": "Wähle deinen E-Mail-Anbieter für einen schnellen Einstieg",
@@ -1849,6 +1850,63 @@
       "linkMissing": "Der Link dieses Abos fehlt – bitte neu eingeben.",
       "linkStoreFailed": "Der Link konnte nicht sicher gespeichert werden.",
       "subscriptionBusy": "Dieser Kalender wird gerade aktualisiert – bitte gleich noch einmal versuchen."
+    }
+  },
+  "pop3": {
+    "protocol": "Abrufprotokoll",
+    "host": "POP3-Server",
+    "security": "Verschlüsselung",
+    "ruleTitle": "Mails auf dem Server",
+    "mode": {
+      "keep": "Auf dem Server lassen",
+      "afterFetch": "Nach dem Abruf vom Server löschen",
+      "afterDays": "Nach einigen Tagen vom Server löschen"
+    },
+    "days": "Tage nach dem Abruf",
+    "withLocal": "Endgültig gelöschte Mails auch auf dem Server löschen",
+    "rule": {
+      "keep": "Mails bleiben nach dem Abruf auf dem Server.",
+      "afterFetch": "Mails werden direkt nach dem Abruf vom Server gelöscht.",
+      "afterDays_one": "Mails werden {{count}} Tag nach dem Abruf vom Server gelöscht.",
+      "afterDays_other": "Mails werden {{count}} Tage nach dem Abruf vom Server gelöscht.",
+      "withLocal": "Endgültig gelöschte Mails werden sofort auch auf dem Server gelöscht.",
+      "withoutLocal": "Endgültiges Löschen hier löst keine Löschung auf dem Server aus.",
+      "localOnly": "Vom Server gelöschte Mails liegen nur noch auf diesem Gerät. Eine regelmäßige Sicherung ist sinnvoll."
+    },
+    "ruleChange": {
+      "sooner": "Gilt auch für bereits abgerufene Mails: Was nach der neuen Regel fällig ist, wird beim nächsten Abruf vom Server gelöscht.",
+      "withLocal": "Auch hier bereits endgültig gelöschte Mails werden dann beim nächsten Abruf auf dem Server gelöscht."
+    },
+    "appPasswordGmail": "Gmail braucht für POP3 ein App-Passwort, und POP muss in den Gmail-Einstellungen eingeschaltet sein.",
+    "appPasswordFastmail": "Fastmail braucht für POP3 ein App-Passwort.",
+    "enableHint": "POP3 muss in den Einstellungen von {{provider}} eingeschaltet sein.",
+    "enableLink": "POP3 einschalten",
+    "testing": "POP3-Verbindung wird getestet …",
+    "serverSettingsDesc": "POP3- und SMTP-Verbindungsdetails. Nur ändern, wenn du weißt, was du tust.",
+    "serverChangeHint": "Nach einem Serverwechsel können Mails, die noch auf dem Server liegen, erneut ankommen.",
+    "deleteAccountBody": "Die Mails dieses POP3-Kontos liegen möglicherweise nur auf diesem Gerät und gehen mit dem Konto unwiderruflich verloren. Erstelle vorher eine Sicherung (Einstellungen → Daten) oder exportiere die Mails.",
+    "error": {
+      "noUidl": {
+        "title": "Server wird nicht unterstützt",
+        "detail": "Dieser POP3-Server kennt UIDL nicht. Ohne diese Funktion kann Prudii Mails nicht sicher wiedererkennen. Nutze IMAP, falls der Anbieter es unterstützt."
+      },
+      "locked": {
+        "title": "Postfach ist gesperrt",
+        "detail": "Ein anderes Programm greift gerade auf das Postfach zu. Schließe es oder warte ein paar Minuten und versuche es erneut."
+      },
+      "tryLater": {
+        "title": "Anmeldung gerade nicht möglich",
+        "detail": "Der Server lehnt die Anmeldung vorübergehend ab. Versuche es später erneut."
+      },
+      "auth": {
+        "generic": "Der Server hat die Anmeldung abgelehnt. Prüfe E-Mail-Adresse und Passwort. Manche Anbieter verlangen ein App-Passwort oder dass POP3 erst eingeschaltet wird.",
+        "gmail": "Gmail braucht ein App-Passwort, und POP muss in den Gmail-Einstellungen eingeschaltet sein.",
+        "fastmail": "Fastmail akzeptiert nur ein App-Passwort, nicht das Kontopasswort.",
+        "enable": "{{provider}} lässt Mailprogramme erst zu, wenn POP3 eingeschaltet ist: E-Mail-Einstellungen → POP3/IMAP. Bei Zwei-Faktor-Anmeldung brauchst du zusätzlich ein App-Passwort."
+      },
+      "protocolConflict": "Die Adresse {{email}} ist bereits als {{protocol}}-Konto eingerichtet. Das Protokoll lässt sich nicht ändern. Entferne das vorhandene Konto zuerst (vorher sichern).",
+      "accountExists": "Für {{email}} gibt es bereits ein POP3-Konto. Ändere es in den Einstellungen. Beim Entfernen würden lokale Mails gelöscht.",
+      "protocolChange": "Das Protokoll eines Kontos lässt sich nicht ändern."
     }
   }
 }

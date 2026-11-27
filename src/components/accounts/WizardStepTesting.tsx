@@ -1,7 +1,7 @@
 import { AlertCircle } from "../icons";
 import { LightThread } from "../motion/LightThread";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import type { SyncProgress } from "../../types";
+import type { IncomingProtocol, SyncProgress } from "../../types";
 import { mapImapError } from "../../lib/imapErrorMap";
 import { inMailPhase, syncFolderLine, syncStatusKey } from "../../lib/syncProgress";
 import { useSyncRun } from "../../hooks/useSyncRun";
@@ -10,13 +10,14 @@ import { NumberTween } from "../motion/NumberTween";
 import { useTranslation } from "react-i18next";
 
 interface WizardStepTestingProps {
-  /** Current sub-step: waiting for browser OAuth or running IMAP test + sync */
+  /** Current sub-step: waiting for browser OAuth or running connection test + sync */
   phase: "oauth_waiting" | "testing";
   testStatus: string;
   testError: string | null;
   syncProgress: SyncProgress | null;
   email: string;
   providerId: string | undefined;
+  protocol: IncomingProtocol;
   onBack: () => void;
   onRetry: () => void;
   onSyncInBackground: () => void;
@@ -29,6 +30,7 @@ export function WizardStepTesting({
   syncProgress,
   email,
   providerId,
+  protocol,
   onBack,
   onRetry,
   onSyncInBackground,
@@ -53,7 +55,7 @@ export function WizardStepTesting({
   }
 
   const errorHint = testError
-    ? mapImapError({ message: testError }, { email, provider: providerId })
+    ? mapImapError({ message: testError }, { email, provider: providerId, protocol })
     : null;
 
   const statusKey = syncProgress ? syncStatusKey(syncProgress.status) : null;

@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { BundleImportResult, Calendar, CalendarPatch, CalendarSettings, EditScope, EventDetail, EventInput, EventPatch, EventTimes, ImportResult, InvitationView, Occurrence, RespondInvitationArgs, SubscribeResult } from "../types/calendar";
-import type { Account, AiResponse, Assignment, Attachment, AttachmentWithContext, AppConfig, AppSettings, BackupOptions, BulkSaveResult, CategoryCount, ChecklistItem, Contact, ContactDomain, CreateAccountRequest, CreateRuleRequest, CreateTaskInput, EmailTemplate, ExportLabels, ExportOptions, Folder, LicenseInfo, ListStatus, Mail, NewsletterOverview, MailCategoryInfo, MailRule, OAuthResult, OllamaStatus, RestorePreview, ScheduledMail, SearchResult, SenderRule, SendMailRequest, SieveSupport, Signature, Task, TaskAttachment, TaskDetail, StoredBody, TaskStatus, TeamSnapshot, TrackerRecord, TrackerReport, UnsubscribeOutcome, UpdateTaskPatch, VacationSettings, VacationState } from "../types";
+import type { Account, AiResponse, Assignment, Attachment, AttachmentWithContext, AppConfig, AppSettings, BackupOptions, BulkSaveResult, CategoryCount, ChecklistItem, Contact, ContactDomain, CreateAccountRequest, CreateRuleRequest, CreateTaskInput, EmailTemplate, ExportLabels, ExportOptions, Folder, IncomingSecurity, IncomingSettings, LicenseInfo, ListStatus, Mail, NewsletterOverview, MailCategoryInfo, MailRule, OAuthResult, OllamaStatus, RestorePreview, ScheduledMail, SearchResult, SenderRule, SendMailRequest, SieveSupport, Signature, Task, TaskAttachment, TaskDetail, StoredBody, TaskStatus, TeamSnapshot, TrackerRecord, TrackerReport, UnsubscribeOutcome, UpdateTaskPatch, VacationSettings, VacationState } from "../types";
 import { prefers24HourClock } from "./localeDefaults";
 
 export async function listAccounts(): Promise<Account[]> {
@@ -67,6 +67,7 @@ export async function updateAccountSettings(
   smtpPort: number,
   smtpSecurity: string,
   loadExternalImages: string,
+  incoming?: Partial<IncomingSettings>,
 ): Promise<void> {
   return invoke("update_account_settings", {
     accountId,
@@ -78,6 +79,7 @@ export async function updateAccountSettings(
     smtpPort,
     smtpSecurity,
     loadExternalImages,
+    incoming,
   });
 }
 
@@ -146,6 +148,21 @@ export async function testImapConnection(
   authType?: string,
 ): Promise<string> {
   return invoke("test_imap_connection", { host, port, email, password, authType: authType ?? null });
+}
+
+export interface Pop3TestResult {
+  message_count: number;
+  supports_uidl: boolean;
+}
+
+export async function testPop3Connection(
+  host: string,
+  port: number,
+  security: IncomingSecurity,
+  email: string,
+  password: string,
+): Promise<Pop3TestResult> {
+  return invoke("test_pop3_connection", { host, port, security, email, password });
 }
 
 export async function syncAccount(accountId: string, password?: string): Promise<void> {

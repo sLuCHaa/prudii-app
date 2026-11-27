@@ -837,6 +837,7 @@
     "addAccount": "Adicionar conta"
   },
   "wizard": {
+    "customProvider": "Personalizado",
     "addAccount": "Adicionar Conta",
     "chooseProvider": "Escolha seu provedor",
     "chooseProviderDesc": "Selecione seu provedor de email para começar rapidamente",
@@ -1849,6 +1850,63 @@
       "linkMissing": "O link desta assinatura está faltando — insira-o novamente.",
       "linkStoreFailed": "Não foi possível guardar o link com segurança.",
       "subscriptionBusy": "Este calendário está sendo atualizado — tente novamente em instantes."
+    }
+  },
+  "pop3": {
+    "protocol": "Protocolo de recebimento",
+    "host": "Servidor POP3",
+    "security": "Criptografia",
+    "ruleTitle": "E-mails no servidor",
+    "mode": {
+      "keep": "Deixar no servidor",
+      "afterFetch": "Excluir do servidor após o download",
+      "afterDays": "Excluir do servidor após alguns dias"
+    },
+    "days": "Dias após o download",
+    "withLocal": "Excluir também no servidor os e-mails apagados definitivamente",
+    "rule": {
+      "keep": "Os e-mails permanecem no servidor após o download.",
+      "afterFetch": "Os e-mails são excluídos do servidor logo após o download.",
+      "afterDays_one": "Os e-mails são excluídos do servidor {{count}} dia após o download.",
+      "afterDays_other": "Os e-mails são excluídos do servidor {{count}} dias após o download.",
+      "withLocal": "Os e-mails apagados definitivamente também são excluídos imediatamente no servidor.",
+      "withoutLocal": "Apagar um e-mail definitivamente aqui não provoca nenhuma exclusão no servidor.",
+      "localOnly": "Os e-mails excluídos do servidor existem apenas neste dispositivo. Faça backup regularmente."
+    },
+    "ruleChange": {
+      "sooner": "Vale também para e-mails já baixados: o que vencer pela nova regra será excluído do servidor na próxima sincronização.",
+      "withLocal": "Os e-mails que você já apagou definitivamente aqui também serão excluídos do servidor na próxima sincronização."
+    },
+    "appPasswordGmail": "O Gmail exige uma senha de app para POP3, e o POP precisa estar ativado nas configurações do Gmail.",
+    "appPasswordFastmail": "O Fastmail exige uma senha de app para POP3.",
+    "enableHint": "O POP3 precisa estar ativado nas configurações do {{provider}}.",
+    "enableLink": "Ativar POP3",
+    "testing": "Testando conexão POP3...",
+    "serverSettingsDesc": "Dados de conexão POP3 e SMTP. Altere apenas se souber o que está fazendo.",
+    "serverChangeHint": "Após trocar de servidor, os e-mails que ainda estiverem nele podem chegar novamente.",
+    "deleteAccountBody": "Os e-mails desta conta POP3 podem existir apenas neste dispositivo e serão perdidos para sempre junto com a conta. Antes, crie um backup (Configurações → Dados) ou exporte os e-mails.",
+    "error": {
+      "noUidl": {
+        "title": "Servidor não compatível",
+        "detail": "Este servidor POP3 não oferece UIDL. Sem esse recurso, o Prudii não consegue reconhecer os e-mails com segurança. Use IMAP se o seu provedor oferecer."
+      },
+      "locked": {
+        "title": "A caixa de correio está bloqueada",
+        "detail": "Outro programa está usando a caixa de correio. Feche-o ou aguarde alguns minutos e tente novamente."
+      },
+      "tryLater": {
+        "title": "Não é possível entrar agora",
+        "detail": "O servidor está recusando o login temporariamente. Tente novamente mais tarde."
+      },
+      "auth": {
+        "generic": "O servidor recusou o login. Verifique o endereço de e-mail e a senha. Alguns provedores exigem uma senha de app ou que o POP3 seja ativado antes.",
+        "gmail": "O Gmail exige uma senha de app, e o POP precisa estar ativado nas configurações do Gmail.",
+        "fastmail": "O Fastmail aceita apenas uma senha de app, não a senha da conta.",
+        "enable": "O {{provider}} só aceita programas de e-mail depois que o POP3 é ativado: E-Mail-Einstellungen → POP3/IMAP. Com a verificação em duas etapas, você também precisa de uma senha de app."
+      },
+      "protocolConflict": "O endereço {{email}} já está configurado como conta {{protocol}}. O protocolo não pode ser alterado. Faça um backup e remova primeiro a conta existente.",
+      "accountExists": "Já existe uma conta POP3 para {{email}}. Altere-a nas configurações. Removê-la apagaria os e-mails locais.",
+      "protocolChange": "O protocolo de uma conta não pode ser alterado."
     }
   }
 }

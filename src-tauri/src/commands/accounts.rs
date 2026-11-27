@@ -827,6 +827,7 @@ pub async fn create_folder(
 
 #[tauri::command]
 pub async fn delete_folder(
+    app: tauri::AppHandle,
     db: State<'_, Database>,
     folder_id: String,
 ) -> Result<(), String> {
@@ -841,7 +842,9 @@ pub async fn delete_folder(
     };
 
     if matches!(get_folder_api_type(&db, &account_id).0, FolderApiType::Pop3) {
-        return pop3_delete_folder(&db, &folder_id);
+        pop3_delete_folder(&db, &folder_id)?;
+        crate::commands::sync::sync_after_pop3_delete(&app, &db, &account_id);
+        return Ok(());
     }
 
     if !is_local {

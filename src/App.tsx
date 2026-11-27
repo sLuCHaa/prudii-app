@@ -39,6 +39,7 @@ import { parseMailSort } from "./lib/mailSort";
 import { checkForUpdate } from "./lib/updater";
 import { installGlobalTooltips } from "./lib/globalTooltips";
 import { resolveAppMode } from "./lib/appMode";
+import { needsOAuth } from "./lib/pop3";
 import { checkFirstHundredOnce, checkMailboxCheckHintOnce } from "./lib/achievements";
 import { playSentSound } from "./lib/sounds";
 import { useDialog } from "./components/ui/DialogProvider";
@@ -273,7 +274,7 @@ function AppInner() {
         const passwordEmails: string[] = [];
         for (const email of emails) {
           const acc = allAccounts.find((a) => a.email === email);
-          if (acc && (acc.provider === "google" || acc.provider === "microsoft")) {
+          if (acc && needsOAuth(acc)) {
             oauthEmails.push(email);
           } else {
             passwordEmails.push(email);

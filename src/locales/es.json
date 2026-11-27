@@ -837,6 +837,7 @@
     "addAccount": "Añadir cuenta"
   },
   "wizard": {
+    "customProvider": "Personalizado",
     "addAccount": "Añadir cuenta",
     "chooseProvider": "Elige tu proveedor",
     "chooseProviderDesc": "Selecciona tu proveedor de correo para comenzar rápidamente",
@@ -1849,6 +1850,63 @@
       "linkMissing": "Falta el enlace de esta suscripción; vuelve a introducirlo.",
       "linkStoreFailed": "No se pudo guardar el enlace de forma segura.",
       "subscriptionBusy": "Este calendario se está actualizando; inténtalo de nuevo en un momento."
+    }
+  },
+  "pop3": {
+    "protocol": "Protocolo de entrada",
+    "host": "Servidor POP3",
+    "security": "Cifrado",
+    "ruleTitle": "Correos en el servidor",
+    "mode": {
+      "keep": "Dejar en el servidor",
+      "afterFetch": "Eliminar del servidor tras la descarga",
+      "afterDays": "Eliminar del servidor tras unos días"
+    },
+    "days": "Días tras la descarga",
+    "withLocal": "Eliminar también en el servidor los correos borrados definitivamente",
+    "rule": {
+      "keep": "Los correos permanecen en el servidor después de la descarga.",
+      "afterFetch": "Los correos se eliminan del servidor justo después de la descarga.",
+      "afterDays_one": "Los correos se eliminan del servidor {{count}} día después de la descarga.",
+      "afterDays_other": "Los correos se eliminan del servidor {{count}} días después de la descarga.",
+      "withLocal": "Los correos borrados definitivamente se eliminan también del servidor de inmediato.",
+      "withoutLocal": "Borrar un correo definitivamente aquí no provoca ningún borrado en el servidor.",
+      "localOnly": "Los correos eliminados del servidor solo existen en este dispositivo. Haz copias de seguridad con regularidad."
+    },
+    "ruleChange": {
+      "sooner": "También se aplica a los correos ya descargados: lo que venza según la nueva regla se eliminará del servidor en la próxima sincronización.",
+      "withLocal": "Los correos que ya hayas borrado definitivamente aquí se eliminarán también del servidor en la próxima sincronización."
+    },
+    "appPasswordGmail": "Gmail requiere una contraseña de aplicación para POP3, y POP debe estar activado en la configuración de Gmail.",
+    "appPasswordFastmail": "Fastmail requiere una contraseña de aplicación para POP3.",
+    "enableHint": "POP3 debe estar activado en la configuración de {{provider}}.",
+    "enableLink": "Activar POP3",
+    "testing": "Probando conexión POP3...",
+    "serverSettingsDesc": "Datos de conexión POP3 y SMTP. Cámbialos solo si sabes lo que haces.",
+    "serverChangeHint": "Tras cambiar de servidor, los correos que sigan en él pueden volver a llegar.",
+    "deleteAccountBody": "Es posible que los correos de esta cuenta POP3 solo existan en este dispositivo y se pierdan para siempre junto con la cuenta. Crea antes una copia de seguridad (Configuración → Datos) o exporta los correos.",
+    "error": {
+      "noUidl": {
+        "title": "Servidor no compatible",
+        "detail": "Este servidor POP3 no admite UIDL. Sin esta función, Prudii no puede reconocer los correos de forma fiable. Usa IMAP si tu proveedor lo ofrece."
+      },
+      "locked": {
+        "title": "El buzón está bloqueado",
+        "detail": "Otro programa está usando el buzón. Ciérralo o espera unos minutos y vuelve a intentarlo."
+      },
+      "tryLater": {
+        "title": "No es posible iniciar sesión ahora",
+        "detail": "El servidor rechaza el inicio de sesión temporalmente. Vuelve a intentarlo más tarde."
+      },
+      "auth": {
+        "generic": "El servidor ha rechazado el inicio de sesión. Comprueba la dirección de correo y la contraseña. Algunos proveedores exigen una contraseña de aplicación o activar antes POP3.",
+        "gmail": "Gmail requiere una contraseña de aplicación, y POP debe estar activado en la configuración de Gmail.",
+        "fastmail": "Fastmail solo acepta una contraseña de aplicación, no la contraseña de la cuenta.",
+        "enable": "{{provider}} solo admite programas de correo cuando POP3 está activado: E-Mail-Einstellungen → POP3/IMAP. Con la verificación en dos pasos necesitas además una contraseña de aplicación."
+      },
+      "protocolConflict": "La dirección {{email}} ya está configurada como cuenta {{protocol}}. El protocolo no se puede cambiar. Haz una copia de seguridad y elimina primero la cuenta existente.",
+      "accountExists": "Ya existe una cuenta POP3 para {{email}}. Modifícala en la configuración. Si la eliminas, se borrarán los correos locales.",
+      "protocolChange": "El protocolo de una cuenta no se puede cambiar."
     }
   }
 }

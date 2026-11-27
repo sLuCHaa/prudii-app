@@ -12,6 +12,10 @@ export interface ProviderPreset {
   color: string;
   authMethod: "oauth" | "password";
   appPasswordUrl?: string;
+  pop3AppPasswordUrl?: string;
+  pop3Host?: string;
+  pop3Port?: number;
+  pop3EnableUrl?: string;
 }
 
 export const PROVIDER_PRESETS: ProviderPreset[] = [
@@ -27,6 +31,9 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     color: "#ea4335",
     authMethod: "oauth",
     appPasswordUrl: "https://myaccount.google.com/apppasswords",
+    pop3Host: "pop.gmail.com",
+    pop3Port: 995,
+    pop3EnableUrl: "https://support.google.com/mail/answer/7104828",
   },
   {
     id: "microsoft",
@@ -65,6 +72,9 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     smtpSecurity: "starttls",
     color: "#69639f",
     authMethod: "password",
+    pop3AppPasswordUrl: "https://www.fastmail.help/hc/en-us/articles/360058752854",
+    pop3Host: "pop.fastmail.com",
+    pop3Port: 995,
   },
   {
     id: "protonmail",
@@ -90,6 +100,9 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     color: "#ffd800",
     authMethod: "password",
     appPasswordUrl: "https://web.de/email/sicherheit/",
+    pop3Host: "pop3.web.de",
+    pop3Port: 995,
+    pop3EnableUrl: "https://hilfe.web.de/pop-imap/einschalten.html",
   },
   {
     id: "gmx",
@@ -103,6 +116,9 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     color: "#1c449b",
     authMethod: "password",
     appPasswordUrl: "https://gmx.net/email/sicherheit/",
+    pop3Host: "pop.gmx.net",
+    pop3Port: 995,
+    pop3EnableUrl: "https://hilfe.gmx.net/pop-imap/einschalten.html",
   },
   {
     id: "custom",

@@ -837,6 +837,7 @@
     "addAccount": "Ajouter un compte"
   },
   "wizard": {
+    "customProvider": "Personnalisé",
     "addAccount": "Ajouter un compte",
     "chooseProvider": "Choisis ton fournisseur",
     "chooseProviderDesc": "Sélectionne ton fournisseur d'email pour démarrer rapidement",
@@ -1849,6 +1850,63 @@
       "linkMissing": "Le lien de cet abonnement est manquant — veuillez le saisir à nouveau.",
       "linkStoreFailed": "Le lien n’a pas pu être enregistré de façon sécurisée.",
       "subscriptionBusy": "Ce calendrier est en cours de mise à jour — réessayez dans un instant."
+    }
+  },
+  "pop3": {
+    "protocol": "Protocole de réception",
+    "host": "Serveur POP3",
+    "security": "Chiffrement",
+    "ruleTitle": "E-mails sur le serveur",
+    "mode": {
+      "keep": "Laisser sur le serveur",
+      "afterFetch": "Supprimer du serveur après le téléchargement",
+      "afterDays": "Supprimer du serveur après quelques jours"
+    },
+    "days": "Jours après le téléchargement",
+    "withLocal": "Supprimer aussi sur le serveur les e-mails effacés définitivement",
+    "rule": {
+      "keep": "Les e-mails restent sur le serveur après le téléchargement.",
+      "afterFetch": "Les e-mails sont supprimés du serveur juste après le téléchargement.",
+      "afterDays_one": "Les e-mails sont supprimés du serveur {{count}} jour après le téléchargement.",
+      "afterDays_other": "Les e-mails sont supprimés du serveur {{count}} jours après le téléchargement.",
+      "withLocal": "Les e-mails effacés définitivement sont aussi supprimés immédiatement du serveur.",
+      "withoutLocal": "Effacer définitivement un e-mail ici ne déclenche aucune suppression sur le serveur.",
+      "localOnly": "Les e-mails supprimés du serveur n'existent plus que sur cet appareil. Sauvegarde-les régulièrement."
+    },
+    "ruleChange": {
+      "sooner": "S’applique aussi aux e-mails déjà relevés : tout ce qui arrive à échéance selon la nouvelle règle sera supprimé du serveur à la prochaine synchronisation.",
+      "withLocal": "Les e-mails déjà effacés définitivement ici seront alors aussi supprimés du serveur à la prochaine synchronisation."
+    },
+    "appPasswordGmail": "Gmail exige un mot de passe d'application pour POP3, et POP doit être activé dans les paramètres de Gmail.",
+    "appPasswordFastmail": "Fastmail exige un mot de passe d'application pour POP3.",
+    "enableHint": "POP3 doit être activé dans les paramètres de {{provider}}.",
+    "enableLink": "Activer POP3",
+    "testing": "Test de la connexion POP3...",
+    "serverSettingsDesc": "Détails de connexion POP3 et SMTP. Ne les modifie que si tu sais ce que tu fais.",
+    "serverChangeHint": "Après un changement de serveur, les e-mails qui s'y trouvent encore peuvent arriver de nouveau.",
+    "deleteAccountBody": "Les e-mails de ce compte POP3 n'existent peut-être que sur cet appareil et seront définitivement perdus avec le compte. Crée d'abord une sauvegarde (Paramètres → Données) ou exporte les e-mails.",
+    "error": {
+      "noUidl": {
+        "title": "Serveur non pris en charge",
+        "detail": "Ce serveur POP3 ne prend pas en charge UIDL. Sans cette fonction, Prudii ne peut pas reconnaître les e-mails de façon fiable. Utilise IMAP si ton fournisseur le propose."
+      },
+      "locked": {
+        "title": "La boîte aux lettres est verrouillée",
+        "detail": "Un autre logiciel utilise la boîte aux lettres. Ferme-le ou attends quelques minutes, puis réessaie."
+      },
+      "tryLater": {
+        "title": "Connexion impossible pour le moment",
+        "detail": "Le serveur refuse temporairement la connexion. Réessaie plus tard."
+      },
+      "auth": {
+        "generic": "Le serveur a refusé la connexion. Vérifie l'adresse e-mail et le mot de passe. Certains fournisseurs exigent un mot de passe d'application ou l'activation préalable de POP3.",
+        "gmail": "Gmail exige un mot de passe d'application, et POP doit être activé dans les paramètres de Gmail.",
+        "fastmail": "Fastmail n'accepte qu'un mot de passe d'application, pas le mot de passe du compte.",
+        "enable": "{{provider}} n'accepte les logiciels de messagerie qu'une fois POP3 activé : E-Mail-Einstellungen → POP3/IMAP. Avec la validation en deux étapes, il te faut aussi un mot de passe d'application."
+      },
+      "protocolConflict": "L'adresse {{email}} est déjà configurée en tant que compte {{protocol}}. Le protocole ne peut pas être modifié. Sauvegarde puis supprime d'abord le compte existant.",
+      "accountExists": "Il existe déjà un compte POP3 pour {{email}}. Modifie-le dans les paramètres. Le supprimer effacerait les e-mails locaux.",
+      "protocolChange": "Le protocole d'un compte ne peut pas être modifié."
     }
   }
 }

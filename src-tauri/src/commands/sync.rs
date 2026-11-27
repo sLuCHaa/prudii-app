@@ -14,6 +14,67 @@ use tauri::{AppHandle, Emitter, Manager, State};
 pub static SYNCING_ACCOUNTS: std::sync::LazyLock<Mutex<HashSet<String>>> =
     std::sync::LazyLock::new(|| Mutex::new(HashSet::new()));
 
+static SYNC_AGAIN: std::sync::LazyLock<Mutex<HashSet<String>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashSet::new()));
+
+fn claim_sync(account_id: &str) -> Option<crate::cleanup_guard::SetGuard> {
+    let mut syncing = SYNCING_ACCOUNTS.lock().unwrap_or_else(|e| e.into_inner());
+    if !syncing.insert(account_id.to_string()) {
+        return None;
+    }
+    take_sync_again(account_id);
+    Some(crate::cleanup_guard::SetGuard::new(&SYNCING_ACCOUNTS, account_id.to_string()))
+}
+
+/// Notes the request under the sync lock, so the running sync cannot finish without seeing it.
+fn queue_if_syncing(account_id: &str) -> bool {
+    let syncing = SYNCING_ACCOUNTS.lock().unwrap_or_else(|e| e.into_inner());
+    let busy = syncing.contains(account_id);
+    if busy {
+        SYNC_AGAIN.lock().unwrap_or_else(|e| e.into_inner()).insert(account_id.to_string());
+    }
+    busy
+}
+
+fn take_sync_again(account_id: &str) -> bool {
+    SYNC_AGAIN.lock().unwrap_or_else(|e| e.into_inner()).remove(account_id)
+}
+
+fn pop3_wants_delete_sync(conn: &rusqlite::Connection, account_id: &str) -> bool {
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM pop3_uidls u JOIN accounts a ON a.id = u.account_id
+             WHERE a.id = ?1 AND a.pop3_delete_with_local = 1
+               AND u.local_deleted_at IS NOT NULL AND u.state IN ('stored','restored'))",
+        [account_id],
+        |row| row.get(0),
+    )
+    .unwrap_or(false)
+}
+
+/// Sends a permanent delete to the POP3 server right away; offline it waits for the next sync.
+pub(crate) fn sync_after_pop3_delete(app: &AppHandle, db: &Database, account_id: &str) {
+    let account = {
+        let conn = db.lock_db();
+        if !pop3_wants_delete_sync(&conn, account_id) {
+            return;
+        }
+        load_account(&conn, account_id)
+    };
+    let Ok(account) = account else { return };
+    if queue_if_syncing(account_id) {
+        return;
+    }
+    let app = app.clone();
+    let account_id = account_id.to_string();
+    crate::task_registry::spawn_for_account(&account_id.clone(), async move {
+        let auth_type = account.auth_type.clone();
+        match credentials::resolve_credential(&account_id, &auth_type, &account.provider).await {
+            Ok(credential) => do_sync_account(app, account, account_id, credential, auth_type).await,
+            Err(_) => log::warn!("POP3: no credential, server delete waits for the next sync"),
+        }
+    });
+}
+
 static RUNNING_OPS: std::sync::LazyLock<Mutex<HashSet<String>>> =
     std::sync::LazyLock::new(|| Mutex::new(HashSet::new()));
 
@@ -506,28 +567,35 @@ const INVITE_SCAN_LIMIT: usize = 20;
 
 /// Internal sync logic — runs inside a spawned background task.
 /// Communicates all progress and errors via events (never returns errors to IPC).
-async fn do_sync_account(app: AppHandle, account: Account, account_id: String, credential: String, auth_type: String) {
-    // Atomic check-and-claim of the per-account sync lock.
+async fn do_sync_account(app: AppHandle, mut account: Account, account_id: String, credential: String, auth_type: String) {
+    while run_sync_pass(app.clone(), account, account_id.clone(), credential.clone(), auth_type.clone()).await
+        && take_sync_again(&account_id)
     {
-        let mut syncing = SYNCING_ACCOUNTS.lock().unwrap_or_else(|e| e.into_inner());
-        if syncing.contains(&account_id) {
-            emit_progress(&app, &SyncProgress {
-                account_id: account_id.clone(),
-                status: "skipped".into(),
-                folder_name: None,
-                folder_index: 0,
-                folder_count: 0,
-                folder_done: 0,
-                folder_total: 0,
-                new_mails: 0,
-                message: "Sync already in progress".into(),
-            });
-            return;
+        let reloaded = load_account(&app.state::<Database>().lock_db(), &account_id);
+        match reloaded {
+            Ok(fresh) => account = fresh,
+            Err(_) => break,
         }
-        syncing.insert(account_id.clone());
     }
+}
+
+/// False when another sync of this account already runs.
+async fn run_sync_pass(app: AppHandle, account: Account, account_id: String, credential: String, auth_type: String) -> bool {
     // Drop guard releases the lock on every exit path (success, error, abort).
-    let _sync_guard = crate::cleanup_guard::SetGuard::new(&SYNCING_ACCOUNTS, account_id.clone());
+    let Some(_sync_guard) = claim_sync(&account_id) else {
+        emit_progress(&app, &SyncProgress {
+            account_id: account_id.clone(),
+            status: "skipped".into(),
+            folder_name: None,
+            folder_index: 0,
+            folder_count: 0,
+            folder_done: 0,
+            folder_total: 0,
+            new_mails: 0,
+            message: "Sync already in progress".into(),
+        });
+        return false;
+    };
 
     do_sync_account_inner(&app, account, &account_id, &credential, &auth_type).await;
 
@@ -554,6 +622,7 @@ async fn do_sync_account(app: AppHandle, account: Account, account_id: String, c
             }
         });
     }
+    true
 }
 
 async fn do_sync_account_inner(app: &AppHandle, account: Account, account_id: &str, credential: &str, auth_type: &str) {
@@ -1542,6 +1611,43 @@ async fn do_outlook_sync(app: &AppHandle, _account: &Account, account_id: &str, 
     // No IDLE for Outlook API — uses polling via sync_interval_minutes
 }
 
+fn load_account(conn: &rusqlite::Connection, account_id: &str) -> Result<Account, String> {
+    conn.query_row(
+        "SELECT id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port, COALESCE(smtp_security, 'ssl') as smtp_security, auth_type, '' as signature_html, '' as signature_text, COALESCE(sync_interval_minutes, 0) as sync_interval_minutes, COALESCE(signature_on_compose, 1) as signature_on_compose, COALESCE(signature_on_reply, 1) as signature_on_reply, COALESCE(load_external_images, 'always') as load_external_images, created_at, updated_at, incoming_protocol, incoming_security, pop3_delete_mode, pop3_delete_after_days, pop3_delete_with_local FROM accounts WHERE id = ?1",
+        rusqlite::params![account_id],
+        |row| {
+            Ok(Account {
+                id: row.get(0)?,
+                email: row.get(1)?,
+                display_name: row.get(2)?,
+                provider: row.get(3)?,
+                color: row.get(4)?,
+                imap_host: row.get(5)?,
+                imap_port: row.get(6)?,
+                smtp_host: row.get(7)?,
+                smtp_port: row.get(8)?,
+                smtp_security: row.get(9)?,
+                auth_type: row.get(10)?,
+                signature_id: None,
+                signature_html: row.get(11)?,
+                signature_text: row.get(12)?,
+                sync_interval_minutes: row.get(13)?,
+                signature_on_compose: row.get(14)?,
+                signature_on_reply: row.get(15)?,
+                load_external_images: row.get(16)?,
+                created_at: row.get(17)?,
+                updated_at: row.get(18)?,
+                incoming_protocol: row.get(19)?,
+                incoming_security: row.get(20)?,
+                pop3_delete_mode: row.get(21)?,
+                pop3_delete_after_days: row.get(22)?,
+                pop3_delete_with_local: row.get(23)?,
+            })
+        },
+    )
+    .map_err(|e| format!("Account not found: {}", e))
+}
+
 #[tauri::command]
 pub async fn sync_account(
     app: AppHandle,
@@ -1549,43 +1655,7 @@ pub async fn sync_account(
     account_id: String,
     password: Option<String>,
 ) -> Result<(), String> {
-    let account: Account = {
-        let conn = db.lock_db();
-        conn.query_row(
-            "SELECT id, email, display_name, provider, color, imap_host, imap_port, smtp_host, smtp_port, COALESCE(smtp_security, 'ssl') as smtp_security, auth_type, '' as signature_html, '' as signature_text, COALESCE(sync_interval_minutes, 0) as sync_interval_minutes, COALESCE(signature_on_compose, 1) as signature_on_compose, COALESCE(signature_on_reply, 1) as signature_on_reply, COALESCE(load_external_images, 'always') as load_external_images, created_at, updated_at, incoming_protocol, incoming_security, pop3_delete_mode, pop3_delete_after_days, pop3_delete_with_local FROM accounts WHERE id = ?1",
-            rusqlite::params![account_id],
-            |row| {
-                Ok(Account {
-                    id: row.get(0)?,
-                    email: row.get(1)?,
-                    display_name: row.get(2)?,
-                    provider: row.get(3)?,
-                    color: row.get(4)?,
-                    imap_host: row.get(5)?,
-                    imap_port: row.get(6)?,
-                    smtp_host: row.get(7)?,
-                    smtp_port: row.get(8)?,
-                    smtp_security: row.get(9)?,
-                    auth_type: row.get(10)?,
-                    signature_id: None,
-                    signature_html: row.get(11)?,
-                    signature_text: row.get(12)?,
-                    sync_interval_minutes: row.get(13)?,
-                    signature_on_compose: row.get(14)?,
-                    signature_on_reply: row.get(15)?,
-                    load_external_images: row.get(16)?,
-                    created_at: row.get(17)?,
-                    updated_at: row.get(18)?,
-                    incoming_protocol: row.get(19)?,
-                    incoming_security: row.get(20)?,
-                    pop3_delete_mode: row.get(21)?,
-                    pop3_delete_after_days: row.get(22)?,
-                    pop3_delete_with_local: row.get(23)?,
-                })
-            },
-        )
-        .map_err(|e| format!("Account not found: {}", e))?
-    };
+    let account = load_account(&db.lock_db(), &account_id)?;
 
     let auth_type = account.auth_type.clone();
     let provider = account.provider.clone();
@@ -2298,5 +2368,76 @@ mod resync_tests {
         conn.execute("UPDATE accounts SET incoming_protocol = 'imap'", []).unwrap();
         assert_eq!(clear_account_for_resync(&conn, &account), Ok(()));
         assert_eq!(state(), (0, 0));
+    }
+}
+
+#[cfg(test)]
+mod pop3_delete_sync_tests {
+    use super::{claim_sync, pop3_wants_delete_sync, queue_if_syncing, take_sync_again};
+    use crate::commands::mails::pop3_delete_rows;
+    use crate::db::Database;
+    use crate::test_support::{seed_account, seed_folder, seed_mail, temp_db, SeedMail};
+
+    fn pop3_account_with_mail(db: &Database) -> (String, String) {
+        let conn = db.lock_db();
+        let account = seed_account(&conn, "anna@studio-halde.example");
+        conn.execute("UPDATE accounts SET incoming_protocol = 'pop3', pop3_delete_with_local = 1", []).unwrap();
+        let trash = seed_folder(&conn, &account, "trash");
+        let mail = seed_mail(&conn, &SeedMail { account_id: &account, folder_id: &trash, ..Default::default() });
+        conn.execute(
+            "INSERT INTO pop3_uidls (account_id, uidl, mail_id, state) VALUES (?1, 'u1', ?2, 'stored')",
+            [&account, &mail],
+        )
+        .unwrap();
+        (account, mail)
+    }
+
+    #[test]
+    fn a_permanent_delete_wants_a_sync_until_the_server_copy_is_gone() {
+        let db = temp_db();
+        let (account, mail) = pop3_account_with_mail(&db);
+        let conn = db.lock_db();
+        assert!(!pop3_wants_delete_sync(&conn, &account));
+
+        pop3_delete_rows(&conn, &account, &[mail]).unwrap();
+        assert!(pop3_wants_delete_sync(&conn, &account));
+
+        conn.execute("UPDATE pop3_uidls SET state = 'deleted'", []).unwrap();
+        assert!(!pop3_wants_delete_sync(&conn, &account));
+    }
+
+    #[test]
+    fn no_sync_when_local_deletes_stay_local() {
+        let db = temp_db();
+        let (account, mail) = pop3_account_with_mail(&db);
+        let conn = db.lock_db();
+        conn.execute("UPDATE accounts SET pop3_delete_with_local = 0", []).unwrap();
+        pop3_delete_rows(&conn, &account, &[mail]).unwrap();
+        assert!(!pop3_wants_delete_sync(&conn, &account));
+    }
+
+    #[test]
+    fn a_request_during_a_sync_runs_once_afterwards() {
+        let account = uuid::Uuid::new_v4().to_string();
+        assert!(!queue_if_syncing(&account));
+
+        let running = claim_sync(&account).unwrap();
+        assert!(claim_sync(&account).is_none());
+        assert!(queue_if_syncing(&account));
+        assert!(queue_if_syncing(&account));
+        drop(running);
+
+        assert!(take_sync_again(&account));
+        assert!(!take_sync_again(&account));
+    }
+
+    #[test]
+    fn a_sync_started_later_covers_an_older_request() {
+        let account = uuid::Uuid::new_v4().to_string();
+        let first = claim_sync(&account).unwrap();
+        assert!(queue_if_syncing(&account));
+        drop(first);
+        let _second = claim_sync(&account).unwrap();
+        assert!(!take_sync_again(&account));
     }
 }

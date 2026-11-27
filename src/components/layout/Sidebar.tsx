@@ -117,6 +117,7 @@ const FOLDER_COLORS = [
 
 function FolderContextMenu({
   folder,
+  localOnly,
   position,
   onClose,
   onRename,
@@ -125,6 +126,7 @@ function FolderContextMenu({
   onEmpty,
 }: {
   folder: FolderT;
+  localOnly: boolean;
   position: { x: number; y: number };
   onClose: () => void;
   onRename: () => void;
@@ -146,8 +148,10 @@ function FolderContextMenu({
     onSelect: () => onColorChange(c.id),
   }));
 
+  const isLocal = localOnly || folder.is_local;
+
   const entries: MenuEntry[] = [
-    { kind: "header", label: folder.is_local ? t("folder.localFolder") : t("folder.serverFolder"), icon: folder.is_local ? <HardDrive className="w-3 h-3" /> : <Cloud className="w-3 h-3" /> },
+    { kind: "header", label: isLocal ? t("folder.localFolder") : t("folder.serverFolder"), icon: isLocal ? <HardDrive className="w-3 h-3" /> : <Cloud className="w-3 h-3" /> },
     { kind: "separator" },
     ...(canEmpty ? [{ kind: "item" as const, id: "empty", label: folder.folder_type === "trash" ? t("folder.emptyTrash") : t("folder.emptySpam"), icon: <Trash2 className="w-4 h-4" />, danger: true, onSelect: onEmpty }, { kind: "separator" as const }] : []),
     { kind: "item", id: "color", label: t("folder.folderColor"), icon: <Palette className="w-4 h-4" />, submenu: colorEntries },
@@ -162,14 +166,16 @@ function FolderContextMenu({
 
 function CreateFolderDialog({
   accountId,
+  localOnly,
   onClose,
 }: {
   accountId: string;
+  localOnly: boolean;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
   const [name, setName] = useState("");
-  const [isLocal, setIsLocal] = useState(false);
+  const [isLocal, setIsLocal] = useState(localOnly);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -228,30 +234,32 @@ function CreateFolderDialog({
           className="w-full px-3 py-2 rounded-control inset-shadow-field border border-border bg-bg-secondary text-text text-sm mb-3 focus:border-accent"
         />
 
-        <div className="flex gap-2 mb-4">
-          <button
-            onClick={() => setIsLocal(false)}
-            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
-              !isLocal
-                ? "border-accent bg-accent-soft text-accent"
-                : "border-border text-text-secondary hover:bg-hover"
-            }`}
-          >
-            <Cloud className="w-4 h-4" />
-            {t("common.server")}
-          </button>
-          <button
-            onClick={() => setIsLocal(true)}
-            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
-              isLocal
-                ? "border-accent bg-accent-soft text-accent"
-                : "border-border text-text-secondary hover:bg-hover"
-            }`}
-          >
-            <HardDrive className="w-4 h-4" />
-            {t("common.localOnly")}
-          </button>
-        </div>
+        {!localOnly && (
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => setIsLocal(false)}
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
+                !isLocal
+                  ? "border-accent bg-accent-soft text-accent"
+                  : "border-border text-text-secondary hover:bg-hover"
+              }`}
+            >
+              <Cloud className="w-4 h-4" />
+              {t("common.server")}
+            </button>
+            <button
+              onClick={() => setIsLocal(true)}
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
+                isLocal
+                  ? "border-accent bg-accent-soft text-accent"
+                  : "border-border text-text-secondary hover:bg-hover"
+              }`}
+            >
+              <HardDrive className="w-4 h-4" />
+              {t("common.localOnly")}
+            </button>
+          </div>
+        )}
 
         {error && (
           <p className="text-xs text-danger mb-3">{error}</p>
@@ -301,12 +309,13 @@ function UnreadBadge({ count, className = "" }: { count: number; className?: str
   );
 }
 
-function AccountSection({ account, collapsed }: { account: AccountType; collapsed: boolean }) {
+export function AccountSection({ account, collapsed }: { account: AccountType; collapsed: boolean }) {
   const { t, i18n } = useTranslation();
   const accountExpandedStates = useAppStore((s) => s.accountExpandedStates);
   const toggleAccountExpanded = useAppStore((s) => s.toggleAccountExpanded);
   const activeCategory = useAppStore((s) => s.activeCategory);
   const expanded = accountExpandedStates[account.id] ?? true;
+  const isPop3 = account.incoming_protocol === "pop3";
   const [contextMenu, setContextMenu] = useState<{ folder: FolderT; x: number; y: number } | null>(null);
   const [renamingFolder, setRenamingFolder] = useState<FolderT | null>(null);
   const [renameValue, setRenameValue] = useState("");
@@ -469,7 +478,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
   function handleSync(e: React.MouseEvent) {
     e.stopPropagation();
     line.revealNext();
-    if (e.shiftKey) {
+    if (e.shiftKey && !isPop3) {
       handleForceResync();
     } else {
       syncMutation.mutate(account.id);
@@ -485,6 +494,10 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
     if (!confirmed) return;
     forceResyncAccount(account.id);
   }
+
+  const resyncEntries: MenuEntry[] = isPop3
+    ? []
+    : [{ kind: "item", id: "resync", label: t("sidebar.forceResyncTitle"), icon: <RotateCcw className="w-4 h-4" />, onSelect: () => { void handleForceResync(); } }];
 
   function handleFolderContextMenu(e: React.MouseEvent, folder: FolderT) {
     e.preventDefault();
@@ -717,6 +730,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
         {contextMenu && (
           <FolderContextMenu
             folder={contextMenu.folder}
+            localOnly={isPop3}
             position={{ x: contextMenu.x, y: contextMenu.y }}
             onClose={() => setContextMenu(null)}
             onRename={handleStartRename}
@@ -735,7 +749,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
               { kind: "header", label: account.email },
               { kind: "separator" },
               { kind: "item", id: "sync", label: t("sidebar.accountMenu.sync"), icon: <RefreshCw className="w-4 h-4" />, onSelect: () => { line.revealNext(); syncMutation.mutate(account.id); } },
-              { kind: "item", id: "resync", label: t("sidebar.forceResyncTitle"), icon: <RotateCcw className="w-4 h-4" />, onSelect: () => { void handleForceResync(); } },
+              ...resyncEntries,
               { kind: "item", id: "export", label: t("mailExport.menuItem"), icon: <Download className="w-4 h-4" />, onSelect: () => openMailExport(account.id) },
               { kind: "item", id: "newFolder", label: t("sidebar.newFolder"), icon: <FolderPlus className="w-4 h-4" />, onSelect: () => setShowCreateDialog(true) },
               { kind: "separator" },
@@ -960,6 +974,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
       {contextMenu && (
         <FolderContextMenu
           folder={contextMenu.folder}
+          localOnly={isPop3}
           position={{ x: contextMenu.x, y: contextMenu.y }}
           onClose={() => setContextMenu(null)}
           onRename={handleStartRename}
@@ -972,6 +987,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
       {showCreateDialog && (
         <CreateFolderDialog
           accountId={account.id}
+          localOnly={isPop3}
           onClose={() => setShowCreateDialog(false)}
         />
       )}
@@ -985,7 +1001,7 @@ function AccountSection({ account, collapsed }: { account: AccountType; collapse
             { kind: "header", label: account.email },
             { kind: "separator" },
             { kind: "item", id: "sync", label: t("sidebar.accountMenu.sync"), icon: <RefreshCw className="w-4 h-4" />, onSelect: () => { line.revealNext(); syncMutation.mutate(account.id); } },
-            { kind: "item", id: "resync", label: t("sidebar.forceResyncTitle"), icon: <RotateCcw className="w-4 h-4" />, onSelect: () => { void handleForceResync(); } },
+            ...resyncEntries,
             { kind: "item", id: "export", label: t("mailExport.menuItem"), icon: <Download className="w-4 h-4" />, onSelect: () => openMailExport(account.id) },
             { kind: "item", id: "newFolder", label: t("sidebar.newFolder"), icon: <FolderPlus className="w-4 h-4" />, onSelect: () => setShowCreateDialog(true) },
             { kind: "separator" },
