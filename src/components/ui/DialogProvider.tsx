@@ -21,6 +21,8 @@ interface DialogOptions {
   confirmLabel?: string;
   cancelLabel?: string;
   icon?: React.ReactNode;
+  /** Answer when another dialog takes this one's place; defaults to cancelled. */
+  replacedValue?: boolean;
 }
 
 interface DialogContextType {
@@ -59,7 +61,6 @@ const DIALOG_COLORS: Record<DialogType, { bg: string; text: string; button: stri
 interface DialogState {
   isOpen: boolean;
   options: DialogOptions | null;
-  resolve: ((value: boolean) => void) | null;
 }
 
 function Dialog({ state, onClose }: { state: DialogState; onClose: (result: boolean) => void }) {
@@ -173,30 +174,23 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<DialogState>({
     isOpen: false,
     options: null,
-    resolve: null,
   });
 
-  // Use a ref so handleClose always has the latest resolve without re-creating the callback
-  const resolveRef = useRef<((value: boolean) => void) | null>(null);
-  resolveRef.current = state.resolve;
+  // A ref, so a second dialog in the same tick still finds the one it replaces.
+  const pendingRef = useRef<{ resolve: (value: boolean) => void; replacedValue: boolean } | null>(null);
 
   const showDialog = useCallback((options: DialogOptions): Promise<boolean> => {
     return new Promise((resolve) => {
-      setState({
-        isOpen: true,
-        options,
-        resolve,
-      });
+      pendingRef.current?.resolve(pendingRef.current.replacedValue);
+      pendingRef.current = { resolve, replacedValue: options.replacedValue ?? false };
+      setState({ isOpen: true, options });
     });
   }, []);
 
   const handleClose = useCallback((result: boolean) => {
-    resolveRef.current?.(result);
-    setState({
-      isOpen: false,
-      options: null,
-      resolve: null,
-    });
+    pendingRef.current?.resolve(result);
+    pendingRef.current = null;
+    setState({ isOpen: false, options: null });
   }, []);
 
   const confirm = useCallback((options: DialogOptions) => {
