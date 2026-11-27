@@ -1,6 +1,10 @@
 export type AccountProvider = "google" | "microsoft" | "apple" | "fastmail" | "protonmail" | "webde" | "gmx" | "custom";
 export type SmtpSecurity = "starttls" | "ssl";
 
+export type IncomingProtocol = "imap" | "pop3";
+export type IncomingSecurity = "ssl" | "starttls";
+export type Pop3DeleteMode = "keep" | "after_fetch" | "after_days";
+
 export interface Account {
   id: string;
   email: string;
@@ -13,7 +17,11 @@ export interface Account {
   smtp_port: number;
   smtp_security: SmtpSecurity;
   auth_type: string;
-  incoming_protocol: "imap" | "pop3";
+  incoming_protocol: IncomingProtocol;
+  incoming_security: IncomingSecurity;
+  pop3_delete_mode: Pop3DeleteMode;
+  pop3_delete_after_days: number;
+  pop3_delete_with_local: boolean;
   signature_id: string | null;
   /** Content of the assigned signature; empty when the account has none. */
   signature_html: string;
@@ -35,7 +43,12 @@ export interface Signature {
   updated_at: string;
 }
 
-export interface CreateAccountRequest {
+export type IncomingSettings = Pick<
+  Account,
+  "incoming_protocol" | "incoming_security" | "pop3_delete_mode" | "pop3_delete_after_days" | "pop3_delete_with_local"
+>;
+
+export interface CreateAccountRequest extends Partial<IncomingSettings> {
   email: string;
   display_name: string;
   provider: string;

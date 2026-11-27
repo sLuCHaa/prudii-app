@@ -1846,5 +1846,57 @@
       "linkStoreFailed": "无法安全地保存链接。",
       "subscriptionBusy": "此日历正在更新，请稍后再试。"
     }
+  },
+  "pop3": {
+    "protocol": "收信协议",
+    "host": "POP3 服务器",
+    "security": "加密方式",
+    "ruleTitle": "服务器上的邮件",
+    "mode": {
+      "keep": "保留在服务器上",
+      "afterFetch": "下载后从服务器删除",
+      "afterDays": "几天后从服务器删除"
+    },
+    "days": "下载后的天数",
+    "withLocal": "永久删除的邮件同时从服务器删除",
+    "rule": {
+      "keep": "邮件下载后仍保留在服务器上。",
+      "afterFetch": "邮件下载后会立即从服务器删除。",
+      "afterDays_other": "邮件会在下载 {{count}} 天后从服务器删除。",
+      "withLocal": "永久删除的邮件会立即同时从服务器删除。",
+      "withoutLocal": "在此永久删除邮件不会将其从服务器删除。",
+      "localOnly": "从服务器删除的邮件只保存在本设备上。请定期备份。"
+    },
+    "appPasswordGmail": "Gmail 使用 POP3 需要应用专用密码，并且须在 Gmail 设置中开启 POP。",
+    "appPasswordFastmail": "Fastmail 使用 POP3 需要应用专用密码。",
+    "enableHint": "须在 {{provider}} 的设置中开启 POP3。",
+    "enableLink": "开启 POP3",
+    "testing": "测试 POP3 连接中...",
+    "serverSettingsDesc": "POP3 和 SMTP 连接信息。仅在清楚操作后果时修改。",
+    "serverChangeHint": "更换服务器后，仍留在服务器上的邮件可能会再次收到。",
+    "deleteAccountBody": "此 POP3 账户的邮件可能只保存在本设备上，删除账户后将永久丢失。请先创建备份（设置 → 备份）或导出邮件。",
+    "error": {
+      "noUidl": {
+        "title": "不支持该服务器",
+        "detail": "此 POP3 服务器不支持 UIDL。缺少该功能，Prudii 无法可靠地识别邮件。如果服务商支持 IMAP，请改用 IMAP。"
+      },
+      "locked": {
+        "title": "邮箱已被锁定",
+        "detail": "另一个程序正在使用该邮箱。请将其关闭，或等待几分钟后重试。"
+      },
+      "tryLater": {
+        "title": "暂时无法登录",
+        "detail": "服务器暂时拒绝登录。请稍后重试。"
+      },
+      "auth": {
+        "generic": "服务器拒绝了登录。请检查邮箱地址和密码。部分服务商要求使用应用专用密码，或先开启 POP3。",
+        "gmail": "Gmail 需要应用专用密码，并且须在 Gmail 设置中开启 POP。",
+        "fastmail": "Fastmail 只接受应用专用密码，不接受账户密码。",
+        "enable": "{{provider}} 只有在开启 POP3 后才允许邮件程序登录：E-Mail-Einstellungen → POP3/IMAP。启用两步验证时还需要应用专用密码。"
+      },
+      "protocolConflict": "邮箱地址 {{email}} 已设置为 {{protocol}} 账户。协议无法更改。请先备份并移除现有账户。",
+      "accountExists": "{{email}} 已有一个 POP3 账户。请在设置中修改。移除该账户会删除本地邮件。",
+      "protocolChange": "账户的协议无法更改。"
+    }
   }
 }
