@@ -1629,7 +1629,9 @@ pub async fn store_body_and_attachments(db: &Database, mail_id: &str, body_bytes
             };
             s.replace('\n', " ").replace('\r', "")
         };
-        let attach_dir = db.data_dir.join("attachments").join(mail_id);
+        let Some(attach_dir) = crate::safe_path::mail_attachment_dir(&db.data_dir, mail_id) else {
+            anyhow::bail!("unusable mail id, attachments not stored");
+        };
         let _ = tokio::fs::create_dir_all(&attach_dir).await;
 
         let mut processed_filenames = std::collections::HashSet::new();
@@ -1732,7 +1734,7 @@ fn extract_first_address(addr: Option<&mail_parser::Address<'_>>) -> (String, St
     }
 }
 
-fn sanitize_filename(name: &str) -> String {
+pub(crate) fn sanitize_filename(name: &str) -> String {
     let sanitized: String = name
         .chars()
         .map(|c| match c {

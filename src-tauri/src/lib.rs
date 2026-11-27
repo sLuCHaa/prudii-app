@@ -23,6 +23,7 @@ pub mod pool;
 pub mod pop3;
 pub mod priority;
 pub mod rules;
+mod safe_path;
 pub mod sieve;
 pub mod smtp;
 pub mod system_accent;

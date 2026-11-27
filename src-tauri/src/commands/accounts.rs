@@ -508,10 +508,8 @@ fn delete_account_data(db: &Database, account_id: &str) -> Result<(), String> {
         return Err(format!("Failed to delete account: {}", e));
     }
 
-    let attach_dir = db.data_dir.join("attachments");
-    if attach_dir.exists() {
-        for mail_id in &mail_ids {
-            let dir = attach_dir.join(mail_id);
+    if db.data_dir.join("attachments").exists() {
+        for dir in mail_ids.iter().filter_map(|id| crate::safe_path::mail_attachment_dir(&db.data_dir, id)) {
             let _ = std::fs::remove_dir_all(&dir);
         }
     }

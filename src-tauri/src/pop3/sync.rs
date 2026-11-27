@@ -7,6 +7,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 
 use super::store::{self, DeleteMode, DeletePolicy, UidlRow};
 use super::{Pop3Client, Pop3Error, Pop3Security, MAX_MESSAGE_BYTES};
+use crate::commands::backup::backup_in_progress;
 use crate::db::Database;
 use crate::imap::InsertOutcome;
 use crate::models::Account;
@@ -139,6 +140,9 @@ async fn delete_phase<S: AsyncRead + AsyncWrite + Unpin>(
 
     let mut deleted = Vec::new();
     for (msg, uidl) in targets {
+        if backup_in_progress() {
+            break;
+        }
         let Some(mail_id) = mail_ids.get(uidl.as_str()) else { continue };
         if !store::has_source(data_dir, mail_id) {
             log::warn!("POP3: raw source missing, kept on server");
@@ -171,12 +175,21 @@ async fn delete_phase<S: AsyncRead + AsyncWrite + Unpin>(
                 continue;
             }
         }
+        // Checked again: the verification above takes time.
+        if backup_in_progress() {
+            break;
+        }
         match client.dele(msg).await? {
             Ok(()) => deleted.push(uidl),
             Err(_) => log::warn!("POP3: DELE refused, message kept on server"),
         }
     }
 
+    // Without QUIT the server discards the DELEs of this session.
+    if !deleted.is_empty() && backup_in_progress() {
+        log::info!("POP3: backup or restore running, server deletes are retried next run");
+        return Ok(0);
+    }
     if client.quit().await.is_err() {
         log::warn!("POP3: QUIT failed, server deletes are retried next run");
         return Ok(0);
@@ -1009,6 +1022,34 @@ mod tests {
         let report = run(&t, vec![uidl(&[(1, "u1")]), list(&[(1, 400)]), QUIT]).await.unwrap();
         assert_eq!(report.deleted_on_server, 0);
         assert_eq!(uidl_rows(&t)[0].2, "stored");
+    }
+
+    #[tokio::test]
+    async fn no_dele_while_a_backup_or_restore_runs() {
+        let mut t = env("keep");
+        store_first(&t).await;
+        t.account.pop3_delete_mode = "after_fetch".into();
+        crate::commands::backup::TEST_BUSY.set(true);
+        let result = run(&t, vec![uidl(&[(1, "u1")]), list(&[(1, 400)]), QUIT]).await;
+        crate::commands::backup::TEST_BUSY.set(false);
+        assert_eq!(result.unwrap().deleted_on_server, 0);
+        assert_eq!(uidl_rows(&t)[0].2, "stored");
+    }
+
+    #[tokio::test]
+    async fn backup_starting_mid_session_stops_deletes_and_skips_quit() {
+        let t = env("after_fetch");
+        let result = run(&t, vec![
+            uidl(&[(1, "u1"), (2, "u2")]),
+            list(&[(1, 400), (2, 400)]),
+            retr(2, &mail("m2", "Zweite")),
+            retr(1, &mail("m1", "Erste")),
+            ("DELE 1", "<BUSY>+OK deleted\r\n"),
+        ])
+        .await;
+        crate::commands::backup::TEST_BUSY.set(false);
+        assert_eq!(result.unwrap().deleted_on_server, 0);
+        assert!(uidl_rows(&t).iter().all(|r| r.2 == "stored"));
     }
 
     #[tokio::test]

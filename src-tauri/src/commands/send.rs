@@ -366,7 +366,9 @@ async fn save_draft_local(db: &Database, account_id: &str, raw: &[u8]) -> Result
         .map_err(|e| format!("Failed to save draft: {}", e))?;
     if let Err(e) = imap::store_body_and_attachments(db, &id, raw).await {
         let _ = db.lock_db().execute("DELETE FROM mails WHERE id = ?1", rusqlite::params![id]);
-        let _ = std::fs::remove_dir_all(db.data_dir.join("attachments").join(&id));
+        if let Some(dir) = crate::safe_path::mail_attachment_dir(&db.data_dir, &id) {
+            let _ = std::fs::remove_dir_all(dir);
+        }
         return Err(format!("Failed to save draft: {}", e));
     }
     db.lock_db()

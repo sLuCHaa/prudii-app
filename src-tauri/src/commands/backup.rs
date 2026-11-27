@@ -7,6 +7,7 @@ use crate::models::{
     BackupIncludes, BackupManifest, BackupOptions, BackupProgress, BackupStats, RestorePreview, UpdateAccountSettings,
 };
 use crate::pool::ImapPool;
+use crate::safe_path::{is_plain_path_component, is_safe_file_name, is_safe_mail_id};
 use std::io::{Read, Seek, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -18,7 +19,16 @@ static BACKUP_IN_PROGRESS: std::sync::LazyLock<Mutex<bool>> =
 /// True while a backup or restore is writing — the export-backup window must not
 /// let the OS close button kill the process mid-write.
 pub fn backup_in_progress() -> bool {
+    #[cfg(test)]
+    if TEST_BUSY.get() {
+        return true;
+    }
     *BACKUP_IN_PROGRESS.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+#[cfg(test)]
+thread_local! {
+    pub(crate) static TEST_BUSY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// Clears the flag even if the backup task panics — otherwise the export window's
@@ -46,14 +56,6 @@ enum ExtractCheck {
     Rejected,
     /// Couldn't create the destination directory or resolve a canonical path.
     IoError(String),
-}
-
-/// True for a name that is exactly one ordinary path segment — no `..`, no separator,
-/// no root or drive prefix.
-fn is_plain_path_component(name: &str) -> bool {
-    let mut components = Path::new(name).components();
-    matches!(components.next(), Some(std::path::Component::Normal(c)) if c == name)
-        && components.next().is_none()
 }
 
 /// Resolves a ZIP entry's relative path under `base`, rejecting directory traversal
@@ -547,7 +549,7 @@ fn do_create_backup_inner(
                     att.get("local_path").and_then(|v| v.as_str()),
                 ) {
                     let src = std::path::Path::new(local_path);
-                    if src.exists() {
+                    if is_safe_mail_id(mail_id) && src.exists() {
                         if let Some(filename) = src.file_name().and_then(|f| f.to_str()) {
                             let zip_path = format!("attachment_files/{}/{}", mail_id, filename);
                             if let Ok(mut file) = std::fs::File::open(src) {
@@ -629,8 +631,7 @@ fn do_create_backup_inner(
 
 const POP3_UIDL_COLUMNS: [&str; 7] = ["account_id", "uidl", "mail_id", "fetched_at", "state", "local_deleted_at", "server"];
 
-/// Writes `pop3_uidls.json` and `mail_sources/{mail_id}.eml`. Only a missing source is skipped,
-/// since the file may be the only copy of the mail.
+/// Only a missing source is skipped, since the file may be the only copy of the mail.
 pub(crate) fn export_pop3<W: Write + Seek>(
     db: &Database,
     zip: &mut zip::ZipWriter<W>,
@@ -655,7 +656,7 @@ pub(crate) fn export_pop3<W: Write + Seek>(
     zip.start_file("pop3_uidls.json", *opts).map_err(|e| e.to_string())?;
     zip.write_all(json.as_bytes()).map_err(|e| e.to_string())?;
 
-    for mail_id in &mail_ids {
+    for mail_id in mail_ids.iter().filter(|id| is_safe_mail_id(id)) {
         let mut file = match std::fs::File::open(crate::pop3::store::source_path(data_dir, mail_id)) {
             Ok(file) => file,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
@@ -675,15 +676,19 @@ pub(crate) fn import_pop3<R: Read + Seek>(
 ) -> Result<(), String> {
     let imported = import_pop3_sources(db, archive, data_dir)
         .and_then(|()| import_pop3_uidls(db, archive, data_dir));
-    // Also after a failure: a restored mail must not leave the server because of an earlier deletion.
-    db.lock_db()
-        .execute(
-            "UPDATE pop3_uidls SET local_deleted_at = NULL WHERE local_deleted_at IS NOT NULL
-             AND EXISTS(SELECT 1 FROM mails m WHERE m.id = pop3_uidls.mail_id)",
-            [],
-        )
-        .map_err(|e| e.to_string())?;
+    clear_pop3_delete_marks(&db.lock_db())?;
     imported
+}
+
+/// Runs even after a failed step: a restored mail must not leave the server because of an earlier deletion.
+fn clear_pop3_delete_marks(conn: &rusqlite::Connection) -> Result<(), String> {
+    conn.execute(
+        "UPDATE pop3_uidls SET local_deleted_at = NULL WHERE local_deleted_at IS NOT NULL
+         AND EXISTS(SELECT 1 FROM mails m WHERE m.id = pop3_uidls.mail_id)",
+        [],
+    )
+    .map(|_| ())
+    .map_err(|e| e.to_string())
 }
 
 fn import_pop3_sources<R: Read + Seek>(
@@ -697,7 +702,7 @@ fn import_pop3_sources<R: Read + Seek>(
         let name = entry.name().map_err(|e| e.to_string())?.into_owned();
         let Some(file_name) = name.strip_prefix("mail_sources/") else { continue };
         let Some(mail_id) = file_name.strip_suffix(".eml") else { continue };
-        if entry.is_dir() || !is_plain_path_component(file_name) || !is_plain_path_component(mail_id) {
+        if entry.is_dir() || !is_safe_mail_id(mail_id) {
             continue;
         }
         let wanted: bool = db
@@ -726,6 +731,10 @@ fn import_pop3_sources<R: Read + Seek>(
         }
         crate::pop3::store::write_source(data_dir, mail_id, &raw)
             .map_err(|e| format!("Failed to write a mail source: {}", e))?;
+        // These bytes were never compared with the server copy.
+        db.lock_db()
+            .execute("UPDATE pop3_uidls SET state = 'restored' WHERE mail_id = ?1 AND state = 'stored'", [mail_id])
+            .map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -752,7 +761,7 @@ fn import_pop3_uidls<R: Read + Seek>(
             "server_deleted" => "server_deleted",
             _ => continue,
         };
-        if uidl.is_empty() || !is_plain_path_component(mail_id) || !crate::commands::mails::is_pop3_account(&tx, account_id) {
+        if uidl.is_empty() || !is_safe_mail_id(mail_id) || !crate::commands::mails::is_pop3_account(&tx, account_id) {
             continue;
         }
         let has_mail: bool = tx
@@ -1291,13 +1300,18 @@ pub(crate) fn import_mail_chunk(conn: &rusqlite::Connection, mails: &[serde_json
     conn.execute_batch("BEGIN TRANSACTION;").map_err(|e| e.to_string())?;
     let result = (|| -> Result<(), String> {
         for mail in mails {
+            let id = mail.get("id").and_then(|v| v.as_str()).unwrap_or("");
+            if !is_safe_mail_id(id) {
+                log::warn!("Restore: skipped a mail with an unusable id");
+                continue;
+            }
             let account_id = mail.get("account_id").and_then(|v| v.as_str()).unwrap_or("");
             // A POP3 account's local mail is the only copy.
             let pop3 = crate::commands::mails::is_pop3_account(conn, account_id);
             conn.execute(
                 if pop3 { &keep_sql } else { &replace_sql },
                 rusqlite::params![
-                    mail.get("id").and_then(|v| v.as_str()).unwrap_or(""),
+                    id,
                     account_id,
                     mail.get("folder_id").and_then(|v| v.as_str()).unwrap_or(""),
                     mail.get("message_id").and_then(|v| v.as_str()),
@@ -1347,6 +1361,30 @@ pub(crate) fn import_mail_chunk(conn: &rusqlite::Connection, mails: &[serde_json
     }
 }
 
+pub(crate) fn import_mails(
+    conn: &rusqlite::Connection,
+    mails: &[serde_json::Value],
+    is_replace: bool,
+    mut on_chunk: impl FnMut(usize),
+) -> Result<(), String> {
+    let mut done = 0;
+    let imported = mails.chunks(1000).try_for_each(|chunk| {
+        import_mail_chunk(conn, chunk, is_replace)?;
+        done += chunk.len();
+        on_chunk(done);
+        Ok::<(), String>(())
+    });
+    clear_pop3_delete_marks(conn)?;
+    imported
+}
+
+/// True for `{mail_id}/{filename}`, the only shape a backup writes.
+fn is_attachment_entry(rel_path: &str) -> bool {
+    rel_path
+        .split_once('/')
+        .is_some_and(|(mail_id, file_name)| is_safe_mail_id(mail_id) && !file_name.contains('/') && is_safe_file_name(file_name))
+}
+
 pub(crate) fn import_attachment_rows(
     conn: &rusqlite::Connection,
     attachments: &[serde_json::Value],
@@ -1365,9 +1403,14 @@ pub(crate) fn import_attachment_rows(
         let mail_id = att.get("mail_id").and_then(|v| v.as_str()).unwrap_or("");
         let filename = att.get("filename").and_then(|v| v.as_str()).unwrap_or("");
 
-        // Determine new local_path based on current data_dir
-        let att_dir = data_dir.join("attachments").join(mail_id);
-        let new_local_path = att_dir.join(filename);
+        // The stored name may be the sender's raw one; the file on disk carries the sanitized form.
+        let on_disk = crate::imap::sanitize_filename(filename);
+        let att_dir = crate::safe_path::mail_attachment_dir(data_dir, mail_id).filter(|_| is_safe_file_name(&on_disk));
+        let Some(att_dir) = att_dir else {
+            log::warn!("Restore: skipped an attachment with an unusable path");
+            continue;
+        };
+        let new_local_path = att_dir.join(on_disk);
 
         conn.execute(
             if is_pop3_mail(conn, mail_id) { &keep_sql } else { &replace_sql },
@@ -2387,19 +2430,15 @@ fn do_restore_backup_inner(
 
             let conn = db.lock_db();
             let insert_or = if is_replace { "INSERT OR REPLACE" } else { "INSERT OR IGNORE" };
-            let batch_size = 1000;
             let total_mails = mails.len();
-            for chunk_start in (0..total_mails).step_by(batch_size) {
-                let chunk_end = (chunk_start + batch_size).min(total_mails);
-                import_mail_chunk(&conn, &mails[chunk_start..chunk_end], is_replace)?;
-
+            import_mails(&conn, &mails, is_replace, |done| {
                 emit_restore_progress(app, &BackupProgress {
                     status: "restoring_mails".into(),
-                    message: format!("Restoring mails... ({}/{})", chunk_end, total_mails),
+                    message: format!("Restoring mails... ({}/{})", done, total_mails),
                     current_step,
                     total_steps,
                 });
-            }
+            })?;
 
             if let Some(drafts_str) = drafts_json {
                 let drafts: Vec<serde_json::Value> = serde_json::from_str(&drafts_str).map_err(|e| e.to_string())?;
@@ -2464,6 +2503,10 @@ fn do_restore_backup_inner(
                 if name.starts_with("attachment_files/") && !entry.is_dir() {
                     // attachment_files/{mail_id}/{filename}
                     let rel_path = &name["attachment_files/".len()..];
+                    if !is_attachment_entry(rel_path) {
+                        log::warn!("Restore: skipped an attachment file with an unusable path");
+                        continue;
+                    }
                     match safe_extract_path(&attachments_base, rel_path) {
                         ExtractCheck::Ok(dest) => {
                             if keeps_existing_file(&db.lock_db(), rel_path, &dest) {
@@ -4105,5 +4148,134 @@ mod pop3_roundtrip {
         import_pop3(&db, &mut zip_of(&[("mails.json", b"[]")]), &db.data_dir).unwrap();
 
         assert!(uidl_states(&db).is_empty());
+    }
+
+    #[test]
+    fn restore_skips_mails_with_unsafe_ids() {
+        let db = temp_db();
+        let (account, _) = mail_of(&db.lock_db(), "anna@studio-halde.example", "pop3");
+        let conn = db.lock_db();
+        let folder: String = conn.query_row("SELECT folder_id FROM mails", [], |r| r.get(0)).unwrap();
+        let good = uuid::Uuid::new_v4().to_string();
+        let ids = ["", "..", "a/b", "a\\b", "x:y", "/etc/anna", "C:\\anna", "../anna", good.as_str()];
+        let mails: Vec<serde_json::Value> = ids
+            .iter()
+            .map(|id| serde_json::json!({ "id": id, "account_id": account, "folder_id": folder, "date": "2026-01-01 00:00:00" }))
+            .collect();
+
+        import_mail_chunk(&conn, &mails, true).unwrap();
+
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM mails", [], |r| r.get(0)).unwrap();
+        assert_eq!(count, 2);
+        let kept: bool = conn.query_row("SELECT EXISTS(SELECT 1 FROM mails WHERE id = ?1)", [&good], |r| r.get(0)).unwrap();
+        assert!(kept);
+    }
+
+    #[test]
+    fn restore_keeps_attachment_paths_inside_the_mail_folder() {
+        let db = temp_db();
+        let (_, mail) = mail_of(&db.lock_db(), "anna@studio-halde.example", "pop3");
+        let conn = db.lock_db();
+        let data = Path::new("data");
+        let att = |id: &str, mail_id: &str, filename: &str| serde_json::json!({ "id": id, "mail_id": mail_id, "filename": filename });
+        let rows = [
+            att("bad1", "..", "a.pdf"),
+            att("bad2", "a/b", "a.pdf"),
+            att("bad3", "a\\b", "a.pdf"),
+            att("bad4", "/etc/anna", "a.pdf"),
+            att("bad5", &mail, ".."),
+            att("bad6", &mail, ".. "),
+            att("slash", &mail, "a/b.pdf"),
+            att("back", &mail, "..\\..\\c.pdf"),
+            att("abs", &mail, "/etc/anna"),
+            att("plain", &mail, "Angebot März 2026.v2.pdf"),
+        ];
+
+        import_attachment_rows(&conn, &rows, data, true).unwrap();
+
+        let mut stmt = conn.prepare("SELECT id, filename, local_path FROM attachments ORDER BY id").unwrap();
+        let stored: Vec<(String, String, String)> = stmt
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        let row = |id: &str, filename: &str, on_disk: &str| {
+            let path = data.join("attachments").join(&mail).join(on_disk).to_string_lossy().to_string();
+            (id.to_string(), filename.to_string(), path)
+        };
+        assert_eq!(
+            stored,
+            vec![
+                row("abs", "/etc/anna", "_etc_anna"),
+                row("back", "..\\..\\c.pdf", ".._.._c.pdf"),
+                row("plain", "Angebot März 2026.v2.pdf", "Angebot März 2026.v2.pdf"),
+                row("slash", "a/b.pdf", "a_b.pdf"),
+            ]
+        );
+    }
+
+    #[test]
+    fn attachment_entries_need_a_mail_folder_and_a_file_name() {
+        assert!(is_attachment_entry("abc-1/Angebot März.v2.pdf"));
+        for bad in ["abc", "abc/", "../x", ".. /x", "abc/..", "abc/.. ", "abc/d/e", "a:b/x", "abc/x:y"] {
+            assert!(!is_attachment_entry(bad), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn backup_never_reads_a_source_through_an_unsafe_id() {
+        let db = temp_db();
+        let (_, mail) = mail_of(&db.lock_db(), "anna@studio-halde.example", "pop3");
+        db.lock_db().execute("UPDATE mails SET id = '../outside' WHERE id = ?1", [&mail]).unwrap();
+        std::fs::create_dir_all(db.data_dir.join("mail_sources")).unwrap();
+        std::fs::write(db.data_dir.join("outside.eml"), b"fremd").unwrap();
+        let mut buffer = std::io::Cursor::new(Vec::new());
+        {
+            let mut zip = zip::ZipWriter::new(&mut buffer);
+            export_pop3(&db, &mut zip, &db.data_dir, &zip::write::SimpleFileOptions::default()).unwrap();
+            zip.finish().unwrap();
+        }
+
+        let archive = zip::ZipArchive::new(buffer).unwrap();
+
+        assert!(archive.file_names().map(|n| n.unwrap().into_owned()).all(|n| !n.ends_with(".eml")));
+    }
+
+    #[test]
+    fn mail_import_clears_delete_marks_even_when_it_aborts() {
+        for fail in [false, true] {
+            let db = temp_db();
+            let (account, mail) = mail_of(&db.lock_db(), "anna@studio-halde.example", "pop3");
+            insert_uidl(&db, &account, "back", &mail, "stored", Some("2026-11-02 09:00:00"));
+            insert_uidl(&db, &account, "gone", "deleted-mail", "stored", Some("2026-11-02 09:00:00"));
+            {
+                let conn = db.lock_db();
+                if fail {
+                    conn.execute_batch("CREATE TRIGGER stop BEFORE INSERT ON mails BEGIN SELECT RAISE(ABORT, 'stop'); END;").unwrap();
+                }
+                let mails = read_mail_batch(&conn, 100, 0).unwrap();
+                assert_eq!(import_mails(&conn, &mails, false, |_| {}).is_err(), fail);
+            }
+
+            assert_eq!(
+                uidl_states(&db),
+                vec![
+                    ("back".to_string(), "stored".to_string(), None),
+                    ("gone".to_string(), "stored".to_string(), Some("2026-11-02 09:00:00".to_string())),
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn a_source_written_for_a_stored_row_must_be_compared_again() {
+        let db = temp_db();
+        let (account, mail) = mail_of(&db.lock_db(), "anna@studio-halde.example", "pop3");
+        insert_uidl(&db, &account, "u1", &mail, "stored", None);
+        let eml = format!("mail_sources/{mail}.eml");
+
+        import_pop3(&db, &mut zip_of(&[(&eml, b"Subject: Angebot\r\n\r\n")]), &db.data_dir).unwrap();
+
+        assert_eq!(uidl_states(&db), vec![("u1".to_string(), "restored".to_string(), None)]);
     }
 }

@@ -1342,7 +1342,9 @@ pub(crate) fn pop3_delete_rows(tx: &rusqlite::Connection, account_id: &str, mail
 
 pub(crate) fn pop3_remove_files(db: &Database, mail_ids: &[String]) {
     for mail_id in mail_ids {
-        let _ = std::fs::remove_dir_all(db.data_dir.join("attachments").join(mail_id));
+        if let Some(dir) = crate::safe_path::mail_attachment_dir(&db.data_dir, mail_id) {
+            let _ = std::fs::remove_dir_all(dir);
+        }
     }
     crate::pop3::discard_orphan_sources(&db.lock_db(), &db.data_dir, mail_ids);
 }
@@ -1854,7 +1856,7 @@ pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id:
                         }
                     }
                     let mid = mail_id.clone();
-                    tokio::spawn(async move { let _ = tokio::fs::remove_dir_all(data_dir.join("attachments").join(&mid)).await; });
+                    tokio::spawn(async move { if let Some(dir) = crate::safe_path::mail_attachment_dir(&data_dir, &mid) { let _ = tokio::fs::remove_dir_all(dir).await; } });
 
                     // Retry-safe permanent delete: queue a pending op (the local row
                     // is already gone) and clear it once the server delete succeeds.
@@ -1962,7 +1964,7 @@ pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id:
                         }
                     }
                     let mid = mail_id.clone();
-                    tokio::spawn(async move { let _ = tokio::fs::remove_dir_all(data_dir.join("attachments").join(&mid)).await; });
+                    tokio::spawn(async move { if let Some(dir) = crate::safe_path::mail_attachment_dir(&data_dir, &mid) { let _ = tokio::fs::remove_dir_all(dir).await; } });
 
                     // Retry-safe permanent delete: queue a pending op (the local row
                     // is already gone) and clear it once the server delete succeeds.
@@ -2313,8 +2315,9 @@ pub async fn trash_mail(app: tauri::AppHandle, db: State<'_, Database>, mail_id:
                 match tx_result {
                     Ok(_) => {
                         let _ = conn.execute_batch("COMMIT");
-                        let attach_dir = data_dir.join("attachments").join(&mail_id);
-                        let _ = std::fs::remove_dir_all(&attach_dir);
+                        if let Some(dir) = crate::safe_path::mail_attachment_dir(&data_dir, &mail_id) {
+                            let _ = std::fs::remove_dir_all(dir);
+                        }
                     }
                     Err(e) => {
                         log::error!("Failed to delete mail locally: {}", e);
@@ -3620,7 +3623,9 @@ async fn empty_folder_by_type(app: tauri::AppHandle, db: State<'_, Database>, ac
             let mail_ids: Vec<String> = mails.iter().map(|(id, _)| id.clone()).collect();
             tokio::spawn(async move {
                 for mid in &mail_ids {
-                    let _ = tokio::fs::remove_dir_all(data_dir.join("attachments").join(mid)).await;
+                    if let Some(dir) = crate::safe_path::mail_attachment_dir(&data_dir, mid) {
+                        let _ = tokio::fs::remove_dir_all(dir).await;
+                    }
                 }
             });
 
@@ -3721,7 +3726,9 @@ async fn empty_folder_by_type(app: tauri::AppHandle, db: State<'_, Database>, ac
                 let mail_ids_clone = mail_ids;
                 tokio::spawn(async move {
                     for mid in &mail_ids_clone {
-                        let _ = tokio::fs::remove_dir_all(data_dir.join("attachments").join(mid)).await;
+                        if let Some(dir) = crate::safe_path::mail_attachment_dir(&data_dir, mid) {
+                            let _ = tokio::fs::remove_dir_all(dir).await;
+                        }
                     }
                 });
                 count
@@ -4547,6 +4554,7 @@ pub async fn bulk_save_attachments(
         }
 
         // Handle duplicate filenames inside the ZIP
+        let filename = &crate::imap::sanitize_filename(filename);
         let mut zip_name = filename.clone();
         if used_names.contains(&zip_name) {
             let stem = std::path::Path::new(filename)
