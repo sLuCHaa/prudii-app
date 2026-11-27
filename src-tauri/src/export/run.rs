@@ -150,7 +150,8 @@ fn read_chunk(db: &Database, folder_id: &str, after: &Option<PageKey>) -> Vec<Ma
         None => (None, None),
     };
     let mut stmt = match conn.prepare(
-        "SELECT id, subject, from_name, from_email, to_json, cc_json, bcc_json, date, body_html, body_text, has_attachments, uid IS NOT NULL
+        "SELECT id, subject, from_name, from_email, to_json, cc_json, bcc_json, date, body_html, body_text, has_attachments,
+             uid IS NOT NULL AND account_id NOT IN (SELECT id FROM accounts WHERE incoming_protocol = 'pop3')
          FROM mails
          WHERE folder_id = ?1 AND (?2 IS NULL OR date < ?2 OR (date = ?2 AND id > ?3))
          ORDER BY date DESC, id ASC LIMIT ?4",
@@ -1194,5 +1195,27 @@ JVBERi0xLjQ=\n\
             assert_eq!(files(&out.0, "eml").len(), 1);
             assert_eq!(files(&out.0, "html").len(), usize::from(html));
         }
+    }
+}
+
+#[cfg(test)]
+mod pop3_uid_tests {
+    use super::read_chunk;
+    use crate::test_support::{seed_account, seed_folder, seed_mail, temp_db, SeedMail};
+
+    #[test]
+    fn a_synthetic_pop3_uid_is_not_a_server_uid() {
+        let db = temp_db();
+        let folder = {
+            let conn = db.lock_db();
+            let account = seed_account(&conn, "anna@studio-halde.example");
+            conn.execute("UPDATE accounts SET incoming_protocol = 'pop3' WHERE id = ?1", [&account]).unwrap();
+            let folder = seed_folder(&conn, &account, "inbox");
+            let id = seed_mail(&conn, &SeedMail { account_id: &account, folder_id: &folder, ..Default::default() });
+            conn.execute("UPDATE mails SET uid = 7 WHERE id = ?1", [&id]).unwrap();
+            folder
+        };
+        let rows = read_chunk(&db, &folder, &None);
+        assert_eq!(rows.iter().map(|r| r.has_uid).collect::<Vec<_>>(), [false]);
     }
 }

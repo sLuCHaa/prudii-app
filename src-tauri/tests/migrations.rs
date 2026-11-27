@@ -528,3 +528,26 @@ fn migration_adds_pop3_columns_with_defaults() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn migration_adds_pop3_uidl_server_column() {
+    let dir = temp_dir("pop3-uidl-server");
+    {
+        let db = Database::new(dir.clone()).unwrap();
+        let conn = db.lock_db();
+        let _ = conn.execute_batch("ALTER TABLE pop3_uidls DROP COLUMN server");
+        conn.execute_batch(
+            "INSERT INTO accounts (id, email, display_name, provider, imap_host, smtp_host) VALUES
+               ('a1', 'anna@studio-halde.example', 'Anna Weber', 'custom', 'pop.studio-halde.example', 'smtp.studio-halde.example');
+             INSERT INTO pop3_uidls (account_id, uidl) VALUES ('a1', 'u1');",
+        )
+        .unwrap();
+    }
+    for _ in 0..2 {
+        let db = Database::new(dir.clone()).unwrap();
+        let conn = db.lock_db();
+        let server: Option<String> = conn.query_row("SELECT server FROM pop3_uidls WHERE uidl = 'u1'", [], |r| r.get(0)).unwrap();
+        assert_eq!(server, None);
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

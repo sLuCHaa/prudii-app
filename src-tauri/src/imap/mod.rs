@@ -1364,17 +1364,18 @@ fn insert_local_row(
     f: &LocalMailFields,
     size: i64,
     is_read: bool,
+    uid: Option<i64>,
 ) -> Result<usize> {
-    // uid = NULL; the star/flag/reply/forward flags default to 0.
+    // The star/flag/reply/forward flags default to 0.
     conn.execute(
-        "INSERT OR IGNORE INTO mails (id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, body_text, body_html, is_read, is_starred, is_flagged, is_replied, is_forwarded, has_attachments, thread_id, in_reply_to, size_bytes, list_unsubscribe, reply_to_json, \"references\", signal_headers, high_priority) VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?24, 0, 0, 0, 0, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)",
+        "INSERT OR IGNORE INTO mails (id, account_id, folder_id, message_id, uid, subject, from_name, from_email, to_json, cc_json, bcc_json, date, snippet, body_text, body_html, is_read, is_starred, is_flagged, is_replied, is_forwarded, has_attachments, thread_id, in_reply_to, size_bytes, list_unsubscribe, reply_to_json, \"references\", signal_headers, high_priority) VALUES (?1, ?2, ?3, ?4, ?25, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?24, 0, 0, 0, 0, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)",
         rusqlite::params![
             mail_id, account_id, folder_id, f.message_id,
             f.subject, f.from_name, f.from_email, f.to_json, f.cc_json, f.bcc_json, f.date,
             f.snippet, f.body_text, f.body_html,
             f.has_attachments as i32, f.thread_id, f.in_reply_to, size,
             f.list_unsubscribe, f.reply_to_json, f.references, f.signal_headers,
-            f.high_priority as i32, is_read as i32,
+            f.high_priority as i32, is_read as i32, uid,
         ],
     )
     .context("Failed to insert local mail")
@@ -1401,7 +1402,7 @@ pub fn insert_local_sent_mail(
         .ok_or_else(|| anyhow::anyhow!("Failed to parse sent message for local insert"))?;
     let mail_id = uuid::Uuid::new_v4().to_string();
     let conn = db.lock_db();
-    insert_local_row(&conn, account_id, folder_id, &mail_id, &fields, raw_bytes.len() as i64, true)?;
+    insert_local_row(&conn, account_id, folder_id, &mail_id, &fields, raw_bytes.len() as i64, true, None)?;
     Ok(mail_id)
 }
 
@@ -1417,7 +1418,7 @@ pub fn insert_local_mail(
 ) -> Result<InsertOutcome> {
     let fields = local_mail_fields(raw_bytes).unwrap_or_else(|| placeholder_mail_fields(raw_bytes));
     let conn = db.lock_db();
-    let changed = insert_local_row(&conn, account_id, folder_id, mail_id, &fields, raw_bytes.len() as i64, is_read)?;
+    let changed = insert_local_row(&conn, account_id, folder_id, mail_id, &fields, raw_bytes.len() as i64, is_read, None)?;
     if changed > 0 {
         return Ok(InsertOutcome::Inserted(mail_id.to_string()));
     }
@@ -1432,6 +1433,22 @@ pub fn insert_local_mail(
         )
         .ok();
     Ok(existing.map_or(InsertOutcome::NotStored, InsertOutcome::Existing))
+}
+
+/// A local row beside a same-Message-ID twin; the synthetic uid keeps it clear of the dedup index.
+pub(crate) fn insert_local_twin(
+    conn: &rusqlite::Connection,
+    account_id: &str,
+    folder_id: &str,
+    mail_id: &str,
+    raw_bytes: &[u8],
+    is_read: bool,
+    uid: i64,
+) -> Result<()> {
+    let fields = local_mail_fields(raw_bytes).unwrap_or_else(|| placeholder_mail_fields(raw_bytes));
+    let changed = insert_local_row(conn, account_id, folder_id, mail_id, &fields, raw_bytes.len() as i64, is_read, Some(uid))?;
+    anyhow::ensure!(changed == 1, "The mail could not be stored.");
+    Ok(())
 }
 
 /// Fetch the full body of a single mail from IMAP and update the DB.

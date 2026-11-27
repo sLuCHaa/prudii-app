@@ -43,6 +43,9 @@ pub(crate) async fn sync_with_client<S: AsyncRead + AsyncWrite + Unpin>(
     data_dir: &Path,
     mailbox: &Account,
 ) -> Result<Pop3SyncReport, Pop3Error> {
+    let server = server_key(mailbox);
+    // Done here, not on settings save: a sync with the old account state may still be recording rows then.
+    reset_foreign_rows(db, data_dir, &mailbox.id, &server)?;
     let listing = client.uidl_all().await?;
     let sizes: HashMap<u32, u64> = client.list_all().await?.into_iter().collect();
     let inbox = inbox_folder_id(db, &mailbox.id)?;
@@ -56,7 +59,7 @@ pub(crate) async fn sync_with_client<S: AsyncRead + AsyncWrite + Unpin>(
             .or_insert(Some(*msg));
     }
 
-    let known: HashSet<String> = load_rows(db, &mailbox.id)?.into_iter().map(|r| r.uidl).collect();
+    let known: HashSet<String> = load_rows(db, &mailbox.id, &server)?.into_iter().map(|r| r.uidl).collect();
     let mut fresh: Vec<(u32, &str)> = listing
         .iter()
         .filter(|(_, uidl)| !known.contains(uidl))
@@ -70,26 +73,26 @@ pub(crate) async fn sync_with_client<S: AsyncRead + AsyncWrite + Unpin>(
         if !seen.insert(server_ref) {
             continue;
         }
-        if let Some(&size) = sizes.get(&msg).filter(|&&size| size > MAX_MESSAGE_BYTES) {
-            skip_too_large(&mut report, server_ref, size);
+        if sizes.get(&msg).is_some_and(|&size| size > MAX_MESSAGE_BYTES) {
+            skip_too_large(&mut report);
             continue;
         }
         let raw = match client.retr(msg, MAX_MESSAGE_BYTES).await {
             Ok(raw) => raw,
-            Err(Pop3Error::TooLarge(size)) => {
-                skip_too_large(&mut report, server_ref, size);
+            Err(Pop3Error::TooLarge(_)) => {
+                skip_too_large(&mut report);
                 continue;
             }
             Err(e) => return Err(e),
         };
-        if let Some(mail_id) = store_fetched(db, data_dir, &mailbox.id, &inbox, server_ref, &raw).await? {
+        if let Some(mail_id) = store_fetched(db, data_dir, mailbox, &inbox, server_ref, &raw).await? {
             report.new_mail_ids.push(mail_id);
         }
     }
 
-    prune_vanished(db, &mailbox.id, &server_uidls)?;
+    prune_vanished(db, data_dir, &mailbox.id, &server, &server_uidls)?;
 
-    let rows = load_rows(db, &mailbox.id)?;
+    let rows = load_rows(db, &mailbox.id, &server)?;
     let mail_ids: HashMap<&str, &str> = rows
         .iter()
         .filter_map(|r| r.mail_id.as_deref().map(|m| (r.uidl.as_str(), m)))
@@ -114,21 +117,32 @@ pub(crate) async fn sync_with_client<S: AsyncRead + AsyncWrite + Unpin>(
     for (msg, uidl) in targets {
         let Some(mail_id) = mail_ids.get(uidl.as_str()) else { continue };
         if !store::has_source(data_dir, mail_id) {
-            log::warn!("POP3: raw source of mail {} missing, kept on server", mail_id);
+            log::warn!("POP3: raw source missing, kept on server");
+            continue;
+        }
+        if !mail_kept_or_deleted_by_user(db, &mailbox.id, &uidl)? {
+            log::warn!("POP3: local mail missing, kept on server");
             continue;
         }
         match client.dele(msg).await? {
             Ok(()) => deleted.push(uidl),
-            Err(text) => log::warn!("POP3: DELE {} refused: {}", msg, text),
+            Err(_) => log::warn!("POP3: DELE refused, message kept on server"),
         }
     }
 
-    if let Err(e) = client.quit().await {
-        log::warn!("POP3: QUIT failed, server deletes are retried next run: {}", e);
+    if client.quit().await.is_err() {
+        log::warn!("POP3: QUIT failed, server deletes are retried next run");
         return Ok(report);
     }
     match mark_server_deleted(db, &mailbox.id, &deleted) {
-        Ok(marked) => report.deleted_on_server = marked,
+        Ok(marked) => {
+            report.deleted_on_server = marked;
+            let gone: Vec<String> = deleted
+                .iter()
+                .filter_map(|uidl| mail_ids.get(uidl.as_str()).map(|id| id.to_string()))
+                .collect();
+            super::discard_orphan_sources(&db.lock_db(), data_dir, &gone);
+        }
         Err(e) => log::warn!("POP3: could not mark server deletes: {}", e),
     }
     Ok(report)
@@ -146,8 +160,8 @@ fn flush_database(db: &Database) -> Result<(), Pop3Error> {
     Ok(())
 }
 
-fn skip_too_large(report: &mut Pop3SyncReport, server_ref: &str, size: u64) {
-    log::warn!("POP3: message {} has {} bytes, left on the server", server_ref, size);
+fn skip_too_large(report: &mut Pop3SyncReport) {
+    log::warn!("POP3: a message is too large, left on the server");
     report.skipped_too_large += 1;
 }
 
@@ -155,11 +169,12 @@ fn skip_too_large(report: &mut Pop3SyncReport, server_ref: &str, size: u64) {
 async fn store_fetched(
     db: &Database,
     data_dir: &Path,
-    owner_id: &str,
+    mailbox: &Account,
     inbox: &str,
     server_ref: &str,
     raw: &[u8],
 ) -> Result<Option<String>, Pop3Error> {
+    let owner_id = mailbox.id.as_str();
     let mail_id = uuid::Uuid::new_v4().to_string();
     store::write_source(data_dir, &mail_id, raw).map_err(|e| Pop3Error::Storage(e.to_string()))?;
     let outcome = match crate::imap::insert_local_mail(db, owner_id, inbox, &mail_id, raw, false) {
@@ -171,40 +186,52 @@ async fn store_fetched(
     };
     match outcome {
         InsertOutcome::Inserted(id) => {
-            record_uidl(db, owner_id, server_ref, Some(&id))?;
-            if let Err(e) = crate::imap::store_body_and_attachments(db, &id, raw).await {
-                log::warn!("POP3: storing body and attachments of {} failed: {}", id, e);
+            if !record_uidl(db, data_dir, mailbox, server_ref, Some(&id), &id)? {
+                return Ok(None);
+            }
+            if crate::imap::store_body_and_attachments(db, &id, raw).await.is_err() {
+                log::warn!("POP3: storing body and attachments of a message failed");
             }
             Ok(Some(id))
         }
         InsertOutcome::Existing(existing) => {
-            let mapped = if store::has_source(data_dir, &existing) {
-                remove_source(data_dir, &mail_id);
-                let stored = store::read_source(data_dir, &existing).map_err(|e| Pop3Error::Storage(e.to_string()))?;
-                let same = stored == raw;
-                if !same {
-                    log::warn!(
-                        "POP3: message {} reuses the Message-ID of mail {}, left on the server",
-                        server_ref, existing
-                    );
-                }
-                same
-            } else {
-                if let Err(e) = store::move_source(data_dir, &mail_id, &existing) {
-                    remove_source(data_dir, &mail_id);
-                    return Err(Pop3Error::Storage(e.to_string()));
-                }
-                true
-            };
-            record_uidl(db, owner_id, server_ref, mapped.then_some(existing.as_str()))?;
+            claim_existing(db, data_dir, mailbox, server_ref, &mail_id, &existing, raw)?;
             Ok(None)
         }
         InsertOutcome::NotStored => {
-            log::warn!("POP3: message {} could not be stored, left on the server", server_ref);
+            log::warn!("POP3: a message could not be stored, left on the server");
             remove_source(data_dir, &mail_id);
             Ok(None)
         }
     }
+}
+
+/// Maps the UIDL to a mail with the same Message-ID, handing it the new source if it has none.
+fn claim_existing(
+    db: &Database,
+    data_dir: &Path,
+    mailbox: &Account,
+    server_ref: &str,
+    mail_id: &str,
+    existing: &str,
+    raw: &[u8],
+) -> Result<(), Pop3Error> {
+    let mapped = if store::has_source(data_dir, existing) {
+        remove_source(data_dir, mail_id);
+        let stored = store::read_source(data_dir, existing).map_err(|e| Pop3Error::Storage(e.to_string()))?;
+        let same = stored == raw;
+        if !same {
+            log::warn!("POP3: a message reuses the Message-ID of a stored mail, left on the server");
+        }
+        same
+    } else {
+        if let Err(e) = store::move_source(data_dir, mail_id, existing) {
+            remove_source(data_dir, mail_id);
+            return Err(Pop3Error::Storage(e.to_string()));
+        }
+        true
+    };
+    record_uidl(db, data_dir, mailbox, server_ref, mapped.then_some(existing), existing).map(drop)
 }
 
 fn remove_source(data_dir: &Path, mail_id: &str) {
@@ -228,25 +255,50 @@ fn inbox_folder_id(db: &Database, account_id: &str) -> Result<String, Pop3Error>
 }
 
 /// A row without mail_id keeps the message known but never deletable.
-fn record_uidl(db: &Database, account_id: &str, uidl: &str, mail_id: Option<&str>) -> Result<(), Pop3Error> {
+/// False when the mail row is gone meanwhile: the UIDL stays unknown and is fetched again.
+fn record_uidl(
+    db: &Database,
+    data_dir: &Path,
+    mailbox: &Account,
+    uidl: &str,
+    mail_id: Option<&str>,
+    row_id: &str,
+) -> Result<bool, Pop3Error> {
     let fetched_at = Utc::now().format(FETCHED_AT_FORMAT).to_string();
-    db.lock_db()
+    let conn = db.lock_db();
+    // One statement, so the mail row cannot disappear between check and insert.
+    let written = conn
         .execute(
-            "INSERT INTO pop3_uidls (account_id, uidl, mail_id, fetched_at, state) VALUES (?1, ?2, ?3, ?4, 'stored')",
-            rusqlite::params![account_id, uidl, mail_id, fetched_at],
+            "INSERT INTO pop3_uidls (account_id, uidl, mail_id, fetched_at, state, server)
+             SELECT ?1, ?2, ?3, ?4, 'stored', ?5 WHERE EXISTS(SELECT 1 FROM mails WHERE id = ?6)",
+            rusqlite::params![mailbox.id, uidl, mail_id, fetched_at, server_key(mailbox), row_id],
         )
-        .map(drop)
+        .map_err(db_error)?;
+    if written == 0 {
+        super::discard_orphan_sources(&conn, data_dir, &[row_id.to_string()]);
+    }
+    Ok(written > 0)
+}
+
+fn mail_kept_or_deleted_by_user(db: &Database, account_id: &str, uidl: &str) -> Result<bool, Pop3Error> {
+    db.lock_db()
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM pop3_uidls u WHERE u.account_id = ?1 AND u.uidl = ?2
+                 AND (u.local_deleted_at IS NOT NULL OR EXISTS(SELECT 1 FROM mails WHERE id = u.mail_id)))",
+            [account_id, uidl],
+            |r| r.get(0),
+        )
         .map_err(db_error)
 }
 
-fn load_rows(db: &Database, account_id: &str) -> Result<Vec<UidlRow>, Pop3Error> {
+fn load_rows(db: &Database, account_id: &str, server: &str) -> Result<Vec<UidlRow>, Pop3Error> {
     let now = Utc::now();
     let conn = db.lock_db();
     let mut stmt = conn
-        .prepare("SELECT uidl, mail_id, fetched_at, state, local_deleted_at FROM pop3_uidls WHERE account_id = ?1")
+        .prepare("SELECT uidl, mail_id, fetched_at, state, local_deleted_at FROM pop3_uidls WHERE account_id = ?1 AND server = ?2")
         .map_err(db_error)?;
     let rows = stmt
-        .query_map([account_id], |r| {
+        .query_map([account_id, server], |r| {
             let fetched_at: String = r.get(2)?;
             Ok(UidlRow {
                 uidl: r.get(0)?,
@@ -270,6 +322,27 @@ fn parse_fetched_at(value: &str) -> Option<DateTime<Utc>> {
         .ok()
 }
 
+/// Identifies the mailbox a UIDL belongs to, from the values the session connects with.
+fn server_key(account: &Account) -> String {
+    format!("{}|{}|{}", account.imap_host.trim().to_lowercase(), account.imap_port, account.email)
+}
+
+fn reset_foreign_rows(db: &Database, data_dir: &Path, account_id: &str, server: &str) -> Result<(), Pop3Error> {
+    let mut conn = db.lock_db();
+    let tx = conn.transaction().map_err(db_error)?;
+    let orphaned = tx
+        .prepare("DELETE FROM pop3_uidls WHERE account_id = ?1 AND server IS NOT ?2 RETURNING mail_id")
+        .and_then(|mut stmt| {
+            stmt.query_map([account_id, server], |r| r.get::<_, Option<String>>(0))?
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .map_err(db_error)?;
+    tx.commit().map_err(db_error)?;
+    let orphaned: Vec<String> = orphaned.into_iter().flatten().collect();
+    super::discard_orphan_sources(&conn, data_dir, &orphaned);
+    Ok(())
+}
+
 fn delete_policy(account: &Account) -> DeletePolicy {
     let mode = match account.pop3_delete_mode.as_str() {
         "after_fetch" => DeleteMode::AfterFetch,
@@ -279,13 +352,22 @@ fn delete_policy(account: &Account) -> DeletePolicy {
     DeletePolicy { mode, with_local: account.pop3_delete_with_local }
 }
 
-fn prune_vanished(db: &Database, account_id: &str, server_uidls: &HashSet<String>) -> Result<(), Pop3Error> {
-    let vanished: Vec<String> = load_rows(db, account_id)?
+fn prune_vanished(
+    db: &Database,
+    data_dir: &Path,
+    account_id: &str,
+    server: &str,
+    server_uidls: &HashSet<String>,
+) -> Result<(), Pop3Error> {
+    let (vanished, orphaned): (Vec<String>, Vec<Option<String>>) = load_rows(db, account_id, server)?
         .into_iter()
-        .map(|r| r.uidl)
-        .filter(|uidl| !server_uidls.contains(uidl))
-        .collect();
-    update_each(db, account_id, &vanished, "DELETE FROM pop3_uidls WHERE account_id = ?1 AND uidl = ?2").map(drop)
+        .filter(|r| !server_uidls.contains(&r.uidl))
+        .map(|r| (r.uidl, r.mail_id))
+        .unzip();
+    update_each(db, account_id, &vanished, "DELETE FROM pop3_uidls WHERE account_id = ?1 AND uidl = ?2")?;
+    let orphaned: Vec<String> = orphaned.into_iter().flatten().collect();
+    super::discard_orphan_sources(&db.lock_db(), data_dir, &orphaned);
+    Ok(())
 }
 
 fn mark_server_deleted(db: &Database, account_id: &str, uidls: &[String]) -> Result<u32, Pop3Error> {
@@ -662,6 +744,32 @@ mod tests {
         assert_eq!(source_files(&t), 1);
     }
 
+    #[test]
+    fn vanished_existing_mail_gets_no_uidl() {
+        let raw = mail("m1", "Erste");
+        for stored in [None, Some(raw.as_str()), Some("anders")] {
+            let t = env("after_fetch");
+            crate::pop3::store::write_source(&t.dir, "new", raw.as_bytes()).unwrap();
+            if let Some(stored) = stored {
+                crate::pop3::store::write_source(&t.dir, "gone", stored.as_bytes()).unwrap();
+            }
+            claim_existing(&t.db, &t.dir, &t.account, "u1", "new", "gone", raw.as_bytes()).unwrap();
+            assert!(uidl_rows(&t).is_empty());
+            assert_eq!(source_files(&t), 0);
+        }
+    }
+
+    #[tokio::test]
+    async fn missing_mail_row_without_local_delete_blocks_dele() {
+        let mut t = env("keep");
+        let mail_id = store_first(&t).await;
+        t.db.lock_db().execute("DELETE FROM mails WHERE id = ?1", [&mail_id]).unwrap();
+        t.account.pop3_delete_mode = "after_fetch".into();
+        let report = run(&t, vec![uidl(&[(1, "u1")]), list(&[(1, 400)]), QUIT]).await.unwrap();
+        assert_eq!(report.deleted_on_server, 0);
+        assert_eq!(uidl_rows(&t)[0].2, "stored");
+    }
+
     #[tokio::test]
     async fn dele_refusal_is_skipped_and_session_quits() {
         let t = env("after_fetch");
@@ -771,6 +879,159 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].0, "u2");
         assert_eq!(inbox_mails(&t).len(), 2);
+        assert_eq!(source_files(&t), 2);
+    }
+
+    fn server_of(t: &Env, uidl: &str) -> Option<String> {
+        t.db.lock_db()
+            .query_row(
+                "SELECT server FROM pop3_uidls WHERE account_id = ?1 AND uidl = ?2",
+                rusqlite::params![t.account.id, uidl],
+                |r| r.get(0),
+            )
+            .unwrap()
+    }
+
+    async fn store_first(t: &Env) -> String {
+        run(t, vec![uidl(&[(1, "u1")]), list(&[(1, 400)]), retr(1, &mail("m1", "Erste")), QUIT])
+            .await
+            .unwrap();
+        mail_of(t, "u1")
+    }
+
+    fn delete_locally(t: &Env, mail_id: &str) {
+        let conn = t.db.lock_db();
+        crate::pop3::mark_locally_deleted(&conn, &t.account.id, &[mail_id.to_string()]).unwrap();
+        conn.execute("DELETE FROM mails WHERE id = ?1", [mail_id]).unwrap();
+    }
+
+    #[tokio::test]
+    async fn server_change_never_deletes_with_old_uidls() {
+        let changes: [fn(&mut Env); 4] = [
+            |t| t.account.imap_host = "pop2.studio-halde.example".into(),
+            |t| t.account.imap_port = 110,
+            |t| t.account.email = "anna.weber@studio-halde.example".into(),
+            |t| set_column(t, "u1", "server = NULL"),
+        ];
+        for change in changes {
+            let mut t = env("keep");
+            t.account.pop3_delete_with_local = true;
+            let old = store_first(&t).await;
+            delete_locally(&t, &old);
+            assert!(crate::pop3::store::has_source(&t.dir, &old));
+            change(&mut t);
+            let report = run(&t, vec![uidl(&[(1, "u1")]), list(&[(1, 400)]), retr(1, &mail("m1", "Erste")), QUIT])
+                .await
+                .unwrap();
+            assert_eq!(report.deleted_on_server, 0);
+            assert_eq!(report.new_mail_ids, vec![mail_of(&t, "u1")]);
+            assert_ne!(mail_of(&t, "u1"), old);
+            assert!(!crate::pop3::store::has_source(&t.dir, &old));
+            assert_eq!(source_files(&t), 1);
+            assert_eq!(server_of(&t, "u1"), Some(server_key(&t.account)));
+        }
+    }
+
+    #[tokio::test]
+    async fn unchanged_server_keeps_rows() {
+        let mut t = env("keep");
+        let mail_id = store_first(&t).await;
+        assert_eq!(
+            server_of(&t, "u1").as_deref(),
+            Some("pop.studio-halde.example|995|anna@studio-halde.example")
+        );
+        t.account.imap_host = " POP.Studio-Halde.Example ".into();
+        let report = run(&t, vec![uidl(&[(1, "u1")]), list(&[(1, 400)]), QUIT]).await.unwrap();
+        assert!(report.new_mail_ids.is_empty());
+        assert_eq!(mail_of(&t, "u1"), mail_id);
+    }
+
+    #[tokio::test]
+    async fn locally_deleted_mail_keeps_source_until_server_deleted() {
+        let mut t = env("keep");
+        t.account.pop3_delete_with_local = true;
+        let mail_id = store_first(&t).await;
+        delete_locally(&t, &mail_id);
+        assert!(crate::pop3::store::has_source(&t.dir, &mail_id));
+
+        let report = run(&t, vec![uidl(&[(1, "u1")]), list(&[(1, 400)]), dele(1), ("QUIT", "<DROP>")])
+            .await
+            .unwrap();
+        assert_eq!(report.deleted_on_server, 0);
+        assert!(crate::pop3::store::has_source(&t.dir, &mail_id));
+
+        let report = run(&t, vec![uidl(&[(1, "u1")]), list(&[(1, 400)]), dele(1), QUIT]).await.unwrap();
+        assert_eq!(report.deleted_on_server, 1);
+        assert_eq!(uidl_rows(&t)[0].2, "server_deleted");
+        assert!(!crate::pop3::store::has_source(&t.dir, &mail_id));
+    }
+
+    #[tokio::test]
+    async fn keep_without_local_delete_holds_source_until_uidl_vanishes() {
+        let t = env("keep");
+        let mail_id = store_first(&t).await;
+        delete_locally(&t, &mail_id);
+        let report = run(&t, vec![uidl(&[(1, "u1")]), list(&[(1, 400)]), QUIT]).await.unwrap();
+        assert!(report.new_mail_ids.is_empty());
+        assert_eq!(uidl_rows(&t).len(), 1);
+        assert!(crate::pop3::store::has_source(&t.dir, &mail_id));
+
+        run(&t, vec![uidl(&[]), list(&[]), QUIT]).await.unwrap();
+        assert!(uidl_rows(&t).is_empty());
+        assert!(!crate::pop3::store::has_source(&t.dir, &mail_id));
+    }
+
+    #[tokio::test]
+    async fn discard_removes_only_unreferenced_sources() {
+        let t = env("keep");
+        let mail_id = store_first(&t).await;
+        let ids = [mail_id.clone()];
+        let discard = || crate::pop3::discard_orphan_sources(&t.db.lock_db(), &t.dir, &ids);
+        let exists = || crate::pop3::store::has_source(&t.dir, &mail_id);
+
+        set_column(&t, "u1", "state = 'server_deleted'");
+        discard();
+        assert!(exists());
+
+        set_column(&t, "u1", "state = 'stored'");
+        t.db.lock_db().execute("DELETE FROM mails WHERE id = ?1", [&mail_id]).unwrap();
+        discard();
+        assert!(exists());
+
+        t.db.lock_db().execute_batch("ALTER TABLE pop3_uidls RENAME TO pop3_uidls_away").unwrap();
+        discard();
+        assert!(exists());
+        t.db.lock_db().execute_batch("ALTER TABLE pop3_uidls_away RENAME TO pop3_uidls").unwrap();
+
+        set_column(&t, "u1", "state = 'server_deleted'");
+        discard();
+        assert!(!exists());
+    }
+
+    #[test]
+    fn mark_locally_deleted_handles_many_ids() {
+        let t = env("keep");
+        let ids: Vec<String> = (0..1500).map(|n| format!("mail-{n}")).collect();
+        let conn = t.db.lock_db();
+        let other = seed_account(&conn, "info@studio-halde.example");
+        for (n, id) in ids.iter().enumerate() {
+            conn.execute(
+                "INSERT INTO pop3_uidls (account_id, uidl, mail_id) VALUES (?1, ?2, ?3)",
+                rusqlite::params![t.account.id, format!("u{n}"), id],
+            )
+            .unwrap();
+        }
+        conn.execute(
+            "INSERT INTO pop3_uidls (account_id, uidl, mail_id) VALUES (?1, 'u0', 'mail-0')",
+            [&other],
+        )
+        .unwrap();
+        let changed = crate::pop3::mark_locally_deleted(&conn, &t.account.id, &ids).unwrap();
+        assert_eq!(changed, 1500);
+        let open: i64 = conn
+            .query_row("SELECT COUNT(*) FROM pop3_uidls WHERE local_deleted_at IS NULL", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(open, 1);
     }
 
     #[tokio::test]

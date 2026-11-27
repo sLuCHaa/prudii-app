@@ -13,6 +13,7 @@ export interface Account {
   smtp_port: number;
   smtp_security: SmtpSecurity;
   auth_type: string;
+  incoming_protocol: "imap" | "pop3";
   signature_id: string | null;
   /** Content of the assigned signature; empty when the account has none. */
   signature_html: string;

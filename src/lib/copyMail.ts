@@ -35,7 +35,7 @@ export async function copyToOtherAccount(
     },
   });
 
-  // The upload went straight to the server; only a sync brings the copy into the local list.
+  // An uploaded copy only reaches the local list through a sync; a POP3 copy is already there.
   syncFolder(dest.account_id, dest.id)
     .then(() => invalidateMailListQueries(queryClient))
     .catch((e) => console.warn("[syncFolder] after copy", dest.id, e));

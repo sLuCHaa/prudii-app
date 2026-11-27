@@ -236,6 +236,7 @@ CREATE TABLE IF NOT EXISTS pop3_uidls (
     fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
     state TEXT NOT NULL DEFAULT 'stored',       -- 'stored' | 'server_deleted'
     local_deleted_at TEXT,
+    server TEXT,                                -- host|port|user the UIDL came from
     PRIMARY KEY (account_id, uidl),
     FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
 );

@@ -63,6 +63,7 @@ import { runMailAction, toastError, causeMessage } from "../../lib/errorToast";
 import { holdUntilMoved, invalidateMailListQueries, patchCachedMails } from "../../lib/mailQueries";
 import { accumulate, decide, isHorizontalIntent } from "../../lib/swipe";
 import { isListNavKey, nextCursor, pageSize, spanIds } from "../../lib/listKeys";
+import { dedupListMails } from "../../lib/dedupListMails";
 import { MAIL_FLAG_COLORS } from "../../types";
 import type { Mail, MailFlag } from "../../types";
 import { useTranslation } from "react-i18next";
@@ -1406,23 +1407,12 @@ export function MailList() {
   // activeQuery.data is referentially stable between re-renders (TanStack Query guarantee)
   // so useMemo only recomputes when actual query data changes, not on every store re-render
   const queryData = activeQuery.data;
-  const fetchedMails = useMemo(() => {
-    const flat = queryData?.pages.flat() ?? [];
-    // Two-pass dedup:
-    // 1. By message_id (same-source duplicates)
-    // 2. By subject+date+from (cross-account duplicates)
-    const seenIds = new Set<string>();
-    const seenContent = new Set<string>();
-    return flat.filter((m) => {
-      const idKey = m.message_id || m.id;
-      if (seenIds.has(idKey)) return false;
-      seenIds.add(idKey);
-      const contentKey = `${m.subject.toLowerCase().trim()}|${m.date}|${m.from.email.toLowerCase()}`;
-      if (seenContent.has(contentKey)) return false;
-      seenContent.add(contentKey);
-      return true;
-    });
-  }, [queryData]);
+  // A string, so that unrelated account updates do not re-apply the query data.
+  const pop3Accounts = accounts.filter((a) => a.incoming_protocol === "pop3").map((a) => a.id).join(",");
+  const fetchedMails = useMemo(
+    () => dedupListMails(queryData?.pages.flat() ?? [], new Set(pop3Accounts.split(","))),
+    [queryData, pop3Accounts],
+  );
 
 
   const viewKey = JSON.stringify([selectedFolderId, activeFilter, showAllInboxes, activeCombinedFolder, showSnoozed, showAssigned, activeCategory]);

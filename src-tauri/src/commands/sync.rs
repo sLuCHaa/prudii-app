@@ -896,6 +896,24 @@ fn pop3_error_message(e: &crate::pop3::Pop3Error) -> String {
     }
 }
 
+/// For logs: the error text can carry the server's answer.
+fn pop3_error_kind(e: &crate::pop3::Pop3Error) -> &'static str {
+    use crate::pop3::Pop3Error as E;
+    match e {
+        E::Io(_) => "connection error",
+        E::Timeout => "timeout",
+        E::Tls(_) => "TLS error",
+        E::Auth(_) => "authentication failed",
+        E::Protocol(_) => "unexpected server response",
+        E::NoUidl => "no UIDL support",
+        E::Locked(_) => "mailbox locked",
+        E::TooLarge(_) => "message too large",
+        E::Database(_) => "database error",
+        E::Storage(_) => "storage error",
+        E::NoInbox => "no inbox folder",
+    }
+}
+
 fn pop3_progress(account_id: &str, status: &str, new_mails: u32, message: String) -> SyncProgress {
     SyncProgress {
         account_id: account_id.to_string(),
@@ -925,7 +943,7 @@ async fn do_pop3_sync(app: &AppHandle, mailbox: &Account, password: &str) {
     let report = match crate::pop3::sync::fetch_pop3_mails(&db, &data_dir, mailbox, password).await {
         Ok(r) => r,
         Err(e) => {
-            log::warn!("POP3 sync failed for account {}: {}", owner_id, e);
+            log::warn!("POP3 sync failed: {}", pop3_error_kind(&e));
             emit_progress(app, &pop3_progress(owner_id, "error", 0, pop3_error_message(&e)));
             return;
         }
@@ -954,8 +972,8 @@ async fn do_pop3_sync(app: &AppHandle, mailbox: &Account, password: &str) {
 
     let total_new = report.new_mail_ids.len() as u32;
     log::info!(
-        "POP3 sync complete for account {}: {} new, {} deleted on server, {} too large",
-        owner_id, total_new, report.deleted_on_server, report.skipped_too_large
+        "POP3 sync complete: {} new, {} deleted on server, {} too large",
+        total_new, report.deleted_on_server, report.skipped_too_large
     );
 
     if total_new > 0 {

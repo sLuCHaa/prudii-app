@@ -64,7 +64,7 @@ async fn tcp_connect(host: &str, port: u16) -> Result<TcpStream, Pop3Error> {
         .with_time(Duration::from_secs(30))
         .with_interval(Duration::from_secs(15));
     if let Err(e) = socket2::SockRef::from(&tcp).set_tcp_keepalive(&keepalive) {
-        log::warn!("POP3 connect {}: failed to set TCP keepalive: {}", host, e);
+        log::warn!("POP3 connect: failed to set TCP keepalive: {}", e.kind());
     }
     Ok(tcp)
 }

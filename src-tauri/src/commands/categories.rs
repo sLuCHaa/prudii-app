@@ -1,4 +1,4 @@
-use super::mails::{dedup_mails, filter_clause, mail_columns, map_mail_row};
+use super::mails::{dedup_mails, filter_clause, mail_columns, map_mail_row, pop3_account_ids};
 use crate::categorize::store::{self, CategoryCount, MailCategoryInfo, SenderRule};
 use crate::db::Database;
 use crate::models::Mail;
@@ -41,7 +41,7 @@ pub fn list_category_mails(
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
-        Ok(dedup_mails(mails))
+        Ok(dedup_mails(mails, &pop3_account_ids(&conn)?))
     })
 }
 

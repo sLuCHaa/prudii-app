@@ -2,6 +2,7 @@
 //! Each action updates the local DB and queues a matching `pending_ops` row,
 //! so rule actions sync to the server exactly like manual user actions.
 
+use crate::commands::mails::relocate_mail;
 use crate::db::Database;
 
 /// Load enabled rules for an account, sorted by priority DESC, and apply them
@@ -211,10 +212,7 @@ fn apply_actions(
 
     if rule.action_archive == Some(true) {
         if let Some((archive_id, archive_path)) = folder_of_type(conn, account_id, "archive") {
-            if let Err(e) = conn.execute(
-                "UPDATE mails SET folder_id = ?1 WHERE id = ?2",
-                rusqlite::params![archive_id, mail_id],
-            ) {
+            if let Err(e) = relocate_mail(conn, mail_id, &archive_id, false) {
                 log::warn!("rule {}: failed to archive mail {}: {}", rule.id, mail_id, e);
             } else {
                 let payload = serde_json::json!({
@@ -245,10 +243,7 @@ fn apply_actions(
                 log::warn!("rule {}: move target folder {} no longer exists; skipping move of mail {}", rule.id, dest_folder_id, mail_id);
                 return;
             };
-            if let Err(e) = conn.execute(
-                "UPDATE mails SET folder_id = ?1 WHERE id = ?2",
-                rusqlite::params![dest_folder_id, mail_id],
-            ) {
+            if let Err(e) = relocate_mail(conn, mail_id, dest_folder_id, false) {
                 log::warn!("rule {}: failed to move mail {} to folder {}: {}", rule.id, mail_id, dest_folder_id, e);
             } else if dest_is_local {
                 // A local folder has no server counterpart: its `path` is only a
@@ -309,7 +304,7 @@ pub(crate) fn trash_mail(
         return false;
     };
     // The trash sync claims a uid-less row by Message-ID; keeping the inbox uid could collide with a trash row.
-    if let Err(e) = conn.execute("UPDATE mails SET folder_id = ?1, uid = NULL WHERE id = ?2", rusqlite::params![trash_id, mail_id]) {
+    if let Err(e) = relocate_mail(conn, mail_id, &trash_id, true) {
         log::warn!("failed to trash mail {}: {}", mail_id, e);
         return false;
     }
@@ -365,5 +360,27 @@ mod pop3_tests {
         let folder: String = conn.query_row("SELECT folder_id FROM mails WHERE id = ?1", [&mail], |r| r.get(0)).unwrap();
         let queued: i64 = conn.query_row("SELECT COUNT(*) FROM pending_ops", [], |r| r.get(0)).unwrap();
         assert_eq!((folder, queued), (trash, 0));
+    }
+
+    #[test]
+    fn a_rule_trashes_a_pop3_mail_next_to_its_twin() {
+        let db = temp_db();
+        let conn = db.lock_db();
+        let account = seed_account(&conn, "anna@studio-halde.example");
+        conn.execute("UPDATE accounts SET incoming_protocol = 'pop3' WHERE id = ?1", [&account]).unwrap();
+        let inbox = seed_folder(&conn, &account, "inbox");
+        let trash = seed_folder(&conn, &account, "trash");
+        let [first, second] = [&trash, &inbox].map(|folder| {
+            let id = seed_mail(&conn, &SeedMail { account_id: &account, folder_id: folder, ..Default::default() });
+            conn.execute("UPDATE mails SET message_id = 'm1@studio-halde.example' WHERE id = ?1", [&id]).unwrap();
+            id
+        });
+
+        assert!(trash_mail(&conn, &account, &second, "m1@studio-halde.example", "INBOX", false));
+
+        let in_trash: i64 = conn
+            .query_row("SELECT COUNT(*) FROM mails WHERE folder_id = ?1 AND id IN (?2, ?3)", [&trash, &first, &second], |r| r.get(0))
+            .unwrap();
+        assert_eq!(in_trash, 2);
     }
 }
