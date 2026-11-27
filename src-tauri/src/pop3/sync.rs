@@ -120,6 +120,10 @@ pub(crate) async fn sync_with_client<S: AsyncRead + AsyncWrite + Unpin>(
             log::warn!("POP3: raw source missing, kept on server");
             continue;
         }
+        if !mail_kept_or_deleted_by_user(db, &mailbox.id, &uidl)? {
+            log::warn!("POP3: local mail missing, kept on server");
+            continue;
+        }
         match client.dele(msg).await? {
             Ok(()) => deleted.push(uidl),
             Err(_) => log::warn!("POP3: DELE refused, message kept on server"),
@@ -182,29 +186,16 @@ async fn store_fetched(
     };
     match outcome {
         InsertOutcome::Inserted(id) => {
-            record_uidl(db, mailbox, server_ref, Some(&id))?;
+            if !record_uidl(db, data_dir, mailbox, server_ref, Some(&id), &id)? {
+                return Ok(None);
+            }
             if crate::imap::store_body_and_attachments(db, &id, raw).await.is_err() {
                 log::warn!("POP3: storing body and attachments of a message failed");
             }
             Ok(Some(id))
         }
         InsertOutcome::Existing(existing) => {
-            let mapped = if store::has_source(data_dir, &existing) {
-                remove_source(data_dir, &mail_id);
-                let stored = store::read_source(data_dir, &existing).map_err(|e| Pop3Error::Storage(e.to_string()))?;
-                let same = stored == raw;
-                if !same {
-                    log::warn!("POP3: a message reuses the Message-ID of a stored mail, left on the server");
-                }
-                same
-            } else {
-                if let Err(e) = store::move_source(data_dir, &mail_id, &existing) {
-                    remove_source(data_dir, &mail_id);
-                    return Err(Pop3Error::Storage(e.to_string()));
-                }
-                true
-            };
-            record_uidl(db, mailbox, server_ref, mapped.then_some(existing.as_str()))?;
+            claim_existing(db, data_dir, mailbox, server_ref, &mail_id, &existing, raw)?;
             Ok(None)
         }
         InsertOutcome::NotStored => {
@@ -213,6 +204,34 @@ async fn store_fetched(
             Ok(None)
         }
     }
+}
+
+/// Maps the UIDL to a mail with the same Message-ID, handing it the new source if it has none.
+fn claim_existing(
+    db: &Database,
+    data_dir: &Path,
+    mailbox: &Account,
+    server_ref: &str,
+    mail_id: &str,
+    existing: &str,
+    raw: &[u8],
+) -> Result<(), Pop3Error> {
+    let mapped = if store::has_source(data_dir, existing) {
+        remove_source(data_dir, mail_id);
+        let stored = store::read_source(data_dir, existing).map_err(|e| Pop3Error::Storage(e.to_string()))?;
+        let same = stored == raw;
+        if !same {
+            log::warn!("POP3: a message reuses the Message-ID of a stored mail, left on the server");
+        }
+        same
+    } else {
+        if let Err(e) = store::move_source(data_dir, mail_id, existing) {
+            remove_source(data_dir, mail_id);
+            return Err(Pop3Error::Storage(e.to_string()));
+        }
+        true
+    };
+    record_uidl(db, data_dir, mailbox, server_ref, mapped.then_some(existing), existing).map(drop)
 }
 
 fn remove_source(data_dir: &Path, mail_id: &str) {
@@ -236,14 +255,39 @@ fn inbox_folder_id(db: &Database, account_id: &str) -> Result<String, Pop3Error>
 }
 
 /// A row without mail_id keeps the message known but never deletable.
-fn record_uidl(db: &Database, mailbox: &Account, uidl: &str, mail_id: Option<&str>) -> Result<(), Pop3Error> {
+/// False when the mail row is gone meanwhile: the UIDL stays unknown and is fetched again.
+fn record_uidl(
+    db: &Database,
+    data_dir: &Path,
+    mailbox: &Account,
+    uidl: &str,
+    mail_id: Option<&str>,
+    row_id: &str,
+) -> Result<bool, Pop3Error> {
     let fetched_at = Utc::now().format(FETCHED_AT_FORMAT).to_string();
-    db.lock_db()
+    let conn = db.lock_db();
+    // One statement, so the mail row cannot disappear between check and insert.
+    let written = conn
         .execute(
-            "INSERT INTO pop3_uidls (account_id, uidl, mail_id, fetched_at, state, server) VALUES (?1, ?2, ?3, ?4, 'stored', ?5)",
-            rusqlite::params![mailbox.id, uidl, mail_id, fetched_at, server_key(mailbox)],
+            "INSERT INTO pop3_uidls (account_id, uidl, mail_id, fetched_at, state, server)
+             SELECT ?1, ?2, ?3, ?4, 'stored', ?5 WHERE EXISTS(SELECT 1 FROM mails WHERE id = ?6)",
+            rusqlite::params![mailbox.id, uidl, mail_id, fetched_at, server_key(mailbox), row_id],
         )
-        .map(drop)
+        .map_err(db_error)?;
+    if written == 0 {
+        super::discard_orphan_sources(&conn, data_dir, &[row_id.to_string()]);
+    }
+    Ok(written > 0)
+}
+
+fn mail_kept_or_deleted_by_user(db: &Database, account_id: &str, uidl: &str) -> Result<bool, Pop3Error> {
+    db.lock_db()
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM pop3_uidls u WHERE u.account_id = ?1 AND u.uidl = ?2
+                 AND (u.local_deleted_at IS NOT NULL OR EXISTS(SELECT 1 FROM mails WHERE id = u.mail_id)))",
+            [account_id, uidl],
+            |r| r.get(0),
+        )
         .map_err(db_error)
 }
 
@@ -698,6 +742,32 @@ mod tests {
         assert!(matches!(result, Err(Pop3Error::Storage(_))));
         assert_eq!(uidl_rows(&t).len(), 1);
         assert_eq!(source_files(&t), 1);
+    }
+
+    #[test]
+    fn vanished_existing_mail_gets_no_uidl() {
+        let raw = mail("m1", "Erste");
+        for stored in [None, Some(raw.as_str()), Some("anders")] {
+            let t = env("after_fetch");
+            crate::pop3::store::write_source(&t.dir, "new", raw.as_bytes()).unwrap();
+            if let Some(stored) = stored {
+                crate::pop3::store::write_source(&t.dir, "gone", stored.as_bytes()).unwrap();
+            }
+            claim_existing(&t.db, &t.dir, &t.account, "u1", "new", "gone", raw.as_bytes()).unwrap();
+            assert!(uidl_rows(&t).is_empty());
+            assert_eq!(source_files(&t), 0);
+        }
+    }
+
+    #[tokio::test]
+    async fn missing_mail_row_without_local_delete_blocks_dele() {
+        let mut t = env("keep");
+        let mail_id = store_first(&t).await;
+        t.db.lock_db().execute("DELETE FROM mails WHERE id = ?1", [&mail_id]).unwrap();
+        t.account.pop3_delete_mode = "after_fetch".into();
+        let report = run(&t, vec![uidl(&[(1, "u1")]), list(&[(1, 400)]), QUIT]).await.unwrap();
+        assert_eq!(report.deleted_on_server, 0);
+        assert_eq!(uidl_rows(&t)[0].2, "stored");
     }
 
     #[tokio::test]

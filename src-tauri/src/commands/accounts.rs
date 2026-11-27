@@ -481,16 +481,15 @@ fn delete_account_data(db: &Database, account_id: &str) -> Result<(), String> {
         })
         .map_err(|e| e.to_string())?;
 
-    let attach_dir = db.data_dir.join("attachments");
-    if attach_dir.exists() {
-        for mail_id in &mail_ids {
-            let dir = attach_dir.join(mail_id);
-            let _ = std::fs::remove_dir_all(&dir);
-        }
-    }
-
     // Explicitly delete all child records in a transaction, then the account
     let conn = db.lock_db();
+    let is_pop3: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM accounts WHERE id = ?1 AND incoming_protocol = 'pop3')",
+            rusqlite::params![account_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
     conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
     let tx_result = (|| -> Result<(), rusqlite::Error> {
         conn.execute(
@@ -503,16 +502,22 @@ fn delete_account_data(db: &Database, account_id: &str) -> Result<(), String> {
         conn.execute("DELETE FROM accounts WHERE id = ?1", rusqlite::params![account_id])?;
         Ok(())
     })();
-    match tx_result {
-        Ok(_) => { let _ = conn.execute_batch("COMMIT"); }
-        Err(e) => {
-            log::error!("Failed to delete account: {}", e);
-            let _ = conn.execute_batch("ROLLBACK");
-            return Err(format!("Failed to delete account: {}", e));
-        }
+    if let Err(e) = tx_result.and_then(|()| conn.execute_batch("COMMIT")) {
+        log::error!("Failed to delete account: {}", e);
+        let _ = conn.execute_batch("ROLLBACK");
+        return Err(format!("Failed to delete account: {}", e));
     }
 
-    crate::pop3::discard_orphan_sources(&conn, &db.data_dir, &mail_ids);
+    let attach_dir = db.data_dir.join("attachments");
+    if attach_dir.exists() {
+        for mail_id in &mail_ids {
+            let dir = attach_dir.join(mail_id);
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+    }
+    if is_pop3 {
+        crate::pop3::discard_orphan_sources(&conn, &db.data_dir, &mail_ids);
+    }
 
     // Reclaim disk space after bulk delete
     let _ = conn.execute_batch("VACUUM;");
