@@ -86,6 +86,7 @@ const LANGUAGE_OPTIONS: { value: AppLanguage; labelKey: string }[] = [
 ];
 
 import type { DensityMode, ThreadViewMode } from "../../types";
+import { MAIL_TEXT_SIZES, normalizeMailTextSize } from "../../lib/mailTextSize";
 import { ACCENT_OPTIONS, DEFAULT_ACCENT_HEX } from "../../lib/accents";
 import { COMPOSE_FONTS, COMPOSE_FONT_SIZES, composeTypography, type ComposeFontId } from "../../lib/outgoingHtml";
 
@@ -1055,6 +1056,17 @@ export function SettingsPanel() {
                           value={localSettings.density}
                           onChange={(id) => updateLocalSetting("density", id)}
                           options={DENSITY_OPTIONS.map(({ id, labelKey }) => ({ value: id, label: t(labelKey) }))}
+                        />
+                      </SettingsBlock>
+                    </SettingsGroup>
+
+                    <SettingsGroup title={t("settings.mailTextSize.title")}>
+                      <SettingsBlock description={t("settings.mailTextSize.description")}>
+                        <SegmentedControl
+                          aria-label={t("settings.mailTextSize.title")}
+                          value={String(normalizeMailTextSize(localSettings.mail_text_size))}
+                          onChange={(id) => updateLocalSetting("mail_text_size", normalizeMailTextSize(Number(id)))}
+                          options={MAIL_TEXT_SIZES.map((size) => ({ value: String(size), label: `${size}%` }))}
                         />
                       </SettingsBlock>
                     </SettingsGroup>

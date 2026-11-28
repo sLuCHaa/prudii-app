@@ -685,6 +685,10 @@
       "comfortable": "Normal",
       "spacious": "Amplio"
     },
+    "mailTextSize": {
+      "title": "Tamaño del texto del correo",
+      "description": "Aumenta el texto al leer correos."
+    },
     "threadView": {
       "title": "Vista de conversación",
       "description": "Cómo se muestran las conversaciones con varios mensajes.",

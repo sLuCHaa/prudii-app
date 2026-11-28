@@ -161,6 +161,8 @@ export interface AppSettings {
   hide_starred_in_inbox: boolean;
   /** Compose opens docked in the main window instead of in a window of its own. */
   compose_docked: boolean;
+  /** Reading size of mail content in percent: 100, 115, 130 or 150. */
+  mail_text_size: number;
 }
 
 export interface CategoryReason {

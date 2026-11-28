@@ -1,5 +1,5 @@
 use crate::db::Database;
-use crate::models::AppSettings;
+use crate::models::{normalize_mail_text_size, AppSettings};
 use tauri::State;
 use tauri_plugin_autostart::ManagerExt;
 
@@ -63,6 +63,7 @@ pub fn get_app_settings(db: State<'_, Database>) -> Result<AppSettings, String> 
                 .unwrap_or_default(),
             hide_starred_in_inbox: get_bool(crate::inbox_view::SETTING, false),
             compose_docked: get_bool("compose_docked", false),
+            mail_text_size: normalize_mail_text_size(get_u32("mail_text_size", 100)),
         })
     })
 }
@@ -167,6 +168,12 @@ pub fn update_app_settings(
         conn.execute(
             "INSERT OR REPLACE INTO app_settings (key, value) VALUES (?1, ?2)",
             rusqlite::params!["thread_view", &settings.thread_view],
+        )
+        .map_err(|e| e.to_string())?;
+
+        conn.execute(
+            "INSERT OR REPLACE INTO app_settings (key, value) VALUES (?1, ?2)",
+            rusqlite::params!["mail_text_size", normalize_mail_text_size(settings.mail_text_size).to_string()],
         )
         .map_err(|e| e.to_string())?;
 

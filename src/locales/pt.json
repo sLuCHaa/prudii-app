@@ -694,6 +694,10 @@
       "comfortable": "Normal",
       "spacious": "Espaçoso"
     },
+    "mailTextSize": {
+      "title": "Tamanho do texto do e-mail",
+      "description": "Aumenta o texto ao ler e-mails."
+    },
     "threadView": {
       "title": "Exibição de conversas",
       "description": "Como as conversas com várias mensagens são exibidas.",

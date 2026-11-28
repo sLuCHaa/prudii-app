@@ -693,6 +693,10 @@
       "comfortable": "适中",
       "spacious": "宽松"
     },
+    "mailTextSize": {
+      "title": "邮件正文字号",
+      "description": "阅读邮件时放大文字。"
+    },
     "threadView": {
       "title": "会话视图",
       "description": "多封邮件的会话如何显示。",

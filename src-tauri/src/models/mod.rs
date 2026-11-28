@@ -164,6 +164,20 @@ fn default_true() -> bool {
     true
 }
 
+pub const MAIL_TEXT_SIZES: [u32; 4] = [100, 115, 130, 150];
+
+pub fn default_mail_text_size() -> u32 {
+    100
+}
+
+pub fn normalize_mail_text_size(value: u32) -> u32 {
+    if MAIL_TEXT_SIZES.contains(&value) {
+        value
+    } else {
+        default_mail_text_size()
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
     pub launch_on_startup: bool,
@@ -199,6 +213,8 @@ pub struct AppSettings {
     pub hide_starred_in_inbox: bool,
     #[serde(default)]
     pub compose_docked: bool,
+    #[serde(default = "default_mail_text_size")]
+    pub mail_text_size: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -530,4 +546,34 @@ pub struct UpdateTaskPatch {
     pub priority: Option<String>,
     pub due_at: Option<String>,
     pub clear_due_at: Option<bool>,
+}
+
+#[cfg(test)]
+mod mail_text_size_tests {
+    use super::*;
+
+    #[test]
+    fn valid_sizes_are_kept() {
+        for size in MAIL_TEXT_SIZES {
+            assert_eq!(normalize_mail_text_size(size), size);
+        }
+    }
+
+    #[test]
+    fn invalid_sizes_fall_back_to_default() {
+        for size in [0, 99, 120, 200, u32::MAX] {
+            assert_eq!(normalize_mail_text_size(size), 100);
+        }
+    }
+
+    #[test]
+    fn settings_without_the_value_still_load() {
+        let json = r#"{"launch_on_startup":false,"show_in_tray":true,"use_24h_clock":null,"show_all_unread_counts":false,
+            "notifications_enabled":true,"notification_sound":true,"language":"en","density":"comfortable",
+            "accent_color":"terracotta","ai_enabled":false,"ollama_url":"http://localhost:11434","ai_model":"",
+            "undo_send_delay":5,"theme_mode":"system","transparent_sidebar":true,"strip_tracking_params":true,
+            "use_system_font":false,"compose_font":"prudii","compose_font_size":11,"mail_sort":"date_desc","thread_view":"classic"}"#;
+        let settings: AppSettings = serde_json::from_str(json).unwrap();
+        assert_eq!(settings.mail_text_size, 100);
+    }
 }

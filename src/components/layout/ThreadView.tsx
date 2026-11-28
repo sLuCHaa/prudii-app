@@ -62,6 +62,7 @@ import { useTranslation } from "react-i18next";
 import { ImageLightbox, type ImageLightboxItem } from "./ImageLightbox";
 import { formatFileSize } from "../../lib/fileSize";
 import { useMailFrameFit } from "../../hooks/useMailFrameFit";
+import { mailTextScale } from "../../lib/mailTextSize";
 import { useLoadingHold } from "../../hooks/useLoadingHold";
 import { landSubjectFly } from "../motion/subjectFly";
 import { prefersReducedMotion } from "../motion/tokens";
@@ -409,7 +410,8 @@ const PendingFrameContext = createContext<(() => () => void) | null>(null);
 const HtmlMailFrame = memo(function HtmlMailFrame({ mailId, html, tight = false, allowExternalImages = true, showTrackedImages = false, onIframeRef, onTrackersDetected, onHeldBack, onLinkClick, onImageClick }: { mailId: string; html: string; tight?: boolean; allowExternalImages?: boolean; showTrackedImages?: boolean; onIframeRef?: (el: HTMLIFrameElement | null) => void; onTrackersDetected?: (trackers: TrackerInfo[]) => void; onHeldBack?: (mailId: string) => void; onLinkClick?: (href: string) => void; onImageClick?: (src: string) => void }) {
   const darkMode = useAppStore((s) => s.darkMode);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const { height, refit, fitted } = useMailFrameFit(iframeRef);
+  const textScale = useAppStore((s) => mailTextScale(s.appSettings.mail_text_size));
+  const { height, refit, fitted } = useMailFrameFit(iframeRef, textScale);
   const pendingFrame = useContext(PendingFrameContext);
   const { data: attachments, isPending: attachmentsPending } = useAttachments(mailId);
   // Inline images resolve against the attachment list; rendering before it arrives means a reload that resizes the frame.
@@ -739,6 +741,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
   const [allowImagesOverride, setAllowImagesOverride] = useState(false);
   const hasBody = displayMail.body_html || displayMail.body_text;
   const hasBothFormats = !!displayMail.body_html && !!displayMail.body_text;
+  const textScale = mailTextScale(appSettings.mail_text_size);
   const showsHtml = !!displayMail.body_html && !viewPlainText;
   const plainText = useMemo(() => stripMmlTags(displayMail.body_text ?? ""), [displayMail.body_text]);
 
@@ -1017,7 +1020,7 @@ const MessageCard = memo(function MessageCard({ mail, isLatest, singleMail, defa
       <SignatureFold html={(hideQuotes && htmlWithoutQuotes) || displayMail.body_html || ""} render={(html, main) => frame(html, main ? mainFrameRef : undefined)} />
     </>
   ) : (
-    <pre className="text-sm text-text-secondary whitespace-pre-wrap font-sans leading-relaxed select-text">
+    <pre className="text-sm text-text-secondary whitespace-pre-wrap font-sans leading-relaxed select-text" style={textScale === 1 ? undefined : { fontSize: `${14 * textScale}px` }}>
       <MarkedText text={hideQuotes && textWithoutQuotes !== null ? textWithoutQuotes : plainText} pattern={highlight} />
     </pre>
   );
