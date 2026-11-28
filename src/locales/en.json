@@ -700,6 +700,10 @@
       "comfortable": "Comfortable",
       "spacious": "Spacious"
     },
+    "mailTextSize": {
+      "title": "Mail text size",
+      "description": "Enlarges the text when reading mail."
+    },
     "threadView": {
       "title": "Conversation view",
       "description": "How conversations with several messages are shown.",

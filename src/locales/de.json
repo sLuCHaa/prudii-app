@@ -685,6 +685,10 @@
       "comfortable": "Normal",
       "spacious": "Großzügig"
     },
+    "mailTextSize": {
+      "title": "Textgröße Mail-Inhalt",
+      "description": "Vergrößert den Text beim Lesen von E-Mails."
+    },
     "threadView": {
       "title": "Konversationsansicht",
       "description": "Wie Konversationen mit mehreren Nachrichten angezeigt werden.",

@@ -18,6 +18,7 @@ import { decodeFileUrl } from "../../lib/outgoingHtml";
 import { useTranslation } from "react-i18next";
 import type { Mail } from "../../types";
 import { useMailFrameFit } from "../../hooks/useMailFrameFit";
+import { mailTextScale } from "../../lib/mailTextSize";
 
 
 const BASE_STYLES = `
@@ -80,7 +81,8 @@ const THEME_STYLE_ID = "prudii-theme";
 export function HtmlMailFrame({ html, allowExternalImages = true, forceLight = false, editable = false, onIframeRef, onLoad, onEditBaseline, onTrackersDetected, onLinkClick, onImageClick }: { html: string; allowExternalImages?: boolean; /** Render as most recipients see it, ignoring the app's dark mode. */ forceLight?: boolean; /** Edit in place; read `#QUOTE_EDIT_ROOT` back through restoreSanitizedHtml. */ editable?: boolean; onIframeRef?: (el: HTMLIFrameElement | null) => void; onLoad?: () => void; /** The edit root's innerHTML before any edit. */ onEditBaseline?: (html: string) => void; onTrackersDetected?: (trackers: TrackerInfo[]) => void; onLinkClick?: (href: string) => void; onImageClick?: (src: string) => void }) {
   const darkMode = useAppStore((s) => s.darkMode) && !forceLight;
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const { height, refit, fitted } = useMailFrameFit(iframeRef);
+  const textScale = useAppStore((s) => mailTextScale(s.appSettings.mail_text_size));
+  const { height, refit, fitted } = useMailFrameFit(iframeRef, textScale);
   const [bodyMenu, setBodyMenu] = useState<{ target: BridgeContextMenu; x: number; y: number; seq: number } | null>(null);
   const { t } = useTranslation();
 

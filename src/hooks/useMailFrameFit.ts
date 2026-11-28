@@ -29,9 +29,10 @@ export function fitScale(available: number, natural: number, minScale = MIN_SCAL
  * Keeps a mail iframe sized to its content and scaled to its pane.
  *
  * Returns the height to render the iframe at, plus `refit` for the caller to
- * fire on load and whenever the document changes.
+ * fire on load and whenever the document changes. `textScale` enlarges the
+ * whole content (the reading-size setting); it reflows at pane width / textScale.
  */
-export function useMailFrameFit(iframeRef: React.RefObject<HTMLIFrameElement | null>) {
+export function useMailFrameFit(iframeRef: React.RefObject<HTMLIFrameElement | null>, textScale = 1) {
   const [height, setHeight] = useState(300);
   const [fitted, setFitted] = useState(false);
   // The outer observer must react to width only. Re-fitting changes the
@@ -49,16 +50,16 @@ export function useMailFrameFit(iframeRef: React.RefObject<HTMLIFrameElement | n
       // Measure the natural layout, not the one the previous pass scaled.
       body.style.transform = "";
       body.style.transformOrigin = "";
-      body.style.width = "";
+      body.style.width = textScale === 1 ? "" : `${100 / textScale}%`;
 
       const available = iframe.clientWidth;
       if (available <= 0) return;
       lastWidth.current = available;
 
       const natural = Math.max(body.scrollWidth, doc.documentElement.scrollWidth);
-      const scale = fitScale(available, natural);
+      const scale = textScale * fitScale(available / textScale, natural);
 
-      if (scale < 1) {
+      if (scale !== 1) {
         body.style.transformOrigin = "0 0";
         body.style.transform = `scale(${scale})`;
         // Below MIN_SCALE the content stays wider than the pane and the frame
@@ -79,7 +80,7 @@ export function useMailFrameFit(iframeRef: React.RefObject<HTMLIFrameElement | n
         if (!img.complete) img.addEventListener("load", refit, { once: true });
       }
     } catch {}
-  }, [iframeRef]);
+  }, [iframeRef, textScale]);
 
   useEffect(() => {
     const iframe = iframeRef.current;

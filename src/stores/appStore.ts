@@ -718,6 +718,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     hidden_categories: [],
     hide_starred_in_inbox: false,
     compose_docked: false,
+    mail_text_size: 100,
   },
   appSettingsLoaded: false,
   setAppSettings: (appSettings) => {
